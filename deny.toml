@@ -1,0 +1,97 @@
+# cargo-deny configuration — supply-chain policy gate (`just deny`).
+#
+# Four independent checks: advisories, licenses, bans, and sources. All are
+# hard-fail in CI. This is PROTECTED config: an agent may tighten it (add
+# denials, drop allowed licenses) but loosening requires human sign-off.
+
+[graph]
+# Evaluate the tree for all targets so we don't miss platform-specific deps.
+all-features = true
+
+# ---------------------------------------------------------------------------
+# Security advisories (RustSec). Any known-vulnerable dep fails the build.
+# ---------------------------------------------------------------------------
+[advisories]
+version = 2
+yanked = "deny"
+# Add specific advisory IDs here (with a justification comment) only when a
+# fix is genuinely unavailable — never as a convenience.
+ignore = []
+
+# ---------------------------------------------------------------------------
+# Licenses. Explicit allow-list; anything not listed fails.
+# ---------------------------------------------------------------------------
+[licenses]
+version = 2
+# An allow-list entry not (yet) seen in the tree is intentional headroom, not a
+# defect: these are all standard permissive licenses a new dependency may carry,
+# and we would rather keep them pre-approved than churn this file (and re-review)
+# each time the tree shifts. cargo-deny warns on such unencountered entries by
+# default; silence that at the source so the CI log-sweep (constitution §2:
+# "warnings are errors") has no benign warning to trip over. The license *policy*
+# is unchanged — anything not listed still fails closed.
+unused-allowed-license = "allow"
+# SPDX identifiers permitted in the dependency tree. Permissive + our own.
+allow = [
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "MIT",
+    "MIT-0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "CC0-1.0",
+]
+# Copyleft or ambiguous licenses are simply absent from the allow-list, so
+# they fail closed. Require high confidence when inferring a license.
+confidence-threshold = 0.9
+
+# ---------------------------------------------------------------------------
+# Bans. Duplicate versions, wildcard deps, and layering violations.
+# ---------------------------------------------------------------------------
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+# Internal workspace crates are shared via `[workspace.dependencies]` with a
+# path + "*" version (`pure-analyzer-lexer.workspace = true`, etc.). Those
+# wildcards are intra-workspace and safe; only reject wildcards on
+# published/external deps.
+allow-wildcard-paths = true
+
+# LAYERING ENFORCEMENT (partial).
+# Only the front-end crates (`pure-analyzer-cli` today; `pure-analyzer-lsp` in
+# v0.2) may depend on a renderer (`ariadne`, `codespan-reporting`) or protocol
+# crate (`clap`, and later `tower-lsp`/`lsp-types`) — see design doc §3.
+# cargo-deny can ban a crate globally but cannot say "banned everywhere except
+# the front-end". So we do BOTH:
+#   1. Globally flag such crates as `deny` here once the ban would bite (empty
+#      today: v0.1 has exactly one front-end crate, so there is nothing yet
+#      for a lexer/syntax/parser/model/resolve/analysis crate to accidentally
+#      pull in). Add entries here — with explicit `skip`/`wrappers` exceptions
+#      for the front-end — the moment a second front-end (the LSP) lands.
+#   2. The authoritative per-crate check lives in the ast-grep rule
+#      `no-front-end-deps-in-core` (ast-grep-rules/no-front-end-deps-in-core.yml)
+#      and the `cargo xtask verify-layering` step, which key off the crate DAG.
+# Keep this list in sync with the ast-grep rule.
+deny = []
+
+# Crates whose duplicate versions are tolerated (transitive churn, not ours to
+# resolve). `syn` is pulled at two majors: `clap_derive`/`serde_derive` moved
+# to syn 3.x, while `tracing-attributes` (a transitive dep of `tracing`) still
+# pins syn 2.x. Skip it at the source rather than leave `multiple-versions =
+# "warn"` printing a `warning[duplicate]:` on every run (constitution §2:
+# warnings are errors — the CI log-sweep would otherwise catch it).
+skip = [{ crate = "syn" }]
+
+# ---------------------------------------------------------------------------
+# Sources. Only crates.io and our own git remotes are trusted.
+# ---------------------------------------------------------------------------
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+# No git dependencies: every crate in the workspace resolves from crates.io.
+allow-git = []

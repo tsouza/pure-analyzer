@@ -1,0 +1,28 @@
+[package]
+name = "fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+license = "Apache-2.0"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4.13"
+serde_json = "1.0.151"
+
+# Path is relative to this crate, which lives outside the workspace (see the
+# root `Cargo.toml` `exclude`).
+pure-analyzer-diagnostics = { path = "../crates/pure-analyzer-diagnostics" }
+
+[[bin]]
+name = "diagnostics"
+path = "fuzz_targets/diagnostics.rs"
+test = false
+doc = false
+bench = false
+
+# Fuzz targets are built with sanitizers under a nightly toolchain by
+# `cargo fuzz`; keep them out of the normal workspace build.
+[workspace]

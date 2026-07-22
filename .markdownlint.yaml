@@ -1,0 +1,26 @@
+# https://github.com/DavidAnson/markdownlint/blob/main/doc/Rules.md
+default: true
+
+# MD013 — line-length: relax; URLs and tables don't wrap at 80.
+MD013: false
+
+# MD033 — inline-html: allow badges, <details>/<summary>, <sub>, etc.
+MD033: false
+
+# MD041 — first-line-h1: not every doc starts with an H1 (frontmatter files).
+MD041: false
+
+# MD024 — duplicate-headings: allow under different parents (CHANGELOG style).
+MD024:
+  siblings_only: true
+
+# MD046 — code-block-style: fenced everywhere.
+MD046:
+  style: fenced
+
+# MD060 — table-column-style: pin "aligned". The default "consistent" mode
+# infers style from the first table per file, which breaks across concurrent
+# PRs. AI-generated tables are almost never aligned; scripts/lib/align-md-tables
+# .mjs pads them so `markdownlint-cli2 --fix` can pass this.
+MD060:
+  style: aligned

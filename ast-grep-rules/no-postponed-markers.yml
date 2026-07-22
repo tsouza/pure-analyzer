@@ -1,0 +1,21 @@
+# Ban postponed-work markers from merged code.
+#
+# Rationale: `todo!()` / `unimplemented!()` are panics-in-waiting, and
+# `unreachable!()` is frequently reachable. A change is either done or it is a
+# spec/issue — it is never a marker left in `main`. This is the structural half
+# of the postponed-marker gate; the CI job also greps for TODO/FIXME comments.
+id: no-postponed-markers
+message: "Postponed-work markers (todo!/unimplemented!/unreachable!) must not reach main. Finish it or file an issue."
+severity: error
+language: rust
+rule:
+  any:
+    - pattern: todo!()
+    - pattern: todo!($$$)
+    - pattern: unimplemented!()
+    - pattern: unimplemented!($$$)
+    - pattern: unreachable!()
+    - pattern: unreachable!($$$)
+files:
+  - "crates/**/*.rs"
+  - "xtask/**/*.rs"

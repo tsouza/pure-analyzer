@@ -1,0 +1,21 @@
+[package]
+name = "xtask"
+description = "Developer automation: cargo-xtask style task runner invoked by the justfile."
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "xtask"
+path = "src/main.rs"
+
+[dependencies]
+clap.workspace = true
+anyhow.workspace = true
+serde_json.workspace = true

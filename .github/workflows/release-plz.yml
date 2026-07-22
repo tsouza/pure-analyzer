@@ -1,0 +1,51 @@
+name: release-plz
+
+# PR-based releases: on push to main, release-plz opens/updates a release PR
+# (version bumps + changelog). Merging that PR triggers the tag/publish run.
+# Nothing publishes off a normal feature merge.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: release-plz-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-plz:
+    name: release-plz
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      # No dtolnay/rust-toolchain step: rust-toolchain.toml already pins stable,
+      # and rustup auto-installs it when release-plz's action first calls cargo.
+      # A second `rustup default` from the action would fight the file over which
+      # pin wins (see the same note in ci.yml).
+      - name: Run release-plz
+        uses: release-plz/action@v0.5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # No CARGO_REGISTRY_TOKEN: crates are `publish = false` (deployable
+          # server, not published libraries). If you later publish a crate, add
+          # `CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}` here.
+
+  # Warnings-are-errors net (constitution §2): sweep this run's job log for a
+  # tool warning that exited 0 (e.g. a release-plz deprecation notice). Same
+  # reusable sweep as ci/lint/security. This workflow is push-to-main only, so
+  # it is the one gate without a pre-merge counterpart — deliberate: it guards
+  # the release action, which has no PR-time run to mirror.
+  no-warnings:
+    needs: [release-plz]
+    if: always()
+    permissions:
+      actions: read
+      contents: read
+    uses: ./.github/workflows/no-warnings.yml

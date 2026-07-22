@@ -1,0 +1,50 @@
+# --- Rust build artifacts ---
+/target
+**/*.rs.bk
+*.pdb
+
+# Cargo.lock IS committed (this is an application/server workspace, not a pure
+# library) so agent == CI == laptop. Do not ignore it.
+
+# --- Coverage / test output ---
+/coverage
+*.profraw
+*.profdata
+lcov.info
+junit.xml
+
+# --- Fuzzing (cargo-fuzz has its own excluded crate) ---
+/fuzz/target
+/fuzz/corpus
+/fuzz/artifacts
+# The fuzz crate is excluded from the workspace and from Dependabot (see
+# dependabot.yml), so its lock is regenerated per run, not committed.
+/fuzz/Cargo.lock
+
+# --- Mutation testing ---
+/mutants.out
+/mutants.out.old
+
+# --- Generated protobuf artifacts (descriptor sets, etc.) ---
+/gen
+
+# --- Benchmarks ---
+/criterion
+
+# --- Editor / OS cruft ---
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# --- Local tool state ---
+.mise.local.toml
+
+# --- Session probe artifact (safe to delete) ---
+.writetest
+
+# direnv
+.direnv/
+
+# JS tooling (Bun)
+node_modules/

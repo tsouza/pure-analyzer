@@ -1,0 +1,18 @@
+[package]
+name = "pure-analyzer-lexer"
+description = "logos-derived DFA lexer for the M3/Domain token layer: literals, %latest/date family, symbols, islands as raw tokens (design doc §4.1)."
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+# Scaffold only — no dependencies until the first lexer feature lands (see
+# specs/lexer.md). Declaring `logos` here before any code uses it would trip
+# `cargo machete` (constitution §2: gates run clean).
+[dependencies]

@@ -1,0 +1,31 @@
+# Ban `.unwrap()` and `.expect()` in non-test code.
+#
+# Rationale: libraries return `Result`/`Option` and callers must handle both
+# arms. `unwrap`/`expect` turn a recoverable condition into a panic, which in a
+# server means a dropped connection or a crashed task. Tests are exempt (a
+# panic there is a legitimate assertion failure).
+id: no-unwrap-outside-tests
+message: "Do not use .unwrap()/.expect() outside tests — handle the Option/Result explicitly."
+severity: error
+language: rust
+rule:
+  any:
+    - pattern: $EXPR.unwrap()
+    - pattern: $EXPR.expect($MSG)
+  # Exclude anything inside an inline `mod tests { ... }` block (the workspace
+  # convention for unit tests). Out-of-line test files are handled by `ignores`
+  # below. Per-`#[test]`-fn matching is intentionally omitted: attributes are
+  # sibling nodes of `function_item` in tree-sitter-rust, not a child field, so
+  # there is no valid relational rule for them — and clippy's disallowed-methods
+  # gate already backstops any unwrap this misses.
+  not:
+    inside:
+      pattern: "mod tests { $$$ }"
+      stopBy: end
+files:
+  - "crates/**/*.rs"
+  - "xtask/**/*.rs"
+ignores:
+  - "**/tests/**"
+  - "**/benches/**"
+  - "**/*_test.rs"

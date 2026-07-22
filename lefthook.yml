@@ -1,0 +1,29 @@
+# Declarative git hooks — constitution §2 forbids hand-written hook scripts.
+# Install with `just hooks-install` (runs `lefthook install`). Non-trivial logic
+# lives in Bun .mjs under scripts/; everything else is a one-line tool call.
+pre-commit:
+  parallel: true
+  commands:
+    fmt:
+      glob: "*.rs"
+      stage_fixed: true
+      run: cargo fmt --all
+    md-align:
+      # MD060 (aligned tables) has no markdownlint auto-fixer; pad columns first.
+      glob: "*.md"
+      stage_fixed: true
+      run: bun scripts/lib/align-md-tables.mjs {staged_files}
+    markdownlint:
+      glob: "*.md"
+      stage_fixed: true
+      run: bunx markdownlint-cli2 --fix {staged_files}
+    secrets:
+      run: gitleaks protect --staged --redact --config .gitleaks.toml
+    postponed-markers:
+      glob: "*.rs"
+      run: bun scripts/checks/postponed-markers.mjs
+
+commit-msg:
+  commands:
+    commitlint:
+      run: bunx commitlint --edit {1}

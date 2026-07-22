@@ -1,0 +1,72 @@
+# release-plz configuration — PR-based release automation.
+#
+# On every push to `main`, release-plz opens/updates a "release PR" that bumps
+# versions and updates changelogs from conventional commits. Merging that PR
+# tags and (optionally) publishes. Humans stay in the loop; nothing publishes
+# automatically off a normal feature merge. Driven by release-plz.yml.
+
+[workspace]
+# Conventional-commit-driven changelogs, one section per crate.
+changelog_update = true
+# Group the whole workspace into a single release PR for coherent versioning.
+git_release_enable = true
+# Keep dependent crates' versions in lockstep on a breaking bump.
+dependencies_update = true
+# Semver bump inferred from commit types (feat -> minor, fix -> patch, ! -> major).
+semver_check = true
+
+[changelog]
+# Keep a Changelog / conventional-commits style headers.
+header = """
+# Changelog
+
+All notable changes to this project are documented here. The format is based on
+[Keep a Changelog](https://keepachangelog.com/) and this project adheres to
+[Semantic Versioning](https://semver.org/).
+"""
+
+# Nothing is published to crates.io yet — v0.1 is a moving target and none of
+# these crates have a stable public API to promise semver on. release-plz
+# still bumps versions, writes changelogs, and cuts GitHub releases/tags. Flip
+# a crate's `publish` to true (and add CARGO_REGISTRY_TOKEN to the release
+# workflow) once its API is ready to promise stability on — `libpure` and
+# `pure-analyzer-cli` are the likely first candidates.
+[[package]]
+name = "pure-analyzer-diagnostics"
+publish = false
+
+[[package]]
+name = "pure-analyzer-lexer"
+publish = false
+
+[[package]]
+name = "pure-analyzer-syntax"
+publish = false
+
+[[package]]
+name = "pure-analyzer-parser"
+publish = false
+
+[[package]]
+name = "pure-analyzer-model"
+publish = false
+
+[[package]]
+name = "pure-analyzer-resolve"
+publish = false
+
+[[package]]
+name = "pure-analyzer-analysis"
+publish = false
+
+[[package]]
+name = "libpure"
+publish = false
+
+[[package]]
+name = "pure-analyzer-cli"
+publish = false
+
+[[package]]
+name = "xtask"
+release = false

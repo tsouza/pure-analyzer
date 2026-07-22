@@ -1,0 +1,33 @@
+name: no-warnings
+
+# Reusable warnings-are-errors net (constitution §2). clippy/rustdoc fail on their
+# own warnings via `-D warnings`, but tools with no native -Werror (docker build,
+# apt, useradd, cargo-deny's `warn` checks, …) can warn while exiting 0. This
+# sweeps a workflow run's job logs and fails on any un-allowlisted tool warning.
+#
+# It is a `workflow_call` reusable job so every workflow that runs tools invokes
+# the same sweep over its OWN run — ci, lint, security, release-plz each add a
+# job `uses: ./.github/workflows/no-warnings.yml` that `needs` its other jobs and
+# runs `if: always()`, so the sweep sees every finished job's log. A workflow
+# without this job leaves its tool warnings unswept.
+
+on:
+  workflow_call:
+
+permissions:
+  actions: read # gh api …/actions/jobs/<id>/logs
+  contents: read
+
+jobs:
+  sweep:
+    name: no-warnings (log sweep)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+      - name: Sweep the run's logs for tool warnings
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bun scripts/checks/no-ci-warnings.mjs

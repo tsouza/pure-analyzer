@@ -1,0 +1,4 @@
+# `cargo xtask <cmd>` is the workspace's task entry point (driven by `just`).
+# The alias resolves it to the local `xtask` crate.
+[alias]
+xtask = "run --quiet --package xtask --"

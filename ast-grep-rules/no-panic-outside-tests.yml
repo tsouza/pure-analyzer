@@ -1,0 +1,31 @@
+# Ban `panic!` and `dbg!` in non-test code.
+#
+# Rationale: constitution §1 forbids `panic!`/`dbg!` outside `#[cfg(test)]`. A
+# bare `panic!` in a server means a dropped connection or a crashed task; `dbg!`
+# is debug residue. The sibling `no-postponed-markers` rule bans
+# `todo!`/`unimplemented!`/`unreachable!` (everywhere, no test exemption); this
+# rule closes the remaining gap so a `panic!` can't be substituted for
+# `unreachable!` to slip a by-construction-impossible branch past that gate.
+# Tests are exempt (a panic there is a legitimate assertion failure), matching
+# the `no-unwrap-outside-tests` exemption shape.
+id: no-panic-outside-tests
+message: "Do not use panic!/dbg! outside tests — return a Result or restructure so the branch cannot occur."
+severity: error
+language: rust
+rule:
+  any:
+    - pattern: panic!($$$)
+    - pattern: dbg!($$$)
+  # Exclude anything inside an inline `mod tests { ... }` block (the workspace
+  # convention for unit tests). Out-of-line test files are handled by `ignores`.
+  not:
+    inside:
+      pattern: "mod tests { $$$ }"
+      stopBy: end
+files:
+  - "crates/**/*.rs"
+  - "xtask/**/*.rs"
+ignores:
+  - "**/tests/**"
+  - "**/benches/**"
+  - "**/*_test.rs"

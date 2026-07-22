@@ -1,0 +1,111 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/pure-analyzer-diagnostics",
+    "crates/pure-analyzer-lexer",
+    "crates/pure-analyzer-syntax",
+    "crates/pure-analyzer-parser",
+    "crates/pure-analyzer-model",
+    "crates/pure-analyzer-resolve",
+    "crates/pure-analyzer-analysis",
+    "crates/libpure",
+    "crates/pure-analyzer-cli",
+    "xtask",
+]
+# `fuzz` requires a nightly toolchain and is excluded so a normal stable
+# `cargo build`/`clippy`/`test --workspace` does not try to compile it:
+# the cargo-fuzz crate needs its own lockfile and a libfuzzer dep.
+exclude = ["fuzz"]
+
+# Workspace-wide lints, inherited by each member via `[lints] workspace = true`.
+# This is the class-killing enforcement behind constitution.md §1.2/§1.3:
+# `unsafe_code` is forbidden and `missing_docs` is denied uniformly across
+# every target — lib, bin, bench, build script — so no crate can silently
+# omit either attribute. The workspace-excluded `fuzz` crate root declares the
+# attributes on its own crate root instead, since excluded packages do not
+# inherit this table.
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "deny"
+
+# Complexity / representation budgets. Numeric thresholds live in `clippy.toml`
+# (PROTECTED, ratchet-only), but a threshold alone is inert on an
+# allow-by-default lint: enabling the lint here is what makes the `-D
+# warnings` gate in `just lint` escalate it to a hard error. Kept paired 1:1
+# with the thresholds in `clippy.toml`.
+[workspace.lints.clippy]
+cognitive_complexity = "warn"
+too_many_lines = "warn"
+too_many_arguments = "warn"
+decimal_literal_representation = "warn"
+
+[workspace.package]
+edition = "2024"
+version = "0.1.0"
+license = "Apache-2.0"
+authors = ["Thiago Souza <tcostasouza@gmail.com>"]
+repository = "https://github.com/tsouza/pure-analyzer"
+rust-version = "1.90"
+
+# ---------------------------------------------------------------------------
+# Internal workspace crates — the analysis-engine DAG (see docs/decisions and
+# constitution.md §1). Dependencies point one way only:
+#   lexer -> syntax -> parser -> {model, resolve} -> analysis -> {cli}
+# `pure-analyzer-diagnostics` is a leaf depended on by parser and everything
+# above it. `libpure` is a thin facade re-exporting syntax/parser/model/
+# resolve/analysis for the front-end crates (cli today; lsp in v0.2).
+# ---------------------------------------------------------------------------
+[workspace.dependencies]
+pure-analyzer-diagnostics = { path = "crates/pure-analyzer-diagnostics" }
+pure-analyzer-lexer = { path = "crates/pure-analyzer-lexer" }
+pure-analyzer-syntax = { path = "crates/pure-analyzer-syntax" }
+pure-analyzer-parser = { path = "crates/pure-analyzer-parser" }
+pure-analyzer-model = { path = "crates/pure-analyzer-model" }
+pure-analyzer-resolve = { path = "crates/pure-analyzer-resolve" }
+pure-analyzer-analysis = { path = "crates/pure-analyzer-analysis" }
+libpure = { path = "crates/libpure" }
+
+# --- Error handling ---
+thiserror = "2.0.19"
+anyhow = "1.0.104"
+
+# --- Observability ---
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt"] }
+
+# --- Serialization ---
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+
+# --- CLI (front-end crates only — see ast-grep-rules/no-front-end-deps-in-core.yml) ---
+clap = { version = "4.6.4", features = ["derive"] }
+ignore = "0.4.31"
+
+# --- Lexing / parsing / syntax tree ---
+logos = "0.16.1"
+rowan = "0.16.1"
+text-size = { version = "1.1.1", features = ["serde"] }
+num-derive = "0.5.1"
+num-traits = "0.2.19"
+ungrammar = "1.16.1"
+
+# --- Diagnostics rendering (front-end crates only) ---
+ariadne = "0.6.0"
+codespan-reporting = "0.13.1"
+
+# --- Parallelism (CLI multi-file processing) ---
+rayon = "1.12.0"
+
+# --- Benchmarking ---
+criterion = "0.8.2"
+
+# --- Test snapshotting (golden/corpus tests) ---
+insta = "1.48.0"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+
+[profile.bench]
+opt-level = 3

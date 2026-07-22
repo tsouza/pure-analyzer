@@ -1,0 +1,99 @@
+name: Lint
+on:
+  push: { branches: [main] }
+  pull_request:
+  merge_group:
+concurrency:
+  group: lint-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+  pull-requests: read   # paths-filter + commitlint read PR files/commits via the API
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      md: ${{ steps.filter.outputs.md }}
+      actions: ${{ steps.filter.outputs.actions }}
+      scripts: ${{ steps.filter.outputs.scripts }}
+    steps:
+      - uses: actions/checkout@v7
+        # fetch-depth: 0 so paths-filter can diff a push against its base commit
+        # locally; persist-credentials: false means it cannot fetch the base
+        # over the network, and a depth-1 checkout lacks it.
+        with: { persist-credentials: false, fetch-depth: 0 }
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            md:
+              - '**/*.md'
+              - '.markdownlint.yaml'
+            actions:
+              - '.github/**'
+            scripts:
+              - 'scripts/**'
+              - '.github/workflows/lint.yml'
+  markdownlint:
+    needs: changes
+    if: needs.changes.outputs.md == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with: { persist-credentials: false }
+      - uses: DavidAnson/markdownlint-cli2-action@v24
+        with:
+          globs: '**/*.md'
+  commitlint:
+    # Runs on every PR (all PRs have commits); harmless on push.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: wagoid/commitlint-github-action@v6
+  actionlint:
+    needs: changes
+    if: needs.changes.outputs.actions == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write   # reviewdog's github-check reporter needs this
+    steps:
+      - uses: actions/checkout@v7
+        with: { persist-credentials: false }
+      - uses: reviewdog/action-actionlint@v1
+        with:
+          reporter: github-check
+          fail_level: error
+  test-scripts:
+    needs: changes
+    if: needs.changes.outputs.scripts == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with: { persist-credentials: false }
+      - uses: oven-sh/setup-bun@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just
+      - run: just test-scripts
+  # Warnings-are-errors net (constitution §2): sweep this run's job logs for a
+  # tool warning that exited 0. Same reusable sweep as ci/security/release-plz.
+  no-warnings:
+    needs: [changes, markdownlint, commitlint, actionlint, test-scripts]
+    if: always()
+    permissions:
+      actions: read
+      contents: read
+    uses: ./.github/workflows/no-warnings.yml
+  lint-gate:
+    name: lint-gate
+    needs: [changes, markdownlint, commitlint, actionlint, test-scripts, no-warnings]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if any lint job failed
+        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+        run: exit 1

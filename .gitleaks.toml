@@ -1,0 +1,25 @@
+# gitleaks configuration — secret scanning (hook + CI).
+#
+# We extend gitleaks' built-in rule set (which covers AWS keys, GitHub/GitLab
+# tokens, private keys, Slack tokens, generic high-entropy secrets, etc.)
+# rather than redefining it, then add an allowlist for known-safe fixtures.
+
+# Pull in and keep all upstream default rules.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Paths and patterns that are safe by construction (test fixtures, lockfiles, generated code)."
+paths = [
+  '''Cargo\.lock$''',
+  '''(^|/)tests?/.*fixtures?/''',
+  '''(^|/)testdata/''',
+  '''(^|/)gen/''',
+]
+# Obvious non-secrets. Anchored so a value must BE the placeholder — a real
+# secret that merely contains one of these words (e.g. `changeme_prod_key`) is
+# NOT allowlisted, keeping the false-negative risk of this security gate low.
+regexes = [
+  '''^EXAMPLE_[A-Z0-9_]+$''',
+  '''(?i)^(dummy|placeholder|changeme)$''',
+]

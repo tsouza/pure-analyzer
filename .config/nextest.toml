@@ -1,0 +1,38 @@
+# cargo-nextest configuration.
+#
+# ZERO-TOLERANCE FLAKE POLICY: retries are deliberately set to 0 everywhere.
+# A test that fails intermittently is a bug to be fixed immediately, never
+# masked by a retry. Do NOT add `retries` to any profile — a flake budget is
+# an invitation to ship flakes. (See CLAUDE.md testing discipline.)
+
+[profile.default]
+# Fail fast locally so the inner loop is short.
+fail-fast = true
+retries = 0
+# Surface anything slow enough to be suspicious.
+slow-timeout = { period = "30s", terminate-after = 2 }
+# Show output for failures so the cause is visible without a rerun.
+failure-output = "immediate-final"
+status-level = "fail"
+
+[profile.default.junit]
+path = "junit.xml"
+
+# CI profile: run the WHOLE suite (no fail-fast) so one failure doesn't hide
+# others, still with zero retries. Selected via `--profile ci` in CI.
+[profile.ci]
+fail-fast = false
+retries = 0
+slow-timeout = { period = "60s", terminate-after = 3 }
+failure-output = "immediate-final"
+final-status-level = "flaky"
+
+[profile.ci.junit]
+path = "junit.xml"
+
+# Chaos / DST profile: these are slower and seed-driven. Still zero retries —
+# a failing seed is captured and replayed deterministically, not retried away.
+[profile.chaos]
+fail-fast = false
+retries = 0
+slow-timeout = { period = "120s", terminate-after = 2 }

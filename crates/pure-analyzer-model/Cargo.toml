@@ -1,0 +1,16 @@
+[package]
+name = "pure-analyzer-model"
+description = "PMCD JSON loader and Pure-model-file (Domain grammar) loader -> ModelGraph. The engine-free model path is first-class (design doc §4.3, §7)."
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+# Scaffold only — no dependencies until the first model-loader feature lands.
+[dependencies]

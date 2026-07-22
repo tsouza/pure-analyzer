@@ -1,0 +1,30 @@
+# clippy configuration — complexity and correctness budgets.
+#
+# The `-D warnings` gate in `just lint` turns every lint below into a hard
+# error. These thresholds are PROTECTED config: an agent may tighten them but
+# may not loosen them without human sign-off (see the ratchet in CLAUDE.md).
+
+# Fail functions that get too tangled. Keeps changes reviewable and nudges
+# extraction over sprawling control flow.
+cognitive-complexity-threshold = 15
+
+# Cap the number of function arguments before it's a smell (default is 7).
+too-many-arguments-threshold = 6
+
+# Flag very large stack types being moved around by value.
+too-many-lines-threshold = 120
+
+# Any float or int literal above this must be a named const, not a magic
+# number buried in logic (see the "no magic constants" rule in CLAUDE.md).
+literal-representation-threshold = 16384
+
+# Disallow `unwrap` everywhere via clippy::disallowed-methods as the cheapest
+# line of defense. NOTE: `expect` is deliberately NOT listed here — unlike the
+# `no-unwrap-outside-tests` ast-grep rule (run by `cargo xtask sweep`), clippy's
+# `disallowed_methods` has no test-code exemption, and tests legitimately use
+# `.expect(..)`. `expect` in non-test code is caught by that rule (which does
+# exempt tests) instead.
+disallowed-methods = [
+    { path = "std::option::Option::unwrap", reason = "handle None explicitly; no unwrap outside tests" },
+    { path = "std::result::Result::unwrap", reason = "handle the error explicitly; no unwrap outside tests" },
+]

@@ -1,0 +1,343 @@
+name: CI
+
+# Thin CI: the fast lane is `cargo xtask ci` (typed, testable orchestration in
+# Rust). Heavier / specialized gates run as parallel jobs so they can use their
+# own tooling and caching. Every gate here has a matching `just` target and
+# vice-versa.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  merge_group:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read   # dorny/paths-filter reads changed files via the PR API
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # --- Path filter: gate code jobs so doc-only PRs skip them ----------------
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v7
+        # fetch-depth: 0 so paths-filter can diff a push against its base commit
+        # locally; persist-credentials: false means it cannot fetch the base
+        # over the network, and a depth-1 checkout lacks it.
+        with: { persist-credentials: false, fetch-depth: 0 }
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            code:
+              - '**/*.rs'
+              - 'crates/**'
+              - 'xtask/**'
+              - 'fuzz/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - '.cargo/**'
+              - 'deny.toml'
+              - 'clippy.toml'
+              - 'rust-toolchain.toml'
+              - '.mise.toml'
+              - 'rustfmt.toml'
+              - 'public-api/**'
+              - '.config/nextest.toml'
+              - 'ast-grep-rules/**'
+              - 'sgconfig.yml'
+              - 'scripts/**'
+              - 'release-plz.toml'
+              - '.github/workflows/ci.yml'
+
+  # --- Primary gate: fmt + lint + build + all nextest layers via xtask -----
+  check:
+    name: xtask ci (fmt, lint, test)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: sccache
+      # sccache keys on compiler invocation, not on incremental fingerprints;
+      # leaving incremental on defeats its cache hits (see mozilla/sccache#465).
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # No dtolnay/rust-toolchain step anywhere in this file: rust-toolchain.toml
+      # already pins stable + rustfmt/clippy/rust-src, and rustup auto-installs
+      # it on the first cargo/rustup call. A second `rustup default` from the
+      # action would fight the file over which one wins, surfacing rustup's
+      # "implicitly overridden" warning on every invocation for no behavioral
+      # difference.
+      - uses: mozilla-actions/sccache-action@v0.0.10
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+      - name: cargo xtask ci
+        run: cargo xtask ci
+
+  # --- Coverage floor (cargo-llvm-cov) -------------------------------------
+  coverage:
+    name: coverage
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: sccache
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # rust-toolchain.toml supplies the stable channel; only the
+      # coverage-specific component is missing from it.
+      - run: rustup component add llvm-tools-preview
+      - uses: mozilla-actions/sccache-action@v0.0.10
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov,cargo-nextest
+      - name: Coverage + floor enforcement
+        run: cargo xtask coverage
+
+  # --- Mutation testing (cargo-mutants) ------------------------------------
+  mutation:
+    name: mutation
+    needs: changes
+    # Mutation runs are expensive; keep them off draft PRs.
+    if: needs.changes.outputs.code == 'true' && github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: sccache
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: mozilla-actions/sccache-action@v0.0.10
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-mutants,cargo-nextest,just
+      - name: cargo mutants
+        run: just test-mutation
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: mutants-out
+          path: mutants.out
+
+  # --- Supply chain: deny + audit + unused deps ----------------------------
+  supply-chain:
+    name: deny / audit / unused-deps
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny,cargo-audit,cargo-machete,just
+      - name: cargo deny
+        run: just deny
+      - name: cargo audit
+        run: just audit
+      - name: cargo machete (unused deps)
+        run: just machete
+      # Fail a PR on release-plz config drift instead of the post-merge trunk
+      # run (release-plz.yml only fires on push to main).
+      - name: release-plz config check
+        run: just release-plz-check
+
+  # --- API stability: semver-checks + public-api snapshot ------------------
+  api-stability:
+    name: semver / public-api
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: sccache
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: mozilla-actions/sccache-action@v0.0.10
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-semver-checks,cargo-public-api,just
+      - name: cargo semver-checks
+        run: just semver
+      # public-api needs a nightly toolchain (rustdoc JSON) and a committed
+      # baseline snapshot per crate. Skips until the API stabilizes: generate
+      # baselines with `just public-api-bless`, commit them, then set repo
+      # variable PUBLIC_API_ENABLED=true.
+      - name: Install nightly (for cargo public-api)
+        if: ${{ vars.PUBLIC_API_ENABLED == 'true' }}
+        uses: dtolnay/rust-toolchain@nightly
+      - name: public API snapshot
+        if: ${{ vars.PUBLIC_API_ENABLED == 'true' }}
+        run: cargo xtask public-api
+
+  # --- Structural rules + postponed-marker gate (ast-grep) -----------------
+  structural:
+    name: ast-grep / postponed-markers
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: Swatinem/rust-cache@v2
+      - uses: oven-sh/setup-bun@v2
+      - name: Install ast-grep
+        uses: taiki-e/install-action@v2
+        with:
+          tool: ast-grep,just
+      - name: ast-grep structural rules
+        run: ast-grep scan
+      - name: Postponed-marker gate
+        run: just postponed-markers
+
+  # --- Docs build (missing-docs is a hard error) ---------------------------
+  docs:
+    name: docs
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: sccache
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: mozilla-actions/sccache-action@v0.0.10
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just
+      - name: cargo doc (warnings denied)
+        run: just docs
+
+  # --- Fuzz smoke (cargo-fuzz / libFuzzer) ---------------------------------
+  # A bounded 60s-per-target run so a newly reachable crash reddens the PR rather
+  # than waiting for a periodic run. The corpus is restored from and saved back to
+  # the Actions cache (constitution §2) so runs accrete coverage instead of
+  # re-fetching from anywhere.
+  fuzz:
+    name: fuzz-smoke
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: sccache
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # cargo-fuzz needs nightly for its `-Zsanitizer` flags; the pinned stable in
+      # rust-toolchain.toml cannot build fuzz targets. This is the sanctioned case
+      # (constitution §1) of a job installing a channel the file does not provide —
+      # same as the opt-in public-api job.
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: mozilla-actions/sccache-action@v0.0.10
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-fuzz,just
+      # Restore the accumulated corpus and save a fresh snapshot each run, so
+      # coverage compounds across PRs without ever re-downloading from a third
+      # party (the fetch is cache-only; a miss just starts from an empty corpus).
+      - uses: actions/cache@v6
+        with:
+          path: fuzz/corpus
+          key: fuzz-corpus-${{ github.run_id }}
+          restore-keys: fuzz-corpus-
+      - name: fuzz-smoke (60s per target)
+        # Force the gnu triple: the musl-installed cargo-fuzz otherwise builds for
+        # a static-libc musl target, incompatible with the ASAN sanitizer.
+        run: just fuzz diagnostics 60 x86_64-unknown-linux-gnu
+
+  # --- Performance regression via CodSpeed (criterion benches) -------------
+  bench:
+    name: bench (codspeed)
+    needs: changes
+    # Skips until CodSpeed is set up: install the CodSpeed GitHub App on the
+    # repo, then set repo variable CODSPEED_ENABLED=true. Auth is via OIDC, no
+    # secret required. A skipped job does not block required-check branch rules.
+    if: needs.changes.outputs.code == 'true' && vars.CODSPEED_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read      # actions/checkout
+      id-token: write     # OIDC auth to CodSpeed (no static token needed)
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: sccache
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: mozilla-actions/sccache-action@v0.0.10
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-codspeed
+      - name: Build benchmarks
+        run: cargo codspeed build --workspace
+      - name: Run benchmarks under CodSpeed
+        uses: CodSpeedHQ/action@v4
+        with:
+          run: cargo codspeed run
+
+  # --- Warnings-are-errors net (constitution §2) --------------------------
+  # Sweep this run's job logs for any tool warning that exited 0 (docker build,
+  # apt, useradd, …). Shared with lint/security/release-plz via the reusable
+  # no-warnings workflow so every pipeline is covered by one definition. Runs
+  # after everything (their logs must exist); `always()` so it also catches
+  # warnings in a job that failed.
+  no-warnings:
+    name: no-warnings (log sweep)
+    needs: [changes, check, coverage, mutation, supply-chain, api-stability, structural, docs, fuzz, bench]
+    if: always()
+    permissions:
+      actions: read
+      contents: read
+    uses: ./.github/workflows/no-warnings.yml
+
+  # --- Aggregate gate: the single required check ---------------------------
+  ci-gate:
+    name: ci-gate
+    needs: [changes, check, coverage, mutation, supply-chain, api-stability, structural, docs, fuzz, bench, no-warnings]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if any code job failed
+        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+        run: exit 1

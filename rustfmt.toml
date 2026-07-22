@@ -1,0 +1,14 @@
+# rustfmt configuration — stable channel only (no nightly-gated options).
+#
+# Enforced in CI via `just fmt-check`. Keep this minimal and stable so the
+# format is reproducible across every contributor's toolchain.
+
+edition = "2024"
+max_width = 100
+newline_style = "Unix"
+use_field_init_shorthand = true
+use_try_shorthand = true
+
+# Reorder and normalize imports/items for stable, review-friendly diffs.
+reorder_imports = true
+reorder_modules = true

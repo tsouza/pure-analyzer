@@ -1,0 +1,29 @@
+[package]
+name = "pure-analyzer-cli"
+description = "The `pure-analyzer` binary: clap subcommands, config discovery, renderers, unified exit codes (design doc §6)."
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+# The distributed binary is not published as a library crate.
+publish = false
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "pure-analyzer"
+path = "src/main.rs"
+
+# The CLI is a front-end crate: it is the one place allowed to depend on
+# `clap` (protocol) and, once rendering lands, `ariadne`/`codespan-reporting`
+# (see ast-grep-rules/no-front-end-deps-in-core.yml). As a binary it may use
+# `anyhow` at the boundary (libraries use `thiserror`).
+[dependencies]
+libpure.workspace = true
+clap.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true

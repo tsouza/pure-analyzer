@@ -1,0 +1,16 @@
+[package]
+name = "pure-analyzer-parser"
+description = "Hand-written resilient recursive-descent + Pratt parser; event stream -> rowan green tree + Vec<Diagnostic>. Parses M3 (query) and Domain (model) (design doc §4.2)."
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+# Scaffold only — no dependencies until the first parser feature lands.
+[dependencies]

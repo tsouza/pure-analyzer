@@ -1,0 +1,9 @@
+# markdownlint-cli2 options. Rule config lives in .markdownlint.yaml (auto-read).
+# Excludes vendored / generated trees so local runs match CI's clean checkout.
+globs:
+  - "**/*.md"
+ignores:
+  - "node_modules/**"
+  - "target/**"
+  - "fuzz/target/**"
+  - "gen/**"

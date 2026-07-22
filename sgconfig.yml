@@ -1,0 +1,9 @@
+# ast-grep project configuration.
+#
+# Structural lint layer (L1 deterministic gate). These rules encode
+# conventions and architecture guardrails as machine-checkable AST patterns so
+# they never need a manual (LLM-token-costing) audit pass. Run via
+# `ast-grep scan` (invoked from `cargo xtask sweep` / `just sweep`).
+
+ruleDirs:
+  - ast-grep-rules

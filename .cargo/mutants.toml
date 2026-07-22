@@ -1,0 +1,12 @@
+# cargo-mutants scope. Mutation testing verifies that unit tests actually catch
+# regressions, so it targets the analysis-engine crates (lexer through
+# libpure), which are unit-tested. Excluded:
+#   * xtask/**                    — the dev/CI task orchestrator, not shipped
+#                                   product code (also excluded from the
+#                                   coverage floor).
+#   * crates/pure-analyzer-cli/** — the composition root: argument parsing,
+#                                   tracing init, and I/O wiring are
+#                                   integration-level, not unit-mutation-
+#                                   testable without spawning the binary.
+# Re-include the CLI once it has integration tests exercising that wiring.
+exclude_globs = ["xtask/**", "crates/pure-analyzer-cli/**"]

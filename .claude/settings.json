@@ -1,0 +1,4 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "//": "Project settings for pure-analyzer. Git hooks are declared in lefthook.yml (installed by 'just hooks-install'); there are intentionally no Claude Code shell hooks (constitution §2 forbids shell scripts)."
+}

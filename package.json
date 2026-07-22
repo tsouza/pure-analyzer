@@ -1,0 +1,11 @@
+{
+  "name": "pure-analyzer-tooling",
+  "private": true,
+  "type": "module",
+  "description": "JS/Bun automation tooling only — the Rust workspace is the product.",
+  "devDependencies": {
+    "@commitlint/cli": "^19.6.0",
+    "@commitlint/config-conventional": "^19.6.0",
+    "markdownlint-cli2": "^0.17.0"
+  }
+}

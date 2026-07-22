@@ -1,0 +1,33 @@
+# This is a last-mile safety net for drift, not the primary way dependencies
+# get pinned. Pins must already be current when written — via `cargo add`
+# with no explicit version — per the dependency-vetting skill and
+# constitution §2. If Dependabot is opening many PRs, that's a process
+# violation upstream, not something to wave through here.
+version: 2
+updates:
+  # Rust workspace (crates/*, xtask). `fuzz` is excluded from the
+  # workspace and its nightly toolchain, so it is intentionally omitted here.
+  - package-ecosystem: cargo
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      cargo-minor-patch:
+        update-types:
+          - minor
+          - patch
+    commit-message:
+      prefix: "chore(deps)"
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        update-types:
+          - minor
+          - patch
+    commit-message:
+      prefix: "ci(deps)"

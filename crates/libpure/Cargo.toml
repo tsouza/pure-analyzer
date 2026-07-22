@@ -1,0 +1,22 @@
+[package]
+name = "libpure"
+description = "Thin facade over the analysis engine: pub use of syntax/parser/model/resolve/analysis (and ir/eq in v0.2). The whole product; cli and lsp are thin adapters over it (design doc §1.5, §3)."
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+pure-analyzer-diagnostics.workspace = true
+pure-analyzer-lexer.workspace = true
+pure-analyzer-syntax.workspace = true
+pure-analyzer-parser.workspace = true
+pure-analyzer-model.workspace = true
+pure-analyzer-resolve.workspace = true
+pure-analyzer-analysis.workspace = true

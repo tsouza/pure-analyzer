@@ -1,0 +1,15 @@
+rust:
+  - changed-files:
+      - any-glob-to-any-file: ['crates/**', 'xtask/**', 'fuzz/**', '**/*.rs', 'Cargo.*']
+documentation:
+  - changed-files:
+      - any-glob-to-any-file: ['**/*.md', 'docs/**']
+ci:
+  - changed-files:
+      - any-glob-to-any-file: ['.github/**', '.mise.toml', 'lefthook.yml']
+dependencies:
+  - changed-files:
+      - any-glob-to-any-file: ['Cargo.lock', 'bun.lock', 'package.json', 'deny.toml']
+security:
+  - changed-files:
+      - any-glob-to-any-file: ['.gitleaks.toml', 'SECURITY.md', '.github/workflows/security.yml']

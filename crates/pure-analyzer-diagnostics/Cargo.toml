@@ -1,0 +1,23 @@
+[package]
+name = "pure-analyzer-diagnostics"
+description = "The shared Diagnostic model: code, severity, spans, fix, verdict. Depended on by every pass-producing crate; emits no renderers itself."
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+# Leaf crate: no internal workspace dependencies. `text-size` is the same
+# byte-offset span type the lexer/syntax/parser layers use, so a `Label`'s
+# span is directly comparable to a `rowan` node's range with no conversion.
+[dependencies]
+text-size.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

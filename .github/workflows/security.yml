@@ -1,0 +1,64 @@
+name: Security
+
+# Scheduled + on-demand security scans: secret scanning (gitleaks) and
+# advisory scanning (cargo-audit). Runs on PRs, on push to main, and weekly so
+# newly-disclosed advisories are caught even without a code change.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Every Monday 05:00 UTC.
+    - cron: "0 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gitleaks:
+    name: gitleaks (secret scan)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # The gitleaks CLI is free; the gitleaks-action wrapper requires a paid
+      # license on GitHub organization accounts. Install the version pinned in
+      # .mise.toml via mise rather than a bespoke curl|tar shell pipeline.
+      - uses: jdx/mise-action@v4
+        with:
+          install_args: gitleaks
+      - name: gitleaks
+        run: gitleaks detect --no-banner --redact --config .gitleaks.toml
+
+  audit:
+    name: cargo-audit (advisories)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+      - name: cargo audit
+        run: cargo audit --deny warnings
+
+  # Warnings-are-errors net (constitution §2): sweep this run's job logs for a
+  # tool warning that exited 0 (e.g. a gitleaks/cargo-audit notice). Same
+  # reusable sweep as ci/lint/release-plz; a warning fails the run.
+  no-warnings:
+    needs: [gitleaks, audit]
+    if: always()
+    permissions:
+      actions: read
+      contents: read
+    uses: ./.github/workflows/no-warnings.yml

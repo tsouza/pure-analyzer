@@ -1,0 +1,49 @@
+# .mise.toml — reproducible toolchain: agent == CI == laptop.
+#
+# `mise install` provisions the pinned tools below. The Rust toolchain itself
+# is deferred to rust-toolchain.toml (the source of truth for channel +
+# components) so rustup and mise never disagree; we only assert the channel
+# here for parity.
+#
+# Cargo-based tools are not distributed via mise, so they are installed by the
+# `install-cargo-tools` task at pinned versions with `--locked` for
+# reproducibility.
+
+[tools]
+# Rust is owned entirely by rust-toolchain.toml (channel = "stable" = latest
+# stable). rustup is a hard requirement of this repo anyway (nightly is needed
+# for the excluded `fuzz`/`lints` crates and for cargo-public-api), so mise does
+# not provision rust — a mise pin here would only shadow and fight rustup.
+
+# Task runner (the human frontend).
+just = "1.55.1"
+
+# Structural search/lint used by the hygiene sweep.
+"ast-grep" = "0.44.1"
+
+# Secret scanning (hook + CI).
+gitleaks = "8.30.1"
+
+# PR-based release automation (version bump + changelog + publish).
+release-plz = "0.3.159"
+
+# Bun runs every `.mjs` automation script (the repo forbids shell scripts).
+bun = "1.3.14"
+
+# Declarative git hooks (no hand-written hook scripts).
+lefthook = "2.1.9"
+
+[env]
+# Keep cargo output deterministic in CI logs.
+CARGO_TERM_COLOR = "always"
+
+# ---------------------------------------------------------------------------
+# Cargo-installed tools. mise cannot pin these directly, so we install them
+# with `cargo install --locked` at explicit versions via a Bun script (the
+# repo forbids shell scripts — see constitution §2). That script is the
+# canonical list of dev tool versions; CI and local dev both run this same
+# task.
+# ---------------------------------------------------------------------------
+[tasks.install-cargo-tools]
+description = "Install all cargo-based dev tools at pinned versions (--locked)."
+run = "bun scripts/install-cargo-tools.mjs"
