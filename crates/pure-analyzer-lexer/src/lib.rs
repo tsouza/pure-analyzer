@@ -444,11 +444,14 @@ mod tests {
 
     #[test]
     fn garbage_bytes_yield_error_tokens_not_panics() {
+        // NUL, SOH, and € match no rule (not whitespace, not IDENT-start,
+        // not any symbol) and none of them borders a token they could
+        // extend into, so — unlike the maximal-munch cases above — each
+        // really does become its own ERROR token here.
         let tokens = lex("\u{0}\u{1}€");
         assert!(
-            tokens
-                .iter()
-                .all(|(kind, _)| *kind != SyntaxKind::WHITESPACE)
+            tokens.iter().all(|(kind, _)| *kind == SyntaxKind::ERROR),
+            "expected every token to be ERROR, got {tokens:?}"
         );
         let total: text_size::TextSize = tokens
             .iter()

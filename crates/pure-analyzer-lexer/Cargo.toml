@@ -12,9 +12,10 @@ publish = false
 [lints]
 workspace = true
 
-# Scaffold only — no dependencies until the first lexer feature lands (see
-# specs/lexer.md). Declaring `logos` here before any code uses it would trip
-# `cargo machete` (constitution §2: gates run clean).
+# logos: forbid_unsafe is required, not optional — its default codegen can
+# emit unsafe, which would fail this crate's #![forbid(unsafe_code)] (see
+# docs/dependencies/logos.md). text-size: the shared span type every layer
+# above this one uses (docs/dependencies/text-size.md).
 [dependencies]
 logos = { workspace = true, features = ["forbid_unsafe"] }
 text-size.workspace = true
