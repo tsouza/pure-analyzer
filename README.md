@@ -1,55 +1,47 @@
 # pure-analyzer
 
-A mechanical, standalone, Rust static-analysis toolchain for Legend Pure (the
-modern `Relation<>` dialect) — no LLM, no runtime engine, no network. It is
-built by an AI coding agent under a machine-enforced methodology inherited
-from a domain-agnostic starter kit; see [`CLAUDE.md`](CLAUDE.md) and
-[`constitution.md`](constitution.md).
-
-pure-analyzer targets a real, proven-hard gap: getting the `%latest`
-milestoning-date arity right on a navigation chain is a genuine Legend/Reladomo
-developer footgun that even frontier LLMs get wrong end-to-end.
-`pure-analyzer lint` mechanically decides it. See
-[`docs/design/pure-analyzer-design.md`](docs/design/pure-analyzer-design.md)
-for the full specification this project implements — background, grammar,
-the milestoning-arity algorithm, subcommand contracts, and staged milestones.
+A mechanical, standalone Rust static-analysis toolchain for [Legend
+Pure](https://legend.finos.org/) — the modern `Relation<>` dialect
+(`meta::pure::functions::relation::*`), not the legacy `TabularDataSet` API. No
+LLM, no runtime engine, no network: identical inputs always produce
+byte-identical output.
 
 ## Why it exists
 
-An AI agent can write a lot of code quickly. The hard part is keeping that code
-*correct, consistent, and honest* over hundreds of changes without a human
-re-reviewing every line. The methodology this project inherited answers that by:
+Deep milestoned navigation — getting the count of `%latest` temporal date
+arguments right on a navigation chain — is a real Legend/Reladomo developer
+footgun, one even frontier LLMs routinely get wrong end-to-end. The required
+arity depends on the *target* class's temporal stereotype (`bitemporal` →2,
+`businesstemporal`/`processingtemporal` →1, none →0), threaded fresh through
+every hop of a chain, with a context-gate that legalizes a bare 0-arg call only
+when the immediate source class is itself compatibly milestoned. `pure-analyzer
+lint` mechanically decides this — no engine required at runtime.
 
-- Pushing quality checks down into **deterministic gates** wherever possible, so
-  judgment (and tokens) are spent only where a machine can't decide.
-- Splitting the agent into a **cheap generator and a stronger reviewer**, so
-  review is rigorous without being ruinously expensive.
-- Making the system **self-learning but ratcheted**: it can loosen its
-  understanding of the domain freely, but it can only ever tighten its guardrails.
+No fast, standalone static-analysis toolchain for Pure existed before this;
+prior tooling is Java/IDE-based and needs the full Legend engine.
 
-Read [`docs/methodology/overview.md`](docs/methodology/overview.md) for the full
-picture.
+## What it does
 
-## Quickstart
+One shared analysis engine (`libpure`: lexer → resilient parser → lossless CST
+→ model loader → resolver), two front-ends over it — a CLI and, from v0.2, a
+Language Server — so every check is available identically at the command line
+and live in an editor:
 
-Day-to-day:
+- **`validate`** — grammar + shallow well-formedness, no model needed.
+- **`lint`** — the milestoning `%latest`-arity core, unknown-property, and
+  statically-determinate multiplicity misuse. Needs a model (PMCD JSON, or a
+  parsed Pure model file — engine-free either way).
+- **`eq` / `diff`** — sound, incomplete, 3-valued structural equivalence
+  (`EQUIVALENT` / `NOT_EQUIVALENT`+witness / `INDECISIVE`+reason) over the
+  decidable relational core. Never wrongly commits an equivalence verdict.
+- **`fmt`** — canonical, idempotent formatting from the lossless CST.
+- **LSP (`pure-analyzer-lsp`)** — the same `Diagnostic`s as live squiggles,
+  each `Fix` as a code-action, `explain` as hover, go-to-definition via the
+  resolver.
 
-```sh
-just ci                 # run the full local gate — build, lint, test, audit
-```
-
-To re-provision a tool later: `mise install && mise run install-cargo-tools`.
-
-Start a feature the way the agent does:
-
-```sh
-just new-feature <name> # create a git worktree + branch for the change
-just spec <name>        # scaffold specs/<name>.md, then drive /spec:
-                        #   plan → implement → verify
-```
-
-`just` is the only supported entry point. If you need a target that doesn't
-exist yet, add it — that's a rule, not a suggestion.
+See [`docs/design/pure-analyzer-design.md`](docs/design/pure-analyzer-design.md)
+for the full specification — grammar, the milestoning-arity algorithm,
+subcommand contracts, model formats, and staged milestones.
 
 ## Layout
 
@@ -64,56 +56,28 @@ crates/
   pure-analyzer-diagnostics/ the shared Diagnostic model (leaf, no renderers)
   libpure/                   thin facade over the above; the whole product
   pure-analyzer-cli/         the `pure-analyzer` binary: clap, renderers, exit codes
-xtask/    typed CI logic invoked by just
 docs/
   design/pure-analyzer-design.md   the full implementation spec
-  domain-model.md                  the evolving "what", elaborating the design doc
-  lessons.md                       heuristics ledger (provisional → confirmed)
+  domain-model.md                  the evolving "what": entities, workflows, invariants
   decisions/                       architecture decision records
-  methodology/                     how this kit works, in depth
-constitution.md         the non-negotiable rules
-CLAUDE.md               what the agent reads every session (thin; links here)
 ```
 
 Dependencies point inward only, along the DAG: `lexer -> syntax -> parser ->
 {model, resolve} -> analysis -> libpure -> cli`, with `pure-analyzer-diagnostics`
-as a shared leaf. Only the front-end crate (`pure-analyzer-cli` today;
-`pure-analyzer-lsp` in v0.2) may depend on a renderer (`ariadne`,
-`codespan-reporting`) or protocol crate (`clap`, later `tower-lsp`). The
-layering is enforced by `cargo xtask verify-layering` (see ADR-0003) and the
-`no-front-end-deps-in-core` ast-grep rule, not by good intentions.
+as a shared leaf — enforced by `cargo xtask verify-layering`, not convention.
 
-## Working with the agent
+## Building
 
-The agent reads [`CLAUDE.md`](CLAUDE.md) each session; that file is deliberately
-thin and links into `docs/`. The rules it must obey are in
-[`constitution.md`](constitution.md). The methodology docs explain the testing
-pyramid, the L0–L4 quality layers, the self-learning loop, and the reviewer
-cascade.
+```sh
+mise install && mise run install-cargo-tools   # provision toolchain once
+just ci                                        # build, lint, test
+```
 
-## Optional gates (off by default)
-
-A few gates ship **wired but disabled**, so the project isn't red on day one.
-Each stays dormant until you flip a repo variable or add a baseline — and until
-then the thing it guards ships **unprotected**:
-
-- [ ] **Performance regression (CodSpeed)** — install the
-  [CodSpeed GitHub App](https://codspeed.io/) on the repo, then set the repo
-  variable `CODSPEED_ENABLED=true`. Until then, criterion deltas are not gated.
-- [ ] **Public-API snapshot (`cargo-public-api`)** — generate baselines with
-  `just public-api-bless`, commit them, then set `PUBLIC_API_ENABLED=true` (needs
-  a nightly toolchain). Until then, unintended public-API changes are not caught
-  (`cargo-semver-checks` still runs on every PR).
-
-Set a variable with `gh variable set CODSPEED_ENABLED --body true`, or via
-**Settings → Secrets and variables → Actions → Variables**. The fuzz-smoke,
-coverage, mutation, and structural gates are on by default — nothing to enable.
-
-## Contributing
-
-See [`CONTRIBUTING.md`](CONTRIBUTING.md), [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md),
-and [`SECURITY.md`](SECURITY.md). Contributions run through the same gates the
-agent does.
+`just` is the only supported entry point — see `just --list` for every target
+(spec scaffolding, coverage, mutation testing, fuzzing, the full CI mirror).
+This project is developed under a spec-driven, gate-enforced engineering
+methodology; see [`CONTRIBUTING.md`](CONTRIBUTING.md) if you're submitting a
+change, and [`constitution.md`](constitution.md) for the rules that govern it.
 
 ## License
 
