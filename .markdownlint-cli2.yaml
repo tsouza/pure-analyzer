@@ -7,3 +7,15 @@ ignores:
   - "target/**"
   - "fuzz/target/**"
   - "gen/**"
+  # Inherited, verbatim inputs (ported from purecard's pre-migration config) —
+  # the relocated master spec and the committed test corpus are content kept
+  # as-is, not repo-authored prose maintained to our markdown style (EBNF
+  # fences, emoji tables, escaped-pipe tables the aligner can't normalize).
+  # docs/spec/README.md is its own index and stays linted. See
+  # .markdownlintignore for the same list and the full rationale.
+  - "crates/pure-analyzer-purecard/docs/spec/overview.md"
+  - "crates/pure-analyzer-purecard/docs/spec/architecture.md"
+  - "crates/pure-analyzer-purecard/docs/spec/grammar.md"
+  - "crates/pure-analyzer-purecard/docs/spec/schema.md"
+  - "crates/pure-analyzer-purecard/docs/spec/testing.md"
+  - "crates/pure-analyzer-purecard/corpus/**"

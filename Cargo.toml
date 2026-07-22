@@ -10,12 +10,17 @@ members = [
     "crates/pure-analyzer-analysis",
     "crates/libpure",
     "crates/pure-analyzer-cli",
+    "crates/pure-analyzer-purecard",
     "xtask",
 ]
 # `fuzz` requires a nightly toolchain and is excluded so a normal stable
 # `cargo build`/`clippy`/`test --workspace` does not try to compile it:
 # the cargo-fuzz crate needs its own lockfile and a libfuzzer dep.
-exclude = ["fuzz"]
+# `crates/pure-analyzer-purecard/fuzz` is purecard's own cargo-fuzz crate, same reasoning.
+# `crates/pure-analyzer-purecard/lints` is a dylint library (links `clippy_utils`, needs
+# rustc_private + nightly); built out-of-band via `cargo dylint`, never by a
+# stable `cargo build`.
+exclude = ["fuzz", "crates/pure-analyzer-purecard/fuzz", "crates/pure-analyzer-purecard/lints"]
 
 # Workspace-wide lints, inherited by each member via `[lints] workspace = true`.
 # This is the class-killing enforcement behind constitution.md §1.2/§1.3:
@@ -97,10 +102,19 @@ codespan-reporting = "0.13.1"
 rayon = "1.12.0"
 
 # --- Benchmarking ---
-criterion = "0.8.2"
+# default-features off: no plotters/gnuplot/rayon HTML-report tree, just the
+# cargo_bench_support harness `harness = false` benches need. A consumer that
+# wants HTML reports adds `features = ["html_reports"]` locally (members can
+# add features but, per Cargo, can't re-enable default-features once the
+# workspace disables them) -- pinned here, not per-crate, so criterion has one
+# source of truth (no other member depends on it yet, so this is zero-risk).
+criterion = { version = "0.8.2", default-features = false }
 
 # --- Test snapshotting (golden/corpus tests) ---
 insta = "1.48.0"
+
+# --- Property testing (docs/dependencies/proptest.md) ---
+proptest = "1.11.0"
 
 [profile.release]
 opt-level = 3

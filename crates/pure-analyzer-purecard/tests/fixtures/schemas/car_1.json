@@ -1,0 +1,409 @@
+{
+  "db_id": "car_1",
+  "db_path": "spider::car_1::Db",
+  "classes": {
+    "spider::car_1::model::default::CarMakers": {
+      "simple_name": "CarMakers",
+      "properties": [
+        {
+          "name": "id",
+          "type": {
+            "kind": "primitive",
+            "name": "Integer"
+          },
+          "mult": {
+            "lower": 1,
+            "upper": 1
+          }
+        },
+        {
+          "name": "maker",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "fullName",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "country",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        }
+      ],
+      "qualified_properties": [],
+      "super_types": []
+    },
+    "spider::car_1::model::default::CarNames": {
+      "simple_name": "CarNames",
+      "properties": [
+        {
+          "name": "makeId",
+          "type": {
+            "kind": "primitive",
+            "name": "Integer"
+          },
+          "mult": {
+            "lower": 1,
+            "upper": 1
+          }
+        },
+        {
+          "name": "model",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "make",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        }
+      ],
+      "qualified_properties": [],
+      "super_types": []
+    },
+    "spider::car_1::model::default::CarsData": {
+      "simple_name": "CarsData",
+      "properties": [
+        {
+          "name": "id",
+          "type": {
+            "kind": "primitive",
+            "name": "Integer"
+          },
+          "mult": {
+            "lower": 1,
+            "upper": 1
+          }
+        },
+        {
+          "name": "mpg",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "cylinders",
+          "type": {
+            "kind": "primitive",
+            "name": "Integer"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "edispl",
+          "type": {
+            "kind": "primitive",
+            "name": "Float"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "horsepower",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "weight",
+          "type": {
+            "kind": "primitive",
+            "name": "Integer"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "accelerate",
+          "type": {
+            "kind": "primitive",
+            "name": "Float"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "year",
+          "type": {
+            "kind": "primitive",
+            "name": "Integer"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        }
+      ],
+      "qualified_properties": [],
+      "super_types": []
+    },
+    "spider::car_1::model::default::Continents": {
+      "simple_name": "Continents",
+      "properties": [
+        {
+          "name": "contId",
+          "type": {
+            "kind": "primitive",
+            "name": "Integer"
+          },
+          "mult": {
+            "lower": 1,
+            "upper": 1
+          }
+        },
+        {
+          "name": "continent",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        }
+      ],
+      "qualified_properties": [],
+      "super_types": []
+    },
+    "spider::car_1::model::default::Countries": {
+      "simple_name": "Countries",
+      "properties": [
+        {
+          "name": "countryId",
+          "type": {
+            "kind": "primitive",
+            "name": "Integer"
+          },
+          "mult": {
+            "lower": 1,
+            "upper": 1
+          }
+        },
+        {
+          "name": "countryName",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "continent",
+          "type": {
+            "kind": "primitive",
+            "name": "Integer"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        }
+      ],
+      "qualified_properties": [],
+      "super_types": []
+    },
+    "spider::car_1::model::default::ModelList": {
+      "simple_name": "ModelList",
+      "properties": [
+        {
+          "name": "modelId",
+          "type": {
+            "kind": "primitive",
+            "name": "Integer"
+          },
+          "mult": {
+            "lower": 1,
+            "upper": 1
+          }
+        },
+        {
+          "name": "maker",
+          "type": {
+            "kind": "primitive",
+            "name": "Integer"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "model",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        }
+      ],
+      "qualified_properties": [],
+      "super_types": []
+    }
+  },
+  "associations": [
+    {
+      "path": "spider::car_1::model::fk_0",
+      "ends": [
+        {
+          "property_name": "fk0DefaultCountries",
+          "target_class": "spider::car_1::model::default::Countries",
+          "mult": {
+            "lower": 1,
+            "upper": null
+          }
+        },
+        {
+          "property_name": "fk0DefaultContinents",
+          "target_class": "spider::car_1::model::default::Continents",
+          "mult": {
+            "lower": 1,
+            "upper": 1
+          }
+        }
+      ]
+    },
+    {
+      "path": "spider::car_1::model::fk_1",
+      "ends": [
+        {
+          "property_name": "fk1DefaultCarMakers",
+          "target_class": "spider::car_1::model::default::CarMakers",
+          "mult": {
+            "lower": 1,
+            "upper": null
+          }
+        },
+        {
+          "property_name": "fk1DefaultCountries",
+          "target_class": "spider::car_1::model::default::Countries",
+          "mult": {
+            "lower": 1,
+            "upper": 1
+          }
+        }
+      ]
+    },
+    {
+      "path": "spider::car_1::model::fk_2",
+      "ends": [
+        {
+          "property_name": "fk2DefaultModelList",
+          "target_class": "spider::car_1::model::default::ModelList",
+          "mult": {
+            "lower": 1,
+            "upper": null
+          }
+        },
+        {
+          "property_name": "fk2DefaultCarMakers",
+          "target_class": "spider::car_1::model::default::CarMakers",
+          "mult": {
+            "lower": 1,
+            "upper": 1
+          }
+        }
+      ]
+    },
+    {
+      "path": "spider::car_1::model::fk_3",
+      "ends": [
+        {
+          "property_name": "fk3DefaultCarNames",
+          "target_class": "spider::car_1::model::default::CarNames",
+          "mult": {
+            "lower": 1,
+            "upper": null
+          }
+        },
+        {
+          "property_name": "fk3DefaultModelList",
+          "target_class": "spider::car_1::model::default::ModelList",
+          "mult": {
+            "lower": 1,
+            "upper": null
+          }
+        }
+      ]
+    },
+    {
+      "path": "spider::car_1::model::fk_4",
+      "ends": [
+        {
+          "property_name": "fk4DefaultCarsData",
+          "target_class": "spider::car_1::model::default::CarsData",
+          "mult": {
+            "lower": 1,
+            "upper": 1
+          }
+        },
+        {
+          "property_name": "fk4DefaultCarNames",
+          "target_class": "spider::car_1::model::default::CarNames",
+          "mult": {
+            "lower": 1,
+            "upper": 1
+          }
+        }
+      ]
+    }
+  ],
+  "enums": {}
+}

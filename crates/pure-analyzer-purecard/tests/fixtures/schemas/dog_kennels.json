@@ -1,0 +1,751 @@
+{
+  "db_id": "dog_kennels",
+  "db_path": "spider::dog_kennels::Db",
+  "classes": {
+    "spider::dog_kennels::model::default::Breeds": {
+      "simple_name": "Breeds",
+      "properties": [
+        {
+          "name": "breedCode",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 1,
+            "upper": 1
+          }
+        },
+        {
+          "name": "breedName",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        }
+      ],
+      "qualified_properties": [],
+      "super_types": []
+    },
+    "spider::dog_kennels::model::default::Charges": {
+      "simple_name": "Charges",
+      "properties": [
+        {
+          "name": "chargeId",
+          "type": {
+            "kind": "primitive",
+            "name": "Integer"
+          },
+          "mult": {
+            "lower": 1,
+            "upper": 1
+          }
+        },
+        {
+          "name": "chargeType",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "chargeAmount",
+          "type": {
+            "kind": "primitive",
+            "name": "Float"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        }
+      ],
+      "qualified_properties": [],
+      "super_types": []
+    },
+    "spider::dog_kennels::model::default::Dogs": {
+      "simple_name": "Dogs",
+      "properties": [
+        {
+          "name": "dogId",
+          "type": {
+            "kind": "primitive",
+            "name": "Integer"
+          },
+          "mult": {
+            "lower": 1,
+            "upper": 1
+          }
+        },
+        {
+          "name": "ownerId",
+          "type": {
+            "kind": "primitive",
+            "name": "Integer"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "abandonedYn",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "breedCode",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "sizeCode",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "name",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "age",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "dateOfBirth",
+          "type": {
+            "kind": "primitive",
+            "name": "DateTime"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "gender",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "weight",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "dateArrived",
+          "type": {
+            "kind": "primitive",
+            "name": "DateTime"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "dateAdopted",
+          "type": {
+            "kind": "primitive",
+            "name": "DateTime"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "dateDeparted",
+          "type": {
+            "kind": "primitive",
+            "name": "DateTime"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        }
+      ],
+      "qualified_properties": [],
+      "super_types": []
+    },
+    "spider::dog_kennels::model::default::Owners": {
+      "simple_name": "Owners",
+      "properties": [
+        {
+          "name": "ownerId",
+          "type": {
+            "kind": "primitive",
+            "name": "Integer"
+          },
+          "mult": {
+            "lower": 1,
+            "upper": 1
+          }
+        },
+        {
+          "name": "firstName",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "lastName",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "street",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "city",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "state",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "zipCode",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "emailAddress",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "homePhone",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "cellNumber",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        }
+      ],
+      "qualified_properties": [],
+      "super_types": []
+    },
+    "spider::dog_kennels::model::default::Professionals": {
+      "simple_name": "Professionals",
+      "properties": [
+        {
+          "name": "professionalId",
+          "type": {
+            "kind": "primitive",
+            "name": "Integer"
+          },
+          "mult": {
+            "lower": 1,
+            "upper": 1
+          }
+        },
+        {
+          "name": "roleCode",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "firstName",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "street",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "city",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "state",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "zipCode",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "lastName",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "emailAddress",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "homePhone",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "cellNumber",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        }
+      ],
+      "qualified_properties": [],
+      "super_types": []
+    },
+    "spider::dog_kennels::model::default::Sizes": {
+      "simple_name": "Sizes",
+      "properties": [
+        {
+          "name": "sizeCode",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 1,
+            "upper": 1
+          }
+        },
+        {
+          "name": "sizeDescription",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        }
+      ],
+      "qualified_properties": [],
+      "super_types": []
+    },
+    "spider::dog_kennels::model::default::TreatmentTypes": {
+      "simple_name": "TreatmentTypes",
+      "properties": [
+        {
+          "name": "treatmentTypeCode",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 1,
+            "upper": 1
+          }
+        },
+        {
+          "name": "treatmentTypeDescription",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        }
+      ],
+      "qualified_properties": [],
+      "super_types": []
+    },
+    "spider::dog_kennels::model::default::Treatments": {
+      "simple_name": "Treatments",
+      "properties": [
+        {
+          "name": "treatmentId",
+          "type": {
+            "kind": "primitive",
+            "name": "Integer"
+          },
+          "mult": {
+            "lower": 1,
+            "upper": 1
+          }
+        },
+        {
+          "name": "dogId",
+          "type": {
+            "kind": "primitive",
+            "name": "Integer"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "professionalId",
+          "type": {
+            "kind": "primitive",
+            "name": "Integer"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "treatmentTypeCode",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "dateOfTreatment",
+          "type": {
+            "kind": "primitive",
+            "name": "DateTime"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "costOfTreatment",
+          "type": {
+            "kind": "primitive",
+            "name": "Float"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        }
+      ],
+      "qualified_properties": [],
+      "super_types": []
+    }
+  },
+  "associations": [
+    {
+      "path": "spider::dog_kennels::model::fk_0",
+      "ends": [
+        {
+          "property_name": "fk0DefaultDogs",
+          "target_class": "spider::dog_kennels::model::default::Dogs",
+          "mult": {
+            "lower": 1,
+            "upper": null
+          }
+        },
+        {
+          "property_name": "fk0DefaultOwners",
+          "target_class": "spider::dog_kennels::model::default::Owners",
+          "mult": {
+            "lower": 1,
+            "upper": 1
+          }
+        }
+      ]
+    },
+    {
+      "path": "spider::dog_kennels::model::fk_1",
+      "ends": [
+        {
+          "property_name": "fk1DefaultDogs",
+          "target_class": "spider::dog_kennels::model::default::Dogs",
+          "mult": {
+            "lower": 1,
+            "upper": null
+          }
+        },
+        {
+          "property_name": "fk1DefaultOwners",
+          "target_class": "spider::dog_kennels::model::default::Owners",
+          "mult": {
+            "lower": 1,
+            "upper": 1
+          }
+        }
+      ]
+    },
+    {
+      "path": "spider::dog_kennels::model::fk_2",
+      "ends": [
+        {
+          "property_name": "fk2DefaultDogs",
+          "target_class": "spider::dog_kennels::model::default::Dogs",
+          "mult": {
+            "lower": 1,
+            "upper": null
+          }
+        },
+        {
+          "property_name": "fk2DefaultSizes",
+          "target_class": "spider::dog_kennels::model::default::Sizes",
+          "mult": {
+            "lower": 1,
+            "upper": 1
+          }
+        }
+      ]
+    },
+    {
+      "path": "spider::dog_kennels::model::fk_3",
+      "ends": [
+        {
+          "property_name": "fk3DefaultDogs",
+          "target_class": "spider::dog_kennels::model::default::Dogs",
+          "mult": {
+            "lower": 1,
+            "upper": null
+          }
+        },
+        {
+          "property_name": "fk3DefaultBreeds",
+          "target_class": "spider::dog_kennels::model::default::Breeds",
+          "mult": {
+            "lower": 1,
+            "upper": 1
+          }
+        }
+      ]
+    },
+    {
+      "path": "spider::dog_kennels::model::fk_4",
+      "ends": [
+        {
+          "property_name": "fk4DefaultTreatments",
+          "target_class": "spider::dog_kennels::model::default::Treatments",
+          "mult": {
+            "lower": 1,
+            "upper": null
+          }
+        },
+        {
+          "property_name": "fk4DefaultDogs",
+          "target_class": "spider::dog_kennels::model::default::Dogs",
+          "mult": {
+            "lower": 1,
+            "upper": 1
+          }
+        }
+      ]
+    },
+    {
+      "path": "spider::dog_kennels::model::fk_5",
+      "ends": [
+        {
+          "property_name": "fk5DefaultTreatments",
+          "target_class": "spider::dog_kennels::model::default::Treatments",
+          "mult": {
+            "lower": 1,
+            "upper": null
+          }
+        },
+        {
+          "property_name": "fk5DefaultProfessionals",
+          "target_class": "spider::dog_kennels::model::default::Professionals",
+          "mult": {
+            "lower": 1,
+            "upper": 1
+          }
+        }
+      ]
+    },
+    {
+      "path": "spider::dog_kennels::model::fk_6",
+      "ends": [
+        {
+          "property_name": "fk6DefaultTreatments",
+          "target_class": "spider::dog_kennels::model::default::Treatments",
+          "mult": {
+            "lower": 1,
+            "upper": null
+          }
+        },
+        {
+          "property_name": "fk6DefaultTreatmentTypes",
+          "target_class": "spider::dog_kennels::model::default::TreatmentTypes",
+          "mult": {
+            "lower": 1,
+            "upper": 1
+          }
+        }
+      ]
+    }
+  ],
+  "enums": {}
+}

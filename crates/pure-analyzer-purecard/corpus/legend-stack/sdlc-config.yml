@@ -1,0 +1,62 @@
+# Self-hosted Legend SDLC (filesystem backend) 0.195.0 config.
+# Adapted from the image default + legend-omnibus file-system template: anonymous auth,
+# entities stored under /data/sdlc (bind-mounted volume). Platform pins match the engine
+# container (4.113.0).
+applicationName: Legend SDLC
+sessionCookie: LEGEND_SDLC_JSESSIONID
+server:
+  adminContextPath: /admin
+  applicationConnectors:
+    - type: http
+      port: 6100
+      maxRequestHeaderSize: 128KiB
+  adminConnectors:
+    - type: http
+      port: 6101
+  gzip:
+    includedMethods:
+      - GET
+      - POST
+  requestLog:
+    type: classic
+    level: "OFF"
+    appenders:
+      - type: console
+        logFormat: "OFF"
+  rootPath: /api
+logging:
+  level: INFO
+  appenders:
+    - type: console
+      logFormat: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5p [%thread] %c - %m%n"
+swagger:
+  resourcePackage: org.finos.legend.sdlc.server.resources
+  title: Legend SDLC (File System)
+  version: 0.195.0
+  schemes: []
+pac4j:
+  clients:
+    - org.pac4j.core.client.direct.AnonymousClient: {}
+filterPriorities:
+  GitLab: 1
+  org.pac4j.j2e.filter.CallbackFilter: 2
+  org.pac4j.j2e.filter.SecurityFilter: 3
+  CORS: 4
+fileSystem:
+  rootDirectory: /data/sdlc
+features:
+  canCreateProject: true
+  canCreateVersion: false
+projectStructure:
+  projectCreation: {}
+  extensionProvider:
+    org.finos.legend.sdlc.server.gitlab.finos.FinosGitlabProjectStructureExtensionProvider: {}
+  platforms:
+    legend-engine:
+      groupId: org.finos.legend.engine
+      platformVersion:
+        version: 4.113.0
+    legend-sdlc:
+      groupId: org.finos.legend.sdlc
+      platformVersion:
+        version: 0.195.0

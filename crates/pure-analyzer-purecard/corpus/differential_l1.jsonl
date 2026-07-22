@@ -1,0 +1,231 @@
+{"q":"|Firm.all()->filter(x|$x.legalName == 'Apple')->project([x|$x.legalName],['name'])","legend":"parse_ok","dimension":"arm-a-relational","note":"canonical filter + two-list project"}
+{"q":"|Trade.all()->filter(x|$x.quantity > 100)->filter(x|$x.price < 50.0)->project([x|$x.id],['id'])","legend":"parse_ok","dimension":"arm-a-relational","note":"chained filters into project"}
+{"q":"|Person.all()->project([x|$x.firstName, x|$x.lastName],['first','last'])","legend":"parse_ok","dimension":"arm-a-relational","note":"multi-column projection, two aligned lists"}
+{"q":"|Trade.all()->groupBy([x|$x.product],[agg(x|$x.quantity, y|$y->sum())],['product','totalQty'])","legend":"parse_ok","dimension":"arm-a-relational","note":"TDS groupBy with single agg reduce"}
+{"q":"|Trade.all()->groupBy([x|$x.product, x|$x.book],[agg(x|$x.quantity, y|$y->sum()), agg(x|$x.price, y|$y->max())],['product','book','qty','maxPx'])","legend":"parse_ok","dimension":"arm-a-relational","note":"multi-key groupBy, multiple aggregations"}
+{"q":"|Person.all()->project([x|$x.name],['name'])->sort([ascending('name')])","legend":"parse_ok","dimension":"arm-a-relational","note":"post-project sort ascending"}
+{"q":"|Trade.all()->project([x|$x.name, x|$x.qty],['name','qty'])->sort([descending('qty'), ascending('name')])","legend":"parse_ok","dimension":"arm-a-relational","note":"multi-key sort, desc then asc"}
+{"q":"|Trade.all()->restrict(['id','quantity','price'])","legend":"parse_ok","dimension":"arm-a-relational","note":"restrict with column-name string list"}
+{"q":"|Trade.all()->groupBy([x|$x.product],[agg(x|$x.quantity, y|$y->sum())],['product','totalQty'])->filter(t|$t.getInteger('totalQty') > 1000)","legend":"parse_ok","dimension":"arm-a-relational","note":"HAVING-style post-aggregate filter via getInteger"}
+{"q":"|Trade.all()->filter(x|$x.getString('side') == 'BUY')->project([x|$x.id],['id'])","legend":"parse_ok","dimension":"arm-a-relational","note":"getString accessor inside filter lambda"}
+{"q":"|Trade.all()->project([x|$x.price * $x.quantity],['notional'])","legend":"parse_ok","dimension":"arm-a-relational","note":"arithmetic expression in projection lambda"}
+{"q":"|Trade.all()->filter(x|$x.quantity > 100 && $x.price < 50.0)->project([x|$x.id],['id'])","legend":"parse_ok","dimension":"arm-a-relational","note":"conjunctive filter with &&"}
+{"q":"|Trade.all()->filter(x|$x.side == 'BUY' || $x.side == 'SELL')","legend":"parse_ok","dimension":"arm-a-relational","note":"disjunctive filter with ||"}
+{"q":"|Trade.all()->filter(x|$x.tradeDate > %2020-01-01)->project([x|$x.id],['id'])","legend":"parse_ok","dimension":"arm-a-relational","note":"date literal comparison in filter"}
+{"q":"|Trade.all()->filter(x|$x.book == 'FX')->groupBy([x|$x.product],[agg(x|$x.quantity, y|$y->sum())],['product','qty'])->sort([descending('qty')])->restrict(['product'])","legend":"parse_ok","dimension":"arm-a-relational","note":"long pipeline: filter→groupBy→sort→restrict"}
+{"q":"|Firm.all()->filter(x|$x.employees->exists(e|$e.age > 65))->project([x|$x.name],['name'])","legend":"parse_ok","dimension":"arm-a-relational","note":"filter body with nested collection exists sub-lambda"}
+{"q":"|Trade.all()->restrict()","legend":"parse_ok","dimension":"arm-a-relational","note":"restrict with empty argument list"}
+{"q":"|Trade.all()->project([x|$x.name])","legend":"parse_ok","dimension":"arm-a-relational","note":"project missing the second alias list"}
+{"q":"|Firm.all()filter(x|$x.name == 'x')","legend":"parse_fail","dimension":"arm-a-relational","note":"missing -> arrow before filter"}
+{"q":"|Firm.all()->filter(x|$x.name == 'x')->project([x|$x.name],['name']","legend":"parse_fail","dimension":"arm-a-relational","note":"unbalanced parens, missing final close"}
+{"q":"|Firm.all()->project([x|$x.name,],['name'])","legend":"parse_fail","dimension":"arm-a-relational","note":"trailing comma in projection lambda list"}
+{"q":"|Trade.all()->groupBy([x|$x.product],[agg(x|$x.quantity, y|$y->sum())],)","legend":"parse_fail","dimension":"arm-a-relational","note":"trailing comma / missing id list arg in groupBy"}
+{"q":"|Person.all()->filter(x|$x.firstName == 'Alice')","legend":"parse_ok","dimension":"arm-c-classnav","note":"single-level property nav in filter predicate"}
+{"q":"|Person.all()->filter(x|$x.address.city == 'NYC')","legend":"parse_ok","dimension":"arm-c-classnav","note":"two-level deep property navigation"}
+{"q":"|Person.all()->filter(x|$x.address.country.name == 'US')","legend":"parse_ok","dimension":"arm-c-classnav","note":"three-level association traversal"}
+{"q":"|Order.all()->filter(x|$x.customer.account.balance > 0)","legend":"parse_ok","dimension":"arm-c-classnav","note":"deep numeric nav with comparison"}
+{"q":"|Employee.all()->filter(x|$x.status == Status.ACTIVE)","legend":"parse_ok","dimension":"arm-c-classnav","note":"enum reference comparison on property"}
+{"q":"|Trade.all()->filter(x|$x.side == Side.BUY && $x.quantity > 100)","legend":"parse_ok","dimension":"arm-c-classnav","note":"enum compare combined with numeric via &&"}
+{"q":"|Person.all()->filter(x|$x.addresses->exists(a|$a.city == 'NYC'))","legend":"parse_ok","dimension":"arm-c-classnav","note":"->exists over collection property with nested lambda"}
+{"q":"|Person.all()->filter(x|$x.addresses->forAll(a|$a.valid == true))","legend":"parse_ok","dimension":"arm-c-classnav","note":"->forAll collection quantifier"}
+{"q":"|Person.all()->filter(x|$x.addresses->isEmpty())","legend":"parse_ok","dimension":"arm-c-classnav","note":"->isEmpty on collection property"}
+{"q":"|Firm.all()->map(x|$x.employees->map(e|$e.firstName))","legend":"parse_ok","dimension":"arm-c-classnav","note":"nested ->map over association traversal"}
+{"q":"|Person.all()->filter(x|$x.fullName() == 'Alice Smith')","legend":"parse_ok","dimension":"arm-c-classnav","note":"qualified property call with no args"}
+{"q":"|Person.all()->filter(x|$x.nameWithPrefix('Dr') == 'Dr Alice')","legend":"parse_ok","dimension":"arm-c-classnav","note":"qualified property call with string arg"}
+{"q":"|Person.all()->filter(x|$x.salaryIn('USD', 2020) > 50000)","legend":"parse_ok","dimension":"arm-c-classnav","note":"qualified property call with multiple args"}
+{"q":"|Person.all()->filter(x|$x.manager.manager.firstName == 'Bob')","legend":"parse_ok","dimension":"arm-c-classnav","note":"repeated self-association deep nav"}
+{"q":"|Account.all()->filter(x|$x.owner.type == PartyType.INDIVIDUAL && $x.active)","legend":"parse_ok","dimension":"arm-c-classnav","note":"deep enum nav plus bare boolean property"}
+{"q":"|Person.all()->filter(x|$x.addresses->exists(a|$a.city == $x.homeCity))","legend":"parse_ok","dimension":"arm-c-classnav","note":"outer refvar captured inside nested exists lambda"}
+{"q":"|Person.all()->filter(x|$x.address.'Postal Code' == '10001')","legend":"parse_ok","dimension":"arm-c-classnav","note":"quoted member after nav step"}
+{"q":"|Person.all()->filter(x|$x.address?.city == 'NYC')","legend":"parse_fail","dimension":"arm-c-classnav","note":"optional-chaining-style ?. navigation (likely not Pure)"}
+{"q":"|Person.all()->filter(x|$x..address == 'NYC')","legend":"parse_fail","dimension":"arm-c-classnav","note":"malformed double-dot navigation"}
+{"q":"|Person.all()->filter(x|$x. == 'NYC')","legend":"parse_fail","dimension":"arm-c-classnav","note":"trailing dot with no member"}
+{"q":"|Person.all()->filter(x|$x.address. == 'NYC')","legend":"parse_fail","dimension":"arm-c-classnav","note":"dangling dot after nav step"}
+{"q":"|Person.all()->filter(x|$.firstName == 'Alice')","legend":"parse_fail","dimension":"arm-c-classnav","note":"refvar with empty name before dot"}
+{"q":"|Person.all()->filter(x|$x.address.city.)","legend":"parse_fail","dimension":"arm-c-classnav","note":"predicate ends on trailing dot, no comparison"}
+{"q":"|Person.all()->project(~[name: x|$x.name, age: x|$x.age])","legend":"parse_ok","dimension":"arm-r-relation-api","note":"project with ~[key: lambda] multi-column"}
+{"q":"|Firm.all()->project(~[legalName])","legend":"parse_ok","dimension":"arm-r-relation-api","note":"project with bare ~[col] no lambda (column selection form)"}
+{"q":"|Trade.all()->project(~[id: x|$x.id, 'Trade Value': x|$x.value])","legend":"parse_ok","dimension":"arm-r-relation-api","note":"quoted string as project column key"}
+{"q":"|Trade.all()->groupBy(~[product], ~[total: x|$x.qty : y|$y->sum()])","legend":"parse_ok","dimension":"arm-r-relation-api","note":"groupBy map-then-reduce agg with grouping array"}
+{"q":"|Trade.all()->groupBy(~[product, region], ~['Total Qty': x|$x.qty : y|$y->sum()])","legend":"parse_ok","dimension":"arm-r-relation-api","note":"multi-key groupBy, quoted agg name"}
+{"q":"|Sales.all()->groupBy(~region, ~total: x|$x.amount : y|$y->sum())","legend":"parse_ok","dimension":"arm-r-relation-api","note":"groupBy with bare ~col (non-array) key and agg"}
+{"q":"|Person.all()->rename(~firstName, ~givenName)","legend":"parse_ok","dimension":"arm-r-relation-api","note":"rename(~old, ~new) two-arg column rename"}
+{"q":"|Person.all()->sort([ascending(~age)])","legend":"parse_ok","dimension":"arm-r-relation-api","note":"sort array with ascending(~col)"}
+{"q":"|Person.all()->sort([ascending(~lastName), descending(~age)])","legend":"parse_ok","dimension":"arm-r-relation-api","note":"sort with mixed ascending/descending"}
+{"q":"|Person.all()->sort(ascending(~age))","legend":"parse_ok","dimension":"arm-r-relation-api","note":"sort with bare func arg, not wrapped in array"}
+{"q":"|Trade.all()->extend(~[gross: x|$x.qty * $x.price])","legend":"parse_ok","dimension":"arm-r-relation-api","note":"extend with computed ~[col: lambda]"}
+{"q":"|Trade.all()->extend(over(~account), ~[runningTotal: {p,w,r|$r.qty}: y|$y->sum()])","legend":"parse_ok","dimension":"arm-r-relation-api","note":"window extend over() with {p,w,r|} frame lambda then reduce"}
+{"q":"|Trade.all()->extend(~newCol: x|$x.a + $x.b)","legend":"parse_ok","dimension":"arm-r-relation-api","note":"extend with bare ~col: lambda (non-array)"}
+{"q":"|Trade.all()->select(~[id, value])","legend":"parse_ok","dimension":"arm-r-relation-api","note":"select with ~[cols] column list"}
+{"q":"|Trade.all()->select(~id)","legend":"parse_ok","dimension":"arm-r-relation-api","note":"select single bare ~col"}
+{"q":"|Person.all()->project(~[total: x|$x.v : y|$y->sum()])","legend":"parse_ok","dimension":"arm-r-relation-api","note":"reducer-in-project: map:reduce inside project (uncertain legality)"}
+{"q":"|Trade.all()->restrict(~[id, value])","legend":"parse_ok","dimension":"arm-r-relation-api","note":"restrict with relation ~[cols]"}
+{"q":"|Trade.all()->groupBy(~[product], ~['count': x|$x.id : y|$y->count()])","legend":"parse_ok","dimension":"arm-r-relation-api","note":"groupBy with count reducer"}
+{"q":"|Trade.all()->project(~['Gross Credits': x|$x.credits])->sort([descending(~'Gross Credits')])","legend":"parse_ok","dimension":"arm-r-relation-api","note":"quoted ~'col' referenced in downstream sort"}
+{"q":"|Firm.all()->project(~[emp: x|$x.employees->count()])","legend":"parse_ok","dimension":"arm-r-relation-api","note":"project lambda body invoking ->count()"}
+{"q":"|Trade.all()->olapGroupBy(~[product], ~rank: {p,w,r|$r}: y|$y->rank())","legend":"parse_ok","dimension":"arm-r-relation-api","note":"olapGroupBy with frame lambda and rank reducer"}
+{"q":"|Trade.all()->groupBy(~[product], ~[sum: x|$x.qty : y|$y->sum(), avg: x|$x.qty : y|$y->average()])","legend":"parse_ok","dimension":"arm-r-relation-api","note":"multiple aggregations in one groupBy"}
+{"q":"|Trade.all()->extend(over(~account, ~[ascending(~date)]), ~[rn: {p,w,r|$r}: y|$y->rank()])","legend":"parse_fail","dimension":"arm-r-relation-api","note":"window over() with partition + order-by array"}
+{"q":"|Trade.all()->project([~id, ~value])","legend":"parse_ok","dimension":"arm-r-relation-api","note":"array of bare ~col refs (not ~[...]) as project arg"}
+{"q":"|Person.all()->project(~[fullName: x|$x.first + ' ' + $x.last])->rename(~fullName, ~name)","legend":"parse_ok","dimension":"arm-r-relation-api","note":"project then rename chained on relation"}
+{"q":"|Trade.all()->groupBy(~[~product], ~[t: x|$x.q : y|$y->sum()])","legend":"parse_fail","dimension":"arm-r-relation-api","note":"nested ~ inside ~[] grouping array (double tilde)"}
+{"q":"|Trade.all()->sort([ascending(~a), ascending(~b), descending(~c)])","legend":"parse_ok","dimension":"arm-r-relation-api","note":"sort with three ordered column specs"}
+{"q":"|Firm.all()->filter(x|$x.name == 'Acme')","legend":"parse_ok","dimension":"literals-and-dates","note":"basic single-quoted string literal"}
+{"q":"|Firm.all()->filter(x|$x.name == 'Comp. Sci.')","legend":"parse_ok","dimension":"literals-and-dates","note":"string with dots and spaces"}
+{"q":"|Firm.all()->filter(x|$x.note == 'a''b')","legend":"parse_fail","dimension":"literals-and-dates","note":"embedded doubled single-quote escape"}
+{"q":"|Firm.all()->filter(x|$x.note == 'it''s a ''test''')","legend":"parse_fail","dimension":"literals-and-dates","note":"multiple doubled-quote escapes in one string"}
+{"q":"|Firm.all()->filter(x|$x.note == '')","legend":"parse_ok","dimension":"literals-and-dates","note":"empty string literal"}
+{"q":"|Firm.all()->filter(x|$x.count == -3)","legend":"parse_ok","dimension":"literals-and-dates","note":"negative integer literal"}
+{"q":"|Firm.all()->filter(x|$x.ratio > 1.5)","legend":"parse_ok","dimension":"literals-and-dates","note":"float literal"}
+{"q":"|Firm.all()->filter(x|$x.ratio > -2.75)","legend":"parse_ok","dimension":"literals-and-dates","note":"negative float literal"}
+{"q":"|Firm.all()->filter(x|$x.ratio < .5)","legend":"parse_ok","dimension":"literals-and-dates","note":"leading-dot float without integer part"}
+{"q":"|Firm.all()->filter(x|$x.active == true)","legend":"parse_ok","dimension":"literals-and-dates","note":"boolean literal true"}
+{"q":"|Firm.all()->filter(x|$x.active == false && $x.n > 0)","legend":"parse_ok","dimension":"literals-and-dates","note":"boolean with boolean-op chain"}
+{"q":"|Firm.all()->filter(x|$x.founded == %2020-01-01)","legend":"parse_ok","dimension":"literals-and-dates","note":"date literal"}
+{"q":"|Firm.all()->filter(x|$x.ts == %2020-01-01T10:00:00)","legend":"parse_ok","dimension":"literals-and-dates","note":"datetime literal with time"}
+{"q":"|Firm.all()->filter(x|$x.ts == %2020-01-01T10:00:00.000)","legend":"parse_ok","dimension":"literals-and-dates","note":"datetime with fractional seconds"}
+{"q":"|Firm.all(%latest)->filter(x|$x.n > 0)","legend":"parse_ok","dimension":"literals-and-dates","note":"milestoning %latest in all()"}
+{"q":"|Firm.all(%latestdate)->filter(x|$x.n > 0)","legend":"parse_fail","dimension":"literals-and-dates","note":"milestoning %latestdate in all()"}
+{"q":"|Firm.all(%latest, %latest)->filter(x|$x.n > 0)","legend":"parse_ok","dimension":"literals-and-dates","note":"two milestoning args in all()"}
+{"q":"|Firm.all()->filter(x|$x.prop(%latest, %latest) == 1)","legend":"parse_ok","dimension":"literals-and-dates","note":"milestoned property access with two milestone args"}
+{"q":"|Firm.all()->filter(x|$x.founded == %2020-13-45)","legend":"parse_ok","dimension":"literals-and-dates","note":"out-of-range date components, likely lexes but semantically bad"}
+{"q":"|Firm.all()->filter(x|$x.founded == %9999-99-99)","legend":"parse_ok","dimension":"literals-and-dates","note":"grossly invalid date, grammar-vs-semantics boundary"}
+{"q":"|Firm.all()->filter(x|$x.name == 'unclosed)","legend":"parse_fail","dimension":"literals-and-dates","note":"unterminated string literal"}
+{"q":"|Firm.all()->filter(x|$x.founded == %)","legend":"parse_fail","dimension":"literals-and-dates","note":"bare percent with no date payload"}
+{"q":"|Firm.all()->filter(x|$x.founded == %2020-01)","legend":"parse_ok","dimension":"literals-and-dates","note":"year-month only date, no day"}
+{"q":"|Firm.all()->filter(x|$x.n == 1_000)","legend":"parse_ok","dimension":"literals-and-dates","note":"underscore digit separator in integer"}
+{"q":"|Firm.all()->filter(x|$x.r == 1.5e3)","legend":"parse_ok","dimension":"literals-and-dates","note":"scientific-notation float"}
+{"q":"|Firm.all()->filter(x|$x.tag == 'line1\nline2')","legend":"parse_fail","dimension":"literals-and-dates","note":"raw newline inside string literal"}
+{"q":"|X.all()->filter(x|$x.'Cnt' > 100)","legend":"parse_ok","dimension":"quoted-members","note":"basic quoted member after value-nav dot"}
+{"q":"|Firm.all()->filter(x|$x.'Gross Credits' > 0)","legend":"parse_ok","dimension":"quoted-members","note":"quoted member name containing a space"}
+{"q":"|X.all()->filter(x|$x.'a''b' > 0)","legend":"parse_fail","dimension":"quoted-members","note":"doubled single-quote escape inside member name"}
+{"q":"|Person.all()->filter(x|$x.'O''Brien' == 'z')","legend":"parse_fail","dimension":"quoted-members","note":"apostrophe via '' doubling in a realistic name"}
+{"q":"|X.all()->filter(x|$x.'Total GC'->toOne() > 0)","legend":"parse_ok","dimension":"quoted-members","note":"chained ->toOne() method after a closed quoted member"}
+{"q":"|X.all()->filter(x|$x.'seg'.name == 'z')","legend":"parse_ok","dimension":"quoted-members","note":"bare-ident navigation dot after a quoted member"}
+{"q":"|X.all()->filter(x|$x.'a'.'b' == 1)","legend":"parse_ok","dimension":"quoted-members","note":"quoted member chained directly to another quoted member"}
+{"q":"|X.all()->filter(x|$this.'1@3' > 0)","legend":"parse_ok","dimension":"quoted-members","note":"digits and @ (non-ident schars) inside a quoted member on $this"}
+{"q":"|X.all()->project([x|$x.'Gross Credits'], ['gc'])","legend":"parse_ok","dimension":"quoted-members","note":"quoted member as the projected value expression"}
+{"q":"|X.all()->groupBy(~[region], ~'Cnt': x|$x.'v' : y|$y->count())->filter(x|$x.'Cnt' > 100)","legend":"parse_ok","dimension":"quoted-members","note":"quoted col name (~'Cnt') plus quoted members in map and downstream filter"}
+{"q":"|X.all()->filter(x|$x.'Gross Credits' > 0 && $x.'Net' < 10)","legend":"parse_ok","dimension":"quoted-members","note":"two quoted members joined by &&"}
+{"q":"|X.all()->extend(over(~desk), ~['w': {p,w,r|$r.'ClientGC'} : y|$y->sum()])","legend":"parse_ok","dimension":"quoted-members","note":"quoted member inside a {p,w,r|...} window frame lambda"}
+{"q":"|X.'name'","legend":"parse_ok","dimension":"quoted-members","note":"quoted member after a SOURCE class path with no all() — source dot needs an ident"}
+{"q":"|demo::Reading.'Cnt'","legend":"parse_ok","dimension":"quoted-members","note":"quoted member after a qualified :: source path (source-dot dead end)"}
+{"q":"|X.all()->filter(x|$x['name'] > 0)","legend":"parse_fail","dimension":"quoted-members","note":"bracket-index member form $x['name'] — the recent-bug illegal shape"}
+{"q":"|X.all()->filter(x|$it[0] > 0)","legend":"parse_fail","dimension":"quoted-members","note":"numeric bracket index $it[0]"}
+{"q":"|X.all()->filter(x|$x.['name'] > 0)","legend":"parse_fail","dimension":"quoted-members","note":"dot-then-bracket $x.['name'] hybrid"}
+{"q":"|X.all()->filter(x|$x.0 > 0)","legend":"parse_fail","dimension":"quoted-members","note":"unquoted numeric member after value-nav dot"}
+{"q":"|X.all()->filter(x|$x.'Cnt > 0)","legend":"parse_fail","dimension":"quoted-members","note":"unclosed quote on member name — never reaches accept"}
+{"q":"|X.all()->filter(x|$x.'' > 0)","legend":"parse_ok","dimension":"quoted-members","note":"empty quoted member: '' is a doubled escape, so effectively unclosed"}
+{"q":"|Trade.all()->filter(x|$x.quantity > 0)","legend":"parse_ok","dimension":"operators-and-precedence","note":"single relational comparison in filter"}
+{"q":"|Trade.all()->filter(x|$x.quantity > 0 && $x.price < 100)","legend":"parse_ok","dimension":"operators-and-precedence","note":"two comparisons joined by &&"}
+{"q":"|Trade.all()->filter(x|$x.status == 'OPEN' || $x.status == 'PENDING')","legend":"parse_ok","dimension":"operators-and-precedence","note":"|| with equality on string literals"}
+{"q":"|Account.all()->filter(x|$x.balance >= -3 && $x.balance <= 0)","legend":"parse_ok","dimension":"operators-and-precedence","note":"chained range with negative int literal"}
+{"q":"|Order.all()->filter(x|$x.qty + $x.extra * 2 > 10)","legend":"parse_ok","dimension":"operators-and-precedence","note":"arithmetic precedence * vs + vs > without parens"}
+{"q":"|Trade.all()->filter(x|not($x.cancelled))","legend":"parse_ok","dimension":"operators-and-precedence","note":"not(...) around a boolean property"}
+{"q":"|Person.all()->filter(x|$x.age != 30)","legend":"parse_ok","dimension":"operators-and-precedence","note":"!= inequality"}
+{"q":"|Person.all()->filter(x|$x.name->startsWith('A'))","legend":"parse_ok","dimension":"operators-and-precedence","note":"string op startsWith as arrow call"}
+{"q":"|Person.all()->filter(x|$x.name->toLower()->contains('smith'))","legend":"parse_ok","dimension":"operators-and-precedence","note":"chained string ops toLower then contains"}
+{"q":"|Trade.all()->filter(x|$x.active == true)","legend":"parse_ok","dimension":"operators-and-precedence","note":"equality against boolean literal"}
+{"q":"|Trade.all()->filter(x|$x.a > 0 && $x.b < 5 || $x.c == 1)","legend":"parse_ok","dimension":"operators-and-precedence","note":"mixed && and || without grouping parens"}
+{"q":"|Trade.all()->filter(x|($x.a > 0 && $x.b < 5) || $x.c == 1)","legend":"parse_ok","dimension":"operators-and-precedence","note":"explicit parens grouping && before ||"}
+{"q":"|T.all()->filter(x|$x.a > 0 && $x.b > 0 && $x.c > 0)","legend":"parse_ok","dimension":"operators-and-precedence","note":"triple && chain left-associative"}
+{"q":"|Order.all()->filter(x|($x.qty + $x.extra) * 2 > 10)","legend":"parse_ok","dimension":"operators-and-precedence","note":"parenthesized arithmetic subexpression"}
+{"q":"|Order.all()->filter(x|$x.total / $x.count - 1 < 5)","legend":"parse_ok","dimension":"operators-and-precedence","note":"division and subtraction precedence with comparison"}
+{"q":"|Trade.all()->filter(x|not($x.a > 0 && $x.b < 0))","legend":"parse_ok","dimension":"operators-and-precedence","note":"not() wrapping an && expression"}
+{"q":"|M.all()->filter(x|$x.a * $x.b == $x.c + $x.d)","legend":"parse_ok","dimension":"operators-and-precedence","note":"arithmetic on both sides of equality, precedence of == vs +/*"}
+{"q":"|M.all()->filter(x|$x.rate > -0.5 && $x.rate < 1.5)","legend":"parse_ok","dimension":"operators-and-precedence","note":"negative float literal in range comparison"}
+{"q":"|T.all()->filter(x|not(not($x.active)))","legend":"parse_ok","dimension":"operators-and-precedence","note":"nested not(not(...))"}
+{"q":"|T.all()->filter(x|0 < $x.a < 10)","legend":"parse_ok","dimension":"operators-and-precedence","note":"chained relational without && (a<b<c)"}
+{"q":"|T.all()->filter(x|$x.a == 1 && $x.b == 2 || $x.c == 3 && $x.d == 4)","legend":"parse_ok","dimension":"operators-and-precedence","note":"&& and || interleaved, precedence ambiguity"}
+{"q":"|Person.all()->filter(x|$x.age > 21)","legend":"parse_ok","dimension":"lambdas-and-nesting","note":"basic single-param lambda in filter"}
+{"q":"|Order.all()->join(Customer.all(), JoinKind.INNER, {o,c|$o.custId == $c.id})","legend":"parse_ok","dimension":"lambdas-and-nesting","note":"multi-param brace lambda {o,c|...} as join predicate"}
+{"q":"|Trade.all()->extend(over(~region), ~'rnk': {p,w,r|$r->rank()})","legend":"parse_ok","dimension":"lambdas-and-nesting","note":"window {p,w,r|...} lambda in extend/over"}
+{"q":"|Trade.all()->filter(t|Account.all()->filter(a|$a.id == $t.accountId)->isEmpty())","legend":"parse_ok","dimension":"lambdas-and-nesting","note":"nested subquery inside filter lambda referencing outer refvar"}
+{"q":"|Order.all()->join(Customer.all()->filter(c|$c.active == true), JoinKind.INNER, {o,c|$o.custId == $c.id})","legend":"parse_ok","dimension":"lambdas-and-nesting","note":"subquery as the join source argument"}
+{"q":"|A.all()->filter(x|B.all()->filter(y|C.all()->exists(z|$z.v == $x.v))->isEmpty())","legend":"parse_ok","dimension":"lambdas-and-nesting","note":"three-level deeply nested lambdas with cross-scope refvar"}
+{"q":"|Sales.all()->groupBy(~[region], ~'total': x|$x.amount : y|$y->sum())","legend":"parse_ok","dimension":"lambdas-and-nesting","note":"map lambda and reduce lambda pair in arm-R groupBy"}
+{"q":"|Person.all()->project([x|$x.firstName, x|$x.lastName], ['fn','ln'])","legend":"parse_ok","dimension":"lambdas-and-nesting","note":"list of multiple single-param lambdas in project"}
+{"q":"|Person.all()->map(x|$x.addresses->map(a|$a.city))","legend":"parse_ok","dimension":"lambdas-and-nesting","note":"lambda nested inside another lambda body"}
+{"q":"|Person.all()->filter(x|)","legend":"parse_fail","dimension":"lambdas-and-nesting","note":"malformed: param and pipe but empty body"}
+{"q":"|Person.all()->filter(|$x.age > 21)","legend":"parse_ok","dimension":"lambdas-and-nesting","note":"malformed: pipe with no parameter name"}
+{"q":"|Person.all()->filter({|$x.age})","legend":"parse_ok","dimension":"lambdas-and-nesting","note":"malformed: brace lambda with empty param list"}
+{"q":"|Person.all()->filter(x $x.age > 21)","legend":"parse_fail","dimension":"lambdas-and-nesting","note":"malformed: param present but missing the pipe"}
+{"q":"|Order.all()->join(Customer.all(), JoinKind.INNER, {o,|$o.id == 1})","legend":"parse_fail","dimension":"lambdas-and-nesting","note":"malformed: trailing comma in multi-param list"}
+{"q":"|Person.all()->map({x|$x.name})","legend":"parse_ok","dimension":"lambdas-and-nesting","note":"single-param lambda wrapped in braces"}
+{"q":"|Person.all()->filter({a,b,c|})","legend":"parse_fail","dimension":"lambdas-and-nesting","note":"malformed: multi-param brace lambda with empty body"}
+{"q":"|Person.all()->filter(x|$x.age > 21 && $x.friends->exists(f|$f.age < $x.age))","legend":"parse_ok","dimension":"lambdas-and-nesting","note":"nested exists lambda closing over outer refvar in boolean expr"}
+{"q":"|Person.all()->filter(x||)","legend":"parse_fail","dimension":"lambdas-and-nesting","note":"malformed: double pipe with empty body"}
+{"q":"|Firm.all()->filter(f|$f.employees->filter(e|$e.age > 65)->size() > 0)","legend":"parse_ok","dimension":"lambdas-and-nesting","note":"chained nested subquery lambda feeding size() comparison"}
+{"q":"|Person.all(","legend":"parse_fail","dimension":"negatives-and-malformed","note":"unbalanced open paren, no close"}
+{"q":"|Person.all()->","legend":"parse_fail","dimension":"negatives-and-malformed","note":"trailing arrow with no method"}
+{"q":"||Person.all()","legend":"parse_fail","dimension":"negatives-and-malformed","note":"empty leading lambda body, double pipe"}
+{"q":"|Person.all()->filter(&)","legend":"parse_fail","dimension":"negatives-and-malformed","note":"bare ampersand as filter arg"}
+{"q":"|Person.all()->groupBy(~)","legend":"parse_fail","dimension":"negatives-and-malformed","note":"bare tilde with no column"}
+{"q":"|Person.all()-> ->filter(x|$x.age > 0)","legend":"parse_fail","dimension":"negatives-and-malformed","note":"stray double arrow, empty method slot"}
+{"q":"|Person.5","legend":"parse_fail","dimension":"negatives-and-malformed","note":"digit immediately after member dot"}
+{"q":"|Person.all()->filter(x|$x..age > 0)","legend":"parse_fail","dimension":"negatives-and-malformed","note":"double dot in navigation"}
+{"q":"|","legend":"parse_fail","dimension":"negatives-and-malformed","note":"lone pipe, empty query"}
+{"q":"|!!!","legend":"parse_fail","dimension":"negatives-and-malformed","note":"garbage bang tokens after pipe"}
+{"q":"|Person.all()->sort([ascending(~name)","legend":"parse_fail","dimension":"negatives-and-malformed","note":"unbalanced bracket and paren in sort"}
+{"q":"|Person.all()->filter({x|$x.age > 0)","legend":"parse_fail","dimension":"negatives-and-malformed","note":"unclosed brace lambda"}
+{"q":"|Person.all()->filter(x|$x.age > )","legend":"parse_fail","dimension":"negatives-and-malformed","note":"trailing comparison operator, missing rhs"}
+{"q":"|Person.all()->filter(x $x.age > 0)","legend":"parse_fail","dimension":"negatives-and-malformed","note":"missing pipe separating lambda param"}
+{"q":"|Person.all()->->filter(x|$x.age > 0)","legend":"parse_fail","dimension":"negatives-and-malformed","note":"consecutive arrows, no method between"}
+{"q":"|Person.all()->filter()","legend":"parse_ok","dimension":"negatives-and-malformed","note":"empty filter arg list — arity unsure"}
+{"q":"|Person.all()->groupBy(~[name],)","legend":"parse_fail","dimension":"negatives-and-malformed","note":"trailing comma, missing agg arg"}
+{"q":"|Person.all()->filter(x|$x. > 0)","legend":"parse_fail","dimension":"negatives-and-malformed","note":"navigation dot with no member name"}
+{"q":"|Person.all()->filter(x|let > 0)","legend":"parse_ok","dimension":"negatives-and-malformed","note":"reserved word let used as expression"}
+{"q":"|Person.all()->filter(x|&& $x.age)","legend":"parse_fail","dimension":"negatives-and-malformed","note":"leading binary operator with no lhs"}
+{"q":"|Person.all()->filter(x|$x.name == 'abc)","legend":"parse_fail","dimension":"negatives-and-malformed","note":"unterminated string literal"}
+{"q":"|Person.all()->filter(x|$x.d == %2020-13-99)","legend":"parse_ok","dimension":"negatives-and-malformed","note":"out-of-range date components"}
+{"q":"|Person.all()->project(~)","legend":"parse_fail","dimension":"negatives-and-malformed","note":"project with bare tilde, no columns"}
+{"q":"|Person.all()->filter(x|$x.age > 5abc)","legend":"parse_ok","dimension":"negatives-and-malformed","note":"identifier glued to integer literal"}
+{"q":"|Person.all()->filter(x|$.age > 0)","legend":"parse_fail","dimension":"negatives-and-malformed","note":"refvar dollar with no name"}
+{"q":"|Person.all()->filter(x|$x.age >> 0)","legend":"parse_fail","dimension":"negatives-and-malformed","note":"invalid >> operator"}
+{"q":"|.all()->filter(x|$x.age > 0)","legend":"parse_fail","dimension":"negatives-and-malformed","note":"leading dot, empty class path"}
+{"q":"|Person.all()->groupBy(~[k], ~'agg':)","legend":"parse_fail","dimension":"negatives-and-malformed","note":"aggregation name with empty map/reduce"}
+{"q":"|Trade.all()->map($it[0]-$it[1])","legend":"parse_fail","dimension":"known-over-approximations","note":"$it bracket-index arithmetic — L1 admits refvar[n], engine has no positional index"}
+{"q":"|Trade.all()->map(x|$x[0])","legend":"parse_fail","dimension":"known-over-approximations","note":"bracket index directly on a refvar (no property) — L1 over-admits"}
+{"q":"|Trade.all()->filter(x|$x.delta>=-3 && $x.delta<=0)","legend":"parse_ok","dimension":"known-over-approximations","note":"&&-conjoined negative-number range — likely legal, documented as boundary residual"}
+{"q":"|Trade.all()->map(z|z-([z1|z1-1],[z2|z2-2]))","legend":"parse_fail","dimension":"known-over-approximations","note":"paren-tuple of bare lambdas after minus — L1 reuses bracket/paren hubs and admits it"}
+{"q":"|Trade.all()->project(~[net: x|$x.v : y|$y->sum()])","legend":"parse_ok","dimension":"known-over-approximations","note":"reducer-in-project (map:reduce shape belongs to groupBy) — may be legal, boundary"}
+{"q":"|Trade.all()->groupBy(~[desk], ~'total': y|$y->sum())","legend":"parse_ok","dimension":"known-over-approximations","note":"relAggSpec with a single lambda after colon — missing the map:reduce split, PDA admits"}
+{"q":"|Trade.all()->groupBy(~[], ~'c': x|$x.v : y|$y->sum() : z|$z->max())","legend":"parse_fail","dimension":"known-over-approximations","note":"three colon-separated lambdas in one agg spec — beyond map:reduce, L1 over-admits nesting"}
+{"q":"|Trade.all()->project([x|$x.a, x|$x.b], ['c'])","legend":"parse_ok","dimension":"known-over-approximations","note":"column-count(2) != name-count(1) — L1 does not enforce equality (§5.6), compiler rejects"}
+{"q":"|Trade.all()->filter(x|$x.name + 3 > 0)","legend":"parse_ok","dimension":"known-over-approximations","note":"string+int arithmetic type mix — valueExpr admits any arithop between terms (§5.6)"}
+{"q":"|Trade.all()->filter(row: meta::pure::tds::TDSRow[2]|$row.getInteger('x') > 0)","legend":"parse_ok","dimension":"known-over-approximations","note":"integer multiplicity binder [2] — mult admits int, deliberate sound widening (§5.6)"}
+{"q":"|Product.all()->filter(x|$x.businessDate == %foo)","legend":"parse_fail","dimension":"known-over-approximations","note":"unknown milestone symbol %foo — milestoneLit admits any %<lowercase>+, compiler rejects"}
+{"q":"|Trade.all()->extend(over(~desk), ~['r': y|$y->sum()])","legend":"parse_ok","dimension":"known-over-approximations","note":"winAggSpec colon carrying a leading ~ inside the bracket — PDA doesn't enforce bare-vs-tilde colon (§5.9)"}
+{"q":"|Trade.all()->groupBy(~[desk], ~'gc': {p,w,r|$r.v} : y|$y->sum())","legend":"parse_ok","dimension":"known-over-approximations","note":"frame-lambda {p,w,r|...} used as the map side of a plain groupBy agg — frame belongs to windows, PDA admits"}
+{"q":"|X.all()->filter(x|$x.type == Type.Meeting)","legend":"parse_ok","dimension":"operators-and-precedence","note":"dotted enum-ref operand (Ident.VALUE) — real, model emits (research round 6)"}
+{"q":"|X.all()->filter(x|$x.emp == EmployeeType.CONTRACT)","legend":"parse_ok","dimension":"operators-and-precedence","note":"dotted enum-ref operand"}
+{"q":"|X.all()->filter(x|$x.seg == model::domain::ClientSegmentationL1.HEDGE_FUNDS)","legend":"parse_ok","dimension":"operators-and-precedence","note":"qualified enum-ref operand (pkg::path.VALUE) — real, model emits"}
+{"q":"|X.all()->filter(x|$x.side == Side.BUY && $x.qty > 0)","legend":"parse_ok","dimension":"operators-and-precedence","note":"dotted enum-ref operand in a conjunction"}
+{"q":"|spider::poker_player::PokerPlayer.all()->size()","legend":"parse_ok","dimension":"pilot-soundness","note":"S1 soundness: bare ->size() count-all"}
+{"q":"|spider::pets_1::Pets.all()->filter(p|$p.weight > 10)->size()","legend":"parse_ok","dimension":"pilot-soundness","note":"S1 soundness: filter numeric > + ->size()"}
+{"q":"|spider::concert_singer::Concert.all()->filter(c|$c.year == '2014' || $c.year == '2015')->size()","legend":"parse_ok","dimension":"pilot-soundness","note":"S1 soundness: string-literal == with || combinator + ->size()"}
+{"q":"|spider::poker_player::People.all()->project([p|$p.nationality], ['nationality'])->distinct()->size()","legend":"parse_ok","dimension":"pilot-soundness","note":"S1 soundness: project single col + ->distinct()->size()"}
+{"q":"|spider::poker_player::PokerPlayer.all()->project([p|$p.earnings], ['earnings'])->sort([desc('earnings')])","legend":"parse_ok","dimension":"pilot-soundness","note":"S1 soundness: project + ->sort([desc('col')])"}
+{"q":"|spider::concert_singer::Singer.all()->filter(s|$s.age > 20)->project([s|$s.country], ['country'])->distinct()","legend":"parse_ok","dimension":"pilot-soundness","note":"S1 soundness: filter + project + ->distinct()"}
+{"q":"|spider::poker_player::PokerPlayer.all()->filter(p|$p.earnings > 300000)->project([p|$p.people.name], ['name'])","legend":"parse_ok","dimension":"pilot-soundness","note":"S1 soundness: filter + assoc-nav project ($p.people.name)"}
+{"q":"|spider::pets_1::HasPet.all()->filter(hp|$hp.student.sex == 'F')->filter(hp|$hp.pets.pettype == 'dog')->size()","legend":"parse_ok","dimension":"pilot-soundness","note":"S1 soundness: chained filters over associations + ->size()"}
+{"q":"|spider::pets_1::Pets.all()->groupBy([p|$p.pettype], [agg(p|$p.weight, x|$x->mean())], ['pettype', 'avgWeight'])","legend":"parse_ok","dimension":"pilot-soundness","note":"S1 soundness: groupBy + agg(...->mean())"}
+{"q":"|spider::singer::Singer.all()->groupBy([s|$s.citizenship], [agg(s|$s.netWorthMillions, x|$x->max())], ['citizenship','maxNetWorth'])","legend":"parse_ok","dimension":"pilot-soundness","note":"S1 soundness: groupBy + agg(...->max())"}
+{"q":"|spider::concert_singer::Singer.all()->filter(s|$s.age > 20)->groupBy([s|$s.country], [], ['country'])","legend":"parse_ok","dimension":"pilot-soundness","note":"S1 soundness: groupBy with empty agg list"}
+{"q":"|spider::concert_singer::Stadium.all()->groupBy([], [agg(s|$s.capacity, x|$x->average()), agg(s|$s.capacity, y|$y->max())], ['avgCap','maxCap'])","legend":"parse_ok","dimension":"pilot-soundness","note":"S1 soundness: groupBy empty keys, two aggs (average,max)"}
+{"q":"|spider::concert_singer::Singer.all()->filter(s|$s.country == 'France')->groupBy([], [agg(s|$s.age, x|$x->average()), agg(s|$s.age, y|$y->min())], ['a','b'])","legend":"parse_ok","dimension":"pilot-soundness","note":"S1 soundness: filter + groupBy empty keys, two aggs (average,min)"}
+{"q":"|spider::battle_death::Battle.all()->filter(b|$b.bulgarianCommander == 'Kaloyan')->filter(b|$b.latinCommander == 'Baldwin I')->project([b|$b.name], ['name'])","legend":"parse_ok","dimension":"pilot-soundness","note":"S1 soundness: two filters + project (string literal with space)"}
+{"q":"|spider::poker_player::PokerPlayer.all()->project([p|$p.finalTableMade, p|$p.bestFinish], ['finalTablesMade', 'bestFinish'])","legend":"parse_ok","dimension":"pilot-soundness","note":"S1 soundness: multi-col project"}
+{"q":"|spider::singer::Singer.all()->filter(s|$s.birthYear == 1948 || $s.birthYear == 1949)->project([s|$s.name], ['name'])","legend":"parse_ok","dimension":"pilot-soundness","note":"S1 soundness: || of int-literal equality + project"}
+{"q":"|spider::concert_singer::model::default::Concert.all()->filter(c|$c.year == \"2014\")->size()","legend":"parse_fail","dimension":"pilot-precision","note":"P1 precision: double-quoted string literal \"2014\" (must be single-quote)"}
+{"q":"|spider::battle_death::model::default::Battle.all().collect({name: $1.name, date: $1.date})","legend":"parse_fail","dimension":"pilot-precision","note":"P2 precision: .collect({...}) obj-literal + $1 positional (collect not admitted)"}
+{"q":"|{min: spider::concert_singer::model::default::Stadium.all()->project([s|$s.capacity], ['capacity'])->min()}","legend":"parse_fail","dimension":"pilot-precision","note":"P3 precision: query begins with { (top-level object literal)"}
+{"q":"|spider::poker_player::model::default::People.all()->groupBy([p|$p.nationality], [agg(p|$p, x|$x->size())], ['nationality', 'cnt'])","legend":"parse_ok","dimension":"pilot-precision","note":"P4 precision: agg map-lambda body bare row $p (non-scalar) -- grammar permissive"}
+{"q":"|spider::poker_player::model::default::People.all()->groupBy([p|$p.nationality], [agg(p|$p, p|->size())], ['nationality', 'cnt'])","legend":"parse_fail","dimension":"pilot-precision","note":"P5 precision: reducer lambda missing bound var (p|->size())"}
+{"q":"|spider::concert_singer::model::default::Concert.all()->groupBy([s|$s], [agg(c|$c.year >= \"2014\", c|$c->size())], ['k', 'cnt'])","legend":"parse_fail","dimension":"pilot-precision","note":"P6 precision: non-scalar key-lambda $s + boolean agg col + double-quote"}
+{"q":"|spider::concert_singer::model::default::Concert.all()->filter(c|$c.year == '2014')->singerInConcerts.singer.project([s|$s.name], ['name'])","legend":"parse_fail","dimension":"pilot-precision","note":"P7 precision: navigation step without -> (.singer.project after relation op)"}
+{"q":"|spider::orchestra::model::default::Orchestra.all()->filter(o|$o.year == 2014)->conductor->project([c|$c.name], ['name'])","legend":"parse_fail","dimension":"pilot-precision","note":"P8 precision: association name used as pipeline step (->conductor)"}
+{"q":"|spider::pets_1::model::default::Student.all()->project([s|$s.hasPets->spider::pets_1::HasPet.pets], ['pets'])","legend":"parse_fail","dimension":"pilot-precision","note":"P9 precision: fully-qualified class path spliced mid-navigation (::)"}
+{"q":"|spider::orchestra::model::default::Show.all()->avg($s.attendance)","legend":"parse_ok","dimension":"pilot-precision","note":"P10 precision: top-level avg(...) with unbound $s -- grammar permissive"}
+{"q":"{|let avgAge = spider::concert_singer::Singer.all()->map(x|$x.age)->average(); spider::concert_singer::Singer.all()->filter(x|$x.age > $avgAge)->size();}","legend":"parse_ok","dimension":"arm-c-classnav","note":"block-query let-statement (compare to a let-bound average) — decision A dialect"}
+{"q":"{|let n = spider::concert_singer::Singer.all()->size(); spider::concert_singer::Singer.all()->filter(x|$x.age > $n)->size();}","legend":"parse_ok","dimension":"arm-c-classnav","note":"block-query let-statement (compare to a let-bound scalar) — decision A dialect; block form, not simple |let"}

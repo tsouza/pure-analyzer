@@ -1,0 +1,21 @@
+# Maturin packaging for the M4 PyO3 boundary. The compiled surface is the Rust
+# `purecard` crate's `python`-featured cdylib (src/ffi.rs); this file only tells
+# maturin how to build the wheel — it adds no Python sources. `just wheel`
+# (`maturin build --release --features python`) and the `wheels.yml` CI lane both
+# read it. The default `cargo` build ignores this file entirely.
+[build-system]
+requires = ["maturin==1.14.1"]
+build-backend = "maturin"
+
+[project]
+name = "purecard"
+requires-python = ">=3.9"
+# `version` is sourced from Cargo.toml (the single version of truth, workspace
+# `[workspace.package] version`); everything else maturin lifts from Cargo.toml.
+dynamic = ["version"]
+
+[tool.maturin]
+# Build the crate with the PyO3 boundary compiled in. abi3-py39 (declared by the
+# feature) yields one forward-compatible wheel for CPython >= 3.9.
+features = ["python"]
+module-name = "purecard"

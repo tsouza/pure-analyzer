@@ -1,0 +1,55 @@
+[package]
+name = "purecard-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+# cargo-fuzz marks this crate as a fuzzing crate so `cargo fuzz` discovers the
+# targets under `fuzz_targets/`.
+[package.metadata]
+cargo-fuzz = true
+
+# Unsafe-policy exception (constitution §1, ADR-0006), stated explicitly and as
+# narrowly as the tooling allows. Every shipped crate carries `#![forbid(unsafe_code)]`;
+# this crate cannot, because `libfuzzer-sys`'s `fuzz_target!` macro expands to `unsafe`
+# glue around the libFuzzer entry point. Rather than a blanket `allow`, the policy is
+# `deny`: the macro-generated `unsafe` is permitted (it carries its own allow), but any
+# *handwritten* `unsafe` in a fuzz target is a compile error (verified). So the
+# exception admits only the required harness glue, not arbitrary unsafe. The crate is
+# also excluded from the root workspace (../Cargo.toml [workspace].exclude), is
+# `publish = false`, built only out-of-band via `cargo +nightly fuzz`, and never linked
+# into the published `purecard` crate — which keeps its forbid intact.
+[lints.rust]
+unsafe_code = "deny"
+
+# Excluded from the root workspace (see ../Cargo.toml [workspace].exclude): the
+# libfuzzer harness generates `unsafe` and needs nightly, which the pure core
+# forbids. Kept out-of-band so the core stays `#![forbid(unsafe_code)]`.
+[dependencies]
+libfuzzer-sys = "0.4.13"
+arbitrary = { version = "1.4.2", features = ["derive"] }
+purecard = { path = ".." }
+
+[[bin]]
+name = "accept_token"
+path = "fuzz_targets/accept_token.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "allowed_mask"
+path = "fuzz_targets/allowed_mask.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "schema_from_json"
+path = "fuzz_targets/schema_from_json.rs"
+test = false
+doc = false
+bench = false
+
+[profile.release]
+debug = 1

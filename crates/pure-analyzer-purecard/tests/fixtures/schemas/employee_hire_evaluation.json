@@ -1,0 +1,287 @@
+{
+  "db_id": "employee_hire_evaluation",
+  "db_path": "spider::employee_hire_evaluation::Db",
+  "classes": {
+    "spider::employee_hire_evaluation::model::default::Employee": {
+      "simple_name": "Employee",
+      "properties": [
+        {
+          "name": "employeeId",
+          "type": {
+            "kind": "primitive",
+            "name": "Integer"
+          },
+          "mult": {
+            "lower": 1,
+            "upper": 1
+          }
+        },
+        {
+          "name": "name",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "age",
+          "type": {
+            "kind": "primitive",
+            "name": "Integer"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "city",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        }
+      ],
+      "qualified_properties": [],
+      "super_types": []
+    },
+    "spider::employee_hire_evaluation::model::default::Evaluation": {
+      "simple_name": "Evaluation",
+      "properties": [
+        {
+          "name": "employeeId",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "yearAwarded",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "bonus",
+          "type": {
+            "kind": "primitive",
+            "name": "Float"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        }
+      ],
+      "qualified_properties": [],
+      "super_types": []
+    },
+    "spider::employee_hire_evaluation::model::default::Hiring": {
+      "simple_name": "Hiring",
+      "properties": [
+        {
+          "name": "shopId",
+          "type": {
+            "kind": "primitive",
+            "name": "Integer"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "employeeId",
+          "type": {
+            "kind": "primitive",
+            "name": "Integer"
+          },
+          "mult": {
+            "lower": 1,
+            "upper": 1
+          }
+        },
+        {
+          "name": "startFrom",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "isFullTime",
+          "type": {
+            "kind": "primitive",
+            "name": "Boolean"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        }
+      ],
+      "qualified_properties": [],
+      "super_types": []
+    },
+    "spider::employee_hire_evaluation::model::default::Shop": {
+      "simple_name": "Shop",
+      "properties": [
+        {
+          "name": "shopId",
+          "type": {
+            "kind": "primitive",
+            "name": "Integer"
+          },
+          "mult": {
+            "lower": 1,
+            "upper": 1
+          }
+        },
+        {
+          "name": "name",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "location",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "district",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "numberProducts",
+          "type": {
+            "kind": "primitive",
+            "name": "Integer"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "managerName",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        }
+      ],
+      "qualified_properties": [],
+      "super_types": []
+    }
+  },
+  "associations": [
+    {
+      "path": "spider::employee_hire_evaluation::model::fk_0",
+      "ends": [
+        {
+          "property_name": "fk0DefaultHiring",
+          "target_class": "spider::employee_hire_evaluation::model::default::Hiring",
+          "mult": {
+            "lower": 1,
+            "upper": 1
+          }
+        },
+        {
+          "property_name": "fk0DefaultEmployee",
+          "target_class": "spider::employee_hire_evaluation::model::default::Employee",
+          "mult": {
+            "lower": 1,
+            "upper": 1
+          }
+        }
+      ]
+    },
+    {
+      "path": "spider::employee_hire_evaluation::model::fk_1",
+      "ends": [
+        {
+          "property_name": "fk1DefaultHiring",
+          "target_class": "spider::employee_hire_evaluation::model::default::Hiring",
+          "mult": {
+            "lower": 1,
+            "upper": null
+          }
+        },
+        {
+          "property_name": "fk1DefaultShop",
+          "target_class": "spider::employee_hire_evaluation::model::default::Shop",
+          "mult": {
+            "lower": 1,
+            "upper": 1
+          }
+        }
+      ]
+    },
+    {
+      "path": "spider::employee_hire_evaluation::model::fk_2",
+      "ends": [
+        {
+          "property_name": "fk2DefaultEvaluation",
+          "target_class": "spider::employee_hire_evaluation::model::default::Evaluation",
+          "mult": {
+            "lower": 1,
+            "upper": null
+          }
+        },
+        {
+          "property_name": "fk2DefaultEmployee",
+          "target_class": "spider::employee_hire_evaluation::model::default::Employee",
+          "mult": {
+            "lower": 1,
+            "upper": 1
+          }
+        }
+      ]
+    }
+  ],
+  "enums": {}
+}
