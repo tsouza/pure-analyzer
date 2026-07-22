@@ -2,3 +2,17 @@ node_modules/
 target/
 gen/
 .git/
+
+# Inherited, verbatim inputs (ported from purecard's pre-migration ignore
+# list) — the relocated master spec and the committed test corpus are content
+# kept as-is, not repo-authored prose maintained to our markdown style. They
+# carry EBNF fences, emoji tables, and escaped-pipe tables the aligner can't
+# normalize; style-linting them risks corrupting the spec / a fixture for no
+# gain. (crates/pure-analyzer-purecard/docs/spec/README.md is its own index
+# and stays linted.)
+crates/pure-analyzer-purecard/docs/spec/overview.md
+crates/pure-analyzer-purecard/docs/spec/architecture.md
+crates/pure-analyzer-purecard/docs/spec/grammar.md
+crates/pure-analyzer-purecard/docs/spec/schema.md
+crates/pure-analyzer-purecard/docs/spec/testing.md
+crates/pure-analyzer-purecard/corpus/**

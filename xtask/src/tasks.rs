@@ -32,6 +32,8 @@ pub fn ci() -> Result<()> {
     verify_layering()?;
     run_cargo_steps(&[
         &["fmt", "--all", "--check"],
+        // clippy with --all-features is compile-checking, not execution — safe
+        // and correct to check every feature combination actually builds.
         &[
             "clippy",
             "--workspace",
@@ -41,7 +43,17 @@ pub fn ci() -> Result<()> {
             "-D",
             "warnings",
         ],
-        &["nextest", "run", "--workspace", "--all-features"],
+        // No --all-features here, unlike clippy above: this *executes* tests,
+        // and pure-analyzer-purecard's optional legend/qwen-oracle/fused-extract
+        // features gate heavy, network-/env-dependent tests that must stay out
+        // of the hermetic per-PR gate (each has its own on-demand `just`
+        // target instead) — matching the pattern purecard's own CI already
+        // established pre-migration. nextest also never runs doctests
+        // (unlike `cargo test`), so the separate --doc --all-features step
+        // below is the only place that coverage exists; that command is safe
+        // with --all-features since doctests carry no heavy optional deps.
+        &["nextest", "run", "--workspace"],
+        &["test", "--workspace", "--doc", "--all-features"],
     ])
 }
 

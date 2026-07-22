@@ -1,0 +1,6 @@
+{
+  "_comment": "PROVISIONAL PLACEHOLDER — not a real Legend protocol-JSON lambda. Regenerate from a real POST /pure/v1/grammar/grammarToJson/lambda roundtrip before the engine lane can assert a specific ReturnType (spec R4).",
+  "_type": "lambda",
+  "body": [],
+  "parameters": []
+}

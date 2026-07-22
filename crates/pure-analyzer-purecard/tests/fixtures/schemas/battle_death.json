@@ -1,0 +1,270 @@
+{
+  "db_id": "battle_death",
+  "db_path": "spider::battle_death::Db",
+  "classes": {
+    "spider::battle_death::model::default::Battle": {
+      "simple_name": "Battle",
+      "properties": [
+        {
+          "name": "id",
+          "type": {
+            "kind": "primitive",
+            "name": "Integer"
+          },
+          "mult": {
+            "lower": 1,
+            "upper": 1
+          }
+        },
+        {
+          "name": "name",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "date",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "bulgarianCommander",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "latinCommander",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "result",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        }
+      ],
+      "qualified_properties": [],
+      "super_types": []
+    },
+    "spider::battle_death::model::default::Death": {
+      "simple_name": "Death",
+      "properties": [
+        {
+          "name": "causedByShipId",
+          "type": {
+            "kind": "primitive",
+            "name": "Integer"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "id",
+          "type": {
+            "kind": "primitive",
+            "name": "Integer"
+          },
+          "mult": {
+            "lower": 1,
+            "upper": 1
+          }
+        },
+        {
+          "name": "note",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "killed",
+          "type": {
+            "kind": "primitive",
+            "name": "Integer"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "injured",
+          "type": {
+            "kind": "primitive",
+            "name": "Integer"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        }
+      ],
+      "qualified_properties": [],
+      "super_types": []
+    },
+    "spider::battle_death::model::default::Ship": {
+      "simple_name": "Ship",
+      "properties": [
+        {
+          "name": "lostInBattle",
+          "type": {
+            "kind": "primitive",
+            "name": "Integer"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "id",
+          "type": {
+            "kind": "primitive",
+            "name": "Integer"
+          },
+          "mult": {
+            "lower": 1,
+            "upper": 1
+          }
+        },
+        {
+          "name": "name",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "tonnage",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "shipType",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "location",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "dispositionOfShip",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        }
+      ],
+      "qualified_properties": [],
+      "super_types": []
+    }
+  },
+  "associations": [
+    {
+      "path": "spider::battle_death::model::fk_0",
+      "ends": [
+        {
+          "property_name": "fk0DefaultShip",
+          "target_class": "spider::battle_death::model::default::Ship",
+          "mult": {
+            "lower": 1,
+            "upper": null
+          }
+        },
+        {
+          "property_name": "fk0DefaultBattle",
+          "target_class": "spider::battle_death::model::default::Battle",
+          "mult": {
+            "lower": 1,
+            "upper": 1
+          }
+        }
+      ]
+    },
+    {
+      "path": "spider::battle_death::model::fk_1",
+      "ends": [
+        {
+          "property_name": "fk1DefaultDeath",
+          "target_class": "spider::battle_death::model::default::Death",
+          "mult": {
+            "lower": 1,
+            "upper": null
+          }
+        },
+        {
+          "property_name": "fk1DefaultShip",
+          "target_class": "spider::battle_death::model::default::Ship",
+          "mult": {
+            "lower": 1,
+            "upper": 1
+          }
+        }
+      ]
+    }
+  ],
+  "enums": {}
+}

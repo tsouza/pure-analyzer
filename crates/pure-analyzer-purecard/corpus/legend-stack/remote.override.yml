@@ -1,0 +1,8 @@
+# Overrides for running the stack on the shared x86 box (31GB, other services present):
+# cap each JVM container; MaxRAMPercentage=60 then yields ~4.8GB heap each.
+# Usage: docker compose -f docker-compose.yml -f remote.override.yml up -d
+services:
+  legend-engine:
+    mem_limit: 8g
+  legend-sdlc:
+    mem_limit: 8g

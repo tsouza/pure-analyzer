@@ -1,0 +1,331 @@
+{
+  "db_id": "concert_singer",
+  "db_path": "spider::concert_singer::Db",
+  "classes": {
+    "spider::concert_singer::model::default::Concert": {
+      "simple_name": "Concert",
+      "properties": [
+        {
+          "name": "concertId",
+          "type": {
+            "kind": "primitive",
+            "name": "Integer"
+          },
+          "mult": {
+            "lower": 1,
+            "upper": 1
+          }
+        },
+        {
+          "name": "concertName",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "theme",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "stadiumId",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "year",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        }
+      ],
+      "qualified_properties": [],
+      "super_types": []
+    },
+    "spider::concert_singer::model::default::Singer": {
+      "simple_name": "Singer",
+      "properties": [
+        {
+          "name": "singerId",
+          "type": {
+            "kind": "primitive",
+            "name": "Integer"
+          },
+          "mult": {
+            "lower": 1,
+            "upper": 1
+          }
+        },
+        {
+          "name": "name",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "country",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "songName",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "songReleaseYear",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "age",
+          "type": {
+            "kind": "primitive",
+            "name": "Integer"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "isMale",
+          "type": {
+            "kind": "primitive",
+            "name": "Boolean"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        }
+      ],
+      "qualified_properties": [],
+      "super_types": []
+    },
+    "spider::concert_singer::model::default::SingerInConcert": {
+      "simple_name": "SingerInConcert",
+      "properties": [
+        {
+          "name": "concertId",
+          "type": {
+            "kind": "primitive",
+            "name": "Integer"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "singerId",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        }
+      ],
+      "qualified_properties": [],
+      "super_types": []
+    },
+    "spider::concert_singer::model::default::Stadium": {
+      "simple_name": "Stadium",
+      "properties": [
+        {
+          "name": "stadiumId",
+          "type": {
+            "kind": "primitive",
+            "name": "Integer"
+          },
+          "mult": {
+            "lower": 1,
+            "upper": 1
+          }
+        },
+        {
+          "name": "location",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "name",
+          "type": {
+            "kind": "primitive",
+            "name": "String"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "capacity",
+          "type": {
+            "kind": "primitive",
+            "name": "Integer"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "highest",
+          "type": {
+            "kind": "primitive",
+            "name": "Integer"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "lowest",
+          "type": {
+            "kind": "primitive",
+            "name": "Integer"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        },
+        {
+          "name": "average",
+          "type": {
+            "kind": "primitive",
+            "name": "Integer"
+          },
+          "mult": {
+            "lower": 0,
+            "upper": 1
+          }
+        }
+      ],
+      "qualified_properties": [],
+      "super_types": []
+    }
+  },
+  "associations": [
+    {
+      "path": "spider::concert_singer::model::fk_0",
+      "ends": [
+        {
+          "property_name": "fk0DefaultConcert",
+          "target_class": "spider::concert_singer::model::default::Concert",
+          "mult": {
+            "lower": 1,
+            "upper": null
+          }
+        },
+        {
+          "property_name": "fk0DefaultStadium",
+          "target_class": "spider::concert_singer::model::default::Stadium",
+          "mult": {
+            "lower": 1,
+            "upper": 1
+          }
+        }
+      ]
+    },
+    {
+      "path": "spider::concert_singer::model::fk_1",
+      "ends": [
+        {
+          "property_name": "fk1DefaultSingerInConcert",
+          "target_class": "spider::concert_singer::model::default::SingerInConcert",
+          "mult": {
+            "lower": 1,
+            "upper": null
+          }
+        },
+        {
+          "property_name": "fk1DefaultSinger",
+          "target_class": "spider::concert_singer::model::default::Singer",
+          "mult": {
+            "lower": 1,
+            "upper": 1
+          }
+        }
+      ]
+    },
+    {
+      "path": "spider::concert_singer::model::fk_2",
+      "ends": [
+        {
+          "property_name": "fk2DefaultSingerInConcert",
+          "target_class": "spider::concert_singer::model::default::SingerInConcert",
+          "mult": {
+            "lower": 1,
+            "upper": null
+          }
+        },
+        {
+          "property_name": "fk2DefaultConcert",
+          "target_class": "spider::concert_singer::model::default::Concert",
+          "mult": {
+            "lower": 1,
+            "upper": 1
+          }
+        }
+      ]
+    }
+  ],
+  "enums": {}
+}

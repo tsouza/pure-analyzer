@@ -1,0 +1,121 @@
+[package]
+name = "pure-analyzer-purecard"
+description = "Grammar- and schema-constrained decoder for Legend Pure: masks a language model's logits so generated queries are valid — and schema-consistent — by construction, in a single forward pass."
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+# Formerly published standalone (crates.io `purecard` v0.1.0); unpublished as
+# part of migrating into this workspace (docs/decisions — migrate-purecard).
+# The publish-oriented metadata (keywords/categories/readme/include
+# allowlist) that only mattered for that standalone publish is dropped along
+# with it, rather than left as dead weight implying a publish that won't happen.
+publish = false
+
+# The core's dependency allowlist — `{ thiserror, serde, serde_json }` — is
+# enforced by `cargo xtask check-core-deplight`, scoped to this crate only
+# (constitution.md; not the analysis-engine DAG's own, different layering
+# rule). `serde`/`serde_json` ingest the host `Schema` as JSON at session init
+# (`Schema::from_json`, `docs/spec/schema.md` §6.3, §9) — host-facing code,
+# not a dev-only oracle, so a bespoke JSON parser would fail "library before
+# writing" by owning escaping/number edge cases for no gain.
+# `cdylib` is the artifact maturin packages into the abi3 wheel; `rlib` keeps
+# `cargo test`/nextest, the benches, and any Rust consumer linking the crate
+# as an ordinary library. The default build produces both without pyo3 (the
+# `python` feature is off).
+[lib]
+# The package/workspace-member name is `pure-analyzer-purecard` (matches this
+# workspace's crate-naming convention), but the actual Rust/Python-facing
+# library identifier stays `purecard` — every `use purecard::...` in
+# tests/benches, the PyO3 `#[pymodule]`, and `import purecard` on the Python
+# side are unaffected by the package rename. Without this, Cargo's default
+# (package name with `-` -> `_`) would silently rename the library too.
+name = "purecard"
+crate-type = ["cdylib", "rlib"]
+
+[lints]
+workspace = true
+
+[dependencies]
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+# The M4 PyO3 boundary (`src/ffi.rs`), compiled only under the `python`
+# feature — both `optional = true`, so the default build stays pyo3-free and
+# the core's dependency surface is unchanged (`check-core-deplight` skips
+# optional entries). pyo3 0.29 generates its `unsafe` inside its own crate, so
+# this crate's `#![forbid(unsafe_code)]` (inherited from `[lints] workspace =
+# true`) holds; `self_cell` co-locates the `Rc<CompiledGrammar>` owner and the
+# borrowing `DecoderSession` (its unsafe is likewise encapsulated in-crate —
+# verified forbid-clean).
+pyo3 = { version = "0.29.0", optional = true }
+self_cell = { version = "1.3.0", optional = true }
+
+# The real-Qwen soundness oracle (`tests/qwen_soundness.rs`, `just
+# qwen-oracle`), compiled only under the `qwen-oracle` feature. `optional =
+# true` so the default build and the core's dependency surface are unchanged
+# (`check-core-deplight` skips optional entries) — this heavy tokenizer is
+# never in a normal build, the per-PR CI, or the wheel. Run on-demand locally
+# (`just qwen-oracle`) or on the nightly `qwen-oracle.yml` workflow, never as
+# a per-PR gate.
+tokenizers = { version = "0.23.1", optional = true }
+
+[dev-dependencies]
+anyhow.workspace = true
+# The `legend` lane's live-HTTP Legend client boundary. The engine is a
+# local, plain-HTTP service (http://localhost:6300), so TLS is disabled
+# (`default-features = false`): no rustls/ring/webpki-roots tree, smaller and
+# license-clean. `json` enables `send_json` / `Body::read_json` for the POST.
+ureq = { version = "3.3.0", default-features = false, features = ["json"] }
+# M2 mask testing (dev-only, so `check-core-deplight`'s `[dependencies] ⊆
+# {thiserror, serde, serde_json}` gate is untouched). `proptest` drives the
+# §8.5 rollback/equivalence properties from committed seeds
+# (`proptest-regressions/`); `criterion` measures `allowed_mask` latency
+# (`benches/allowed_mask.rs`) — the workspace pin already has default
+# features off (root Cargo.toml), just add the harness feature this crate's
+# `harness = false` bench needs.
+proptest.workspace = true
+criterion = { workspace = true, features = ["cargo_bench_support"] }
+
+# The M2 mask-latency benchmark (§4, G3). `harness = false` hands `main` to
+# criterion; `just bench` picks it up.
+[[bench]]
+name = "allowed_mask"
+harness = false
+
+[features]
+# The Legend-backed completeness lane (opt-in): compiles the live-HTTP client
+# in `tests/support/legend.rs` and collects `tests/legend_completeness.rs`. A
+# bare cfg flag — `ureq`/`anyhow` are unconditional `[dev-dependencies]`, so a
+# feature cannot use `dep:` on them. Off by default so `just ci` stays
+# hermetic; enabled for the nightly/on-demand completeness tests via `just
+# test-legend`.
+legend = []
+
+# The M4 PyO3 boundary: compiles `src/ffi.rs`, links pyo3 as a CPython
+# extension module, and targets the stable ABI (abi3) for CPython >= 3.9 so a
+# single wheel serves every supported interpreter. Off by default (the core
+# builds pyo3-free); the wheel build (`just wheel`) and the `just check-ffi`
+# type-check gate enable it. `dep:` keeps the optional pyo3/self_cell crates
+# from implying a like-named feature.
+python = ["dep:pyo3", "dep:self_cell", "pyo3/extension-module", "pyo3/abi3-py39"]
+
+# The real-Qwen tokenizer soundness oracle (`tests/qwen_soundness.rs`): loads
+# the actual Qwen2.5-Coder tokenizer and replays the gold corpus token-by-
+# token. Heavy and network-fed, so it is a `just qwen-oracle` local/on-demand
+# gate and the nightly `qwen-oracle.yml` workflow, NOT a per-PR gate. Off by
+# default; `dep:tokenizers` keeps it out of the normal graph.
+qwen-oracle = ["dep:tokenizers"]
+
+# The fused-nav-dot precision fixture extractor
+# (`tests/fused_tokenizer_extract.rs`): re-derives
+# `tests/fixtures/tokenizers/fused_precision.jsonl` from the ACTUAL Qwen +
+# GPT-2 byte-level BPE tokenizers and diffs it against the committed fixture,
+# so the hermetic Tier-A precision fixture cannot rot. Heavy and network-fed
+# like `qwen-oracle`, so it is a `just fused-tokenizers` local/on-demand gate
+# and the nightly `qwen-oracle.yml` workflow, NOT a per-PR gate. Off by
+# default; `dep:tokenizers` keeps it out of the normal graph.
+fused-extract = ["dep:tokenizers"]

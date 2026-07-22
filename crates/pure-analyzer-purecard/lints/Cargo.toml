@@ -1,0 +1,28 @@
+[package]
+name = "lints"
+description = "Custom dylint lints for this workspace: forbid `.unwrap()`/`.expect()` in non-test library code."
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+# dylint libraries are loaded as dynamic libraries by the `cargo-dylint` driver.
+[lib]
+crate-type = ["cdylib"]
+
+# NOTE: `clippy_utils` and `dylint_linting` are pinned to a nightly compiler
+# whose version must match the driver `cargo-dylint` selects. Because they track
+# `rustc`'s private crates, exact versions are chosen at `cargo dylint` time; the
+# `rev`/`tag` below should be aligned with the toolchain in `rust-toolchain`
+# when you first build the lints. See the dylint docs for the current pairing.
+[dependencies]
+clippy_utils = { git = "https://github.com/rust-lang/rust-clippy", tag = "rust-1.85.0" }
+dylint_linting = "3"
+
+[dev-dependencies]
+dylint_testing = "3"
+
+[package.metadata.rust-analyzer]
+rustc_private = true

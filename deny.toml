@@ -16,7 +16,15 @@ version = 2
 yanked = "deny"
 # Add specific advisory IDs here (with a justification comment) only when a
 # fix is genuinely unavailable — never as a convenience.
-ignore = []
+ignore = [
+    # `paste` is unmaintained (informational advisory, no known vulnerability). It
+    # is a transitive dep of `tokenizers`, which is itself an OPTIONAL, feature-gated
+    # (`qwen-oracle`/`fused-extract`), test-only dependency of `pure-analyzer-purecard`
+    # that never ships in a default build. tokenizers still pulls it, so no upstream
+    # fix is available; the advisory is accepted only for that isolated, on-demand
+    # real-tokenizer oracle tree (ported from purecard's own pre-migration exception).
+    "RUSTSEC-2024-0436",
+]
 
 # ---------------------------------------------------------------------------
 # Licenses. Explicit allow-list; anything not listed fails.

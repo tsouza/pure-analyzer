@@ -1,0 +1,64 @@
+# Self-hosted Legend Engine 4.113.0 config (docs/design/sql-to-pure-datagen.md §3).
+# Adapted from the image's default /config/config.json + the legend-omnibus slim template:
+# anonymous auth (no GitLab/Mongo), SDLC resolution pointed directly at the legend-sdlc
+# container (no nginx prefix). This stack is pipeline infrastructure -- never the private
+# .env instance (ADR-0008).
+deployment:
+  mode: TEST_IGNORE_FUNCTION_MATCH
+logging:
+  level: INFO
+  appenders:
+    - type: console
+      logFormat: "%msg\r\n"
+pac4j:
+  bypassPaths: ["/api/server/v1/info"]
+  clients:
+    - org.pac4j.core.client.direct.AnonymousClient: {}
+opentracing:
+  elastic: ""
+  zipkin: ""
+  uri: ""
+  authenticator:
+    principal: ""
+    keytab: ""
+swagger:
+  title: Legend Engine
+  resourcePackage: org.finos.legend
+  uriPrefix: /api
+sessionCookie: LEGEND_ENGINE_JSESSIONID
+server:
+  type: simple
+  applicationContextPath: /
+  adminContextPath: /admin
+  connector:
+    type: http
+    port: 6300
+    maxRequestHeaderSize: 128KiB
+  requestLog:
+    appenders: []
+metadataserver:
+  pure:
+    host: unused
+    port: 1234
+  alloy:
+    host: unused
+    port: 1234
+    prefix: /depot/api
+  sdlc:
+    host: legend-sdlc
+    port: 6100
+    prefix: ""
+temporarytestdb:
+  port: 6310
+relationalexecution:
+  temporarytestdb:
+    port: 6310
+  tempPath: /tmp/
+  flowProviderClass: >-
+    org.finos.legend.engine.authentication.LegendDefaultDatabaseAuthenticationFlowProvider
+  flowProviderConfiguration:
+    _type: legendDefault
+errorhandlingconfiguration:
+  enabled: true
+activatorConfiguration: []
+vaults: []
