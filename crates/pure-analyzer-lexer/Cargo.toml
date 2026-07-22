@@ -16,3 +16,5 @@ workspace = true
 # specs/lexer.md). Declaring `logos` here before any code uses it would trip
 # `cargo machete` (constitution §2: gates run clean).
 [dependencies]
+logos = { workspace = true, features = ["forbid_unsafe"] }
+text-size.workspace = true
