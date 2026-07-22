@@ -589,8 +589,9 @@ fn block_stmt(stack_top: Option<Frame>, byte: u8, allow_close: bool) -> Step {
 /// Splitting a byte-level PDA transition table into per-state functions is a
 /// real, worthwhile refactor, but risky to do as a side effect of a
 /// structural file move on load-bearing, engine-oracle-verified parsing
-/// logic — tracked as a dedicated follow-up, not silently swept under an
-/// unexplained allow.
+/// logic — tracked as a dedicated follow-up
+/// (<https://github.com/tsouza/pure-analyzer/issues/6>), not silently swept
+/// under an unexplained allow.
 #[must_use]
 #[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
 pub fn step(state: State, stack_top: Option<Frame>, byte: u8) -> Step {
