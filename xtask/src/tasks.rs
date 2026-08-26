@@ -1212,7 +1212,7 @@ fn parse_grouped(token: &str) -> Option<usize> {
     digits.parse().ok()
 }
 
-/// The analysis-engine crate DAG (design doc §3, constitution §1, ADR-0003):
+/// The analysis-engine crate DAG (constitution §1, ADR-0003):
 /// for each enforced workspace crate, the set of internal crates it may
 /// depend on, in any dependency kind. The engine direction is parser → model →
 /// resolve: the resolver may depend on model types, never the reverse. An
@@ -2340,7 +2340,7 @@ missing_docs = \"warn\"
 
     #[test]
     fn layering_violations_allows_the_documented_dag_edges() {
-        // The real workspace shape: every edge follows the DAG (design doc §3).
+        // The real workspace shape: every edge follows the DAG.
         let packages = [
             package("pure-analyzer-diagnostics", &[]),
             package("pure-analyzer-lexer", &[]),

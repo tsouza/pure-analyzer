@@ -34,9 +34,8 @@ Every rule is tagged. If a rule is untagged, treat it as PROTECTED.
   with `pure-analyzer-diagnostics` a shared leaf. Cargo dependencies point
   toward prerequisites; specifically, `pure-analyzer-resolve` may depend on
   `pure-analyzer-model`, and the reverse edge is forbidden. Only analyzer front
-  ends (`pure-analyzer-cli` today; `pure-analyzer-lsp` in the target design) may
-  depend on a renderer (`ariadne`, `codespan-reporting`) or protocol crate
-  (`clap`, later `tower-lsp`/`lsp-types`).
+  ends may depend on a renderer (`ariadne`, `codespan-reporting`) or protocol
+  crate (`clap`, `tower-lsp`/`lsp-types`).
 - The umbrella contains a second, independent product,
   `pure-analyzer-purecard`
   ([ADR-0004](docs/decisions/0004-purecard-independent-workspace-product.md) and

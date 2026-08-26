@@ -62,7 +62,7 @@ crates/
   pure-analyzer-cli/         analyzer CLI
   pure-analyzer-purecard/    independent constrained-decoder product
 xtask/                       shared repository automation
-docs/                        root governance, design, and methodology
+docs/                        root governance and methodology
 ```
 
 ## Building

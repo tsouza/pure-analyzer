@@ -1,20 +1,7 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
-//! `libpure`: the analysis engine as one product, `pub use`-facaded over its
-//! layered crates (design doc §1.5, §3).
-//!
-//! `pure-analyzer-cli` (and, in v0.2, `pure-analyzer-lsp`) are thin adapters
-//! over this crate: they render the `Diagnostic`s it produces and turn
-//! `Fix`es into their own protocol's edit representation, but the parsing,
-//! model loading, resolution, and pass logic all live below this facade.
-//!
-//! **Scaffold status.** The sub-crates below (`pure-analyzer-lexer` through
-//! `pure-analyzer-analysis`) are currently placeholders — see each crate's
-//! own docs — so this facade currently re-exports only what already exists:
-//! the shared `Diagnostic` model and each sub-crate's version, so the DAG
-//! (design doc §3) is exercised end-to-end from the first commit rather than
-//! wired up later as an afterthought.
+//! Facade exposing shared diagnostics and analyzer-crate versions.
 
 pub use pure_analyzer_diagnostics::{Diagnostic, Severity};
 
@@ -22,8 +9,7 @@ pub use pure_analyzer_diagnostics::{Diagnostic, Severity};
 /// `Cargo.toml`-declared semantic version.
 pub type CrateVersion = (&'static str, &'static str);
 
-/// The version of every crate in the analysis-engine DAG, in dependency
-/// order (design doc §3): lexer, syntax, parser, model, resolve, analysis.
+/// The version of every crate in the analysis-engine dependency order.
 #[must_use]
 pub fn engine_crate_versions() -> Vec<CrateVersion> {
     vec![

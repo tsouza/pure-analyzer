@@ -13,15 +13,11 @@ The analyzer and decoder concern the same language, and PureCARD owns a useful
 engine-backed and offline corpus, but those similarities do not establish a
 shared runtime abstraction or product contract.
 
-The products are at different stages and expose different guarantees:
+The products expose distinct guarantees:
 
-- `pure-analyzer` is currently an early scaffold for a static-analysis pipeline.
-  Lexer and diagnostics are substantive; most higher layers are version stubs,
-  and CLI subcommands are not implemented.
-- PureCARD is a grammar-constrained decoder with an implemented partial schema
-  overlay, its own Rust API, PyO3 boundary, corpus, fuzz targets, and specialized
-  test lanes. Its M0–M5 code artifacts exist, but its documented end-to-end
-  proof obligations remain open, so it does not yet claim feature completeness.
+- `pure-analyzer` is a static-analysis pipeline.
+- PureCARD is a grammar-constrained decoder with an optional schema overlay, its
+  own Rust API, PyO3 boundary, corpus, fuzz targets, and specialized test lanes.
 
 Cargo workspace membership alone cannot express whether one is a layer of the
 other. Without an explicit boundary, convenient local imports or corpus reuse

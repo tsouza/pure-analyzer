@@ -76,7 +76,6 @@ The generator writes; the **reviewer subagent is the gate**. See
   - [Quality layers](docs/methodology/quality-layers.md) — L0–L4 defense
   - [Self-learning](docs/methodology/self-learning.md) — how the repository adapts safely
   - [Model tiering](docs/methodology/model-tiering.md) — cheap generator, strong reviewer
-  - [Twelve-factor](docs/methodology/twelve-factor.md) — every factor is load-bearing; env-driven, self-documenting config
 
 ## Before you open a PR
 

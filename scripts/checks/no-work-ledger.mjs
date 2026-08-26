@@ -1,13 +1,14 @@
 #!/usr/bin/env bun
 // Keep change planning and progress in GitHub Issues/PRs, not in a checked-in
-// duplicate work ledger. Product design documents remain valid source material;
-// this gate rejects retired per-change specs and lesson ledgers.
+// duplicate work ledger. Durable product and architecture references
+// remain valid source material; this gate rejects retired per-change ledgers.
 import { $ } from "bun";
 import { die } from "../lib/ci.mjs";
 
 /** Paths formerly used for checked-in work state rather than product truth. */
 export const WORK_LEDGER_PATHS = [
   "specs",
+  "docs/design/pure-analyzer-design.md",
   "docs/lessons.md",
   "crates/pure-analyzer-purecard/docs/lessons.md",
   ".claude/commands/spec.md",

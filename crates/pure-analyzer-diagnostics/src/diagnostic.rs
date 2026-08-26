@@ -10,8 +10,8 @@ use crate::verdict::{ReasonCode, Verdict};
 
 /// How serious a [`Diagnostic`] is, independent of which pass produced it.
 ///
-/// Exit-code and `--deny`/`--warn` policy (design doc §6.3) is computed from
-/// this field by the CLI; this crate assigns no exit-code meaning to it.
+/// The CLI computes exit-code and `--deny`/`--warn` policy from this field;
+/// this crate assigns no exit-code meaning to it.
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
 )]
@@ -68,9 +68,6 @@ impl Label {
 /// A finding produced by a pass: the parser's syntax errors, `lint`'s
 /// milestoning-arity findings, `eq`'s verdicts.
 ///
-/// See the crate-level docs and design doc §6.1/§6.2 for the full field
-/// contract, and §6.4 for the `PUR<nnnn>` code namespace.
-///
 /// Findings flow one way, from passes to renderers, so this type is
 /// intentionally serialization-only. Its identifiers are closed enums rather
 /// than caller-provided strings.
@@ -91,7 +88,7 @@ pub struct Diagnostic {
     /// Set only for `eq`/`diff` verdict-carrying diagnostics (`PUR3xxx`).
     pub verdict: Option<Verdict>,
     /// Set iff the verdict (or the finding itself) is `Indecisive`/downgraded;
-    /// carries the reason bucket (design doc §5.3/§6.2).
+    /// carries the reason bucket.
     pub reason: Option<ReasonCode>,
     /// A doc link into `docs/reason-codes/<code>`, if one exists.
     pub url: Option<String>,

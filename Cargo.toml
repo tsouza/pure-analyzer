@@ -58,7 +58,7 @@ rust-version = "1.90"
 #   lexer -> syntax -> parser -> model -> resolve -> analysis -> libpure -> cli
 # `pure-analyzer-diagnostics` is a leaf depended on by parser and everything
 # above it. `libpure` is a thin facade re-exporting syntax/parser/model/
-# resolve/analysis for the front-end crates (cli today; lsp in v0.2).
+# resolve/analysis for front-end crates.
 # ---------------------------------------------------------------------------
 [workspace.dependencies]
 pure-analyzer-diagnostics = { path = "crates/pure-analyzer-diagnostics" }

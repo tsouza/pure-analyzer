@@ -1,13 +1,12 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
-//! The lexer: a `logos`-derived DFA token layer (design doc §4.1).
+//! A `logos`-derived DFA token layer for the supported Pure syntax.
 //!
 //! Owns [`SyntaxKind`], the token enum for the M3 (query) and Domain
 //! (model-definition) grammars — literals, the `%latest`/date family,
-//! symbols, and the raw island tokens (`#>{`, `#{`, `}#`, …) that the future
-//! `pure-analyzer-parser` balances into `Island` nodes rather than a `logos`
-//! mode stack (design doc §2.3) — and [`lex`], which drives it.
+//! symbols, and raw island tokens (`#>{`, `#{`, `}#`, …) — and [`lex`], which
+//! drives it.
 //!
 //! `SyntaxKind` here covers **terminal (token) kinds only**. It is not the
 //! richer, rowan-compatible kind enum `pure-analyzer-syntax` builds for the
@@ -20,11 +19,11 @@ use text_size::{TextRange, TextSize};
 
 /// A terminal token kind, as produced by [`lex`].
 ///
-/// One flat `logos`-derived enum covering every token class design doc §4.1
-/// specifies, plus the semicolon and concrete arithmetic/comparison operators
+/// One flat `logos`-derived enum covering the supported token classes, plus the
+/// semicolon and concrete arithmetic/comparison operators
 /// the grammar requires under the document's broad "arithmetic" category.
 /// Trivia (whitespace, comments) are real variants, never skipped, so the
-/// token stream is lossless — required for `fmt` later.
+/// token stream is lossless.
 #[derive(Logos, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u16)]
 #[allow(non_camel_case_types, missing_docs)] // one self-explanatory variant per token class; see the module + field docs above instead of per-variant prose
@@ -90,18 +89,18 @@ pub enum SyntaxKind {
     GE,
     #[token(">")]
     GT,
-    // Required by §4.2's `CodeBlock = Stmt (';' Stmt)*` and §1.1's worked example.
+    // Required by code blocks and the worked example.
     #[token(";")]
     SEMICOLON,
     // Shared by lambda bodies (`{x,y| ...}`) and islands (`#{...}#`) alike;
     // the lexer doesn't distinguish the two contexts, the parser does, by
-    // balancing (design doc §2.3).
+    // balancing.
     #[token("{")]
     BRACE_OPEN,
     #[token("}")]
     BRACE_CLOSE,
 
-    // -- M3 keywords (design doc §4.1) — exact-token variants take priority
+    // -- M3 keywords — exact-token variants take priority
     // over the IDENT regex on an equal-length match, so `all` lexes as
     // ALL_KW while `allVersions2` (longer) still lexes whole as IDENT. -----
     #[token("all")]
@@ -115,7 +114,7 @@ pub enum SyntaxKind {
     #[token("toBytes")]
     TO_BYTES_KW,
 
-    // -- literals (design doc §4.1) ----------------------------------------
+    // -- literals ----------------------------------------------------------
     #[regex(r"[A-Za-z_][A-Za-z0-9_]*")]
     IDENT,
     #[regex(r"[0-9]+")]
@@ -124,11 +123,11 @@ pub enum SyntaxKind {
     #[token("false")]
     BOOLEAN,
     // Pascal/SQL-style: `'...'` with `''` as an escaped literal quote — a
-    // documented assumption, not yet engine-verified.
+    // accepted lexical form.
     #[regex(r"'([^']|'')*'", allow_greedy = true)]
     STRING,
 
-    // -- island raw tokens (design doc §2.3) — flat, unbalanced; the parser
+    // -- island raw tokens — flat, unbalanced; the parser
     // is responsible for matching `#>{`/`#{` against `}#` ------------------
     #[token("#>{")]
     HASH_STORE_OPEN,
@@ -141,7 +140,7 @@ pub enum SyntaxKind {
     #[token("#")]
     HASH,
 
-    // -- trivia: real tokens, never skipped (design doc §4.1 losslessness) -
+    // -- trivia: real tokens, never skipped --------------------------------
     #[regex(r"[ \t\r\n]+")]
     WHITESPACE,
     #[regex(r"//[^\n]*", allow_greedy = true)]
@@ -211,7 +210,7 @@ mod tests {
         lex(text).into_iter().map(|(kind, _)| kind).collect()
     }
 
-    // -- date family: longest match first (design doc §4.1) -----------------
+    // -- date family: longest match first -----------------------------------
 
     #[test]
     fn lexes_date_time_before_strict_date_or_percent() {
@@ -376,7 +375,7 @@ mod tests {
         assert_eq!(kinds("'unterminated"), [SyntaxKind::ERROR]);
     }
 
-    // -- island raw tokens (design doc §2.3) -------------------------------
+    // -- island raw tokens --------------------------------------------------
 
     #[test]
     fn lexes_island_markers_as_flat_raw_tokens() {
@@ -508,7 +507,7 @@ mod tests {
         let tokens = lex(text);
         assert!(
             tokens.iter().all(|(kind, _)| *kind != SyntaxKind::ERROR),
-            "unexpected ERROR token in design doc §1.1 worked example: {tokens:?}"
+            "unexpected ERROR token in worked example: {tokens:?}"
         );
     }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "pure-analyzer-lexer"
-description = "logos-derived DFA lexer for the M3/Domain token layer: literals, %latest/date family, symbols, islands as raw tokens (design doc §4.1)."
+description = "logos-derived DFA lexer for the supported Pure token layer."
 edition.workspace = true
 version.workspace = true
 license.workspace = true

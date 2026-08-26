@@ -25,13 +25,10 @@ to test.
 
 ### 2. Integration tests — CLI/LSP over fixture inputs
 
-The analyzer has no databases, queues, or other backing services. Its planned
-integration surface is `.pure` source plus a model (PMCD JSON or a Pure model
-file, design doc §7). Once those layers exist, tests invoke the real analyzer
-binary or LSP session against analyzer-owned fixtures and assert on emitted
-diagnostics and exit codes without mocking parser or resolver. Today the CLI
-subcommands and most of that pipeline are scaffolds, so this paragraph is a
-target test shape, not a claim that an end-to-end analyzer suite already exists.
+The analyzer has no databases, queues, or other backing services. Its integration
+surface is `.pure` source plus a model (PMCD JSON or a Pure model file). Tests
+invoke implemented analyzer interfaces against analyzer-owned fixtures and assert
+on emitted diagnostics and exit codes without mocking parser or resolver.
 
 PureCARD's shipped integration tests replay its own offline gold corpus, schemas,
 tokenizer fixtures, and Python boundary. Its optional live Legend oracle remains
@@ -64,12 +61,10 @@ continuous fuzzing such as OSS-Fuzz is a future option, not a current service.
 
 ### 6. End-to-end
 
-A thin top layer. For the analyzer target, the compiled binary will eventually
-exercise all subcommands, output formats, and exit codes, followed by the LSP
-over real stdio JSON-RPC. Those end-to-end surfaces are not implemented yet.
-PureCARD already exercises its Rust decoder and optional PyO3 boundary end to
-end in its own suites. Keep these product tests independent even when root CI
-runs them in one matrix.
+A thin top layer exercises each product through its externally exposed interface.
+PureCARD exercises its Rust decoder and optional PyO3 boundary end to end in its
+own suites. Keep product tests independent even when root CI runs them in one
+matrix.
 
 ## The gates around the pyramid
 

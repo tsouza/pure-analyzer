@@ -1,14 +1,10 @@
 //! Structured fixes: a [`Fix`] is a set of [`TextEdit`]s, not a rendered
-//! string, so it maps directly onto an LSP `WorkspaceEdit` (design doc §1.5).
+//! string, so front ends can map it to their own edit representation.
 
 use text_size::TextRange;
 
 /// How safe a [`Fix`] is to apply automatically.
 ///
-/// `--fix` (design doc §5.2) applies only `MachineApplicable` fixes. v0.1
-/// ships every `PUR2001` fix as `Suggested` until the resolver corpus proves
-/// out the context/inheritance/date-variable cases; see the auto-fix policy
-/// note in the design doc.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Applicability {

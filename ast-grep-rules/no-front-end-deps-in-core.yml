@@ -1,13 +1,10 @@
 # Architecture guardrail: keep the analysis-engine core free of front-end
 # concerns.
 #
-# Design doc §3: "Only the front-end crates (pure-analyzer-cli today,
-# pure-analyzer-lsp in v0.2) may depend on renderers (ariadne,
-# codespan-reporting, codespan-lsp) or protocol crates (clap, tower-lsp,
-# lsp-types). Everything below them emits only structured Diagnostics, so the
-# CLI and LSP render identical findings." This rule keys off file path (every
-# core crate except pure-analyzer-cli) and bans importing a renderer/protocol
-# crate there.
+# Only front-end crates may depend on renderers (ariadne, codespan-reporting,
+# codespan-lsp) or protocol crates (clap, tower-lsp, lsp-types). This rule keys
+# off file path (every core crate except pure-analyzer-cli) and bans importing a
+# renderer/protocol crate there.
 #
 # The authoritative per-crate half of this ban lives here (ast-grep can't be
 # scoped by dependency graph); `cargo xtask verify-layering` covers the
@@ -15,7 +12,7 @@
 # sync with `deny.toml`'s comment and `ALLOWED_INTERNAL_DEPS` in
 # `xtask/src/tasks.rs`.
 id: no-front-end-deps-in-core
-message: "Core analysis-engine crates must stay renderer/protocol-free — no clap/ariadne/codespan_reporting/codespan_lsp/tower_lsp/lsp_types. Put front-end concerns in pure-analyzer-cli (or, in v0.2, pure-analyzer-lsp)."
+message: "Core analysis-engine crates must stay renderer/protocol-free — no clap/ariadne/codespan_reporting/codespan_lsp/tower_lsp/lsp_types. Put front-end concerns in a front-end crate."
 severity: error
 language: rust
 rule:
