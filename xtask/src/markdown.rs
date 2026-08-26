@@ -274,14 +274,13 @@ fn normalize_relative_target(
     source: &Path,
     raw_target: &str,
 ) -> std::result::Result<Option<ResolvedTarget>, String> {
-    let unescaped = markdown_unescape(raw_target);
-    if unescaped.starts_with('/') || has_uri_scheme(&unescaped) {
+    if raw_target.starts_with('/') || has_uri_scheme(raw_target) {
         return Ok(None);
     }
 
-    let (path_and_query, fragment) = unescaped
+    let (path_and_query, fragment) = raw_target
         .split_once('#')
-        .map_or((unescaped.as_str(), None), |(path, fragment)| {
+        .map_or((raw_target, None), |(path, fragment)| {
             (path, Some(fragment))
         });
     let path = path_and_query
@@ -323,22 +322,6 @@ fn lexical_join(base: &Path, relative: &Path) -> std::result::Result<PathBuf, St
         }
     }
     Ok(normalized)
-}
-
-/// Remove CommonMark backslash escapes from a destination.
-fn markdown_unescape(target: &str) -> String {
-    let mut output = String::with_capacity(target.len());
-    let mut characters = target.chars();
-    while let Some(character) = characters.next() {
-        if character == '\\' {
-            if let Some(escaped) = characters.next() {
-                output.push(escaped);
-            }
-        } else {
-            output.push(character);
-        }
-    }
-    output
 }
 
 /// Decode percent-encoded UTF-8 without treating `+` as a space.
@@ -561,6 +544,30 @@ mod tests {
         let problems = link_problems(&documents, &tracked);
         assert_eq!(problems.len(), 1);
         assert!(problems[0].contains("missing `missing.md`"));
+    }
+
+    #[test]
+    fn parser_destinations_are_not_unescaped_twice() {
+        let (documents, tracked) = fixture(
+            &[(
+                "docs/README.md",
+                r"[inline literal](inline\literal.md)
+[inline escaped](inline\\escaped.md)
+[reference literal][literal]
+[reference escaped][escaped]
+
+[literal]: reference\literal.md
+[escaped]: reference\\escaped.md",
+            )],
+            &[
+                r"docs/inline\literal.md",
+                r"docs/inline\escaped.md",
+                r"docs/reference\literal.md",
+                r"docs/reference\escaped.md",
+            ],
+        );
+
+        assert!(link_problems(&documents, &tracked).is_empty());
     }
 
     #[test]
