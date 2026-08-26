@@ -1,0 +1,104 @@
+name: PureCARD wheels
+
+# This lane proves the Python boundary and abi3 packaging remain healthy. It is
+# deliberately build-only: release triggers, registry credentials, and publish
+# permissions do not belong in the migrated workspace until publishing is
+# explicitly re-authorized.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  merge_group:
+
+concurrency:
+  group: purecard-wheels-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read # paths-filter reads changed files through the PR API
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  changes:
+    name: PureCARD wheel path filter
+    runs-on: ubuntu-latest
+    outputs:
+      wheel: ${{ steps.filter.outputs.wheel }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Filter changed paths
+        id: filter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: |
+            wheel:
+              - 'crates/pure-analyzer-purecard/src/**'
+              - 'crates/pure-analyzer-purecard/python/**'
+              - 'crates/pure-analyzer-purecard/Cargo.toml'
+              - 'crates/pure-analyzer-purecard/pyproject.toml'
+              - 'crates/pure-analyzer-purecard/uv.lock'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - 'justfile'
+              - '.mise.toml'
+              - 'rust-toolchain.toml'
+              - '.github/workflows/purecard-wheels.yml'
+
+  build:
+    name: Test and build PureCARD wheel
+    needs: changes
+    if: needs.changes.outputs.wheel == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12.14"
+      - name: Set up uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.5"
+          enable-cache: true
+          cache-dependency-glob: crates/pure-analyzer-purecard/uv.lock
+      - name: Install just
+        uses: taiki-e/install-action@b6ff580856c41316412a0b9b60540fbc6f8c82cc # v2.86.7
+        with:
+          tool: just@1.55.1
+      - name: Test the Python boundary
+        run: just test-python
+      - name: Build abi3 wheel
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          working-directory: crates/pure-analyzer-purecard
+          maturin-version: v1.15.0
+          command: build
+          args: --release --features python --strip --out ../../target/wheels
+          manylinux: auto
+          sccache: true
+      - name: Upload wheel
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: purecard-wheels
+          path: target/wheels/*.whl
+          if-no-files-found: error
+
+  no-warnings:
+    name: no-warnings (log sweep)
+    needs: [changes, build]
+    if: always()
+    permissions:
+      actions: read # reusable sweep reads this workflow run's completed logs
+      contents: read
+    uses: ./.github/workflows/no-warnings.yml

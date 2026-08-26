@@ -5,12 +5,16 @@
 # violation upstream, not something to wave through here.
 version: 2
 updates:
-  # Rust workspace (crates/*, xtask). `fuzz` is excluded from the
-  # workspace and its nightly toolchain, so it is intentionally omitted here.
+  # Rust workspace (crates/*, xtask). Workspace-excluded fuzz roots are
+  # maintained through their own entries below.
   - package-ecosystem: cargo
     directory: "/"
     schedule:
       interval: weekly
+    # Let non-security releases age for seven days before adoption. Security
+    # updates are exempt from Dependabot cooldowns.
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 10
     groups:
       cargo-minor-patch:
@@ -24,6 +28,8 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       actions:
         update-types:
@@ -31,3 +37,34 @@ updates:
           - patch
     commit-message:
       prefix: "ci(deps)"
+
+  # PureCARD's cargo-fuzz project is a separate, workspace-excluded Cargo root
+  # with its own committed lockfile.
+  - package-ecosystem: cargo
+    directory: "/crates/pure-analyzer-purecard/fuzz"
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      purecard-fuzz-minor-patch:
+        update-types:
+          - minor
+          - patch
+    commit-message:
+      prefix: "chore(deps)"
+
+  # Keep PureCARD's locked uv environment current independently of Cargo.
+  - package-ecosystem: uv
+    directory: "/crates/pure-analyzer-purecard"
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      python-minor-patch:
+        update-types:
+          - minor
+          - patch
+    commit-message:
+      prefix: "chore(deps)"

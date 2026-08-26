@@ -53,6 +53,11 @@ lint-commits:
 lint-actions:
     actionlint
 
+# Audit GitHub Actions for unsafe triggers, permissions, and unpinned uses.
+# Accepted findings, if any, are narrowly scoped in .github/zizmor.yml.
+zizmor:
+    zizmor --config .github/zizmor.yml .github/
+
 # ---------------------------------------------------------------------------
 # Testing (layered: unit -> integration -> chaos -> mutation -> fuzz)
 # ---------------------------------------------------------------------------
@@ -97,8 +102,9 @@ test-legend:
 test-scripts:
     bun test scripts/
 
-# Mutation testing — verifies the test suite actually catches regressions.
-# xtask creates the output parent portably and owns both mutation passes.
+# Mutation testing verifies that the test suite actually catches regressions.
+# The default workspace and feature-gated PureCARD FFI surface run separately
+# so neither pass can succeed vacuously; xtask portably prepares their output.
 test-mutation:
     cargo xtask test-mutation
 
@@ -122,9 +128,11 @@ fuzz target="" time="60" triple="":
 purecard-fuzz target time="60" triple="":
     cargo +nightly fuzz run --fuzz-dir crates/pure-analyzer-purecard/fuzz {{ if triple == "" { "" } else { "--target " + triple } }} {{ target }} -- -max_total_time={{ time }}
 
-# Compile every PureCARD fuzz target without executing it (bit-rot gate).
-purecard-fuzz-build:
-    cargo +nightly fuzz build --fuzz-dir crates/pure-analyzer-purecard/fuzz
+# Compile every PureCARD fuzz target without executing it (bit-rot gate). CI
+# supplies the GNU triple because the static installer otherwise selects musl,
+# which is incompatible with ASan; local developers normally omit it.
+purecard-fuzz-build triple="":
+    cargo +nightly fuzz build --fuzz-dir crates/pure-analyzer-purecard/fuzz {{ if triple == "" { "" } else { "--target " + triple } }}
 
 # Time-box all three PureCARD fuzz targets. The per-target loop and nested fuzz
 # manifest selection live in xtask rather than shell control flow here.
@@ -178,6 +186,11 @@ fused-tokenizers-write: fused-tokenizers-fetch
 # Criterion benchmarks. On CI these run under CodSpeed (see ci.yml).
 bench:
     cargo bench --workspace
+
+# Build and run the workspace benchmarks under cargo-codspeed.
+codspeed:
+    cargo codspeed build --workspace
+    cargo codspeed run
 
 # ---------------------------------------------------------------------------
 # Coverage, supply-chain & API-stability gates
@@ -336,7 +349,7 @@ ci:
 # nightly for cargo-fuzz's sanitizers) — so they are only enforced in CI. Run the
 # fuzz-smoke directly with `just fuzz diagnostics 60` if you have nightly. Use
 # before a PR when a change touches what the fast gate skips.
-ci-full: ci coverage test-mutation deny audit machete release-plz-check semver sweep postponed-markers docs test-scripts
+ci-full: ci coverage test-mutation deny audit machete release-plz-check semver sweep postponed-markers docs test-scripts lint-actions zizmor
     @echo "ci-full: ran every locally reproducible PR gate; codspeed bench, the no-warnings log sweep, the opt-in public-api snapshot, and the fuzz-smoke are enforced only in CI"
 
 # Install git hooks (managed by lefthook.yml). Also run automatically by the

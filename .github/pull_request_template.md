@@ -20,12 +20,16 @@ Closes #
 - [ ] pure-analyzer-diagnostics
 - [ ] libpure
 - [ ] pure-analyzer-cli
+- [ ] pure-analyzer-purecard
+- [ ] PureCARD corpus / oracle fixtures
+- [ ] PureCARD Python wheel / FFI
 - [ ] tooling / CI
 
 ## Testing
 
 How is this verified? Note the layers exercised (unit / integration / chaos /
-mutation / fuzz) and any new tests added. Flaky tests are not acceptable.
+mutation / fuzz), any PureCARD hermetic/live oracle boundary, and any Python
+boundary coverage. Flaky tests are not acceptable.
 
 ## Pre-existing issues
 
@@ -35,9 +39,12 @@ fix into this PR or BRANCHED it out, and justify the choice.
 ## Checklist
 
 - [ ] `just ci` passes locally.
+- [ ] `just ci-full` passes for changes that touch slow or specialized gates.
 - [ ] `just review` (structural rules, unused deps, secret scan) is clean.
 - [ ] No `unwrap`/`expect`/`todo!`/`unimplemented!` outside tests.
 - [ ] Public API / diagnostic-code changes are intentional; stability gates pass
       or are accompanied by a justified version bump.
+- [ ] PureCARD remains unpublished and independent from analyzer internals; any
+      parser/corpus sharing has a dedicated ADR.
 - [ ] Docs updated (`#![deny(missing_docs)]` on public items) and `just docs` passes.
 - [ ] Conventional-commit title (feat/fix/chore/...); breaking changes marked `!`.

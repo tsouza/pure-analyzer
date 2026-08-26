@@ -1,0 +1,14 @@
+# zizmor runs with its strict default posture. This is the sole accepted
+# exception and is scoped to the workflow that must retain Git credentials to
+# push release-plz's branch and tags.
+rules:
+  # actions/labeler uses the base branch's pinned action and label config; it
+  # never checks out or executes pull-request code. pull_request_target is
+  # required so fork PRs can receive labels with the narrowly scoped job token.
+  dangerous-triggers:
+    ignore:
+      - labeler.yml
+
+  artipacked:
+    ignore:
+      - release-plz.yml

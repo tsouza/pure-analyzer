@@ -24,6 +24,10 @@ just = "1.55.1"
 # Secret scanning (hook + CI).
 gitleaks = "8.30.1"
 
+# Static security analysis for GitHub Actions. The local `just zizmor` gate
+# uses the same version as the pinned CI action.
+zizmor = "1.29.0"
+
 # PR-based release automation (version bump + changelog + publish).
 release-plz = "0.3.159"
 
