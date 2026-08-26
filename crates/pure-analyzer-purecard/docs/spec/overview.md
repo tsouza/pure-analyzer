@@ -66,10 +66,9 @@ The three levels form a strict containment hierarchy:
 
 Read the conceptual containment right-to-left: every faithful query is
 schema-consistent, and every schema-consistent query is syntactic — but not vice
-versa. PureCARD is intended to move output from "arbitrary text" into the
-emitted-subset syntactic set (L1) and, with a complete schema overlay, into the
-schema-consistent set (L2). Today it enforces the L1 recognizer and a partial L2
-overlay; it **cannot** move output into the _faithful_ set.
+versa. PureCARD enforces the emitted-subset syntactic set (L1) and, when given a
+schema, applies its partial L2 overlay. It **cannot** move output into the
+_faithful_ set.
 
 Why faithfulness is structurally unreachable at decode time: the mask sees the schema and the partial output string, but **never the question's intent**. Consider a database with a `Singer` class. Both
 
@@ -84,9 +83,8 @@ real member set `{singerId, name, country, songName, songReleaseYear, age,
 isMale}`; **every** member remains a legal next-token, and L2 has no basis to
 prefer `country` over `name`. Only the model's own probability mass — shaped by
 training and by the in-context question — picks the faithful column. The
-implemented overlay can block a non-existent member at those covered positions;
-it does not yet guarantee full name resolution or type-checking across the
-query.
+implemented overlay can block a non-existent member at covered positions; it
+does not guarantee full name resolution or type-checking across the query.
 
 **False-confidence risk.** A compiling query can still be 100% wrong (wrong
 column, wrong join, wrong aggregate). Schema constraints can narrow syntax,
@@ -113,9 +111,8 @@ over a thin PyO3 boundary — plus the oracle-driven test harness that measures 
 - **Not** the training pipeline, the Python inference stack, tokenizer training, or general Rust project scaffolding. Only the decoder crate and its PyO3 boundary.
 - **Not** trajectory constraint. The model emits full agentic trajectories (tool calls, reasoning, then the final query); PureCARD constrains **only the final-query span** — the Python loop activates it when that span begins (integration assumption, §9).
 - **Not** full Pure syntax. The grammar is a deliberate over-approximation of
-  validity in a few places (§5.6); the Legend compiler oracle (§8) is intended
-  to catch escapes and drive tightening. Do not gold-plate — keep it minimal
-  and use the outstanding live proof to establish soundness.
+  validity in a few places (§5.6); the Legend compiler oracle (§8) classifies
+  escapes. Do not gold-plate — keep the emitted subset minimal.
 - **Not** runtime data values. L2 never constrains literal _values_ (only their _types_), because any type-valid literal compiles.
 - **Not** an analyzer subsystem. PureCARD and Pure Analyzer are sibling products
   with no dependency edges in either direction; only root governance and

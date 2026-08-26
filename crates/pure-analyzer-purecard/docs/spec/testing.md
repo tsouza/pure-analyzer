@@ -9,9 +9,8 @@ _Part of the [PureCARD spec](README.md); see also the [domain model](../domain-m
 
 A constrained decoder can fail silently: a **soundness** bug masks a continuation
 that a valid query needs, while a **completeness** bug admits a path that the real
-compiler cannot accept. The repository has strong offline evidence for the first
-class. The live end-to-end evidence for the second remains incomplete and is
-called out explicitly below.
+compiler cannot accept. The test suite keeps offline soundness evidence and live
+Legend integration evidence separate.
 
 ### 8.1 Soundness — never mask a valid continuation
 
@@ -36,10 +35,9 @@ runs via `just qwen-oracle` and the scheduled/on-demand tokenizer workflow, not
 the per-PR lane. This proves real-tokenizer token-ID replay. It does **not** run a
 model forward pass and does **not** compile output with Legend.
 
-### 8.2 Completeness — the live differential target
+### 8.2 Completeness — live Legend integration
 
-The target is to generate under constraint and compile every result through the
-pinned Legend engine:
+Live Legend integration uses the pinned engine endpoints:
 
 ```text
 http://localhost:6300/api
@@ -47,27 +45,24 @@ http://localhost:6300/api
 /pure/v1/compilation/lambdaReturnType
 ```
 
-The current `legend_completeness.rs` lane health-waits the live engine, posts the
-committed placeholder protocol fixtures, and classifies every response. It also
-feeds every deterministic accepting walk through that live path. It proves
-engine reachability, teardown-safe orchestration, and response classification;
-it does **not** prove the target 100% compile rate. Raw-walk `grammarToJson`
-lowering and schema-constrained walk generation remain outstanding.
+`legend_completeness.rs` health-waits the live engine, posts protocol fixtures,
+feeds deterministic accepting walks through that path, and classifies every
+response. This evidence establishes engine reachability, teardown-safe
+orchestration, and response classification; it does **not** establish universal
+compiler validity.
 
 ### 8.3 Schema-consistency verification (L2)
 
-The implemented L2 subset is covered hermetically by gold replay, targeted
+The supported L2 subset is covered hermetically by gold replay, targeted
 precision/counterfactual tests, property tests, and the real-Qwen token-ID lane.
-The end-state target remains zero phantom-identifier and type-mismatch compile
-errors for schema-constrained accepting walks against live Legend. That live
-claim is not yet established because the schema-aware generator is missing.
+It narrows only the positions named in the product reference and is not a general
+schema-validation guarantee.
 
 ### 8.4 Differential fuzzing
 
 Committed-seed accepting walks test recognizer liveness and reproducibility;
 near-miss and structured-corpus tests probe mask precision. The excluded nightly
-fuzz crate exercises decoder entry points. A live compiler verdict for every
-generated walk remains part of §8.2's open target.
+fuzz crate exercises decoder entry points.
 
 ### 8.5 Property tests
 
@@ -81,18 +76,12 @@ Any production or narrowing rule a gold query violates is wrong and must be
 relaxed. A construct absent from the frozen corpus requires a provenance-bearing
 seed before the PDA is widened. The oracle inputs, not intuition, bound changes.
 
-### 8.7 Enforced gates and acceptance target
+### 8.7 Enforced gates
 
 The enforced hermetic gates include full byte-level corpus replay, the
 implemented L2 fixture replay, properties/precision regressions, doc facts, and
 normal workspace quality checks. Real-Qwen token-ID replay is scheduled and
 on-demand because it is heavy and network-fed.
-
-The **acceptance target**, not a currently satisfied pre-merge gate, is 100%
-constrained-walk compilation plus zero schema-resolution/type errors on a
-representative schema set. Do not report that target as achieved until
-grammar-to-protocol lowering and schema-constrained walk generation make the live
-Legend assertion real.
 
 ---
 
@@ -196,20 +185,18 @@ Association spider::concert_singer::model::fk_1
 | Schemas      | `data/pilot/armC_ctx_<db>.md` (+ OOS ctx briefs)          | `corpus/schemas/<db>.md` (committed)                       |
 | Legend stack | `infra/legend-stack/`                                     | `corpus/legend-stack/` (§14)                               |
 
-The shipped `corpus/` is sufficient for the implemented offline M0–M3 lanes
-without upstream access. Regenerating or extending its provenance requires the
-upstream pure-lingua datagen inputs. The committed corpus is a frozen empirical
-oracle, not proof that every legal emitted-Pure construct or schema is covered.
+The shipped `corpus/` supports the offline test lanes without upstream access.
+Regenerating or extending its provenance requires the upstream pure-lingua
+datagen inputs. The committed corpus is a frozen empirical oracle, not proof that
+every legal emitted-Pure construct or schema is covered.
 
 ---
 
 ## 14. Legend engine setup (for the completeness oracle) + CI
 
-The byte-level **soundness** half of §8 is offline (§13.1). The live
-**completeness** target needs a Legend engine. The pinned stack ships in the
-PureCARD package subtree under `corpus/legend-stack/`. The current lane proves
-reachability and classified responses; §8.2 records the lowering and generation
-work still needed before it can claim compile-rate completeness.
+The byte-level **soundness** half of §8 is offline (§13.1). Live Legend
+integration uses the pinned stack under `corpus/legend-stack/`. Its evidence is
+limited to reachability and classified responses (§8.2).
 
 ### 14.1 The stack
 
@@ -248,7 +235,7 @@ The compose file already declares matching healthchecks (engine: `curl -sf http:
 Compiling a candidate Pure lambda is a **two-call** sequence on the engine (both from `gate0-findings.md`; the `lambdaReturnType` compile call is the same oracle §8.2 already names):
 
 1. **`POST /pure/v1/grammar/grammarToJson/lambda`** — body is the Pure lambda **text**; returns the lambda as **protocol JSON** (the `grammarToJson` family; per Gate-0, elements carry `package`+`name`, not a `path`).
-2. **`POST /pure/v1/compilation/lambdaReturnType`** — body `{ "lambda": <protocol-json-from-step-1>, "model": <PMCD> }`; on success returns the lambda's **return type** (e.g. `TabularDataSet` for a projected pipeline — the Gate-0 end-to-end probe confirmed this), and on failure returns a **compile error**. A returned type == compiles == completeness satisfied for that generation; an error == a grammar/overlay gap to tighten (oracle-driven, never speculative — §8.2).
+2. **`POST /pure/v1/compilation/lambdaReturnType`** — body `{ "lambda": <protocol-json-from-step-1>, "model": <PMCD> }`; on success returns the lambda's **return type** (e.g. `TabularDataSet` for a projected pipeline — the Gate-0 end-to-end probe confirmed this), and on failure returns a **compile error**. A returned type means that generation compiles; an error is classified by the oracle (§8.2).
 
 The `model` is the **PMCD** (PureModelContextData) for the DB — the same model structure the schema files (§13.2) describe, either regenerated into the fs-SDLC workspace or supplied inline. For **L2** verification (§8.3) the model is the specific DB's PMCD, and a phantom-identifier / type-mismatch generation surfaces as a `lambdaReturnType` compile error.
 

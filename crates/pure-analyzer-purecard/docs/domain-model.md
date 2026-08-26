@@ -110,21 +110,14 @@ soundness bug.
 of the scope stack determines which identifiers the implemented L2 narrowing
 rules admit at their covered positions.
 
-**Implemented subset (M3).** `Schema::from_json` +
-`DecoderSession::with_schema` deliver the current L2 subset as
-`src/schema/{model, scope, narrow}`. The scope machine (`ScopeTracker`) advances in
-lockstep with `accept_token`, and `allowed_mask` intersects the L1 mask with the
-schema-legal set. The shipped rules are N3 (source is a real class **or** the store
-`db_path`, per `Schema::is_source`), N1/N2 (member/nav after `.`), **N5**
-(association-direction narrowing — it ships folded into N1, since
-`Schema::member_names`/`resolve` admit only the navigable, correct-direction
-association ends, so a wrong-direction navigation is already masked by N1's member
-set), N6 (relation-column strings), and T1 (comparison operand type-class — only
-its string/numeric levers; Boolean/Temporal operand narrowing passes through);
-deferred are T2/T3/T4/T6/T7 and the inert N4/T5 (see the module docs and
-`spec/schema.md`). Soundness holds on all 269
-fixture-backed gold queries; the load-bearing narrowing surface is the 13 arm-C
-queries (arm-A exercises only N6 + a table-exists check).
+**Supported overlay.** `Schema::from_json` +
+`DecoderSession::with_schema` provide L2 through `src/schema/{model, scope,
+narrow}`. `ScopeTracker` advances in lockstep with `accept_token`, and
+`allowed_mask` intersects the L1 mask with the schema-legal set. The overlay
+constrains N3 (a real class or store `db_path`), N1/N2 (member/navigation after
+`.`), N5 (association direction through N1 member lookup), N6 (relation-column
+strings), and the numeric/string portion of T1. Other named N/T categories are
+outside the supported guarantee and pass through without schema narrowing.
 
 **Introduced by.** [`spec/schema.md`](spec/schema.md) §6.4.
 
@@ -135,7 +128,7 @@ a `CompiledGrammar`. Its surface: `allowed_mask()`, `accept_token()`,
 `is_complete()`, `reset()`. The `#[cfg(feature = "python")]` PyO3 bindings wrap
 exactly this.
 
-**Invariants (M5).** `is_complete()` is true iff **every frame is closed AND the
+**Invariants.** `is_complete()` is true iff **every frame is closed AND the
 last token is fully lexed at a value boundary** — derived from `step`, so it
 covers every value-terminal state (a trailing top-level identifier now completes),
 while a bare `|X` source deliberately does not. `accept_token` distinguishes an
@@ -171,8 +164,8 @@ zero core dependencies.
 `CompiledGrammar::compile(vocab)` (or the compatibility surface
 `from_spec(spec, vocab)`) binds the vocab and **sizes** the lazy per-state mask
 cache — it probes no token up front; each state's partition is built on first
-visit (`cached(state)`). `from_spec` does not lower `spec` yet; it selects the
-fixed emitted-subset PDA.
+visit (`cached(state)`). `from_spec` selects the fixed emitted-subset PDA; it
+does not lower its argument.
 [`spec/architecture.md`](spec/architecture.md) §4.5, §9.1.
 
 ### Constrain one generation (per decode step)
@@ -192,11 +185,9 @@ trajectory. [`spec/architecture.md`](spec/architecture.md) §3.3, §4.3, §9.3.
   fixed PDA's terminal set at its covered positions; it can only remove
   admissible tokens, never add them
   ([`spec/architecture.md`](spec/architecture.md) §3.1).
-- **Completeness target.** Constrained generations should compile against the
-  real Legend engine; a compile failure is a grammar/overlay gap to tighten
-  oracle-driven ([`spec/testing.md`](spec/testing.md) §8.2). The current live lane
-  proves engine reachability and result classification, not a 100% compile rate;
-  schema-constrained walk generation and real lowering remain open.
+- **Completeness boundary.** Live Legend integration classifies responses but
+  does not establish universal compiler validity
+  ([`spec/testing.md`](spec/testing.md) §8.2).
 
 ## Glossary
 

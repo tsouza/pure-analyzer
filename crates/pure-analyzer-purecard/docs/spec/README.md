@@ -16,7 +16,7 @@ Together the files below specify the decoder product. Its external inputs at
 build/test time are
 (a) the _test corpus_ of gold Pure queries and (b) a running _Legend engine_,
 both located in [`testing.md`](testing.md) §8. The host-side Python
-model/tokenizer/inference stack that drives it (the M4 integration surface) is
+model/tokenizer/inference stack that drives it is
 out of scope here — see §2 and §9 — as are general Rust workspace conventions,
 CI, and agentic dev setup. Those shared concerns are governed by the root
 [constitution](../../../../constitution.md), `just` frontend, CI, and
