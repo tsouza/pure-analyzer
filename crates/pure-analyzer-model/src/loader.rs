@@ -473,7 +473,7 @@ fn classify_qualified_property(
 }
 
 fn is_milestoning_profile(profile: &str) -> bool {
-    matches!(profile, MILESTONING_PROFILE | MILESTONING_PROFILE_PROTOCOL)
+    profile == MILESTONING_PROFILE || profile == MILESTONING_PROFILE_PROTOCOL
 }
 
 fn lower_type_ref(raw: RawGenericType) -> Result<TypeRef, ModelErrorKind> {
