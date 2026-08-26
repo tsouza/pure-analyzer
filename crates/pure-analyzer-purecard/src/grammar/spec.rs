@@ -132,7 +132,7 @@ pub enum ByteTest {
         bytes: Vec<u8>,
     },
     /// Any byte at all — the universal fallback, valid only as a state's last
-    /// rule (see [`super::compile::CompileError::UnreachableRule`]).
+    /// rule (see [`SpecError::UnreachableRule`]).
     Any,
 }
 
