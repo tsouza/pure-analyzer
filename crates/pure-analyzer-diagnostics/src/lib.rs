@@ -13,13 +13,15 @@
 //! with a tiny, stable, serializable shape is what lets the CLI and LSP stay
 //! thin adapters over identical findings.
 
+mod code;
 mod diagnostic;
 mod file;
 mod fix;
 mod verdict;
 
+pub use code::{ALL_DIAG_CODES, DiagCode, DiagFamily, UnknownDiagCode};
 pub use diagnostic::{Diagnostic, DiagnosticBuilder, Label, Severity};
 pub use file::FileId;
 pub use fix::{Applicability, Fix, TextEdit};
 pub use text_size::{TextRange, TextSize};
-pub use verdict::{ReasonBucket, ReasonCode, Verdict};
+pub use verdict::{ALL_REASON_CODES, ReasonBucket, ReasonCode, UnknownReasonCode, Verdict};

@@ -3,6 +3,7 @@
 
 use text_size::TextRange;
 
+use crate::code::DiagCode;
 use crate::file::FileId;
 use crate::fix::Fix;
 use crate::verdict::{ReasonCode, Verdict};
@@ -70,14 +71,13 @@ impl Label {
 /// See the crate-level docs and design doc §6.1/§6.2 for the full field
 /// contract, and §6.4 for the `PUR<nnnn>` code namespace.
 ///
-/// `Serialize`-only, like [`ReasonCode`]: `code` is `&'static str` (every
-/// `PUR<nnnn>` code is a compile-time constant a pass references, never one
-/// it constructs from user input), which cannot soundly round-trip through
-/// `Deserialize`. Findings flow one way, from passes to renderers.
+/// Findings flow one way, from passes to renderers, so this type is
+/// intentionally serialization-only. Its identifiers are closed enums rather
+/// than caller-provided strings.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct Diagnostic {
-    /// Stable string id, e.g. `"PUR2001"`.
-    pub code: &'static str,
+    /// Stable registered identifier, e.g. [`DiagCode::WrongMilestoningArity`].
+    pub code: DiagCode,
     /// How serious this finding is.
     pub severity: Severity,
     /// The human-readable finding message.
@@ -103,7 +103,7 @@ impl Diagnostic {
     /// empty/`None` and can be set via the builder's `with_*` methods.
     #[must_use]
     pub fn builder(
-        code: &'static str,
+        code: DiagCode,
         severity: Severity,
         message: impl Into<String>,
         primary: Label,
@@ -119,12 +119,7 @@ pub struct DiagnosticBuilder {
 }
 
 impl DiagnosticBuilder {
-    fn new(
-        code: &'static str,
-        severity: Severity,
-        message: impl Into<String>,
-        primary: Label,
-    ) -> Self {
+    fn new(code: DiagCode, severity: Severity, message: impl Into<String>, primary: Label) -> Self {
         Self {
             inner: Diagnostic {
                 code,
@@ -193,8 +188,8 @@ mod tests {
 
     #[test]
     fn builder_defaults_optional_fields_to_empty() {
-        let d = Diagnostic::builder("PUR9999", Severity::Error, "boom", label()).build();
-        assert_eq!(d.code, "PUR9999");
+        let d = Diagnostic::builder(DiagCode::BadToken, Severity::Error, "boom", label()).build();
+        assert_eq!(d.code, DiagCode::BadToken);
         assert_eq!(d.severity, Severity::Error);
         assert!(d.secondary.is_empty());
         assert!(d.fix.is_none());
@@ -210,17 +205,28 @@ mod tests {
             TextRange::new(5.into(), 9.into()),
             "declared here",
         );
-        let d = Diagnostic::builder("PUR2001", Severity::Warning, "wrong arity", label())
-            .secondary(secondary.clone())
-            .url("https://example.invalid/PUR2001")
-            .build();
+        let d = Diagnostic::builder(
+            DiagCode::WrongMilestoningArity,
+            Severity::Warning,
+            "wrong arity",
+            label(),
+        )
+        .secondary(secondary.clone())
+        .url("https://example.invalid/PUR2001")
+        .build();
         assert_eq!(d.secondary, vec![secondary]);
         assert_eq!(d.url.as_deref(), Some("https://example.invalid/PUR2001"));
     }
 
     #[test]
     fn serializes_to_the_expected_json_shape() {
-        let d = Diagnostic::builder("PUR2001", Severity::Error, "wrong arity", label()).build();
+        let d = Diagnostic::builder(
+            DiagCode::WrongMilestoningArity,
+            Severity::Error,
+            "wrong arity",
+            label(),
+        )
+        .build();
         let value: serde_json::Value = serde_json::to_value(&d).expect("serialize");
         assert_eq!(value["code"], "PUR2001");
         assert_eq!(value["severity"], "error");
