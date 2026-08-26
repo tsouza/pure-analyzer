@@ -254,6 +254,8 @@ pub fn purecard::grammar::compiled::CompiledGrammar::borrow_mut(&mut self) -> &m
 impl<T> core::convert::From<T> for purecard::grammar::compiled::CompiledGrammar
 pub fn purecard::grammar::compiled::CompiledGrammar::from(T) -> T
 impl<T> pyo3::marker::Ungil for purecard::grammar::compiled::CompiledGrammar where T: core::marker::Send
+pub mod purecard::grammar::emitted_subset
+pub const purecard::grammar::emitted_subset::EMITTED_SUBSET_SPEC: &str
 pub mod purecard::grammar::pda
 pub enum purecard::grammar::pda::Frame
 pub purecard::grammar::pda::Frame::Brace
@@ -1182,6 +1184,7 @@ pub unsafe fn purecard::grammar::DeadState::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for purecard::grammar::DeadState
 pub fn purecard::grammar::DeadState::from(T) -> T
 impl<T> pyo3::marker::Ungil for purecard::grammar::DeadState where T: core::marker::Send
+pub const purecard::grammar::EMITTED_SUBSET_SPEC: &str
 pub mod purecard::mask
 pub struct purecard::mask::BitMask
 impl purecard::mask::BitMask
