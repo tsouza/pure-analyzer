@@ -78,21 +78,22 @@ PureCARD, and repository-wide tasks. Contributions follow
 [`CONTRIBUTING.md`](CONTRIBUTING.md) and the rules in
 [`constitution.md`](constitution.md).
 
-## Optional gates (off by default)
+## Optional performance gate (off by default)
 
-Two CI protections require repository administration and therefore start
-disabled. Until enabled, their absence is an explicit protection gap rather
-than evidence that those properties were checked.
+The performance protection requires repository administration and therefore
+starts disabled. Until enabled, its absence is an explicit protection gap rather
+than evidence that performance was checked.
 
 - **CodSpeed:** install the CodSpeed GitHub App, then set the repository Actions
   variable `CODSPEED_ENABLED=true`. The `bench (codspeed)` job will run
   `just codspeed` for code changes. Without it, CI does not block performance
   regressions; `just bench` remains available for local measurements.
-- **Public API snapshots:** run `just public-api-bless`, review and commit the
-  generated `public-api/` baselines, then set the repository Actions variable
-  `PUBLIC_API_ENABLED=true`. The nightly-backed snapshot comparison then joins
-  the always-on semantic-version check. Without it, exact public-surface drift
-  is not blocked by snapshot comparison.
+
+Public API snapshots are mandatory. `just public-api` compares every public
+Rust crate's all-features surface with the reviewed files in `public-api/`;
+missing or stale files fail the gate. For an intended API change, run
+`just public-api-bless`, review the regenerated baseline diff, and commit it
+with the implementation change.
 
 ## License
 

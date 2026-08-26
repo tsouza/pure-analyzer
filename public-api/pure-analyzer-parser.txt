@@ -1,0 +1,2 @@
+pub mod pure_analyzer_parser
+pub fn pure_analyzer_parser::version() -> &'static str

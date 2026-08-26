@@ -1,0 +1,99 @@
+pub mod pure_analyzer_lexer
+#[repr(u16)] pub enum pure_analyzer_lexer::SyntaxKind
+pub pure_analyzer_lexer::SyntaxKind::ALL_KW
+pub pure_analyzer_lexer::SyntaxKind::ALL_VERSIONS_IN_RANGE_KW
+pub pure_analyzer_lexer::SyntaxKind::ALL_VERSIONS_KW
+pub pure_analyzer_lexer::SyntaxKind::ARROW
+pub pure_analyzer_lexer::SyntaxKind::ASSIGN
+pub pure_analyzer_lexer::SyntaxKind::AT
+pub pure_analyzer_lexer::SyntaxKind::BLOCK_COMMENT
+pub pure_analyzer_lexer::SyntaxKind::BOOLEAN
+pub pure_analyzer_lexer::SyntaxKind::BRACE_CLOSE
+pub pure_analyzer_lexer::SyntaxKind::BRACE_OPEN
+pub pure_analyzer_lexer::SyntaxKind::BRACKET_CLOSE
+pub pure_analyzer_lexer::SyntaxKind::BRACKET_OPEN
+pub pure_analyzer_lexer::SyntaxKind::COLON
+pub pure_analyzer_lexer::SyntaxKind::COMMA
+pub pure_analyzer_lexer::SyntaxKind::DATE_TIME
+pub pure_analyzer_lexer::SyntaxKind::DOLLAR
+pub pure_analyzer_lexer::SyntaxKind::DOT
+pub pure_analyzer_lexer::SyntaxKind::EQ
+pub pure_analyzer_lexer::SyntaxKind::ERROR
+pub pure_analyzer_lexer::SyntaxKind::GE
+pub pure_analyzer_lexer::SyntaxKind::GT
+pub pure_analyzer_lexer::SyntaxKind::HASH
+pub pure_analyzer_lexer::SyntaxKind::HASH_ISLAND_OPEN
+pub pure_analyzer_lexer::SyntaxKind::HASH_STORE_OPEN
+pub pure_analyzer_lexer::SyntaxKind::IDENT
+pub pure_analyzer_lexer::SyntaxKind::INTEGER
+pub pure_analyzer_lexer::SyntaxKind::ISLAND_END
+pub pure_analyzer_lexer::SyntaxKind::LATEST_DATE
+pub pure_analyzer_lexer::SyntaxKind::LE
+pub pure_analyzer_lexer::SyntaxKind::LET_KW
+pub pure_analyzer_lexer::SyntaxKind::LINE_COMMENT
+pub pure_analyzer_lexer::SyntaxKind::LT
+pub pure_analyzer_lexer::SyntaxKind::MINUS
+pub pure_analyzer_lexer::SyntaxKind::NAV_PATH_BLOCK
+pub pure_analyzer_lexer::SyntaxKind::NEQ
+pub pure_analyzer_lexer::SyntaxKind::NEW_SYMBOL
+pub pure_analyzer_lexer::SyntaxKind::PAREN_CLOSE
+pub pure_analyzer_lexer::SyntaxKind::PAREN_OPEN
+pub pure_analyzer_lexer::SyntaxKind::PATH_SEPARATOR
+pub pure_analyzer_lexer::SyntaxKind::PERCENT
+pub pure_analyzer_lexer::SyntaxKind::PIPE
+pub pure_analyzer_lexer::SyntaxKind::PLUS
+pub pure_analyzer_lexer::SyntaxKind::SEMICOLON
+pub pure_analyzer_lexer::SyntaxKind::SLASH
+pub pure_analyzer_lexer::SyntaxKind::STAR
+pub pure_analyzer_lexer::SyntaxKind::STRICT_DATE
+pub pure_analyzer_lexer::SyntaxKind::STRING
+pub pure_analyzer_lexer::SyntaxKind::TILDE
+pub pure_analyzer_lexer::SyntaxKind::TO_BYTES_KW
+pub pure_analyzer_lexer::SyntaxKind::WHITESPACE
+impl core::clone::Clone for pure_analyzer_lexer::SyntaxKind
+pub fn pure_analyzer_lexer::SyntaxKind::clone(&self) -> pure_analyzer_lexer::SyntaxKind
+impl core::cmp::Eq for pure_analyzer_lexer::SyntaxKind
+impl core::cmp::PartialEq for pure_analyzer_lexer::SyntaxKind
+pub fn pure_analyzer_lexer::SyntaxKind::eq(&self, &pure_analyzer_lexer::SyntaxKind) -> bool
+impl core::fmt::Debug for pure_analyzer_lexer::SyntaxKind
+pub fn pure_analyzer_lexer::SyntaxKind::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for pure_analyzer_lexer::SyntaxKind
+pub fn pure_analyzer_lexer::SyntaxKind::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::Copy for pure_analyzer_lexer::SyntaxKind
+impl core::marker::StructuralPartialEq for pure_analyzer_lexer::SyntaxKind
+impl<'s> logos::Logos<'s> for pure_analyzer_lexer::SyntaxKind
+pub type pure_analyzer_lexer::SyntaxKind::Error = ()
+pub type pure_analyzer_lexer::SyntaxKind::Extras = ()
+pub type pure_analyzer_lexer::SyntaxKind::Source = str
+pub fn pure_analyzer_lexer::SyntaxKind::lex(&mut logos::lexer::Lexer<'s, Self>) -> core::option::Option<core::result::Result<Self, <Self as logos::Logos<'s>>::Error>>
+impl core::marker::Freeze for pure_analyzer_lexer::SyntaxKind
+impl core::marker::Send for pure_analyzer_lexer::SyntaxKind
+impl core::marker::Sync for pure_analyzer_lexer::SyntaxKind
+impl core::marker::Unpin for pure_analyzer_lexer::SyntaxKind
+impl core::marker::UnsafeUnpin for pure_analyzer_lexer::SyntaxKind
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_lexer::SyntaxKind
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_lexer::SyntaxKind
+impl<T, U> core::convert::Into<U> for pure_analyzer_lexer::SyntaxKind where U: core::convert::From<T>
+pub fn pure_analyzer_lexer::SyntaxKind::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_lexer::SyntaxKind where U: core::convert::Into<T>
+pub type pure_analyzer_lexer::SyntaxKind::Error = never
+pub fn pure_analyzer_lexer::SyntaxKind::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_lexer::SyntaxKind where U: core::convert::TryFrom<T>
+pub type pure_analyzer_lexer::SyntaxKind::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_lexer::SyntaxKind::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_lexer::SyntaxKind where T: core::clone::Clone
+pub type pure_analyzer_lexer::SyntaxKind::Owned = T
+pub fn pure_analyzer_lexer::SyntaxKind::clone_into(&self, &mut T)
+pub fn pure_analyzer_lexer::SyntaxKind::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_lexer::SyntaxKind where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_lexer::SyntaxKind::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_lexer::SyntaxKind where T: ?core::marker::Sized
+pub fn pure_analyzer_lexer::SyntaxKind::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_lexer::SyntaxKind where T: ?core::marker::Sized
+pub fn pure_analyzer_lexer::SyntaxKind::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_lexer::SyntaxKind where T: core::clone::Clone
+pub unsafe fn pure_analyzer_lexer::SyntaxKind::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_lexer::SyntaxKind
+pub fn pure_analyzer_lexer::SyntaxKind::from(T) -> T
+pub fn pure_analyzer_lexer::lex(&str) -> alloc::vec::Vec<(pure_analyzer_lexer::SyntaxKind, text_size::range::TextRange)>
+pub fn pure_analyzer_lexer::version() -> &'static str

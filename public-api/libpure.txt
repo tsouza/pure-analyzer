@@ -1,0 +1,5 @@
+pub mod libpure
+pub use libpure::Diagnostic
+pub use libpure::Severity
+pub fn libpure::engine_crate_versions() -> alloc::vec::Vec<libpure::CrateVersion>
+pub type libpure::CrateVersion = (&'static str, &'static str)
