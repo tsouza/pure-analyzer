@@ -3,6 +3,12 @@
 Contributions are welcome — human or agent. Everyone runs through the same gates,
 so the bar is the same for all.
 
+This is an umbrella repository with two independent products: the
+`pure-analyzer` scaffold and the PureCARD constrained decoder. PureCARD's M0–M5
+code artifacts exist, but its end-to-end proof obligations remain open. State
+which product or shared-infrastructure surface your change owns; repository
+co-location is not permission to couple their runtime code or test assets.
+
 By contributing you agree that your contributions are licensed under
 [Apache-2.0](LICENSE), and you certify the
 [Developer Certificate of Origin](https://developercertificate.org/) for each
@@ -20,6 +26,9 @@ before your first change. The short version:
   add a `just` target instead.
 - **Nothing merges red.** `just ci` must be green.
 - **No test skipping, no weakened assertions.** Flakes are bugs; fix them.
+- **Keep product edges at zero.** Analyzer crates and PureCARD may not depend on
+  one another in any Cargo dependency kind. Parser or corpus sharing requires a
+  dedicated spec and ADR; `xtask` remains shared infrastructure.
 - **Fix the system, not the instance.** A bug fix must also add the test, lint,
   or rule that prevents the whole class from recurring.
 
@@ -37,6 +46,8 @@ just ci                    # must pass before you open a PR
 Then open a PR. In the description:
 
 - link the spec the change implements,
+- identify whether the diff belongs to analyzer, PureCARD, or shared
+  infrastructure,
 - note anything you updated in `docs/domain-model.md`, `docs/lessons.md`, or
   `docs/decisions/`,
 - if you touched a **pre-existing** unrelated issue, state your

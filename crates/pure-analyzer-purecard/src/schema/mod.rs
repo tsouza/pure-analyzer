@@ -1,9 +1,10 @@
 //! L2: the schema-consistency overlay (`docs/spec/schema.md` §6).
 //!
-//! Given a [`Schema`] for the target database, L2 narrows the L1 mask at exactly
-//! the identifier and operand positions §7 enumerates, so a partial query
-//! references only real, correctly-typed model elements. It is composed of three
-//! pure (crate-internal) pieces:
+//! Given a [`Schema`] for the target database, the implemented L2 subset narrows
+//! the L1 mask at its covered identifier and operand positions. At those
+//! positions it removes prefixes that cannot reach the selected real,
+//! type-compatible model elements; deferred positions pass through. It is
+//! composed of three pure (crate-internal) pieces:
 //!
 //! - `model` — the [`Schema`] data-contract (§6.2) and its JSON ingress;
 //! - `scope` — the `ScopeTracker` state machine (§6.4) that threads a typed scope

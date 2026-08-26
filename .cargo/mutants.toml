@@ -1,6 +1,7 @@
 # cargo-mutants scope. Mutation testing verifies that unit tests actually catch
-# regressions, so it targets the analysis-engine crates (lexer through
-# libpure), which are unit-tested. Excluded:
+# regressions across the analysis-engine crates and the independent PureCARD
+# product. The feature-gated PureCARD FFI file runs in a separate recipe pass so
+# it is compiled and observed. Excluded:
 #   * xtask/**                    — the dev/CI task orchestrator, not shipped
 #                                   product code (also excluded from the
 #                                   coverage floor).

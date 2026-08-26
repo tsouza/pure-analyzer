@@ -1,8 +1,10 @@
 # Methodology: Overview
 
-This kit is a way of working, not just a scaffold. The goal is simple to state and
-hard to achieve: **let an AI agent build a real Rust server, fast, without letting
-quality drift** — and do it without a human re-reading every line.
+This repository carries a way of working, not just Rust code. The goal is simple
+to state and hard to achieve: **let agents build and maintain real products
+quickly without letting quality drift** — and do it without requiring a human to
+re-read every line. It now governs two independent products, `pure-analyzer` and
+PureCARD, plus the infrastructure that checks both.
 
 Three ideas make that possible. Each has its own page; this one ties them together.
 
@@ -11,8 +13,8 @@ Three ideas make that possible. Each has its own page; this one ties them togeth
 2. **Split the agent: cheap generator, strong reviewer.** Spend expensive
    judgment only where a machine can't decide. See
    [model-tiering.md](model-tiering.md).
-3. **Self-learn, but ratchet.** The kit's understanding of the domain is free to
-   evolve; its guardrails can only tighten. See
+3. **Self-learn, but ratchet.** The repository's understanding of each product
+   is free to evolve; its guardrails can only tighten. See
    [self-learning.md](self-learning.md).
 
 ## The change loop
@@ -25,7 +27,9 @@ spec  →  worktree  →  implement  →  just ci  →  review  →  merge  → 
 
 1. **Spec.** The "what" is written down first — the constitution plus a
    per-feature spec. `just spec <name>` scaffolds it; the reviewer later checks the
-   diff against it. See [spec-driven.md](spec-driven.md).
+   diff against it. The spec identifies the affected product or shared
+   infrastructure; co-location is not permission to cross a product boundary.
+   See [spec-driven.md](spec-driven.md).
 2. **Worktree.** `just new-feature <name>` creates a git worktree and branch. One
    change lives in one worktree, isolated from every other in-flight change.
 3. **Implement.** The generator writes code and tests against the spec, obeying
@@ -58,6 +62,10 @@ principles worth naming here, because everything else follows from them:
   defer it (branch), and writes the reasoning in the PR. The reviewer checks the
   call. This keeps changes focused without letting rot accumulate silently.
 - **Never self-lower a gate.** See [self-learning.md](self-learning.md).
+- **Keep product boundaries explicit.** Analyzer and PureCARD have no Cargo
+  dependency edges in either direction. Shared parser or corpus work requires a
+  dedicated spec and ADR; root automation may orchestrate both products without
+  becoming part of either.
 
 ## The dependency vetting rubric
 
@@ -85,4 +93,4 @@ recurring gap becomes a lesson (and possibly a vetted default).
 - [testing.md](testing.md) — the pyramid, from unit to DST to fuzz, and its gates.
 - [quality-layers.md](quality-layers.md) — the L0–L4 defense-in-depth.
 - [model-tiering.md](model-tiering.md) — the generator/reviewer cascade and its cost logic.
-- [self-learning.md](self-learning.md) — how the kit adapts without weakening itself.
+- [self-learning.md](self-learning.md) — how the repository adapts without weakening itself.

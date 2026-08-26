@@ -8,6 +8,7 @@
 //!
 //! [cargo-xtask]: https://github.com/matklad/cargo-xtask
 
+mod markdown;
 mod process;
 mod tasks;
 
@@ -45,6 +46,8 @@ enum Command {
     CheckCoreDeplight,
     /// Assert PureCARD's documented facts match their authoritative sources.
     CheckDocFacts,
+    /// Check tracked Markdown relative files and GitHub-style heading anchors.
+    CheckDocLinks,
     /// Snapshot / verify the public API surface via cargo-public-api (nightly).
     PublicApi {
         /// Update the committed baselines instead of checking against them.
@@ -61,7 +64,7 @@ enum Command {
         /// Feature name; becomes `specs/<name>.md`.
         name: String,
     },
-    /// Verify the workspace layering: no layer may depend outward (any kind).
+    /// Verify analyzer layering and the analyzer/PureCARD product boundary.
     VerifyLayering,
     /// Verify every crate inherits the workspace lints (forbid-unsafe / deny-missing-docs).
     VerifyLints,
@@ -83,6 +86,7 @@ fn main() -> Result<()> {
         Command::ReleasePlzCheck => tasks::release_plz_check(),
         Command::CheckCoreDeplight => tasks::check_core_deplight(),
         Command::CheckDocFacts => tasks::check_doc_facts(),
+        Command::CheckDocLinks => markdown::check_doc_links(),
         Command::PublicApi { bless } => tasks::public_api(bless),
         Command::NewFeature { name } => tasks::new_feature(&name),
         Command::Spec { name } => tasks::spec(&name),
