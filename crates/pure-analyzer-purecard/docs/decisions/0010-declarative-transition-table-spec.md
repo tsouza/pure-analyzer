@@ -80,14 +80,20 @@ typed `SpecError` variants naming the offending state and rule index.
 
 ## Consequences
 
-- Encoding the full shipped §5 grammar as a `GrammarSpec` (so
-  `CompiledGrammar::compile`'s built-in grammar also compiles through
-  `from_spec`, closing out issue #57's remaining acceptance criteria) is
-  mechanical transcription against this schema, not new design.
-- The hand-written `pda.rs` automaton remains the equivalence oracle the
-  transcription is checked against (differentially, over the existing gold /
-  precision / property / fuzz corpora) before any default switches to the
-  spec-compiled path.
-- A future capability this schema cannot express (e.g. lookahead) requires a
-  new `version` tag, never widening `V1` — a consumer pinned to `"1"` must
-  never observe a behavior change from a spec it already accepted.
+- A supplied grammar is data the crate validates and lowers deterministically,
+  never text it interprets — so a malformed or explosive spec fails typed
+  validation before any `RtnPda` exists, and the compiler adds no parsing
+  surface beyond `serde_json`, which this crate already carries (ADR-0005).
+- Any grammar this crate ships or accepts — the built-in one included — is
+  expressible in exactly one representation (a `GrammarSpec`), so there is a
+  single lowering path to keep sound rather than two (a hand-written one and a
+  spec-interpreted one) drifting independently.
+- The schema is versioned, not evolved in place: a capability it cannot
+  express (e.g. lookahead) requires a new `version` tag, never a widened
+  `V1` — a consumer pinned to `"1"` must never observe a behavior change from
+  a spec it already accepted.
+- The L2 schema overlay (`schema::scope::ScopeTracker`) is written against the
+  hand-written PDA's named states and does not generalize to an arbitrary
+  spec-compiled automaton; a grammar built via `from_spec` gets L1 syntactic
+  recognition only. Generalizing L2 to a declarative automaton is out of
+  scope for this decision.
