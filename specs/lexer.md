@@ -1,32 +1,33 @@
 # Spec: lexer
 
-- Status: draft
+- Status: complete
 - Created: 2026-07-22
 - Owner: agent (autonomous v0.1 build-out)
 
 ## Problem
 
-`pure-analyzer-lexer` is currently a hollow `version()`-only stub. Every crate
+`pure-analyzer-lexer` began as a hollow `version()`-only stub. Every crate
 above it in the DAG (`syntax`, `parser`, and transitively everything else)
-needs a real token stream before any real work can start there. This is the
+needed a real token stream before work could start there. This feature was the
 first concrete v0.1 milestone (design doc §9): the token layer.
 
 ## Goals
 
-- [ ] A `logos`-derived tokenizer producing every token class design doc §4.1
+- [x] A `logos`-derived tokenizer producing every token class design doc §4.1
       specifies: the date family (longest-match-first: `DATE_TIME`,
       `STRICT_DATE`, `LATEST_DATE`, bare `PERCENT`), symbols, the five M3
-      keywords (`all let allVersions allVersionsInRange toBytes`), the four
+      keywords (`all let allVersions allVersionsInRange toBytes`), assignment
+      (`=`), the four
       literal classes (`IDENT INTEGER STRING BOOLEAN`), the island raw tokens
       from §2.3 (`#>{`, `#{`, `#/...#`, bare `#`, `{`, `}`, `}#`), and trivia
       (whitespace, `//` line comments, `/* */` block comments) kept as real
       tokens, never skipped — required for `fmt`'s losslessness later.
-- [ ] Total coverage: every byte of input is accounted for by some token,
+- [x] Total coverage: every byte of input is accounted for by some token,
       including unrecognized bytes (an explicit `ERROR` kind) — no gaps, no
       panics, on arbitrary input (constitution §1: no `panic!`/`unwrap` outside
       tests; design doc §4.2's "total parsing" invariant applies at this layer
       too even though the parser itself is a separate future feature).
-- [ ] Public surface: `pub enum SyntaxKind` (`#[repr(u16)]`, the literal type
+- [x] Public surface: `pub enum SyntaxKind` (`#[repr(u16)]`, the literal type
       name design doc §4.1 specifies as the lexer's output) and
       `pub fn lex(text: &str) -> Vec<(SyntaxKind, TextRange)>`, using
       `text-size::TextRange` (see `docs/dependencies/text-size.md`) so spans
@@ -42,7 +43,7 @@ first concrete v0.1 milestone (design doc §9): the token layer.
   syntax's (future) richer CST-kind enum, and this feature doesn't reach into
   what that enum looks like. `pure-analyzer-syntax` is a separate future spec.
 - **No island balancing.** §2.3 is explicit: `logos` cannot cleanly implement
-  a nesting nesting `{`/`}` depth stack, so island tokens are lexed as flat raw
+  a nesting `{`/`}` depth stack, so island tokens are lexed as flat raw
   tokens (`#>{`, `#{`, `#/...#`, `#`, `{`, `}`, `}#`) with balancing left to
   the parser. This crate does not validate island structure at all.
 - **No float/decimal literal.** §4.1's literal list is exactly `IDENT INTEGER
@@ -55,6 +56,10 @@ first concrete v0.1 milestone (design doc §9): the token layer.
   standard set (`+ - * /`, `< <= > >=`) as a documented interpretation, to be
   corrected against the real grammar once the differential corpus (§8) exists.
   Flagged explicitly rather than silently assumed.
+- **Single `=` is an assignment token, not an equality operator.** §4.2 defines
+  `LetStmt = 'let' Ident '=' Expr`; `ASSIGN` represents that terminal while
+  `EQ` continues to represent `==`. Logos longest-match behavior keeps `==`
+  whole.
 - **`SEMICOLON` isn't in §4.1's symbol list either, but is added anyway** — it
   is unambiguously required: §4.2's own grammar defines
   `CodeBlock = Stmt (';' Stmt)*` for multi-statement lambda bodies, and the
@@ -76,8 +81,9 @@ first concrete v0.1 milestone (design doc §9): the token layer.
 Touches only `crates/pure-analyzer-lexer`. New dependencies: `logos` (with the
 `forbid_unsafe` feature — its default codegen can emit `unsafe`, which would
 make `#![forbid(unsafe_code)]` fail to compile in this crate) and `text-size`
-(vetted: `docs/dependencies/text-size.md`; already a mandatory transitive
-dependency via `rowan`, so this adds zero new supply-chain surface).
+(vetted: `docs/dependencies/text-size.md`; already a direct dependency of
+`pure-analyzer-diagnostics`, and the future syntax-tree dependency resolves
+the same span crate).
 
 `SyntaxKind` is a flat `#[derive(logos::Logos)]` enum, `#[repr(u16)]`,
 `Clone + Copy + PartialEq + Eq + Hash + Debug`. `lex()` drives `SyntaxKind::lexer(text)`
@@ -100,6 +106,8 @@ failing before implementation, per `start-feature`. Coverage:
 - Each token class from §4.1, including the island raw tokens and the
   longest-match ordering within the date family (`%latest` inside a longer
   `%YYYY-MM-DD` shouldn't misfire, and vice versa).
+- Assignment/equality separation, including `let x = 1`, `= ==`, and the
+  longest-match boundary `===` → `[EQ, ASSIGN]`.
 - Trivia (whitespace, both comment forms) round-trips as real tokens whose
   concatenated spans cover the whole input — the losslessness property `fmt`
   will depend on later.
@@ -111,8 +119,8 @@ failing before implementation, per `start-feature`. Coverage:
 
 ## Risks & rollout
 
-Pure addition, no consumers yet (six crates above this one are still stubs) —
-zero blast radius. The documented non-goals (arithmetic operator set, string
+Pure addition with no implemented downstream consumer yet — zero runtime blast
+radius. The documented non-goals (arithmetic operator set, string
 escaping) are the main risk: both are best-effort interpretations pending the
 real differential corpus, called out explicitly rather than silently assumed,
 so a future correction is a clean, expected diff rather than a surprise.

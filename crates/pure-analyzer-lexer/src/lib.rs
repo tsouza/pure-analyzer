@@ -158,6 +158,10 @@ pub enum SyntaxKind {
     #[allow(missing_docs)]
     // rustdoc already sees the doc comment above; the lint just can't tell through the derive macro's expansion
     ERROR,
+    // Kept at the tail so this additive token does not renumber existing
+    // `repr(u16)` discriminants before the richer syntax layer lands.
+    #[token("=")]
+    ASSIGN,
 }
 
 /// Tokenizes `text` into a flat sequence of `(SyntaxKind, TextRange)` pairs.
@@ -237,7 +241,7 @@ mod tests {
     #[test]
     fn lexes_every_documented_symbol() {
         assert_eq!(
-            kinds("~$->|@:^.,::()[]=={}!=+-*/<<=>>=;"),
+            kinds("~$->|@:^.,::()[]==={}!=+-*/<<=>>=;"),
             [
                 SyntaxKind::TILDE,
                 SyntaxKind::DOLLAR,
@@ -254,6 +258,7 @@ mod tests {
                 SyntaxKind::BRACKET_OPEN,
                 SyntaxKind::BRACKET_CLOSE,
                 SyntaxKind::EQ,
+                SyntaxKind::ASSIGN,
                 SyntaxKind::BRACE_OPEN,
                 SyntaxKind::BRACE_CLOSE,
                 SyntaxKind::NEQ,
@@ -267,6 +272,45 @@ mod tests {
                 SyntaxKind::GE,
                 SyntaxKind::SEMICOLON,
             ]
+        );
+    }
+
+    #[test]
+    fn distinguishes_assignment_from_equality() {
+        assert_eq!(
+            kinds("= =="),
+            [SyntaxKind::ASSIGN, SyntaxKind::WHITESPACE, SyntaxKind::EQ,]
+        );
+        assert_eq!(
+            kinds("==="),
+            [SyntaxKind::EQ, SyntaxKind::ASSIGN],
+            "maximal munch must keep the equality operator whole"
+        );
+    }
+
+    #[test]
+    fn lexes_let_assignment_without_an_error_token() {
+        let text = "let x = 1";
+        let tokens = lex(text);
+        assert_eq!(
+            tokens.iter().map(|(kind, _)| *kind).collect::<Vec<_>>(),
+            [
+                SyntaxKind::LET_KW,
+                SyntaxKind::WHITESPACE,
+                SyntaxKind::IDENT,
+                SyntaxKind::WHITESPACE,
+                SyntaxKind::ASSIGN,
+                SyntaxKind::WHITESPACE,
+                SyntaxKind::INTEGER,
+            ]
+        );
+        assert_eq!(
+            tokens[4].1,
+            TextRange::new(TextSize::from(6), TextSize::from(7))
+        );
+        assert_eq!(
+            tokens.last().map(|(_, range)| range.end()),
+            Some(TextSize::of(text))
         );
     }
 
