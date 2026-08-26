@@ -1,7 +1,8 @@
 #!/usr/bin/env bun
-// Keep change planning and progress in GitHub Issues/PRs, not in a checked-in
-// duplicate work ledger. Durable product and architecture references
-// remain valid source material; this gate rejects retired per-change ledgers.
+// Keep change planning and progress in GitHub Issues, with implementation
+// evidence in PRs, not in a checked-in duplicate work ledger. Durable product
+// and architecture references remain valid source material; this gate rejects
+// retired per-change ledgers.
 import { $ } from "bun";
 import { die } from "../lib/ci.mjs";
 
@@ -35,7 +36,7 @@ if (import.meta.main) {
   const paths = workLedgerPaths(await indexedPaths());
   if (paths.length > 0) {
     die(
-      `checked-in work ledger paths are forbidden; keep change state in GitHub Issues/PRs:\n${paths
+      `checked-in work ledger paths are forbidden; keep change state in GitHub Issues and implementation evidence in PRs:\n${paths
         .map((path) => `    ${path}`)
         .join("\n")}`,
     );

@@ -303,7 +303,8 @@ postponed-markers:
     bun scripts/checks/postponed-markers.mjs --all
 
 # Reject the retired checked-in work ledger. Change scope and progress belong in
-# GitHub Issues and PRs; durable product references remain source material.
+# GitHub Issues; PRs record implementation evidence. Durable product references
+# remain source material.
 no-work-ledger:
     bun scripts/checks/no-work-ledger.mjs
 
