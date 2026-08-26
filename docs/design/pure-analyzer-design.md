@@ -408,7 +408,7 @@ libpure emits **facts + structural-impossibility diagnostics only** (lex/parse e
 `logos`-derived DFA emitting `Vec<(SyntaxKind, TextRange)>`. Token classes (1:1 with Core/M3 lexers):
 
 - **Date family (longest match first):** `DATE_TIME %YYYY-MM-DDThh:mm:ss`, `STRICT_DATE %YYYY-MM-DD`, `LATEST_DATE '%latest'`, then bare `PERCENT '%'`.
-- **Symbols:** `TILDE ~`, `DOLLAR $`, `ARROW ->`, `PIPE |`, `AT @`, `COLON :`, `NEW_SYMBOL ^`, `DOT .`, `COMMA ,`, `PATH_SEPARATOR ::`, `PAREN/BRACKET/BRACE` open/close, `EQ ==`, `NEQ !=`, arithmetic.
+- **Symbols:** `TILDE ~`, `DOLLAR $`, `ARROW ->`, `PIPE |`, `AT @`, `COLON :`, `NEW_SYMBOL ^`, `DOT .`, `COMMA ,`, `PATH_SEPARATOR ::`, `PAREN/BRACKET/BRACE` open/close, `ASSIGN =`, `EQ ==`, `NEQ !=`, arithmetic.
 - **Keywords (M3):** `all let allVersions allVersionsInRange toBytes`. (`JoinKind`, operator names are `qualifiedName`, not keywords.)
 - **Literals:** `IDENT INTEGER STRING BOOLEAN`.
 - **Island raw tokens (NOT a logos mode stack — see §2.3):** `HASH_STORE_OPEN '#>{'`, `HASH_ISLAND_OPEN '#{'`, `NAV_PATH_BLOCK '#/' (~[#])* '#'` (whole token), `HASH '#'`, `BRACE_OPEN '{'`, `BRACE_CLOSE '}'`, `ISLAND_END '}#'`. Balancing is the parser's job.
