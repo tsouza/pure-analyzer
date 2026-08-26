@@ -144,27 +144,19 @@ impl CompiledGrammar {
 
     /// The memoized partition for `state`, built on first access (§4.5).
     ///
-    /// # Panics
-    /// Panics if `self.engine` is [`Engine::Spec`] — the fixed [`State`]
-    /// alphabet only ever pairs with [`Engine::Fixed`], and every caller
-    /// (`DecoderSession`'s `Fixed` cursor) already only reaches this method
-    /// on that engine.
+    /// Only ever called by a `Fixed`-backed session's cursor — the fixed
+    /// [`State`] alphabet and this grammar's cache sizing (`State::COUNT`)
+    /// only correspond to each other for [`Engine::Fixed`].
     pub(crate) fn cached(&self, state: State) -> &Cached {
-        let Engine::Fixed = &self.engine else {
-            unreachable!("cached is only ever called on a Fixed-backed grammar");
-        };
         self.cache[state.index()].get_or_init(|| build_fixed(state, &self.vocab, self.mask_len()))
     }
 
-    /// The memoized partition for the spec-compiled automaton's state `id`,
-    /// built on first access (§4.5).
-    ///
-    /// # Panics
-    /// Panics if `self.engine` is [`Engine::Fixed`].
-    pub(crate) fn cached_spec(&self, id: u32) -> &Cached {
-        let Engine::Spec(automaton) = &self.engine else {
-            unreachable!("cached_spec is only ever called on a Spec-backed grammar");
-        };
+    /// The memoized partition for `automaton`'s state `id`, built on first
+    /// access (§4.5). `automaton` is passed in (rather than re-derived from
+    /// `self.engine`) so a `Spec`-backed session's cursor — which already
+    /// owns the automaton via its [`RtnPda`] — is the single source of truth
+    /// for which automaton it is driving.
+    pub(crate) fn cached_spec(&self, automaton: &CompiledAutomaton, id: u32) -> &Cached {
         self.cache[id as usize]
             .get_or_init(|| build_spec(automaton, id, &self.vocab, self.mask_len()))
     }
@@ -218,7 +210,7 @@ fn build_spec(automaton: &CompiledAutomaton, id: u32, vocab: &Vocab, mask_len: u
 
 #[cfg(test)]
 mod tests {
-    use super::CompiledGrammar;
+    use super::{CompiledGrammar, Engine};
     use crate::grammar::pda::State;
     use crate::vocab::Vocab;
 
@@ -281,9 +273,12 @@ mod tests {
     fn from_spec_lowers_a_real_spec_into_a_working_cache() {
         let grammar =
             CompiledGrammar::from_spec(LITERAL_OK_SPEC, vocab()).expect("valid spec compiles");
+        let Engine::Spec(automaton) = grammar.engine() else {
+            panic!("from_spec always builds a Spec-backed grammar")
+        };
         // `id`s are dense automaton state ids here, not `pda::State` — probe
         // the start state (id 0, the first key in the spec's sorted map).
-        let cached = grammar.cached_spec(0);
+        let cached = grammar.cached_spec(automaton, 0);
         assert_eq!(cached.indep.len(), grammar.mask_len());
     }
 

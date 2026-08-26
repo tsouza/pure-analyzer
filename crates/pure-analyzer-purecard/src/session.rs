@@ -72,7 +72,7 @@ impl<'g> Cursor<'g> {
     fn cached<'a>(&self, grammar: &'a CompiledGrammar) -> &'a crate::grammar::compiled::Cached {
         match self {
             Cursor::Fixed { pda, .. } => grammar.cached(pda.state()),
-            Cursor::Spec { pda, .. } => grammar.cached_spec(pda.state()),
+            Cursor::Spec { pda, .. } => grammar.cached_spec(pda.automaton(), pda.state()),
         }
     }
 
@@ -109,19 +109,13 @@ impl<'g> Cursor<'g> {
     /// Feed one byte, advancing the live configuration. On rejection, returns
     /// the state/stack-top names for [`DecodeError::DeadState`] and leaves
     /// the cursor unchanged (both engines' `advance` already guarantee this).
-    fn advance_byte(
-        &mut self,
-        grammar: &CompiledGrammar,
-        byte: u8,
-    ) -> Result<(), (String, String)> {
+    fn advance_byte(&mut self, byte: u8) -> Result<(), (String, String)> {
         match self {
             Cursor::Fixed { pda, .. } => pda
                 .advance(byte)
                 .map_err(|dead| (dead.state.to_string(), dead.stack_top.to_string())),
             Cursor::Spec { pda, .. } => {
-                let Engine::Spec(automaton) = grammar.engine() else {
-                    unreachable!("a Cursor::Spec always pairs with an Engine::Spec grammar")
-                };
+                let automaton = pda.automaton();
                 if pda.advance(byte) {
                     Ok(())
                 } else {
@@ -307,11 +301,10 @@ impl<'g> DecoderSession<'g> {
         // completable. The set is built into the reused `narrow_buf` (no per-step
         // alloc); when `schema` is `None` the block is skipped entirely, so the
         // L1-only path keeps its zero added per-step cost. `with_schema` already
-        // refused a spec-compiled grammar, so `schema.is_some()` implies `Fixed`.
-        if let Some(schema) = &self.schema {
-            let Cursor::Fixed { pda, .. } = &self.cursor else {
-                unreachable!("with_schema refuses a spec-compiled grammar")
-            };
+        // refused a spec-compiled grammar, so `schema.is_some()` implies `Fixed` —
+        // the `Cursor::Spec` arm below is unreachable in practice, not merely
+        // unimplemented, so it is a no-op rather than a postponed-work marker.
+        if let (Some(schema), Cursor::Fixed { pda, .. }) = (&self.schema, &self.cursor) {
             let pos = self.tracker.position(pda.state());
             if narrow_into(
                 &mut self.narrow_buf,
@@ -391,11 +384,12 @@ impl<'g> DecoderSession<'g> {
         let Some(bytes) = self.grammar.vocab().bytes(id) else {
             return Err(DecodeError::UnknownToken { id });
         };
-        if let Some(schema) = &self.schema {
-            // `with_schema` already refused a spec-compiled grammar.
-            let Cursor::Fixed { pda, .. } = &mut self.cursor else {
-                unreachable!("with_schema refuses a spec-compiled grammar")
-            };
+        // `with_schema` already refused a spec-compiled grammar, so
+        // `schema.is_some()` implies `Cursor::Fixed`; the fall-through `else`
+        // below is unreachable in practice for that case, not merely
+        // unimplemented, so a schema-tagged `Cursor::Spec` (impossible today)
+        // degrades to the plain L1 path rather than panicking.
+        if let (Some(schema), Cursor::Fixed { pda, .. }) = (&self.schema, &mut self.cursor) {
             // Fold into a clone and commit only on full success: a rejection never
             // touches `pda`, so no stack contents can be corrupted by a
             // Pop-then-fail. One small stack clone per call, off the per-candidate
@@ -461,7 +455,7 @@ impl<'g> DecoderSession<'g> {
 impl ByteRecognizer for DecoderSession<'_> {
     fn accept_byte(&mut self, byte: u8) -> Result<(), DecodeError> {
         let offset = self.offset;
-        match self.cursor.advance_byte(self.grammar, byte) {
+        match self.cursor.advance_byte(byte) {
             Ok(()) => {
                 self.offset += 1;
                 Ok(())
@@ -509,7 +503,7 @@ mod tests {
         );
         // `(` opens a `Paren` frame from `ExpectValue` after a source.
         for &byte in b"|X.all()->take(" {
-            assert!(matches!(cursor.advance_byte(&grammar, byte), Ok(())));
+            assert!(matches!(cursor.advance_byte(byte), Ok(())));
         }
         assert!(
             cursor.stack_top_present(),
