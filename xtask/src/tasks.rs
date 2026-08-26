@@ -36,6 +36,7 @@ pub fn ci() -> Result<()> {
     check_core_deplight()?;
     verify_purecard_fuzz_workspace()?;
     check_doc_facts()?;
+    crate::markdown::check_doc_links()?;
     run_cargo_steps(&[
         &["fmt", "--all", "--check"],
         // PureCARD's always-on classifier binary is cfg(not(feature =
@@ -1319,13 +1320,13 @@ fn parse_grouped(token: &str) -> Option<usize> {
 
 /// The analysis-engine crate DAG (design doc §3, constitution §1, ADR-0003):
 /// for each enforced workspace crate, the set of internal crates it may
-/// depend on, in any dependency kind. This is a DAG, not a linear rank —
-/// `pure-analyzer-model` and `pure-analyzer-resolve` are siblings that both
-/// build on `pure-analyzer-parser` but neither depends on the other — so
-/// membership is checked against an explicit allow-set per crate rather than
-/// an inward/outward rank comparison. `pure-analyzer-diagnostics` is a leaf
-/// every parser-and-above crate may depend on; the lexer and syntax layers
-/// may not (they sit below the diagnostics-consuming boundary).
+/// depend on, in any dependency kind. The engine direction is parser → model →
+/// resolve: the resolver may depend on model types, never the reverse. An
+/// explicit allow-set captures that order together with the diagnostics leaf,
+/// facade, and front-end boundaries more clearly than a rank comparison.
+/// `pure-analyzer-diagnostics` is a leaf every parser-and-above crate may depend
+/// on; the lexer and syntax layers may not (they sit below the
+/// diagnostics-consuming boundary).
 const ALLOWED_INTERNAL_DEPS: &[(&str, &[&str])] = &[
     ("pure-analyzer-diagnostics", &[]),
     ("pure-analyzer-lexer", &[]),
@@ -1395,6 +1396,127 @@ fn allowed_internal_deps(name: &str) -> Option<&'static [&'static str]> {
         .map(|(_, allowed)| *allowed)
 }
 
+/// Repository-level product boundary assigned to a Cargo package.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum WorkspaceMemberClass {
+    /// A crate in the ADR-0003 analysis-engine DAG.
+    Analyzer,
+    /// The independent PureCARD decoder product.
+    Purecard,
+    /// Repository automation permitted to orchestrate either product.
+    Orchestration,
+}
+
+/// Workspace package allowed to orchestrate both independent products.
+const ORCHESTRATION_PACKAGE: &str = "xtask";
+
+/// Fail-closed ownership for workspace-excluded Cargo packages.
+const EXCLUDED_PACKAGE_BOUNDARIES: &[(&str, &str, WorkspaceMemberClass)] = &[
+    ("fuzz", "fuzz", WorkspaceMemberClass::Analyzer),
+    (
+        "crates/pure-analyzer-purecard/fuzz",
+        "purecard-fuzz",
+        WorkspaceMemberClass::Purecard,
+    ),
+    (
+        "crates/pure-analyzer-purecard/lints",
+        "lints",
+        WorkspaceMemberClass::Purecard,
+    ),
+];
+
+/// The product boundary for a known repository Cargo package.
+fn workspace_member_class(name: &str) -> Option<WorkspaceMemberClass> {
+    if allowed_internal_deps(name).is_some() {
+        Some(WorkspaceMemberClass::Analyzer)
+    } else if name == PURECARD_PACKAGE {
+        Some(WorkspaceMemberClass::Purecard)
+    } else if name == ORCHESTRATION_PACKAGE {
+        Some(WorkspaceMemberClass::Orchestration)
+    } else {
+        EXCLUDED_PACKAGE_BOUNDARIES
+            .iter()
+            .find(|(_, package_name, _)| *package_name == name)
+            .map(|(_, _, class)| *class)
+    }
+}
+
+/// Workspace members not assigned to a repository product boundary.
+fn unclassified_workspace_members(packages: &[serde_json::Value]) -> Vec<String> {
+    let mut unclassified: Vec<String> = packages
+        .iter()
+        .filter_map(|package| package["name"].as_str())
+        .filter(|name| workspace_member_class(name).is_none())
+        .map(str::to_string)
+        .collect();
+    unclassified.sort();
+    unclassified.dedup();
+    unclassified
+}
+
+/// Render a dependency edge with every Cargo shape relevant to the boundary.
+fn dependency_edge(source: &str, dependency: &serde_json::Value) -> Option<String> {
+    let target = dependency["name"].as_str()?;
+    let mut attributes = vec![dependency["kind"].as_str().unwrap_or("normal").to_string()];
+    if dependency["optional"].as_bool().unwrap_or(false) {
+        attributes.push("optional".to_string());
+    }
+    if let Some(rename) = dependency["rename"].as_str() {
+        attributes.push(format!("renamed as {rename}"));
+    }
+    Some(format!(
+        "{source} --({})--> {target}",
+        attributes.join(", ")
+    ))
+}
+
+/// Analyzer-to-PureCARD and PureCARD-to-analyzer dependency edges.
+fn cross_product_violations(packages: &[serde_json::Value]) -> Vec<String> {
+    let workspace_members: BTreeSet<&str> = packages
+        .iter()
+        .filter_map(|package| package["name"].as_str())
+        .collect();
+    let mut violations = Vec::new();
+    for package in packages {
+        let Some(source) = package["name"].as_str() else {
+            continue;
+        };
+        let Some(source_class) = workspace_member_class(source) else {
+            continue;
+        };
+        let Some(dependencies) = package["dependencies"].as_array() else {
+            continue;
+        };
+        for dependency in dependencies {
+            let Some(target) = dependency["name"].as_str() else {
+                continue;
+            };
+            if !workspace_members.contains(target) {
+                continue;
+            }
+            let Some(target_class) = workspace_member_class(target) else {
+                continue;
+            };
+            let crosses_product_boundary = matches!(
+                (source_class, target_class),
+                (
+                    WorkspaceMemberClass::Analyzer,
+                    WorkspaceMemberClass::Purecard
+                ) | (
+                    WorkspaceMemberClass::Purecard,
+                    WorkspaceMemberClass::Analyzer
+                )
+            );
+            if crosses_product_boundary && let Some(edge) = dependency_edge(source, dependency) {
+                violations.push(edge);
+            }
+        }
+    }
+    violations.sort();
+    violations.dedup();
+    violations
+}
+
 /// Collect every layering violation in the parsed `cargo metadata` packages:
 /// an enforced crate depending — in any dependency kind — on another enforced
 /// crate that is not in its [`ALLOWED_INTERNAL_DEPS`] entry.
@@ -1428,12 +1550,272 @@ fn layering_violations(packages: &[serde_json::Value]) -> Vec<String> {
             }
         }
     }
+    violations.sort();
+    violations.dedup();
     violations
 }
 
-/// Fail if any workspace crate depends on another enforced crate outside its
-/// documented DAG edges — in **any** dependency kind, including dev- and
-/// build-dependencies.
+/// Deterministic diagnostic for every workspace dependency-topology failure.
+fn layering_diagnostic(
+    analyzer_violations: &[String],
+    product_violations: &[String],
+    unclassified_members: &[String],
+) -> String {
+    let mut sections = Vec::new();
+    if !analyzer_violations.is_empty() {
+        sections.push(format!(
+            "analysis-engine DAG violations (constitution §1, ADR-0003): {}",
+            analyzer_violations.join(", ")
+        ));
+    }
+    if !product_violations.is_empty() {
+        sections.push(format!(
+            "cross-product dependency violations (ADR-0004/ADR-0009): {}",
+            product_violations.join(", ")
+        ));
+    }
+    if !unclassified_members.is_empty() {
+        sections.push(format!(
+            "unclassified workspace members (ADR-0004/ADR-0009): {}",
+            unclassified_members.join(", ")
+        ));
+    }
+    sections.join("; ")
+}
+
+/// Load workspace-excluded Cargo packages so product boundaries cover tooling.
+fn excluded_manifest_packages(workspace_root: &Path) -> Result<Vec<serde_json::Value>> {
+    let root_manifest_path = workspace_root.join("Cargo.toml");
+    let root_source = std::fs::read_to_string(&root_manifest_path)
+        .with_context(|| format!("reading {}", root_manifest_path.display()))?;
+    let root: toml::Value = toml::from_str(&root_source)
+        .with_context(|| format!("parsing {}", root_manifest_path.display()))?;
+    let exclusions = root
+        .get("workspace")
+        .and_then(|workspace| workspace.get("exclude"))
+        .and_then(toml::Value::as_array)
+        .context("root Cargo.toml workspace.exclude must be an array")?;
+
+    let classified_paths = classified_excluded_paths(exclusions)?;
+
+    let mut packages = Vec::with_capacity(classified_paths.len());
+    for (relative, expected_name) in classified_paths {
+        let manifest_path = workspace_root.join(relative).join("Cargo.toml");
+        let source = std::fs::read_to_string(&manifest_path)
+            .with_context(|| format!("reading excluded manifest {}", manifest_path.display()))?;
+        let package = manifest_package_value(&source, &manifest_path.display().to_string())?;
+        let actual_name = package["name"]
+            .as_str()
+            .context("parsed excluded package has no name")?;
+        validate_excluded_package_name(relative, expected_name, actual_name)?;
+        packages.push(package);
+    }
+    Ok(packages)
+}
+
+/// Match `workspace.exclude` exactly against the classified package paths.
+fn classified_excluded_paths(exclusions: &[toml::Value]) -> Result<Vec<(&str, &'static str)>> {
+    let mut relative_paths: Vec<&str> = exclusions
+        .iter()
+        .map(|value| {
+            value
+                .as_str()
+                .context("workspace.exclude entries must be strings")
+        })
+        .collect::<Result<_>>()?;
+    relative_paths.sort_unstable();
+
+    let mut classified_paths = Vec::with_capacity(relative_paths.len());
+    for relative in relative_paths {
+        if relative.contains(['*', '?', '[', ']']) {
+            anyhow::bail!(
+                "workspace.exclude pattern `{relative}` cannot be classified fail-closed; \
+                 list each excluded Cargo package explicitly"
+            );
+        }
+        let expected_name = EXCLUDED_PACKAGE_BOUNDARIES
+            .iter()
+            .find(|(path, _, _)| *path == relative)
+            .map(|(_, package_name, _)| *package_name)
+            .with_context(|| {
+                format!(
+                    "workspace.exclude path `{relative}` has no product-boundary classification"
+                )
+            })?;
+        classified_paths.push((relative, expected_name));
+    }
+
+    let present_paths: BTreeSet<&str> = classified_paths
+        .iter()
+        .map(|(relative, _)| *relative)
+        .collect();
+    let missing_paths: Vec<&str> = EXCLUDED_PACKAGE_BOUNDARIES
+        .iter()
+        .map(|(relative, _, _)| *relative)
+        .filter(|relative| !present_paths.contains(relative))
+        .collect();
+    if !missing_paths.is_empty() {
+        anyhow::bail!(
+            "root Cargo.toml workspace.exclude is missing expected product-boundary path(s): {}",
+            missing_paths
+                .iter()
+                .map(|relative| format!("`{relative}`"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+    }
+
+    Ok(classified_paths)
+}
+
+/// Ensure a classified exclusion still declares the package name we inspect.
+fn validate_excluded_package_name(
+    relative: &str,
+    expected_name: &str,
+    actual_name: &str,
+) -> Result<()> {
+    if actual_name != expected_name {
+        anyhow::bail!(
+            "workspace.exclude path `{relative}` is classified as package `{expected_name}` \
+             but its manifest declares `{actual_name}`"
+        );
+    }
+    Ok(())
+}
+
+/// Convert a standalone Cargo manifest into the metadata subset used by gates.
+fn manifest_package_value(source: &str, label: &str) -> Result<serde_json::Value> {
+    let document: toml::Value =
+        toml::from_str(source).with_context(|| format!("parsing excluded manifest {label}"))?;
+    let package_name = document
+        .get("package")
+        .and_then(|package| package.get("name"))
+        .and_then(toml::Value::as_str)
+        .with_context(|| format!("excluded manifest {label} has no package.name"))?;
+    let dependencies = manifest_dependencies(&document, label)?;
+
+    let mut package = serde_json::Map::new();
+    package.insert("name".to_string(), serde_json::Value::from(package_name));
+    package.insert(
+        "dependencies".to_string(),
+        serde_json::Value::Array(dependencies),
+    );
+    Ok(serde_json::Value::Object(package))
+}
+
+/// Collect normal/dev/build dependencies, including target-specific tables.
+fn manifest_dependencies(document: &toml::Value, label: &str) -> Result<Vec<serde_json::Value>> {
+    let mut dependencies = Vec::new();
+    append_manifest_dependency_kinds(document, label, &mut dependencies)?;
+
+    if let Some(targets) = document.get("target") {
+        let targets = targets
+            .as_table()
+            .with_context(|| format!("excluded manifest {label} target must be a table"))?;
+        for (selector, target) in targets {
+            let target_label = format!("{label} target.{selector}");
+            append_manifest_dependency_kinds(target, &target_label, &mut dependencies)?;
+        }
+    }
+    Ok(dependencies)
+}
+
+/// Append Cargo's three dependency-table kinds from one manifest table.
+fn append_manifest_dependency_kinds(
+    document: &toml::Value,
+    label: &str,
+    dependencies: &mut Vec<serde_json::Value>,
+) -> Result<()> {
+    for (table_name, kind) in [
+        ("dependencies", None),
+        ("dev-dependencies", Some("dev")),
+        ("build-dependencies", Some("build")),
+    ] {
+        let Some(table) = document.get(table_name) else {
+            continue;
+        };
+        let table = table
+            .as_table()
+            .with_context(|| format!("excluded manifest {label} {table_name} must be a table"))?;
+        for (alias, specification) in table {
+            let (package_name, optional) = match specification {
+                toml::Value::String(_) => (alias.as_str(), false),
+                toml::Value::Table(specification) => {
+                    if let Some(workspace) = specification.get("workspace") {
+                        let inherited = workspace.as_bool().with_context(|| {
+                            format!(
+                                "excluded manifest {label} dependency {alias}.workspace \
+                                 must be a boolean"
+                            )
+                        })?;
+                        if inherited {
+                            anyhow::bail!(
+                                "excluded manifest {label} dependency {alias} inherits a \
+                                 workspace dependency whose renamed package cannot be resolved \
+                                 fail-closed; declare its package/version/path explicitly"
+                            );
+                        }
+                    }
+                    let package_name = match specification.get("package") {
+                        Some(value) => value.as_str().with_context(|| {
+                            format!(
+                                "excluded manifest {label} dependency {alias}.package \
+                                 must be a string"
+                            )
+                        })?,
+                        None => alias,
+                    };
+                    let optional = match specification.get("optional") {
+                        Some(value) => value.as_bool().with_context(|| {
+                            format!(
+                                "excluded manifest {label} dependency {alias}.optional \
+                                 must be a boolean"
+                            )
+                        })?,
+                        None => false,
+                    };
+                    (package_name, optional)
+                }
+                _ => {
+                    anyhow::bail!(
+                        "excluded manifest {label} dependency {alias} must use a string or table"
+                    );
+                }
+            };
+            dependencies.push(metadata_dependency_value(
+                package_name,
+                kind,
+                optional,
+                (package_name != alias).then_some(alias.as_str()),
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Build the cargo-metadata dependency fields consumed by topology checks.
+fn metadata_dependency_value(
+    name: &str,
+    kind: Option<&str>,
+    optional: bool,
+    rename: Option<&str>,
+) -> serde_json::Value {
+    let mut dependency = serde_json::Map::new();
+    dependency.insert("name".to_string(), serde_json::Value::from(name));
+    dependency.insert(
+        "kind".to_string(),
+        kind.map_or(serde_json::Value::Null, serde_json::Value::from),
+    );
+    dependency.insert("optional".to_string(), serde_json::Value::from(optional));
+    dependency.insert(
+        "rename".to_string(),
+        rename.map_or(serde_json::Value::Null, serde_json::Value::from),
+    );
+    serde_json::Value::Object(dependency)
+}
+
+/// Fail if a Cargo package is unclassified, violates the analyzer DAG, or
+/// crosses the analyzer/PureCARD product boundary in any dependency kind.
 ///
 /// The layering rule (constitution §1, ADR-0003) requires the analysis-engine
 /// dependency graph to follow the documented DAG exactly. `cargo-deny` bans a
@@ -1447,25 +1829,42 @@ fn layering_violations(packages: &[serde_json::Value]) -> Vec<String> {
 /// crate-global ban misses. It is deterministic, offline, and reproduces
 /// faithfully in a PR's detached-`HEAD` checkout.
 ///
+/// ADR-0004 and ADR-0009 additionally keep PureCARD independent from the
+/// analyzer DAG. The boundary rejects normal, dev, build, optional, and renamed
+/// edges in either direction across workspace members and excluded fuzz/lint
+/// packages, while `xtask` may orchestrate both products.
+///
 /// # Errors
 ///
-/// Returns an error naming each offending edge (with its kind).
+/// Returns an error naming each offending edge (including optionality and
+/// renames at the product boundary) or unclassified workspace member.
 pub fn verify_layering() -> Result<()> {
     let json = run_stdout("cargo", &["metadata", "--no-deps", "--format-version", "1"])?;
     let meta: serde_json::Value =
         serde_json::from_str(&json).context("parsing `cargo metadata` output")?;
-    let packages = meta["packages"]
+    let mut packages = meta["packages"]
         .as_array()
-        .context("`cargo metadata` has no packages array")?;
+        .context("`cargo metadata` has no packages array")?
+        .clone();
+    let workspace_root = meta["workspace_root"]
+        .as_str()
+        .context("`cargo metadata` has no workspace_root")?;
+    packages.extend(excluded_manifest_packages(Path::new(workspace_root))?);
 
-    let violations = layering_violations(packages);
-    if !violations.is_empty() {
+    let analyzer_violations = layering_violations(&packages);
+    let product_violations = cross_product_violations(&packages);
+    let unclassified_members = unclassified_workspace_members(&packages);
+    if !analyzer_violations.is_empty()
+        || !product_violations.is_empty()
+        || !unclassified_members.is_empty()
+    {
         anyhow::bail!(
-            "forbidden internal dependency edge (constitution §1, ADR-0003): the analysis-engine \
-             DAG (lexer -> syntax -> parser -> {{model, resolve}} -> analysis -> libpure -> cli, \
-             with diagnostics as a shared leaf) allows dependencies only along its documented \
-             edges. Offending edges: {}",
-            violations.join(", ")
+            "forbidden workspace dependency topology: {}",
+            layering_diagnostic(
+                &analyzer_violations,
+                &product_violations,
+                &unclassified_members
+            )
         );
     }
     Ok(())
@@ -2026,19 +2425,30 @@ missing_docs = \"warn\"
     // Build metadata `Value`s by hand rather than via `serde_json::json!`: the
     // macro expands to an internal `.unwrap()`, which the `disallowed_methods`
     // clippy lint forbids everywhere, tests included.
-    fn package(name: &str, deps: &[(&str, Option<&str>)]) -> serde_json::Value {
-        let dependencies: Vec<serde_json::Value> = deps
-            .iter()
-            .map(|(dep_name, kind)| {
-                let mut dep = serde_json::Map::new();
-                dep.insert("name".to_string(), serde_json::Value::from(*dep_name));
-                dep.insert(
-                    "kind".to_string(),
-                    kind.map_or(serde_json::Value::Null, serde_json::Value::from),
-                );
-                serde_json::Value::Object(dep)
-            })
-            .collect();
+    fn dependency(
+        name: &str,
+        kind: Option<&str>,
+        optional: bool,
+        rename: Option<&str>,
+    ) -> serde_json::Value {
+        let mut dependency = serde_json::Map::new();
+        dependency.insert("name".to_string(), serde_json::Value::from(name));
+        dependency.insert(
+            "kind".to_string(),
+            kind.map_or(serde_json::Value::Null, serde_json::Value::from),
+        );
+        dependency.insert("optional".to_string(), serde_json::Value::from(optional));
+        dependency.insert(
+            "rename".to_string(),
+            rename.map_or(serde_json::Value::Null, serde_json::Value::from),
+        );
+        serde_json::Value::Object(dependency)
+    }
+
+    fn package_with_dependencies(
+        name: &str,
+        dependencies: Vec<serde_json::Value>,
+    ) -> serde_json::Value {
         let mut package = serde_json::Map::new();
         package.insert("name".to_string(), serde_json::Value::from(name));
         package.insert(
@@ -2046,6 +2456,15 @@ missing_docs = \"warn\"
             serde_json::Value::Array(dependencies),
         );
         serde_json::Value::Object(package)
+    }
+
+    fn package(name: &str, deps: &[(&str, Option<&str>)]) -> serde_json::Value {
+        package_with_dependencies(
+            name,
+            deps.iter()
+                .map(|(dependency_name, kind)| dependency(dependency_name, *kind, false, None))
+                .collect(),
+        )
     }
 
     #[test]
@@ -2075,6 +2494,24 @@ missing_docs = \"warn\"
             package("xtask", &[("pure-analyzer-diagnostics", None)]),
         ];
         assert!(layering_violations(&packages).is_empty());
+    }
+
+    #[test]
+    fn resolver_may_depend_on_model_but_model_may_not_depend_on_resolver() {
+        let allowed = [package(
+            "pure-analyzer-resolve",
+            &[("pure-analyzer-model", None)],
+        )];
+        assert!(layering_violations(&allowed).is_empty());
+
+        let forbidden = [package(
+            "pure-analyzer-model",
+            &[("pure-analyzer-resolve", None)],
+        )];
+        assert_eq!(
+            layering_violations(&forbidden),
+            ["pure-analyzer-model --(normal)--> pure-analyzer-resolve"]
+        );
     }
 
     #[test]
@@ -2108,6 +2545,224 @@ missing_docs = \"warn\"
                 "pure-analyzer-model --(dev)--> pure-analyzer-analysis",
                 "pure-analyzer-resolve --(build)--> libpure"
             ]
+        );
+    }
+
+    #[test]
+    fn workspace_member_classifier_covers_both_products_and_orchestration() {
+        assert_eq!(
+            workspace_member_class("pure-analyzer-parser"),
+            Some(WorkspaceMemberClass::Analyzer)
+        );
+        assert_eq!(
+            workspace_member_class(PURECARD_PACKAGE),
+            Some(WorkspaceMemberClass::Purecard)
+        );
+        assert_eq!(
+            workspace_member_class(ORCHESTRATION_PACKAGE),
+            Some(WorkspaceMemberClass::Orchestration)
+        );
+        assert_eq!(
+            workspace_member_class("fuzz"),
+            Some(WorkspaceMemberClass::Analyzer)
+        );
+        assert_eq!(
+            workspace_member_class("purecard-fuzz"),
+            Some(WorkspaceMemberClass::Purecard)
+        );
+        assert_eq!(
+            workspace_member_class("lints"),
+            Some(WorkspaceMemberClass::Purecard)
+        );
+        assert_eq!(workspace_member_class("serde"), None);
+    }
+
+    #[test]
+    fn unclassified_workspace_members_are_rejected_deterministically() {
+        let packages = [
+            package("z-new-product", &[]),
+            package(ORCHESTRATION_PACKAGE, &[]),
+            package(PURECARD_PACKAGE, &[]),
+            package("pure-analyzer-lexer", &[]),
+            package("a-new-product", &[]),
+        ];
+        assert_eq!(
+            unclassified_workspace_members(&packages),
+            ["a-new-product", "z-new-product"]
+        );
+    }
+
+    #[test]
+    fn cross_product_violations_cover_every_cargo_dependency_shape() {
+        let packages = [
+            package_with_dependencies(
+                "pure-analyzer-parser",
+                vec![
+                    dependency(PURECARD_PACKAGE, None, false, None),
+                    dependency(PURECARD_PACKAGE, Some("dev"), false, None),
+                    dependency(PURECARD_PACKAGE, Some("build"), false, None),
+                    dependency(PURECARD_PACKAGE, None, true, None),
+                    dependency(PURECARD_PACKAGE, None, false, Some("decoder")),
+                ],
+            ),
+            package_with_dependencies(
+                PURECARD_PACKAGE,
+                vec![dependency("pure-analyzer-parser", None, false, None)],
+            ),
+        ];
+        let expected = [
+            "pure-analyzer-parser --(build)--> pure-analyzer-purecard",
+            "pure-analyzer-parser --(dev)--> pure-analyzer-purecard",
+            "pure-analyzer-parser --(normal)--> pure-analyzer-purecard",
+            "pure-analyzer-parser --(normal, optional)--> pure-analyzer-purecard",
+            "pure-analyzer-parser --(normal, renamed as decoder)--> pure-analyzer-purecard",
+            "pure-analyzer-purecard --(normal)--> pure-analyzer-parser",
+        ];
+        assert_eq!(cross_product_violations(&packages), expected);
+
+        let mut reversed = packages.clone();
+        reversed.reverse();
+        assert_eq!(cross_product_violations(&reversed), expected);
+    }
+
+    #[test]
+    fn excluded_paths_require_every_classified_boundary() -> Result<()> {
+        let exclusions: Vec<toml::Value> = EXCLUDED_PACKAGE_BOUNDARIES
+            .iter()
+            .map(|(relative, _, _)| toml::Value::String((*relative).to_string()))
+            .collect();
+        let classified = classified_excluded_paths(&exclusions)?;
+        let paths: Vec<&str> = classified.iter().map(|(relative, _)| *relative).collect();
+        assert_eq!(
+            paths,
+            [
+                "crates/pure-analyzer-purecard/fuzz",
+                "crates/pure-analyzer-purecard/lints",
+                "fuzz",
+            ]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn excluded_paths_fail_closed_when_an_expected_boundary_is_missing() -> Result<()> {
+        let exclusions: Vec<toml::Value> = EXCLUDED_PACKAGE_BOUNDARIES
+            .iter()
+            .filter(|(relative, _, _)| *relative != "crates/pure-analyzer-purecard/lints")
+            .map(|(relative, _, _)| toml::Value::String((*relative).to_string()))
+            .collect();
+        let error = match classified_excluded_paths(&exclusions) {
+            Ok(_) => anyhow::bail!("expected a missing workspace.exclude path to fail"),
+            Err(error) => error,
+        };
+        assert_eq!(
+            error.to_string(),
+            "root Cargo.toml workspace.exclude is missing expected product-boundary path(s): \
+             `crates/pure-analyzer-purecard/lints`"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn excluded_manifest_name_mismatch_diagnostic_is_stable() -> Result<()> {
+        let error = match validate_excluded_package_name("fuzz", "fuzz", "renamed-fuzz") {
+            Ok(()) => anyhow::bail!("expected a mismatched excluded package name to fail"),
+            Err(error) => error,
+        };
+        assert_eq!(
+            error.to_string(),
+            "workspace.exclude path `fuzz` is classified as package `fuzz` \
+             but its manifest declares `renamed-fuzz`"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn excluded_manifest_dependencies_cover_kinds_aliases_and_targets() -> Result<()> {
+        let excluded = manifest_package_value(
+            r#"
+[package]
+name = "purecard-fuzz"
+
+[dependencies]
+decoder = { package = "pure-analyzer-model", path = "../../model", optional = true }
+
+[dev-dependencies]
+pure-analyzer-parser = { path = "../../parser" }
+
+[target.'cfg(unix)'.build-dependencies]
+pure-analyzer-analysis = { path = "../../analysis" }
+"#,
+            "fixture/Cargo.toml",
+        )?;
+        let packages = [
+            excluded,
+            package("pure-analyzer-model", &[]),
+            package("pure-analyzer-parser", &[]),
+            package("pure-analyzer-analysis", &[]),
+        ];
+        assert_eq!(
+            cross_product_violations(&packages),
+            [
+                "purecard-fuzz --(build)--> pure-analyzer-analysis",
+                "purecard-fuzz --(dev)--> pure-analyzer-parser",
+                "purecard-fuzz --(normal, optional, renamed as decoder)--> pure-analyzer-model",
+            ]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn excluded_manifest_workspace_dependencies_fail_closed() {
+        let result = manifest_package_value(
+            r#"
+[package]
+name = "purecard-fuzz"
+
+[dependencies]
+decoder.workspace = true
+"#,
+            "fixture/Cargo.toml",
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn product_boundary_ignores_product_named_dependencies_absent_from_workspace() {
+        let packages = [package("pure-analyzer-lexer", &[(PURECARD_PACKAGE, None)])];
+        assert!(cross_product_violations(&packages).is_empty());
+    }
+
+    #[test]
+    fn product_boundary_allows_xtask_orchestration_and_external_dependencies() {
+        let packages = [
+            package("pure-analyzer-lexer", &[("logos", None)]),
+            package(PURECARD_PACKAGE, &[("serde", None)]),
+            package(
+                ORCHESTRATION_PACKAGE,
+                &[
+                    ("pure-analyzer-lexer", None),
+                    (PURECARD_PACKAGE, Some("dev")),
+                    ("anyhow", None),
+                ],
+            ),
+        ];
+        assert!(cross_product_violations(&packages).is_empty());
+        assert!(unclassified_workspace_members(&packages).is_empty());
+        assert!(layering_violations(&packages).is_empty());
+    }
+
+    #[test]
+    fn layering_diagnostic_cites_the_governing_adrs_by_failure_class() {
+        assert_eq!(
+            layering_diagnostic(
+                &["analyzer-edge".to_string()],
+                &["product-edge".to_string()],
+                &["new-member".to_string()]
+            ),
+            "analysis-engine DAG violations (constitution §1, ADR-0003): analyzer-edge; \
+             cross-product dependency violations (ADR-0004/ADR-0009): product-edge; \
+             unclassified workspace members (ADR-0004/ADR-0009): new-member"
         );
     }
 

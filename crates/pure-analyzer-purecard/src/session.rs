@@ -8,7 +8,7 @@
 //!
 //! At M2 it also borrows a [`CompiledGrammar`] and exposes the masking surface
 //! (`docs/spec/architecture.md` §4, §9): [`allowed_mask`](DecoderSession::allowed_mask)
-//! returns the set of tokens that keep the stream on a path to a valid query, and
+//! returns tokens that keep the stream inside the emitted-subset recognizer, and
 //! [`accept_token`](DecoderSession::accept_token) advances by a whole token,
 //! rolling back untouched if the token is inadmissible. The schema overlay (L2,
 //! M3) is shipped: [`with_schema`](DecoderSession::with_schema) installs a
@@ -95,12 +95,13 @@ impl<'g> DecoderSession<'g> {
         Self::build(grammar, None)
     }
 
-    /// A fresh session that also enforces the L2 schema overlay against `schema`
-    /// (`docs/spec/schema.md` §6): at each identifier and operand position the
-    /// syntactic L1 mask is intersected with the schema-legal set, so phantom
-    /// classes/properties and type-mismatched operands are cleared. L2 only ever
+    /// A fresh session that also applies the implemented L2 schema-overlay rules
+    /// against `schema` (`docs/spec/schema.md` §6). At covered identifier and
+    /// operand positions, the emitted-subset mask is intersected with the
+    /// schema-derived set; deferred positions pass through. The overlay only ever
     /// *narrows* — the additive counterpart to [`new`](DecoderSession::new), which
-    /// stays L1-only and byte-compatible for M0–M2 callers.
+    /// stays L1-only and byte-compatible for M0–M2 callers. It is not a full-query
+    /// schema-validity or compiler-success guarantee.
     #[must_use]
     pub fn with_schema(grammar: &'g CompiledGrammar, schema: Schema) -> Self {
         Self::build(grammar, Some(schema))
@@ -112,15 +113,16 @@ impl<'g> DecoderSession<'g> {
         self.offset
     }
 
-    /// The set of token ids that keep the stream on a path to a valid query at
-    /// the current position: every token whose raw bytes leave the byte-PDA
+    /// The set of token ids that keep the stream on a non-dead path through the
+    /// fixed emitted-subset PDA at the current position: every token whose raw
+    /// bytes leave the byte-PDA
     /// non-dead (§4.4), with the reserved EOS bit set iff
     /// [`is_complete`](DecoderSession::is_complete).
     ///
-    /// **This is the sole point that enforces the shipped L2 rules** (§6.7 —
+    /// **This is the sole point that applies the implemented L2 rules** (§6.7 —
     /// N1/N2/N3/N6/T1; deferred rules pass through). Under an active [`Schema`] the
-    /// syntactic (L1) mask is intersected with that schema-legal set (§6), so a
-    /// token illegal under a shipped rule is cleared here.
+    /// fixed-PDA mask is intersected with that schema-derived set (§6), so a
+    /// token rejected by an implemented rule is cleared here.
     /// [`accept_token`](DecoderSession::accept_token) does *not* re-apply that
     /// narrow — the mask-first contract is that the host samples only from this set,
     /// then commits. When no schema is set, this is the L1 mask alone.
@@ -215,7 +217,7 @@ impl<'g> DecoderSession<'g> {
     /// its bytes dead-end the **byte-PDA** (the L1 grammar). It does *not* re-apply
     /// the L2 schema narrow: a token that is grammar-legal but schema-masked (absent
     /// from [`allowed_mask`](DecoderSession::allowed_mask) under an active [`Schema`])
-    /// is still accepted. `allowed_mask` is the sole point that enforces the shipped
+    /// is still accepted. `allowed_mask` is the sole point that applies the implemented
     /// L2 rules (§6.7) — the host samples only from the masked set, then commits with
     /// `accept_token`. Do not treat `accept_token` as a schema-validation backstop;
     /// accepting an unmasked token yields schema-invalid output. (The L2 tracker

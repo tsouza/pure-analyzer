@@ -28,6 +28,7 @@ jobs:
           filters: |
             md:
               - '**/*.md'
+              - '**/*.markdown'
               - '.markdownlint.yaml'
             actions:
               - '.github/**'
@@ -43,7 +44,21 @@ jobs:
         with: { persist-credentials: false }
       - uses: DavidAnson/markdownlint-cli2-action@21c1be1b93ad9ed58fa840aacc3f279cde2a72ff # v24.2.0
         with:
-          globs: '**/*.md'
+          globs: |
+            '**/*.md'
+            '**/*.markdown'
+
+  doc-links:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: taiki-e/install-action@b6ff580856c41316412a0b9b60540fbc6f8c82cc # v2.86.7
+        with:
+          tool: just@1.55.1
+      - name: Check relative files and anchors
+        run: just check-doc-links
   commitlint:
     # Runs on every PR (all PRs have commits); harmless on push.
     runs-on: ubuntu-latest
@@ -97,7 +112,7 @@ jobs:
   # Warnings-are-errors net (constitution §2): sweep this run's job logs for a
   # tool warning that exited 0. Same reusable sweep as ci/security/release-plz.
   no-warnings:
-    needs: [changes, markdownlint, commitlint, actionlint, zizmor, test-scripts]
+    needs: [changes, markdownlint, doc-links, commitlint, actionlint, zizmor, test-scripts]
     if: always()
     permissions:
       actions: read
@@ -105,7 +120,7 @@ jobs:
     uses: ./.github/workflows/no-warnings.yml
   lint-gate:
     name: lint-gate
-    needs: [changes, markdownlint, commitlint, actionlint, zizmor, test-scripts, no-warnings]
+    needs: [changes, markdownlint, doc-links, commitlint, actionlint, zizmor, test-scripts, no-warnings]
     if: always()
     runs-on: ubuntu-latest
     steps:

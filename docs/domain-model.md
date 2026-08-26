@@ -1,21 +1,22 @@
 # Domain Model
 
-The evolving statement of **what pure-analyzer is and does**. Unlike a fresh
-fork of the starter kit, this project did not start domain-empty: it
-instantiates [`docs/design/pure-analyzer-design.md`](design/pure-analyzer-design.md),
-a complete, implementation-ready specification for a mechanical static-analysis
-toolchain for Legend Pure. That document is the authoritative source for
-background, grammar, the milestoning-arity algorithm, and subcommand
-contracts — this file elaborates only the entities/workflows/invariants that
-have actually landed in code, one feature at a time, each addition arriving
-through a reviewer-approved PR.
+The evolving statement of what the `pure-analyzer` umbrella contains and what
+has actually landed. The repository holds two independent products:
+`pure-analyzer`, an early-scaffold static analyzer, and
+`pure-analyzer-purecard`, a constrained decoder with M0–M5 code artifacts
+implemented and documented end-to-end proof obligations still open. The analyzer
+[design document](design/pure-analyzer-design.md) remains the target source for
+its intended grammar, milestoning algorithm, and subcommand contracts; it is
+not evidence that those capabilities are implemented. PureCARD's shipped
+contract lives in its [nested product documentation](../crates/pure-analyzer-purecard/docs/).
 
 This document is **EVOLVABLE**. It is the elaboration of the domain section of
 [`../constitution.md`](../constitution.md): the constitution states the
 non-negotiable domain *rules*; this file describes the *entities, workflows, and
 invariants* those rules govern. When the two disagree, the constitution wins.
-When either disagrees with the design doc on a point the design doc has already
-settled, treat that as a bug to fix, not a license to diverge.
+For target analyzer behavior, an unexplained disagreement with the design doc
+is a design-governance bug. For present-tense implementation status, this file
+and the code are authoritative.
 
 ## How to use this file
 
@@ -48,29 +49,93 @@ enforcement in `domain` types (make illegal states unrepresentable) and in tests
 
 ## Entities
 
+### Umbrella repository
+
+**What it is.** A Cargo workspace and governance boundary containing two
+independent sibling products plus shared repository infrastructure.
+
+**Invariants.** Analyzer crates and PureCARD have zero Cargo dependency edges
+in either direction, including normal, development, build, optional, and renamed
+dependencies. `xtask`, `just`, and root CI may orchestrate either product but
+are not product layers. Co-location alone grants no shared parser, corpus,
+runtime architecture, product ownership, or release authority.
+
+**Relationships.** Contains the `pure-analyzer` and PureCARD product entities.
+Any parser or corpus integration between them requires a future spec and ADR.
+
+**Introduced by.**
+[`specs/migrate-purecard-structural-move.md`](../specs/migrate-purecard-structural-move.md)
+· [`specs/reconcile-purecard-governance.md`](../specs/reconcile-purecard-governance.md)
+· [ADR-0004](decisions/0004-purecard-independent-workspace-product.md) ·
+[PureCARD ADR-0009](../crates/pure-analyzer-purecard/docs/decisions/0009-monorepo-placement.md).
+
+### pure-analyzer product
+
+**What it is.** A planned deterministic, standalone static-analysis toolchain
+for Legend Pure's modern `Relation<>` dialect.
+
+**Invariants.** Its processing order is `lexer → syntax → parser → model
+→ resolve → analysis → libpure → cli`. Cargo edges point toward
+prerequisites: resolver may depend on model; model must not depend on resolver.
+Diagnostics is a shared analyzer leaf. Runtime analysis remains mechanical:
+no LLM, network, clock, or runtime Legend engine.
+
+**Relationships.** Lexer and diagnostics currently have substantive
+implementations. Syntax, parser, model, resolve, analysis, and `libpure` are
+mostly version-reporting stubs; CLI subcommands return `not implemented yet`.
+The design document describes the intended later product.
+
+**Introduced by.** Repository bootstrap ·
+[ADR-0003](decisions/0003-analysis-engine-crate-dag.md).
+
+### PureCARD product
+
+**What it is.** A constrained decoder for Legend Pure whose fixed PDA and
+implemented partial schema overlay mask the next tokens those constraints
+reject during language-model decoding.
+
+**Invariants.** PureCARD constrains output to membership in its hand-written
+emitted-subset PDA and, when given a schema, narrows tokens only at the positions
+covered by its implemented N/T rules. Those constraints are not a general Pure
+syntax or schema-validity guarantee, and accepted output is not yet guaranteed
+to compile. It does not claim semantic faithfulness or feature completeness;
+the [documented end-to-end proof obligations](../crates/pure-analyzer-purecard/docs/spec/overview.md#10-milestone-implementation-status-m0m5)
+remain. The migrated Cargo package remains
+unpublished (`publish = false`); Python wheels built by CI are verification
+artifacts only.
+
+**Relationships.** PureCARD is a sibling product, not an analyzer front end or
+a node in ADR-0003's crate DAG. It owns its decoder implementation, nested docs,
+gold corpus, specialized tests, fuzz targets, and Python boundary.
+
+**Introduced by.**
+[`specs/migrate-purecard-structural-move.md`](../specs/migrate-purecard-structural-move.md)
+· [ADR-0004](decisions/0004-purecard-independent-workspace-product.md).
+
 ### Diagnostic
 
-**What it is.** The single output shape every pass produces: a `code`
-(`PUR<nnnn>`), `severity`, `message`, a primary + secondary set of
+**What it is.** The implemented analyzer output model intended for every pass:
+a `code` (`PUR<nnnn>`), `severity`, `message`, a primary + secondary set of
 file/byte-range `Label`s, an optional structured `Fix` (span + replacement
 edits, never a rendered string), an optional `eq`/`diff` `Verdict`, and an
 optional `ReasonCode` explaining an `Indecisive` verdict or a downgrade under
 model under-resolution. See design doc §6.1.
 
 **Invariants.** `Diagnostic` carries no renderer-specific state — no ANSI
-codes, no LSP types — so the CLI and (in v0.2) the LSP render identical
+codes, no LSP types — so future CLI and LSP front ends can render identical
 findings from the same value. `code` and `ReasonCode::id`/`blurb` are
 `&'static str`: every code is a compile-time constant a pass references, never
 one it constructs at runtime, which is also why `Diagnostic` and `ReasonCode`
 are `Serialize`-only (a `&'static str` field cannot soundly round-trip through
 `Deserialize`) — findings flow one way, from passes to renderers.
 
-**Relationships.** Produced by every crate from `pure-analyzer-parser` upward
-(parser syntax errors, `pure-analyzer-analysis`'s validate/lint passes, later
-`pure-analyzer-eq`'s verdicts). `Label.file`/`.span` use `FileId`/`TextRange`
-from this crate and `text-size` respectively, the same span representation the
-lexer/syntax/parser layers use, so a diagnostic's span is directly comparable
-to a CST node's range with no conversion.
+**Relationships.** Analyzer-only. It is intended to be produced by every crate
+from `pure-analyzer-parser` upward (parser syntax errors,
+`pure-analyzer-analysis`'s validate/lint passes, later `pure-analyzer-eq`'s
+verdicts). Today the diagnostic model itself is implemented while most planned
+producers remain scaffolds. `Label.file`/`.span` use `FileId`/`TextRange` from
+this crate and `text-size` respectively, the span representation intended for
+the lexer/syntax/parser layers.
 
 **Introduced by.** Repository bootstrap (no `specs/` entry — this is the
 verbatim design doc §6.1 shape, not a design decision made during
@@ -78,15 +143,24 @@ implementation). `crates/pure-analyzer-diagnostics/`.
 
 ## Workflows
 
-None yet.
+There is intentionally no cross-product runtime workflow. Analyzer execution
+workflows remain target designs until their layers land. PureCARD's implemented
+decode/session workflows live in its
+[`docs/spec/`](../crates/pure-analyzer-purecard/docs/spec/). A root change may
+orchestrate both products for validation, but orchestration does not create a
+runtime relationship.
 
 ## Cross-cutting invariants
 
-- **Mechanical determinism (design doc §1.3).** No LLM, no network, no clock,
+- **Independent products.** Analyzer and PureCARD runtime code never depend on
+  one another. Shared repository automation may invoke both without becoming a
+  product dependency or transferring ownership of product assets.
+
+- **Analyzer mechanical determinism (design doc §1.3).** No LLM, no network, no clock,
   no randomness in output. Identical `(inputs, model, config, flags)` with
   `--jobs 1` must produce byte-identical output and exit code. This governs
-  every pass, not just a specific subcommand — a `HashMap` in a render or
-  model path is a bug, not a style nit.
+  every analyzer pass, not just a specific subcommand — a `HashMap` in a render
+  or model path is a bug, not a style nit.
 - **`eq` soundness is sacred (design doc §1.3, §5.3).** `eq`/`diff` must never
   wrongly commit `EQUIVALENT` or `NOT_EQUIVALENT`; "don't know" always maps to
   `Indecisive`, never a guess.
