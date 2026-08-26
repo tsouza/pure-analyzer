@@ -15,7 +15,7 @@
 //! Honest coverage note: 256 of the 269 are arm-A relational, exercising only the
 //! N6 relation-column check plus a table-exists check; the §6 property/type rules
 //! fire on only the **13 arm-C** queries. L2 soundness runs over all 269, but the
-//! load-bearing narrowing surface is those 13 (see `specs/m3-schema-overlay.md`).
+//! load-bearing narrowing surface is those 13 (see `docs/spec/schema.md`).
 #![forbid(unsafe_code)]
 
 use std::collections::BTreeMap;

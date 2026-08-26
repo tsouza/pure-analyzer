@@ -90,7 +90,7 @@ pub(crate) enum PropType {
 
 /// A `[lower..upper]` multiplicity (§6.2.1). `upper == None` is `*` (unbounded).
 ///
-/// M3 ships the identifier/type rules (N/T) that read a member's *type*, not its
+/// The identifier/type rules (N/T) read a member's *type*, not its
 /// multiplicity; the collapse rule T6 that consumes multiplicity is deferred, so
 /// the bounds are carried on [`Resolved`] but not consumed by the current rules.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]

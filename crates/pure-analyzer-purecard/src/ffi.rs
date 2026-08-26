@@ -1,4 +1,4 @@
-//! The PyO3 boundary (M4): the thin, feature-gated Python surface over the pure
+//! The PyO3 boundary: the thin, feature-gated Python surface over the pure
 //! decoder core (`docs/spec/architecture.md` §9.2). Compiled only under the
 //! `python` feature; the default build never sees pyo3.
 //!

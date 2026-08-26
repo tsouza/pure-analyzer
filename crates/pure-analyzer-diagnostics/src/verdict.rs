@@ -6,7 +6,7 @@ use serde::ser::{SerializeStruct, Serializer};
 
 /// The outcome of `eq`/`diff`: sound, incomplete, three-valued.
 ///
-/// `eq`'s soundness is sacred (design doc §1.3): this type has no fourth
+/// This type has no fourth
 /// variant that could be mistaken for a commitment, and every producer must
 /// map uncertainty to [`Verdict::Indecisive`] rather than guessing.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -31,7 +31,7 @@ pub enum Verdict {
 pub enum ReasonBucket {
     /// Out of scope without a fundamentally different semantic technique.
     Fundamental,
-    /// A conservative engineering gap that future sound analysis can close.
+    /// A limitation that prevents a committed verdict for the current input.
     Recoverable,
 }
 
@@ -60,7 +60,7 @@ pub enum ReasonCode {
     IndDifferentSources,
     /// The normalizer lacks a known sound rewrite.
     IndMissingRewrite,
-    /// A relational operator has no sound model yet.
+    /// A relational operator lacks a sound semantic model.
     IndUnmodeledOp,
     /// Witness evaluation encounters an uninterpreted function.
     IndOpaqueFunctionInWitness,

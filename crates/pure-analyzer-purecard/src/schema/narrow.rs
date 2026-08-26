@@ -47,7 +47,7 @@ pub(crate) struct NarrowCache {
     /// built once per `(schema, rule)` and its per-cursor-node masks are memoized —
     /// a continuation sub-token re-walks an existing trie instead of rebuilding it,
     /// and a recurring cursor (the anchor most of all) copies its memoized mask
-    /// instead of re-scanning the whole vocabulary (§4.5, M3-perf).
+    /// instead of re-scanning the whole vocabulary (§4.5).
     tries: HashMap<CacheKey, RuleCache>,
 }
 

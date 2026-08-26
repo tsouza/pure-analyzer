@@ -676,114 +676,8 @@ pub fn new_feature(name: &str) -> Result<()> {
     run("git", &["worktree", "add", "-b", &branch, &worktree])?;
 
     println!("Created worktree at {worktree} on branch {branch}");
-    println!("  cd \"{worktree}\" && just spec {name}");
+    println!("  cd \"{worktree}\" && just ci");
     Ok(())
-}
-
-/// Template for a new `specs/<name>.md` file. `{name}` and `{date}` are
-/// substituted by [`spec`].
-const SPEC_TEMPLATE: &str = "\
-# Spec: {name}
-
-- Status: draft
-- Created: {date}
-- Owner:
-
-## Problem
-What user-visible problem does this solve? Why now?
-
-## Goals
-- [ ]
-
-## Non-goals
--
-
-## Design
-How it works, which crate(s) it touches in the analysis-engine DAG (lexer /
-syntax / parser / model / resolve / analysis / libpure / cli), and how it
-respects the layering invariants.
-
-## API / contract impact
-Public API, proto, or OpenAPI changes (if any) and their stability impact.
-
-## Testing plan
-Unit / integration / chaos / mutation / fuzz coverage for this change.
-
-## Risks & rollout
-Failure modes, feature-flagging, and how we roll back.
-";
-
-/// Scaffold a feature spec at `specs/<name>.md` from [`SPEC_TEMPLATE`].
-///
-/// # Errors
-///
-/// Returns an error if `name` is empty, a spec already exists at that path, or
-/// the file cannot be written.
-pub fn spec(name: &str) -> Result<()> {
-    validate_name(name, "spec")?;
-    let out = format!("specs/{name}.md");
-    if std::path::Path::new(&out).exists() {
-        anyhow::bail!("spec already exists: {out}");
-    }
-    std::fs::create_dir_all("specs").context("creating specs/")?;
-
-    let contents = render_spec(name, &today_utc_ymd());
-    std::fs::write(&out, contents).with_context(|| format!("writing {out}"))?;
-    println!("Wrote {out}");
-    Ok(())
-}
-
-/// Render [`SPEC_TEMPLATE`] with `name` and `date` substituted.
-fn render_spec(name: &str, date: &str) -> String {
-    SPEC_TEMPLATE
-        .replace("{name}", name)
-        .replace("{date}", date)
-}
-
-/// Seconds in a day.
-const SECS_PER_DAY: u64 = 86_400;
-/// Days in one common year.
-const DAYS_PER_YEAR: i64 = 365;
-/// Years in a 400-year proleptic-Gregorian era — the leap cycle the algorithm
-/// folds on.
-const YEARS_PER_ERA: i64 = 400;
-/// Days in a 400-year era (its `YEARS_PER_ERA` years plus 97 leap days).
-const DAYS_PER_ERA: i64 = 146_097;
-/// Days in a 4-year cycle — a leap correction in the year-of-era formula.
-const DAYS_PER_4_YEARS: i64 = 1_460;
-/// Days in a 100-year cycle — a leap correction in the year-of-era formula.
-const DAYS_PER_100_YEARS: i64 = 36_524;
-/// Days from the algorithm's shifted epoch (0000-03-01) to the Unix epoch.
-const EPOCH_SHIFT_DAYS: i64 = 719_468;
-
-/// Today's UTC date as `YYYY-MM-DD`, computed in-process — no shell-out to the
-/// platform `date` binary (absent/inconsistent across OSes; constitution §2
-/// "portable automation").
-fn today_utc_ymd() -> String {
-    let secs = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |d| d.as_secs());
-    let (year, month, day) = civil_from_days((secs / SECS_PER_DAY) as i64);
-    format!("{year:04}-{month:02}-{day:02}")
-}
-
-/// Convert days since the Unix epoch to a proleptic-Gregorian `(year, month,
-/// day)`. Howard Hinnant's exact, dependency-free algorithm, documented at
-/// <https://howardhinnant.github.io/date_algorithms.html>.
-fn civil_from_days(days: i64) -> (i64, u32, u32) {
-    let z = days + EPOCH_SHIFT_DAYS;
-    let era = (if z >= 0 { z } else { z - (DAYS_PER_ERA - 1) }) / DAYS_PER_ERA;
-    let doe = z - era * DAYS_PER_ERA;
-    let yoe = (doe - doe / DAYS_PER_4_YEARS + doe / DAYS_PER_100_YEARS - doe / (DAYS_PER_ERA - 1))
-        / DAYS_PER_YEAR;
-    let year = yoe + era * YEARS_PER_ERA;
-    let doy = doe - (DAYS_PER_YEAR * yoe + yoe / 4 - yoe / 100);
-    // Hinnant's month-from-day-of-year fit; 5/2/153/3/9 are the algorithm's
-    // polynomial coefficients, meaningful only within it.
-    let mp = (5 * doy + 2) / 153;
-    let day = (doy - (153 * mp + 2) / 5 + 1) as u32;
-    let month = (if mp < 10 { mp + 3 } else { mp - 9 }) as u32;
-    (if month <= 2 { year + 1 } else { year }, month, day)
 }
 
 // ---------------------------------------------------------------------------
@@ -1318,7 +1212,7 @@ fn parse_grouped(token: &str) -> Option<usize> {
     digits.parse().ok()
 }
 
-/// The analysis-engine crate DAG (design doc §3, constitution §1, ADR-0003):
+/// The analysis-engine crate DAG (constitution §1, ADR-0003):
 /// for each enforced workspace crate, the set of internal crates it may
 /// depend on, in any dependency kind. The engine direction is parser → model →
 /// resolve: the resolver may depend on model types, never the reverse. An
@@ -2274,29 +2168,6 @@ intro\n\n### 3.2 Crate layout\n\n```\npurecard/\n  vocab.rs   the vocab\n  sessi
     }
 
     #[test]
-    fn civil_from_days_matches_known_anchors() {
-        assert_eq!(civil_from_days(0), (1970, 1, 1)); // Unix epoch
-        assert_eq!(civil_from_days(10_957), (2000, 1, 1)); // 30 years + 7 leap days
-        assert_eq!(civil_from_days(11_016), (2000, 2, 29)); // exercises the leap day
-        assert_eq!(civil_from_days(-1), (1969, 12, 31)); // day before the epoch
-    }
-
-    #[test]
-    fn today_utc_ymd_is_well_formed() {
-        let today = today_utc_ymd();
-        assert_eq!(today.len(), 10);
-        assert_eq!(today.matches('-').count(), 2);
-        assert!(today.starts_with("20"));
-    }
-
-    #[test]
-    fn render_spec_substitutes_name_and_date() {
-        let out = render_spec("widget", "2026-07-05");
-        assert!(out.contains("# Spec: widget"));
-        assert!(out.contains("Created: 2026-07-05"));
-    }
-
-    #[test]
     fn validate_name_accepts_plain_names() {
         assert!(validate_name("widget", "spec").is_ok());
     }
@@ -2469,7 +2340,7 @@ missing_docs = \"warn\"
 
     #[test]
     fn layering_violations_allows_the_documented_dag_edges() {
-        // The real workspace shape: every edge follows the DAG (design doc §3).
+        // The real workspace shape: every edge follows the DAG.
         let packages = [
             package("pure-analyzer-diagnostics", &[]),
             package("pure-analyzer-lexer", &[]),

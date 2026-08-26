@@ -22,6 +22,8 @@ pre-commit:
     postponed-markers:
       glob: "*.rs"
       run: bun scripts/checks/postponed-markers.mjs
+    no-work-ledger:
+      run: bun scripts/checks/no-work-ledger.mjs
     stale-selfdescription:
       glob: "crates/pure-analyzer-purecard/src/**/*.rs"
       run: bun scripts/checks/stale-selfdescription.mjs

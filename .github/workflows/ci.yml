@@ -225,9 +225,9 @@ jobs:
         if: ${{ vars.PUBLIC_API_ENABLED == 'true' }}
         run: cargo xtask public-api
 
-  # --- Structural rules + postponed-marker gate (ast-grep) -----------------
+  # --- Structural rules + work-ledger + postponed-marker gates (ast-grep) ---
   structural:
-    name: ast-grep / postponed-markers
+    name: ast-grep / work-ledger / postponed-markers
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
@@ -243,6 +243,8 @@ jobs:
           tool: ast-grep,just
       - name: ast-grep structural rules
         run: ast-grep scan
+      - name: Checked-in work-ledger gate
+        run: just no-work-ledger
       - name: Postponed-marker gate
         run: just postponed-markers
 

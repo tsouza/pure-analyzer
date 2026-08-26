@@ -1,4 +1,4 @@
-//! The M1 soundness killer-test (`docs/spec/testing.md` §8.1, `specs/m1-l1-grammar.md` G2).
+//! The M1 soundness killer-test (`docs/spec/testing.md` §8.1, `docs/spec/grammar.md`).
 //!
 //! This drives the **real** shipped byte-PDA — [`purecard::DecoderSession`] — over
 //! every gold `pure_text` value one byte at a time, and asserts the killer

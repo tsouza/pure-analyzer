@@ -1,7 +1,7 @@
 //! The byte-level pushdown automaton for the emitted-Pure grammar (§5).
 //!
 //! This is the live automaton: an explicit, hand-written state machine, not a
-//! compiled EBNF table (see `specs/m1-l1-grammar.md`, *Design*). [`step`] is a
+//! compiled EBNF table (see `docs/spec/grammar.md`). [`step`] is a
 //! **pure** transition function — `(state, stack_top, byte) -> `[`Step`] — with no
 //! I/O, allocation, or hidden state; [`Pda`] is the thin mutable driver that
 //! applies each [`Step`] to a state field and a [`Frame`] stack.
@@ -212,7 +212,7 @@ pub enum State {
 impl State {
     /// A stable name for this state, used in [`DecodeError::DeadState`] so a
     /// soundness failure names the exact production position that rejected a byte
-    /// (`specs/m1-l1-grammar.md`, G4).
+    /// (`docs/spec/grammar.md`).
     ///
     /// [`DecodeError::DeadState`]: crate::DecodeError::DeadState
     #[must_use]

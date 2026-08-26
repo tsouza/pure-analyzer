@@ -6,12 +6,12 @@
 //! automaton and translating a dead state into a [`DecodeError::DeadState`]
 //! carrying the offset at which the stream ran out of continuations.
 //!
-//! At M2 it also borrows a [`CompiledGrammar`] and exposes the masking surface
+//! It borrows a [`CompiledGrammar`] and exposes the masking surface
 //! (`docs/spec/architecture.md` §4, §9): [`allowed_mask`](DecoderSession::allowed_mask)
 //! returns tokens that keep the stream inside the emitted-subset recognizer, and
 //! [`accept_token`](DecoderSession::accept_token) advances by a whole token,
-//! rolling back untouched if the token is inadmissible. The schema overlay (L2,
-//! M3) is shipped: [`with_schema`](DecoderSession::with_schema) installs a
+//! rolling back untouched if the token is inadmissible. The L2 schema overlay
+//! is installed by [`with_schema`](DecoderSession::with_schema), which takes a
 //! [`Schema`], and [`allowed_mask`](DecoderSession::allowed_mask) intersects the
 //! syntactic L1 mask with the schema-legal set at the identifier and operand
 //! positions covered by the shipped L2 rules (§3.1) — N3, N1/N2, N6, and the
@@ -54,7 +54,7 @@ pub struct DecoderSession<'g> {
     /// [`CompiledGrammar::mask_len`]. Left untouched on the L1-only (`schema` is
     /// `None`) path.
     narrow_buf: BitMask,
-    /// The optional L2 schema overlay. `None` is L1-only (M0–M2 behaviour): the
+    /// The optional L2 schema overlay. `None` is L1-only: the
     /// schema-narrowing block in [`allowed_mask`](DecoderSession::allowed_mask) is
     /// skipped entirely, so there is zero added per-step cost.
     schema: Option<Schema>,
@@ -100,7 +100,7 @@ impl<'g> DecoderSession<'g> {
     /// operand positions, the emitted-subset mask is intersected with the
     /// schema-derived set; deferred positions pass through. The overlay only ever
     /// *narrows* — the additive counterpart to [`new`](DecoderSession::new), which
-    /// stays L1-only and byte-compatible for M0–M2 callers. It is not a full-query
+    /// stays L1-only and byte-compatible. It is not a full-query
     /// schema-validity or compiler-success guarantee.
     #[must_use]
     pub fn with_schema(grammar: &'g CompiledGrammar, schema: Schema) -> Self {

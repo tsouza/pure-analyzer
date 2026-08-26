@@ -12,11 +12,11 @@ Use the **`rot-sweep`** skill to run a deep audit${ARGUMENTS:+ scoped to `$ARGUM
 2. **L2 (LLM judgment on the residue only):** semantic DRY, nonsense/dead intent,
    design smells (leaky layers, god-objects). Do not re-derive anything L1 already
    decides.
-3. **Record** each material finding in `docs/lessons.md` with date, trigger
-   (L1 tool vs. L2), confidence, and action.
-4. **Promote** any finding class seen `N=3` times into a new L1 rule (ast-grep
-   pattern or clippy `disallowed-methods` entry) with a test, and note the
-   promotion in `docs/lessons.md`.
+3. **Record** each independent finding in a GitHub Issue with affected paths
+   and acceptance criteria; fix in-scope findings in the current PR.
+4. **Promote** any mechanically decidable finding class into a new L1 rule
+   (ast-grep pattern or clippy `disallowed-methods` entry) with a test, and note
+   the implementation evidence in the PR.
 
-Report: L1 findings (fixed/filed), L2 residue with confidence, lessons.md entries
-added, and any rule promoted this sweep.
+Report: L1 findings (fixed/filed), L2 residue with confidence, linked Issues,
+and any rule promoted this sweep.

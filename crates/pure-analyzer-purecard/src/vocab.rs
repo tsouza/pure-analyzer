@@ -1,7 +1,7 @@
 //! The model vocabulary: token id → raw bytes.
 //!
 //! The host supplies this table at the boundary. [`CompiledGrammar`] consumes it
-//! to build its per-state mask cache (M2, see `docs/spec/architecture.md` §4),
+//! to build its per-state mask cache (see `docs/spec/architecture.md` §4),
 //! and [`DecoderSession::accept_token`] folds `vocab.bytes(id)` through the
 //! byte-PDA one byte at a time. Lookup is a direct index into the token table;
 //! there is no separate trie.

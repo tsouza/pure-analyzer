@@ -10,9 +10,9 @@ but neither product may depend on the other's internals. The Cargo package is
 `pure-analyzer-purecard`; the Rust library and Python module are `purecard`
 ([ADR-0009](../decisions/0009-monorepo-placement.md)).
 
-### 3.1 Design stance: CFG skeleton (L1) + semantic narrowing (L2)
+### 3.1 CFG skeleton (L1) + semantic narrowing (L2)
 
-The design target uses a pushdown automaton (PDA) for Pure's context-free shape
+PureCARD uses a pushdown automaton (PDA) for Pure's context-free shape
 (the `->` pipeline, bracket matching, and lambda structure) and a thin
 type/scope tracker for context-sensitive decisions such as which property may
 follow `$x.`. This mirrors PICARD's lexical/grammatical/schema-consistency tiers,
@@ -25,7 +25,7 @@ recognizer, and the shipped tracker implements only the N/T positions named in
 L2 never _widens_ what L1 allows — it only narrows. `DecoderSession::new(grammar)`
 runs the fixed PDA without schema narrowing — useful before a schema is
 available and as a fast path. `DecoderSession::with_schema(grammar, schema)`
-adds the currently implemented partial L2 overlay.
+adds the partial L2 overlay.
 
 ### 3.2 Crate layout
 
@@ -50,7 +50,7 @@ src/
     narrow.rs       at implemented positions, restrict terminals to the schema-legal set
     trie.rs         byte-prefix trie: keep a token iff it can extend a legal name (BPE-aware)
   session.rs      DecoderSession: state + stack + scope; accept_token / allowed_mask / is_complete
-  selfcheck.rs    tokenizer self-check (M5): vocab round-trip before decode
+  selfcheck.rs    tokenizer self-check: vocab round-trip before decode
   error.rs        DecodeError
   ffi.rs          #[cfg(feature="python")] PyO3 bindings (§9)
 ```
@@ -58,8 +58,8 @@ src/
 There is no `grammar/spec.rs` or `grammar/build.rs`: the emitted-Pure grammar
 (§5) is fixed, so `CompiledGrammar::from_spec` accepts a `spec` argument but
 selects that single hand-written PDA against the vocab (see
-`src/grammar/mod.rs`). Grammar-spec lowering is an explicit outstanding item,
-not a capability implied by the method name. Masking lives in one `mask.rs`
+`src/grammar/mod.rs`). `from_spec` selects the fixed PDA; it does not lower its
+argument. Masking lives in one `mask.rs`
 (there is no `mask/` directory), and the soundness/differential harness lives
 under `tests/`, not an in-crate `testing/` module (ADR-0003).
 
@@ -100,8 +100,7 @@ Naive per-token PDA replay at every step over a 150k vocab is far too slow. Pure
    `CompiledGrammar`. Bind the model vocabulary (`Vocab`: each token id → its
    raw byte string) into the grammar object, sizing an empty lazy per-state mask
    cache. Tokens are indexed directly by id; per-state acceptance is resolved by
-   probing the PDA on first visit to each state (§4.5). Once spec lowering exists,
-   the cache identity also needs to include the lowered grammar.
+   probing the PDA on first visit to each state (§4.5).
 
 ### 4.2 Partition the vocabulary per PDA state
 
@@ -135,21 +134,23 @@ Naive per-token PDA replay at every step over a 150k vocab is far too slow. Pure
    The decoder treats every model token as an opaque byte string; the host is
    responsible for supplying the correct raw bytes per token id (§9).
 
-### 4.5 Latency target and cache construction
+### 4.5 Cache construction
 
-Target: **mask generation ≤ a few hundred µs/token**, so it is never the bottleneck against the model's ms-scale forward pass. The per-state cache is what makes this hold. Build it **lazily** — memoize each state's mask the first time that state is reached — to avoid precomputing masks for unreachable states.
+The per-state cache is built **lazily**: it memoizes each state's mask on first
+visit rather than precomputing masks for unreachable states.
 
 For L2, additionally **cache per-(state, class-scope) identifier masks**: the set of schema-legal identifiers after `$x.` depends only on the class `$x` is bound to, so it can be memoized per (position, class) pair rather than recomputed every step.
 
-### 4.6 Shipped M5 baseline (the locked performance record)
+### 4.6 Performance measurements
 
-The criterion suite (`benches/allowed_mask.rs`) locks the shipped per-step baseline. The intended regression guard is CodSpeed (the `bench` job — deterministic _instruction count_, walltime-independent, so it reproduces faithfully in CI), but it is **opt-in, not yet an enforced merge check**: the `bench` job is gated behind `vars.CODSPEED_ENABLED == 'true'`, so until the CodSpeed app is installed and that variable is set, it posts perf deltas without blocking a PR. Once enabled, CodSpeed's instruction-count delta is what fails a PR. Recommended CodSpeed threshold at first-lock: **±10 %** instruction count, ratcheted tighter over time (a PROTECTED gate only tightens).
+The Criterion suite (`benches/allowed_mask.rs`) records relative per-step costs.
+CI configuration defines which benchmark checks run for a change.
 
 The families and the _relative_ cost each establishes (no absolute figures are quoted here: there is no gate asserting a hand-copied number against the bench output, so only the shape is stated — the bench itself holds the measurements):
 
-- **`allowed_mask`** — steady-state per step, and the cheapest at shallow and identifier positions. The deep-stack worst case (nested open frames, maximal context-dependent re-probe) is the costliest per-step path; its design budget is **≤ a few hundred µs/token** (§4.5) — a target the bench measures against, not a guarantee asserted here — and that budget is itself dwarfed by the model's forward pass.
+- **`allowed_mask`** — steady-state per step, and the cheapest at shallow and identifier positions. The deep-stack worst case (nested open frames, maximal context-dependent re-probe) is the costliest per-step path.
 - **`accept_token`** — a whole-token advance is cheap: a byte-fold through a PDA clone.
-- **`cache_win`** — the M2 partition cache: a warm step (word-wise copy) is dramatically cheaper than a cold first-visit build (which probes the whole ~150k-token vocabulary). This is why the lazy per-state cache is load-bearing, not an optimization.
+- **`cache_win`** — the partition cache: a warm step (word-wise copy) is dramatically cheaper than a cold first-visit build (which probes the whole ~150k-token vocabulary). This is why the lazy per-state cache is load-bearing, not an optimization.
 - **`l2_overhead`** — the schema-narrowing block at an identifier position adds a small constant over the L1 mask (the `intersect` plus the scope-legal set build); L2 ⊆ L1 by construction, so it only ever narrows.
 
 ---
@@ -168,7 +169,7 @@ pub struct CompiledGrammar { /* owns Vocab + lazy per-state mask cache */ }
 impl CompiledGrammar {
     pub fn compile(vocab: Vocab) -> Self;               // bind vocab, size the lazy caches
     pub fn from_spec(spec: &str, vocab: Vocab) -> Self; // accepts spec; compiles the fixed §5 PDA
-                                                        // over the single fixed M1 PDA today
+                                                        // over the single fixed PDA
     pub fn vocab(&self) -> &Vocab;
 }
 
@@ -213,8 +214,7 @@ PureCARD is the **Rust half of a Python/Rust split**. Python owns training,
 datagen, inference orchestration, tokenization, and sampling; Rust owns the
 decoder state and mask. PureCARD exposes itself via PyO3 and is designed to
 constrain **only the final-query span** of an agentic trajectory (not the whole
-trajectory). The boundary exists, but a real-model Python-to-live-Legend e2e
-harness has not yet been implemented.
+trajectory).
 
 Host-side contract for the inference loop (out of scope to build here):
 

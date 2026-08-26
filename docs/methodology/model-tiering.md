@@ -8,12 +8,12 @@ review**, and escalate only when risk warrants it.
 
 Generation and review are *not* the same job and don't need the same model.
 
-- **Generator — cheaper, faster model.** Writes code and tests against the spec.
+- **Generator — cheaper, faster model.** Writes code and tests against the linked issue.
   It's constrained on all sides — by the constitution, by L0/L1 deterministic
-  gates, by the spec — so it doesn't need to be the strongest model available. It
+  gates, and by review — so it doesn't need to be the strongest model available. It
   needs to be fast and cheap, because it does the high-volume work.
 - **Reviewer — stronger model, as a subagent.** Gates the change. It reads the
-  diff against its spec, hunts for gaming and gate-tampering, and enforces craft
+  diff against its linked issue and PR, hunts for gaming and gate-tampering, and enforces craft
   (DRY/KISS, comment economy). This is where judgment lives, so this is where the
   capability budget goes.
 
@@ -44,8 +44,8 @@ Two forces compound in the right direction:
 1. **Deterministic-first.** Everything L0/L1 can decide never reaches a model at
    all (see [quality-layers.md](quality-layers.md)). Models only see what genuinely
    needs judgment.
-2. **The flywheel.** Recurring judgment findings graduate into free L1 rules
-   (N=3 promotion), so the pool of "needs a model" shrinks over time. The audit
+2. **The flywheel.** Judgment findings that can be decided mechanically become
+   free L1 rules, so the pool of "needs a model" shrinks over time. The audit
    cost per change trends **down** as the project matures.
 
 So the strong model is reserved for novel risk, and the volume of novel risk falls

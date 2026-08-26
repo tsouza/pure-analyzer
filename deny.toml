@@ -70,16 +70,12 @@ wildcards = "deny"
 allow-wildcard-paths = true
 
 # LAYERING ENFORCEMENT (partial).
-# Only the front-end crates (`pure-analyzer-cli` today; `pure-analyzer-lsp` in
-# v0.2) may depend on a renderer (`ariadne`, `codespan-reporting`) or protocol
-# crate (`clap`, and later `tower-lsp`/`lsp-types`) — see design doc §3.
+# Only front-end crates may depend on renderer (`ariadne`, `codespan-reporting`)
+# or protocol crates (`clap`, `tower-lsp`, `lsp-types`).
 # cargo-deny can ban a crate globally but cannot say "banned everywhere except
 # the front-end". So we do BOTH:
 #   1. Globally flag such crates as `deny` here once the ban would bite (empty
-#      today: v0.1 has exactly one front-end crate, so there is nothing yet
-#      for a lexer/syntax/parser/model/resolve/analysis crate to accidentally
-#      pull in). Add entries here — with explicit `skip`/`wrappers` exceptions
-#      for the front-end — the moment a second front-end (the LSP) lands.
+#      front-end exceptions as needed).
 #   2. The authoritative per-crate check lives in the ast-grep rule
 #      `no-front-end-deps-in-core` (ast-grep-rules/no-front-end-deps-in-core.yml)
 #      and the `cargo xtask verify-layering` step, which key off the crate DAG.

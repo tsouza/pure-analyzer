@@ -1,17 +1,13 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
-//! The shared `Diagnostic` model (design doc §6.1).
+//! The shared `Diagnostic` model.
 //!
 //! Every pass in the analysis engine — the parser's syntax errors, `lint`'s
 //! milestoning-arity findings, `eq`'s verdicts — emits [`Diagnostic`] values
-//! and nothing else. This crate defines that shape and **no renderer**: the
-//! CLI (`ariadne`/`codespan-reporting`) and, later, the LSP
-//! (`codespan-lsp`/`lsp_types`) are the only crates allowed to turn a
-//! `Diagnostic` into human- or protocol-facing output (see
-//! `ast-grep-rules/no-front-end-deps-in-core.yml`). Keeping this crate a leaf
-//! with a tiny, stable, serializable shape is what lets the CLI and LSP stay
-//! thin adapters over identical findings.
+//! and nothing else. This crate defines that shape and **no renderer**;
+//! rendering belongs in front-end crates. Keeping this crate a leaf with a
+//! small, serializable shape keeps diagnostics independent of presentation.
 
 mod code;
 mod diagnostic;

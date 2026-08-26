@@ -34,9 +34,8 @@ Every rule is tagged. If a rule is untagged, treat it as PROTECTED.
   with `pure-analyzer-diagnostics` a shared leaf. Cargo dependencies point
   toward prerequisites; specifically, `pure-analyzer-resolve` may depend on
   `pure-analyzer-model`, and the reverse edge is forbidden. Only analyzer front
-  ends (`pure-analyzer-cli` today; `pure-analyzer-lsp` in the target design) may
-  depend on a renderer (`ariadne`, `codespan-reporting`) or protocol crate
-  (`clap`, later `tower-lsp`/`lsp-types`).
+  ends may depend on a renderer (`ariadne`, `codespan-reporting`) or protocol
+  crate (`clap`, `tower-lsp`/`lsp-types`).
 - The umbrella contains a second, independent product,
   `pure-analyzer-purecard`
   ([ADR-0004](docs/decisions/0004-purecard-independent-workspace-product.md) and
@@ -184,15 +183,10 @@ mechanically require explicit maintainer judgment.
 This repository is an umbrella for two Legend Pure products:
 
 - **`pure-analyzer`** is a deterministic, standalone static-analysis toolchain
-  for the modern `Relation<>` dialect. Its current implementation is an early
-  scaffold: lexer and diagnostics are substantive; syntax, parser, model,
-  resolve, analysis, and `libpure` are mostly version stubs; CLI subcommands are
-  not implemented. Its design document describes target behavior, not shipped
-  capability.
-- **`pure-analyzer-purecard` (PureCARD)** is a grammar-constrained decoder with an
-  implemented partial schema overlay. Its M0–M5 code artifacts are implemented,
-  but its documented end-to-end proof obligations remain open, so it does not
-  yet claim feature completeness. It is migrated into this workspace but remains an
+  for the modern `Relation<>` dialect. Its crates follow the analyzer dependency
+  direction defined by ADR-0003.
+- **`pure-analyzer-purecard` (PureCARD)** is a grammar-constrained decoder with
+  a fixed emitted-subset recognizer and an optional schema overlay. It is an
   independently owned, unpublished product (`publish = false`; wheels are CI
   verification artifacts, not releases).
 

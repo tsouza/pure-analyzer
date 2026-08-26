@@ -46,13 +46,13 @@ model is involved, so they cost nothing per run and never disagree with themselv
   deterministic rule (see the flywheel).
 - **Coverage floor** — `cargo-llvm-cov` below the PROTECTED minimum fails.
 
-L1 is where lessons go to die a good death: a recurring judgment finding that can
-be made mechanical becomes an L1 rule (see the flywheel below).
+L1 is where recurring judgment findings become permanent: a failure class that
+can be made mechanical becomes an L1 rule (see the flywheel below).
 
 ## L2 — Generator → reviewer cascade (judgment, tiered)
 
 What deterministic checks can't decide — is this the *right* design? does the diff
-match the spec? is this comment litter or genuine explanation? — goes to models,
+match its linked issue? is this comment litter or genuine explanation? — goes to models,
 but **asymmetrically**: a **cheap generator** writes, a **stronger reviewer
 subagent** gates. Review is escalated, not applied uniformly, by risk and
 uncertainty:
@@ -73,14 +73,14 @@ Rot accumulates between changes. Two sweeps catch it:
   duplication creeping across modules, abstractions going stale, drift from the
   domain model.
 
-Findings feed [`lessons.md`](../lessons.md). And crucially: a finding that recurs
-**N=3** times is **promoted into a new L1 deterministic rule**. The judgment that
-caught it three times becomes a free check that catches it forever after.
+Fix findings in the current PR or track them in a GitHub Issue. When a failure
+class can be decided mechanically, promote it into an L1 deterministic rule so
+future changes receive the check for free.
 
 ## L4 — Reviewer judgment with an independent backstop
 
 - The **reviewer subagent supplies the judgmental gate**. It is tuned to this
-  project's rules and reads the diff against its spec.
+  project's rules and reads the diff against its linked issue and PR.
 - Risky changes receive a **separate reviewer pass** with fresh context. The
   default-branch ruleset independently enforces the deterministic aggregate
   checks, branch freshness, and resolved conversations.
@@ -91,14 +91,13 @@ The whole system tightens itself. Every layer feeds the one below it:
 
 ```text
 L4/L3 judgment finds an issue
-   → recurs N=3 times → promoted to an L1 deterministic rule
-      → now caught for free, forever → audit surface shrinks
-         → strong-model attention freed for genuinely novel risk
+   → a deterministic rule can decide its class
+      → the rule catches it for free, forever
+         → strong-model attention is freed for genuinely novel risk
 ```
 
 Over time the fraction of quality enforced by *free, deterministic* checks rises,
 and the per-change cost of keeping the bar high trends **down**. That is the
 point: judgment is expensive and should be spent buying permanent, cheap
-enforcement — not re-spent on the same finding every week. The promotion mechanism
-is governed by [self-learning.md](self-learning.md); the thresholds it can and
-can't touch are PROTECTED.
+enforcement — not re-spent on the same finding every week. The guardrail policy
+is governed by [self-learning.md](self-learning.md).

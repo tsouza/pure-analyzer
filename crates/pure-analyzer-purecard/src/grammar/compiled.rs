@@ -53,7 +53,7 @@ pub(crate) struct Cached {
 }
 
 impl CompiledGrammar {
-    /// Compile the fixed M1 byte-PDA against `vocab`, sizing the (empty) lazy
+    /// Compile the fixed byte-PDA against `vocab`, sizing the (empty) lazy
     /// per-state cache. No token is probed here — every state's partition is
     /// built on first visit (§4.5).
     #[must_use]
@@ -63,9 +63,10 @@ impl CompiledGrammar {
     }
 
     /// Compile a grammar for `vocab` from an EBNF `spec`. The emitted-Pure grammar
-    /// (§5) is fixed, so `spec` is ignored and this returns the single fixed M1
+    /// (§5) is fixed, so `spec` is ignored and this returns the single fixed
     /// PDA-backed grammar compiled against `vocab` — identical to
-    /// [`compile`](CompiledGrammar::compile), exposing the spec-driven API shape
+    /// [`compile`](CompiledGrammar::compile), preserving the declarative-input
+    /// API shape
     /// the host calls through.
     #[must_use]
     pub fn from_spec(_spec: &str, vocab: Vocab) -> Self {

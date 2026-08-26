@@ -1,6 +1,6 @@
 [package]
 name = "libpure"
-description = "Thin facade over the analysis engine: pub use of syntax/parser/model/resolve/analysis (and ir/eq in v0.2). The whole product; cli and lsp are thin adapters over it (design doc §1.5, §3)."
+description = "Facade crate for pure-analyzer workspace components."
 edition.workspace = true
 version.workspace = true
 license.workspace = true

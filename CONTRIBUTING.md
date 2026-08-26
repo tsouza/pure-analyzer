@@ -4,8 +4,7 @@ Contributions are welcome — human or agent. Everyone runs through the same gat
 so the bar is the same for all.
 
 This is an umbrella repository with two independent products: the
-`pure-analyzer` scaffold and the PureCARD constrained decoder. PureCARD's M0–M5
-code artifacts exist, but its end-to-end proof obligations remain open. State
+`pure-analyzer` static analyzer and the PureCARD constrained decoder. State
 which product or shared-infrastructure surface your change owns; repository
 co-location is not permission to couple their runtime code or test assets.
 
@@ -28,7 +27,7 @@ before your first change. The short version:
 - **No test skipping, no weakened assertions.** Flakes are bugs; fix them.
 - **Keep product edges at zero.** Analyzer crates and PureCARD may not depend on
   one another in any Cargo dependency kind. Parser or corpus sharing requires a
-  dedicated spec and ADR; `xtask` remains shared infrastructure.
+  dedicated issue and ADR; `xtask` remains shared infrastructure.
 - **Fix the system, not the instance.** A bug fix must also add the test, lint,
   or rule that prevents the whole class from recurring.
 
@@ -38,27 +37,25 @@ before your first change. The short version:
 mise install && mise run install-cargo-tools   # provision toolchain + dev tools
 just hooks-install                             # wire the git hooks
 just new-feature <name>    # worktree + branch
-just spec <name>           # scaffold a spec, then plan → implement → verify
 # ... make your change ...
 just ci                    # must pass before you open a PR
 ```
 
-Then open a PR. In the description:
+Start with a GitHub issue for the change, then open a PR. In the description:
 
-- link the spec the change implements,
+- link the issue and state the acceptance evidence,
 - identify whether the diff belongs to analyzer, PureCARD, or shared
   infrastructure,
-- note anything you updated in `docs/domain-model.md`, `docs/lessons.md`, or
-  `docs/decisions/`,
+- note any durable product or architecture documentation you updated,
 - if you touched a **pre-existing** unrelated issue, state your
   **fold-vs-branch** decision and why.
 
 ## Review
 
-Every PR is reviewed against its spec, with a separate reviewer pass for risky
-changes. Reviewers look for gaming or gate-tampering and enforce DRY/KISS and
-comment economy. The default-branch ruleset independently requires an up-to-date
-branch, resolved review conversations, and the `ci-gate`, `lint-gate`,
+Every PR is reviewed against its linked issue and stated acceptance evidence,
+with a separate reviewer pass for risky changes. Reviewers look for gaming or
+gate-tampering and enforce DRY/KISS and comment economy. The default-branch
+ruleset independently requires an up-to-date branch, resolved review conversations, and the `ci-gate`, `lint-gate`,
 `security-gate`, `purecard-fuzz-gate`, and `purecard-wheels-gate` checks. See
 [`docs/methodology/model-tiering.md`](docs/methodology/model-tiering.md).
 

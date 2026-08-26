@@ -301,6 +301,11 @@ sweep:
 postponed-markers:
     bun scripts/checks/postponed-markers.mjs --all
 
+# Reject the retired checked-in work ledger. Change scope and progress belong in
+# GitHub Issues and PRs; durable product references remain source material.
+no-work-ledger:
+    bun scripts/checks/no-work-ledger.mjs
+
 # Reject stale milestone/scaffold self-description in shipped PureCARD source
 # docs. The restored scanner is monorepo-aware and intentionally crate-scoped.
 lint-purecard-stale:
@@ -331,7 +336,7 @@ review: sweep
     gitleaks detect --no-banner --redact
 
 # ---------------------------------------------------------------------------
-# Feature / spec scaffolding
+# Feature scaffolding
 # ---------------------------------------------------------------------------
 
 # Create an isolated git worktree + branch `feature/<name>` for a change.
@@ -339,17 +344,13 @@ review: sweep
 new-feature name:
     cargo xtask new-feature {{ name }}
 
-# Scaffold a feature spec at specs/<name>.md from the template.
-spec name:
-    cargo xtask spec {{ name }}
-
 # ---------------------------------------------------------------------------
 # Aggregate / meta targets
 # ---------------------------------------------------------------------------
 
 # The fast inner-loop gate: layering + fmt-check + clippy + test. This is the
 # necessary-but-not-sufficient pre-PR check; the full gate is CI (see ci-full).
-ci:
+ci: no-work-ledger
     cargo xtask ci
 
 # The full local gate: every PR-blocking CI gate, chained in CI's job order,

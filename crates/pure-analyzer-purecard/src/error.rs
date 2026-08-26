@@ -14,11 +14,11 @@
 /// automaton `state` and `stack_top` at the point of rejection. Those last two
 /// name *why* the byte was rejected, so a soundness failure over the gold corpus
 /// points at the exact production the grammar wrongly forbids (see
-/// `specs/m1-l1-grammar.md`, G4). This is a backward-compatible superset of M0's
+/// `docs/spec/grammar.md`). This is a backward-compatible superset of the
 /// `{ offset, byte }`.
 ///
 /// The remaining three variants are the token-level channel of
-/// [`accept_token`](crate::DecoderSession::accept_token) (M5): a
+/// [`accept_token`](crate::DecoderSession::accept_token): a
 /// [`InadmissibleToken`](DecodeError::InadmissibleToken) — an in-range token the
 /// mask legitimately cleared — a [`UnknownToken`](DecodeError::UnknownToken) for
 /// an out-of-range id (a host-contract violation), and a

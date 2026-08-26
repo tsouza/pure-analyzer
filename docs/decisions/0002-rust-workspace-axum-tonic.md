@@ -9,8 +9,7 @@
 > mechanical static-analysis CLI/LSP toolchain, not a network service. It
 > never shipped any domain logic behind the axum/tonic stack it describes.
 > Superseded in full by [ADR-0003](0003-analysis-engine-crate-dag.md); kept
-> for the historical record per `docs/lessons.md`'s "never silently delete"
-> rule.
+> for the historical record.
 
 ## Context
 

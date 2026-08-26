@@ -1,4 +1,4 @@
-# PureCARD specification
+# PureCARD product reference
 
 **A Rust grammar/schema-constrained decoder for Legend Pure (a "PICARD-for-Pure"
 constrained-decoding library).**
@@ -11,45 +11,33 @@ constrained-decoding library).**
 - **Repository placement:** an independent sibling product colocated in the Pure
   Analyzer monorepo, with zero dependency edges in either direction
   ([ADR-0009](../decisions/0009-monorepo-placement.md)).
-- **Status:** the M0–M5 code artifacts are implemented. The live and
-  real-model acceptance obligations listed below remain open, so this spec does
-  not claim feature completeness or end-to-end milestone completion.
 
 Together the files below specify the decoder product. Its external inputs at
 build/test time are
 (a) the _test corpus_ of gold Pure queries and (b) a running _Legend engine_,
 both located in [`testing.md`](testing.md) §8. The host-side Python
-model/tokenizer/inference stack that drives it (the M4 integration surface) is
+model/tokenizer/inference stack that drives it is
 out of scope here — see §2 and §9 — as are general Rust workspace conventions,
 CI, and agentic dev setup. Those shared concerns are governed by the root
 [constitution](../../../../constitution.md), `just` frontend, CI, and
 [methodology](../../../../docs/methodology/).
 
 Context in one line: an upstream project ("pure-lingua") trains an LLM to emit
-Legend Pure queries; at serving time the target is _guaranteed-valid_ output
-without a compile-repair round-trip. PureCARD implements the per-step logits
-transform intended to provide that guarantee, but the end-to-end proof
-obligations below remain open. This spec is the authoritative source that
+Legend Pure queries; PureCARD provides a per-step logits transform over the
+emitted subset. This reference is the authoritative source that
 [`../domain-model.md`](../domain-model.md) navigates and elaborates.
 
-The implemented decoder has a hand-written emitted-subset PDA, lazy mask cache,
-an L2 overlay at selected schema-sensitive positions, PyO3/wheel boundary,
-fuzz targets, and benches. Real-Qwen token-ID replay is implemented in
-`tests/qwen_soundness.rs` against the pinned tokenizer revision and runs on
-demand or on schedule. That evidence is not real-model inference and does not
-compile output against live Legend. The current implementation therefore does
-not guarantee that every accepted output compiles.
-
-The authoritative
-[remaining proof obligations](overview.md#10-milestone-implementation-status-m0m5)
-stay open until each has named end-to-end evidence.
+The decoder has a hand-written emitted-subset PDA, lazy mask cache, an L2
+overlay at selected schema-sensitive positions, a PyO3/wheel boundary, fuzz
+targets, and benches. Its [operating limits](overview.md#10-operating-limits)
+state the guarantees it does and does not provide.
 
 Section numbers (`§N`) are preserved verbatim as headings, so any `§N` reference
 resolves to the file below.
 
 | Sections                          | File                               | Covers                                                                                 |
 | --------------------------------- | ---------------------------------- | -------------------------------------------------------------------------------------- |
-| §1, §2, §10, §11, §12, Appendix B | [overview.md](overview.md)         | What PureCARD is, the guarantee boundary, scope, milestones, risks, roadmap, prior art |
+| §1, §2, §10, §12, Appendix B      | [overview.md](overview.md)         | What PureCARD is, the guarantee boundary, scope, limits, and prior art                 |
 | §3, §4, §9                        | [architecture.md](architecture.md) | Architecture, the masking algorithm, the public Rust + PyO3 API                        |
 | §5                                | [grammar.md](grammar.md)           | L1 — the emitted-Pure syntactic grammar                                                |
 | §6, §7                            | [schema.md](schema.md)             | L2 — schema-consistency and the L1↔L2 contract                                         |

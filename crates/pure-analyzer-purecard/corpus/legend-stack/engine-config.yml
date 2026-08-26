@@ -1,4 +1,4 @@
-# Self-hosted Legend Engine 4.113.0 config (docs/design/sql-to-pure-datagen.md §3).
+# Self-hosted Legend Engine 4.113.0 configuration for differential labeling.
 # Adapted from the image's default /config/config.json + the legend-omnibus slim template:
 # anonymous auth (no GitLab/Mongo), SDLC resolution pointed directly at the legend-sdlc
 # container (no nginx prefix). This stack is pipeline infrastructure -- never the private

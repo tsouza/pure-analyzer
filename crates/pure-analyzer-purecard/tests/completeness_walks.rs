@@ -1,4 +1,4 @@
-//! Hermetic completeness self-test (`specs/m1-l1-grammar.md` T8, G3).
+//! Hermetic completeness self-test (`docs/spec/grammar.md`).
 //!
 //! The seeded walk generator ([`walker`]) samples the byte-PDA's accepting
 //! language by clone-and-probe. This lane asserts, without a network, that every

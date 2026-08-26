@@ -9,8 +9,7 @@
 M1 brings the first real decoder into `src/`: a byte-level pushdown automaton
 whose done-criterion is **100% gold-corpus soundness** — the PDA must never reach
 a dead state on any byte a gold query actually emits, and must be in an accepting
-state at end-of-stream, for *every* in-scope gold query (`specs/m1-l1-grammar.md`,
-G2).
+state at end-of-stream, for *every* in-scope gold query.
 
 The committed corpus (`corpus/gold_queries.jsonl`, verified this session) holds
 **5,034** execution-verified gold queries in two idioms, discriminated by their

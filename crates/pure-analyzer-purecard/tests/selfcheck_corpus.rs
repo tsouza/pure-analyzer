@@ -1,4 +1,4 @@
-//! The heavy tokenizer self-check round-trip (M5, `specs/m5-hardening.md` Area 1).
+//! The heavy tokenizer self-check round-trip (M5, `docs/spec/overview.md`).
 //!
 //! The pure core ships only a ~4-query `SMOKE` set; the full-corpus proof lives
 //! here. For every one of the 5034 gold `pure_text` queries this builds a

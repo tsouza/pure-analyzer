@@ -1,6 +1,6 @@
 [package]
 name = "pure-analyzer-cli"
-description = "The `pure-analyzer` binary: clap subcommands, config discovery, renderers, unified exit codes (design doc §6)."
+description = "Command-line entry point for pure-analyzer."
 edition.workspace = true
 version.workspace = true
 license.workspace = true

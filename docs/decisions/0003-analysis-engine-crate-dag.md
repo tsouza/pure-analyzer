@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-07-22; ratified and corrected 2026-08-26
-- **Deciders:** Project maintainer and agent, through the normal spec/review flow
+- **Deciders:** Project maintainer and agent, through the normal issue/PR review flow
 
 ## Context
 
@@ -10,7 +10,7 @@ The repository began from a domain-agnostic Rust server starter kit with a
 hexagonal `domain → app → infra → server` layout. That layout assumed an
 HTTP/gRPC service with business logic behind a transport.
 
-`pure-analyzer` has a different target architecture: a mechanical Legend Pure
+`pure-analyzer` has a different architecture: a mechanical Legend Pure
 analysis pipeline with lexer, lossless syntax, parser, model loader, resolver,
 passes, facade, and front ends. There is no persistence or network-service layer
 in that product. A per-crate dependency allow-set expresses its real topology
@@ -62,13 +62,10 @@ stack.
 `cargo xtask verify-layering` checks the explicit per-crate allow-set against
 `cargo metadata`, including normal, development, build, optional, and renamed
 dependencies. The `no-front-end-deps-in-core` ast-grep rule independently keeps
-front-end libraries out of analyzer core crates. Current scaffold crates do not
-yet exercise every permitted edge; the allow-set defines legal direction, not a
-claim that every target component is implemented.
+front-end libraries out of analyzer core crates.
 
-Planned `pure-analyzer-ir`, `pure-analyzer-eq`, `pure-analyzer-lsp`, and
-`pure-analyzer-eq-smt` crates require an explicit allow-set and governance update
-when their milestones land. They remain analyzer product layers.
+Adding or moving an analyzer crate requires an explicit allow-set and governance
+update in the same change.
 
 PureCARD is not a front end, facade, parser layer, or any other node in this DAG.
 `xtask` is shared repository infrastructure and likewise is not an analyzer
@@ -100,6 +97,4 @@ product layer.
 - Analyzer front ends stay thin, and diagnostics remain renderer-independent.
 - PureCARD changes cannot be justified as analyzer-DAG work. Its zero-edge
   product boundary is enforced separately within the same verification command.
-- The historical target design remains useful, but present-tense capability
-  claims must reflect that most analyzer layers and CLI behavior are still
-  scaffolds.
+- Product capability claims are backed by code, tests, and product references.

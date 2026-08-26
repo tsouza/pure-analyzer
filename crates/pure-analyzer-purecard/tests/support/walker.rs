@@ -1,5 +1,5 @@
-//! Seeded accepting-walk generator for the byte-PDA (`specs/m1-l1-grammar.md` T8,
-//! G3; `docs/spec/testing.md` §8.2).
+//! Seeded accepting-walk generator for the byte-PDA (`docs/spec/grammar.md`,
+//! `docs/spec/testing.md` §8.2).
 //!
 //! The recognizer is `Clone` and leaves itself unchanged on a dead byte
 //! ([`Pda::advance`] doc), so the *language* it accepts can be sampled by

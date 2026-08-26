@@ -9,7 +9,7 @@
 //! The mask spans `V + 1` bits over a `V`-token vocabulary: bit `V` is the
 //! reserved **EOS** bit (architecture Decision D3), a canonical completeness
 //! signal independent of whatever id the host's tokenizer assigns its own EOS
-//! token. [`intersect`](BitMask::intersect) is the forward-compatible hook the M3
+//! token. [`intersect`](BitMask::intersect) is the schema-overlay hook that
 //! schema overlay narrows through; [`copy_from`](BitMask::copy_from) refills an
 //! owned buffer from a cached mask with no allocation, which is what keeps the
 //! per-step path alloc-free (§4.3).
@@ -97,7 +97,7 @@ impl BitMask {
         self.words.iter_mut().for_each(|word| *word = 0);
     }
 
-    /// Word-wise `self &= other` — the M3 schema-narrowing hook (§4.3). Both
+    /// Word-wise `self &= other` — the schema-narrowing hook (§4.3). Both
     /// masks must share a length (hence a word count); the loop intersects the
     /// overlap.
     pub fn intersect(&mut self, other: &BitMask) {

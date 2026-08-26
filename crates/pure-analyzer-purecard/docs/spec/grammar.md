@@ -164,7 +164,7 @@ digit      = "0".."9" ;
 ### 5.5 Verified lexical quirks (corpus-confirmed)
 
 - **Single-quote strings only.** Double quotes never appear; an embedded quote is written `''` (15 gold queries exercise the doubling). A grammar admitting `"..."` is a compile-unsound over-approximation — keep `strlit` single-quote-only.
-- **`SortDirection.ASC` / `SortDirection.DESC`** are the only enum-shaped literals in the pilot corpus (36 occurrences), and they occur **only inside `sort`** (via `sortdir`), never as a comparison operand. They are a _Pure builtin_, not a schema enumeration, so they are **not** an L2 N4/N5 position — L1 fixes their `EnumPath "." IDENT` shape as a fixed terminal in `sortdir`, and L2 does not narrow them. **Schema-enum comparison** (`$x.status == SomeEnum.ACTIVE`, an `EnumRef` property vs an enum value) is what L2's N4/T5 target; it does **not** occur in the current Spider-derived corpus, so per §5 the emitted grammar carries **no** enum-literal _operand_ production yet. That operand production (`enumLit = classpath "." ident`, feeding `term`) is **reserved**: add it on the first gold query that compares an enum, at which point L2's N4/T5 narrow its RHS. See §7 (the N4/T5 contract rows) and §6.5 N4 / §6.6 T5, which mark the same rules forward-looking.
+- **`SortDirection.ASC` / `SortDirection.DESC`** are the only enum-shaped literals in the pilot corpus (36 occurrences), and they occur **only inside `sort`** (via `sortdir`), never as a comparison operand. They are a _Pure builtin_, not a schema enumeration, so they are **not** an L2 N4/N5 position — L1 fixes their `EnumPath "." IDENT` shape as a fixed terminal in `sortdir`, and L2 does not narrow them. Schema-enum comparison is outside the emitted grammar and supported schema overlay.
 - **`binderVar` vs `refVar`.** The lambda _header_ names the variable bare (`x|`); every _use_ in the body is `$`-prefixed (`$x.`). L1 keeps them distinct so a stray bare `x.name` or `$x|` is rejected; L2 binds the header name and resolves `$`-uses against it (§6.4, transition S2).
 - **Two kinds of `%`-literal.** A `%` opens either a _numeric_ date/time literal (`dateLit`, `%2018-03-17[T07:13:53]`) or a _symbolic_ milestoning literal (`milestoneLit`, `%latest` / `%latestdate`). They are disjoint at the first byte after `%`: a `dateChar` (digit / `-` / `T` / `:`) opens `dateLit`, a lowercase letter opens `milestoneLit`, and a bare `%` (or any other byte) is a dead state. `%latest` is not in the Spider-derived gold corpus; it is oracle'd by the **modern-dialect seed corpus** (§5.8) — the fine-tuned model emits it in `Class.all(%latest)`, bitemporal `Class.all(%latest, %latest)`, milestoned `.PROP(%latest, %latest)`, and comparison-operand positions (gap report §5/G2). Like `dateLit`, `milestoneLit` is a `Lexeme::Date` L2 pass-through — no schema narrowing.
 
@@ -186,14 +186,13 @@ Counts in the **Queries** column are **distinct queries containing the construct
 at least once** — _not_ raw occurrence totals — over the full **5,034-query**
 corpus (`corpus/gold_queries.jsonl`: 4,639 arm-A + 395 arm-C), recomputed this
 session. This is deliberately a different measure from the _total occurrences_
-quoted in prose (§5.2 and `specs/m1-l1-grammar.md`): a construct that repeats
+quoted in prose (§5.2): a construct that repeats
 within one query (`pair` appears 32,308 times but in 2,378 queries; `tableReference`
 8,455 times in 4,639 queries) has a higher occurrence total than its
 queries-containing count, while a once-per-query construct (`limit`, `between`)
 has equal counts. The queries-containing figures here are the authoritative
 inventory the grammar is locked against. Every construct here MUST parse; anything
-absent here is _not yet_ in the grammar (add on first gold occurrence, per §5's
-core principle).
+absent here is outside the emitted grammar.
 
 **Arm-A relational envelope and steps** (the 92.2% majority idiom):
 

@@ -27,15 +27,15 @@ Fold only when **all** of these hold; otherwise branch:
 | **Risk / blast radius** (concurrency, data, public API, security)           | low        | non-trivial        |
 | **Coupling** — does the current change depend on this being fixed?          | yes → fold | no                 |
 | **Reviewability** — does folding keep the diff coherent and easy to review? | yes        | no                 |
-| **Scope** — is it the same logical concern as the spec?                     | yes        | no                 |
+| **Scope** — is it the same logical concern as the linked issue?             | yes        | no                 |
 
 Rules of thumb:
 
 - **Blocking + on-path + small + low-risk → fold.** (e.g. the function you're
   editing has an off-by-one two lines down.)
 - **Non-blocking, or off-path, or large, or risky → branch.** Start it with the
-  `start-feature` flow (`just new-feature <name>`) so it gets its own spec, tests,
-  and PR. Leave a breadcrumb (issue/TODO-in-tracker, *not* a `TODO` in code — the
+  `start-feature` flow (`just new-feature <name>`) so it gets its own issue, tests,
+  and PR. Leave a breadcrumb in the tracker, *not* a `TODO` in code — the
   `postponed-marker` hook rejects those).
 - **Unsure → branch.** A separate small PR is cheaper than an incoherent large one.
 

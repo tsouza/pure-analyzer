@@ -22,31 +22,30 @@ Three ideas make that possible. Each has its own page; this one ties them togeth
 Every unit of work is one change, and it runs the same loop:
 
 ```text
-spec  →  worktree  →  implement  →  just ci  →  review  →  merge  →  reflect
+issue  →  worktree  →  implement  →  just ci  →  review  →  merge  →  reflect
 ```
 
-1. **Spec.** The "what" is written down first — the constitution plus a
-   per-feature spec. `just spec <name>` scaffolds it; the reviewer later checks the
-   diff against it. The spec identifies the affected product or shared
-   infrastructure; co-location is not permission to cross a product boundary.
-   See [spec-driven.md](spec-driven.md).
+1. **Issue.** The change's goal, non-goals, acceptance criteria, and dependencies
+   live in its GitHub issue. The PR links it and records only implementation
+   evidence and decisions, so the repository stores present product truth rather
+   than a second work ledger.
 2. **Worktree.** `just new-feature <name>` creates a git worktree and branch. One
    change lives in one worktree, isolated from every other in-flight change.
-3. **Implement.** The generator writes code and tests against the spec, obeying
+3. **Implement.** The generator writes code and tests against the issue, obeying
    [`constitution.md`](../../constitution.md).
 4. **`just ci`.** The fast local gate — the layering check, format, clippy
    (`-D warnings`), and the workspace test suite. Coverage, mutation, the
    structural sweep, and the supply-chain audits run as their own `just` targets
    and as separate CI jobs, not from `just ci`. Nothing proceeds red. See
    [testing.md](testing.md).
-5. **Review.** A reviewer subagent checks the diff against the spec, hunts for
-   gaming and gate-tampering, and enforces craft (DRY/KISS, comment economy).
+5. **Review.** A reviewer subagent checks the diff against the issue and PR,
+   hunts for gaming and gate-tampering, and enforces craft (DRY/KISS, comment economy).
    Risky changes receive a separate reviewer pass; deterministic aggregate
    checks remain independent required gates.
 6. **Merge.** One change, one PR, Conventional Commits, green.
-7. **Reflect.** The loop feeds itself: what we learned updates the domain model,
-   the lessons ledger, or the ADRs — and recurring findings graduate into new
-   deterministic gates.
+7. **Reflect.** The loop feeds itself: durable product truth updates the domain
+   model or an ADR, while a mechanically decidable failure becomes a new
+   deterministic gate. Mutable work state stays in GitHub.
 
 ## The rules that hold it together
 
@@ -65,7 +64,7 @@ principles worth naming here, because everything else follows from them:
 - **Never self-lower a gate.** See [self-learning.md](self-learning.md).
 - **Keep product boundaries explicit.** Analyzer and PureCARD have no Cargo
   dependency edges in either direction. Shared parser or corpus work requires a
-  dedicated spec and ADR; root automation may orchestrate both products without
+  dedicated issue and ADR; root automation may orchestrate both products without
   becoming part of either.
 
 ## The dependency vetting rubric
@@ -85,8 +84,8 @@ adding any new crate, and records the outcome in the PR.
 
 If a candidate clears every row, prefer it. If it fails any row and no alternative
 clears the bar, **write our own** — small, owned, and tested — rather than take on
-a liability. Either way, the decision and its reasoning go in the PR, and a
-recurring gap becomes a lesson (and possibly a vetted default).
+a liability. Either way, the decision and its reasoning go in the PR; a recurring
+mechanically decidable gap becomes a deterministic guard.
 
 An adopted crate must also keep `just deny`, `just audit`, and `just vet` green.
 The cargo-vet gate distinguishes reviewed or imported audit coverage from an
@@ -95,7 +94,6 @@ certification.
 
 ## Where to go next
 
-- [spec-driven.md](spec-driven.md) — how the "what" enters and gets verified.
 - [testing.md](testing.md) — the pyramid, from unit to DST to fuzz, and its gates.
 - [quality-layers.md](quality-layers.md) — the L0–L4 defense-in-depth.
 - [model-tiering.md](model-tiering.md) — the generator/reviewer cascade and its cost logic.

@@ -1,19 +1,7 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
-//! `pure-analyzer`: mechanical, standalone static analysis for Legend Pure
-//! (the modern `Relation<>` dialect) — no LLM, no runtime engine, no network
-//! (design doc §1).
-//!
-//! This binary is a thin renderer over `libpure`: it parses arguments,
-//! discovers config, and turns `Diagnostic`s into terminal/JSON output with
-//! the unified exit codes from design doc §6.3.
-//!
-//! **Scaffold status.** Every subcommand below parses its arguments for real
-//! (the CLI contract is design doc §6.4) but returns "not implemented yet":
-//! `libpure`'s parser/model/resolve/analysis layers are still placeholders
-//! (see their crate docs). The exit-code contract itself is a v0.1
-//! deliverable with its own spec and tests, not something to guess at here.
+//! Command-line entry point for `pure-analyzer`.
 
 use clap::{Parser, Subcommand};
 use tracing_subscriber::EnvFilter;
@@ -27,7 +15,7 @@ struct Cli {
     command: Command,
 }
 
-/// The five `pure-analyzer` subcommands, plus `explain` (design doc §6.4).
+/// The `pure-analyzer` subcommands.
 #[derive(Debug, Subcommand)]
 enum Command {
     /// Grammar + shallow well-formedness. Needs no model.
@@ -101,14 +89,13 @@ fn main() -> anyhow::Result<()> {
     }
 }
 
-/// Report that `subcommand` has not landed yet.
+/// Report an unavailable `subcommand`.
 ///
 /// # Errors
 ///
-/// Always returns an error; this is a placeholder for subcommands whose real
-/// implementation is tracked by a future spec.
+/// Always returns an error.
 fn not_yet_implemented(subcommand: &str) -> anyhow::Result<()> {
-    anyhow::bail!("`{subcommand}` is not implemented yet — see docs/design/pure-analyzer-design.md")
+    anyhow::bail!("`{subcommand}` is unavailable in this build")
 }
 
 /// Initialize the `tracing` subscriber, respecting `RUST_LOG`.
