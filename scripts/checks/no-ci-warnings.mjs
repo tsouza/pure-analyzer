@@ -134,7 +134,12 @@ if (import.meta.main) {
 
   async function fetchJobLog(job) {
     for (let attempt = 1; attempt <= FETCH_ATTEMPTS; attempt++) {
-      const out = await $`gh api /repos/${repo}/actions/jobs/${job.databaseId}/logs`.nothrow().quiet();
+      // Recent gh releases reject otherwise-valid log responses containing ANSI
+      // control sequences unless the caller opts in. Runner logs routinely
+      // contain colour output, so accept those bytes and scan the decoded text.
+      const out = await $`gh api --allow-escape-sequences /repos/${repo}/actions/jobs/${job.databaseId}/logs`
+        .nothrow()
+        .quiet();
       if (out.exitCode === 0) return out.stdout.toString();
       if (attempt < FETCH_ATTEMPTS) await Bun.sleep(RETRY_BACKOFF_MS * attempt);
     }
