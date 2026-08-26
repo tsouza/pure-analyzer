@@ -66,5 +66,13 @@ updates:
         update-types:
           - minor
           - patch
+    # PureCARD ships one abi3 wheel for Python >=3.9. pytest 9 requires Python
+    # >=3.10, so Dependabot cannot resolve that major without breaking the
+    # package's declared compatibility floor. Compatible pytest 8.x updates
+    # remain eligible.
+    ignore:
+      - dependency-name: pytest
+        update-types:
+          - version-update:semver-major
     commit-message:
       prefix: "chore(deps)"
