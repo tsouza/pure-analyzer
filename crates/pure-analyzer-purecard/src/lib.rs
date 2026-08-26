@@ -3,14 +3,16 @@
 
 //! # PureCARD
 //!
-//! A grammar- and schema-constrained decoder for **Legend Pure**. PureCARD sits
-//! between a language model's logits and its sampler and masks every next token
-//! that cannot lead to a valid Pure query — so output is valid *by construction*
-//! in a single forward pass, with no compile-repair round-trip.
+//! An emitted-subset grammar decoder for **Legend Pure** with a partial
+//! schema-aware overlay. PureCARD sits between a language model's logits and its
+//! sampler and masks tokens that leave its hand-written recognizer, with further
+//! narrowing at implemented schema-sensitive positions. End-to-end inference
+//! and live compiler proof obligations remain open, so accepted output is not
+//! yet guaranteed to compile in every case.
 //!
-//! It offers two nested guarantees and deliberately refuses a third; see
-//! [`GuaranteeLevel`]. The complete design — grammar, masking algorithm, schema
-//! overlay, and the oracle-driven test strategy — is specified under
+//! It models two nested product-target levels and deliberately refuses a third;
+//! see [`GuaranteeLevel`]. The design — grammar, masking algorithm, schema
+//! overlay, current evidence, and the oracle-driven test strategy — is specified under
 //! `docs/spec/`.
 //!
 //! ## Usage
@@ -72,12 +74,13 @@
 //! plain.reset();
 //! assert!(!plain.is_complete(), "reset returns to a fresh, incomplete stream");
 //!
-//! // L2 (schema-consistent) session: the mask is additionally intersected with the
-//! // schema-legal terminals at each identifier/operand position. This example shows
-//! // the L2 *API* and the structural **L2 ⊆ L1** invariant — L2 only ever narrows,
+//! // Schema-overlay session: the mask is additionally intersected with schema-derived
+//! // terminals at the positions covered by implemented rules. This example shows
+//! // the overlay *API* and the structural **overlay ⊆ L1** invariant — it only narrows,
 //! // so a token L1 admits (here the source) is never *added* and, being
-//! // schema-legal, still survives. That narrowing genuinely *removes* phantom
-//! // classes/properties and type-mismatched operands is proven by the counterfactual
+//! // legal under the implemented rules, still survives. That narrowing genuinely
+//! // removes selected phantom classes/properties and type-mismatched operands at
+//! // covered positions is proven by the counterfactual
 //! // suite (`tests/l2_precision.rs`) and, against fragmented BPE tokens, by
 //! // `tests/bpe_split_soundness.rs` — not re-litigated in this doc example.
 //! let schema = Schema::from_json(r#"{"db_id": "d", "db_path": "model::Db", "classes": {}}"#)?;
@@ -90,15 +93,17 @@
 //!
 //! ## Status
 //!
-//! All milestones **M0–M5** are shipped. The core is the [`GuaranteeLevel`]
-//! lattice, the [`vocab`] module's [`Vocab`] table (token id → raw bytes), the
+//! The code artifacts labeled **M0–M5** are implemented; this is not a claim
+//! that their original end-to-end acceptance obligations are complete. The core
+//! is the conceptual [`GuaranteeLevel`] lattice, the [`vocab`] module's [`Vocab`]
+//! table (token id → raw bytes), the
 //! byte-level recogniser (the [`grammar`] module's hand-written pushdown
 //! automaton [`Pda`] over the emitted-Pure grammar (§5), the [`DecoderSession`]
 //! that drives it as a [`ByteRecognizer`], and the [`DecodeError`] it reports),
 //! the M2 mask cache ([`CompiledGrammar`]), and the M3 [`schema`] overlay:
 //! [`Schema::from_json`] ingests the host contract as JSON and
-//! [`DecoderSession::with_schema`] narrows the mask to schema-legal terminals at
-//! each identifier/operand position. The gold-corpus loader and the Legend
+//! [`DecoderSession::with_schema`] narrows the mask at the identifier/operand
+//! positions covered by the implemented N/T subset. The gold-corpus loader and the Legend
 //! completeness probe live in the test-oracle harness under `tests/` (see
 //! `docs/decisions/0003-non-core-in-tests-deplight-core.md`); the core's runtime
 //! dependencies are `thiserror` (error types) and `serde`/`serde_json` (the L2
@@ -152,8 +157,8 @@ pub use selfcheck::{SelfCheckError, self_check, self_check_smoke};
 pub use session::DecoderSession;
 pub use vocab::Vocab;
 
-/// The nested guarantee levels a constrained decoder can offer, ordered from
-/// weakest (the largest set of queries) to strongest (the smallest).
+/// The conceptual guarantee levels a constrained decoder can target, ordered
+/// from weakest (the largest set of queries) to strongest (the smallest).
 ///
 /// The sets form a strict containment hierarchy — every faithful query is
 /// schema-consistent, and every schema-consistent query is syntactic, but not
@@ -163,11 +168,15 @@ pub use vocab::Vocab;
 /// faithful ⊂ schema-consistent ⊂ syntactic
 /// ```
 ///
-/// PureCARD moves a model's output into [`Syntactic`](GuaranteeLevel::Syntactic)
-/// (L1) and, when given a schema, into
-/// [`SchemaConsistent`](GuaranteeLevel::SchemaConsistent) (L2). It *cannot* reach
-/// [`Faithful`](GuaranteeLevel::Faithful) (L3): a logits mask sees the schema and
-/// the partial output, but never the question's intent.
+/// PureCARD's product target is emitted-subset
+/// [`Syntactic`](GuaranteeLevel::Syntactic) output (L1) and, with a complete
+/// schema overlay, [`SchemaConsistent`](GuaranteeLevel::SchemaConsistent) output
+/// (L2). The current code enforces membership in its fixed PDA and narrows only
+/// the positions covered by the implemented schema subset; the open live and
+/// end-to-end obligations mean this enum is not evidence that either full target
+/// has been proven. No decode-time mask can reach
+/// [`Faithful`](GuaranteeLevel::Faithful) (L3): it sees the schema and partial
+/// output, but never the question's intent.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum GuaranteeLevel {
     /// **L1.** The query parses as (emitted-subset) Pure.
@@ -181,9 +190,10 @@ pub enum GuaranteeLevel {
 }
 
 impl GuaranteeLevel {
-    /// The strongest guarantee PureCARD can enforce at decode time:
-    /// schema-consistency (L2). [`Faithful`](GuaranteeLevel::Faithful) (L3) is
-    /// out of reach by construction.
+    /// The theoretical strongest level a decode-time grammar/schema constraint
+    /// can target: schema-consistency (L2). This ceiling is not a claim that the
+    /// current partial overlay has achieved full L2. Faithfulness (L3) remains
+    /// structurally out of reach.
     pub const MAX_ENFORCEABLE: GuaranteeLevel = GuaranteeLevel::SchemaConsistent;
 
     /// Whether holding `self` also guarantees the weaker property `other`.
@@ -196,9 +206,10 @@ impl GuaranteeLevel {
         self >= other
     }
 
-    /// Whether PureCARD can actually enforce this level — i.e. it is no stronger
-    /// than [`MAX_ENFORCEABLE`](GuaranteeLevel::MAX_ENFORCEABLE). L3 is not
-    /// enforceable.
+    /// Whether this level is structurally enforceable by a decode-time
+    /// grammar/schema constraint — i.e. it is no stronger than the theoretical
+    /// [`MAX_ENFORCEABLE`](GuaranteeLevel::MAX_ENFORCEABLE). This does not report
+    /// whether the current implementation has proven that level end to end.
     #[must_use]
     pub fn is_enforceable(self) -> bool {
         self <= Self::MAX_ENFORCEABLE
@@ -232,7 +243,7 @@ mod tests {
     }
 
     #[test]
-    fn purecard_enforces_up_to_schema_consistency_only() {
+    fn lattice_marks_schema_consistency_as_the_strongest_targetable_level() {
         assert!(Syntactic.is_enforceable());
         assert!(SchemaConsistent.is_enforceable());
         assert!(!Faithful.is_enforceable());

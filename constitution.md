@@ -27,18 +27,31 @@ Every rule is tagged. If a rule is untagged, treat it as PROTECTED.
 - `#![deny(missing_docs)]` on every public crate (`pure-analyzer-lexer`,
   `pure-analyzer-syntax`, `pure-analyzer-parser`, `pure-analyzer-model`,
   `pure-analyzer-resolve`, `pure-analyzer-analysis`, `pure-analyzer-diagnostics`,
-  `libpure`, `pure-analyzer-cli`). Public items are documented or they do not
-  merge.
-- The workspace is layered as the analysis-engine DAG (see ADR-0003): `lexer →
-  syntax → parser → {model, resolve} → analysis → libpure → cli`, with
-  `pure-analyzer-diagnostics` a shared leaf. Dependencies point **inward only**
-  along this DAG — never sideways between siblings, never outward. Only the
-  front-end crate (`pure-analyzer-cli` today; `pure-analyzer-lsp` in v0.2) may
+  `libpure`, `pure-analyzer-cli`, `pure-analyzer-purecard`). Public items are
+  documented or they do not merge.
+- The analyzer product follows the processing pipeline in ADR-0003: `lexer →
+  syntax → parser → model → resolve → analysis → libpure → cli`,
+  with `pure-analyzer-diagnostics` a shared leaf. Cargo dependencies point
+  toward prerequisites; specifically, `pure-analyzer-resolve` may depend on
+  `pure-analyzer-model`, and the reverse edge is forbidden. Only analyzer front
+  ends (`pure-analyzer-cli` today; `pure-analyzer-lsp` in the target design) may
   depend on a renderer (`ariadne`, `codespan-reporting`) or protocol crate
-  (`clap`, later `tower-lsp`/`lsp-types`). The layering is enforced by `cargo
-  xtask verify-layering` (an explicit per-crate allow-set checked against
-  `cargo metadata`, in any dependency kind) and the
-  `no-front-end-deps-in-core` ast-grep rule, not by convention.
+  (`clap`, later `tower-lsp`/`lsp-types`).
+- The umbrella contains a second, independent product,
+  `pure-analyzer-purecard`
+  ([ADR-0004](docs/decisions/0004-purecard-independent-workspace-product.md) and
+  its nested
+  [ADR-0009](crates/pure-analyzer-purecard/docs/decisions/0009-monorepo-placement.md)).
+  Analyzer crates and PureCARD have **zero Cargo dependency edges in either
+  direction**, across normal, development, build, optional, and renamed
+  dependencies. `xtask` and
+  root automation are shared infrastructure, not a product layer. Co-location
+  grants no permission to share a parser, corpus, or product ownership; any
+  such integration requires its own spec and ADR.
+- `cargo xtask verify-layering` checks the analyzer allow-set and the
+  analyzer–PureCARD boundary against `cargo metadata`; the
+  `no-front-end-deps-in-core` ast-grep rule independently protects analyzer
+  core crates. These are enforced facts, not conventions.
 - No `unwrap`, `expect`, `panic!`, `todo!`, `unimplemented!`, or `dbg!` outside
   `#[cfg(test)]`. Libraries return `Result` with `thiserror` types; boundaries
   (`pure-analyzer-cli`, `xtask`) may use `anyhow`.
@@ -166,9 +179,23 @@ reviewer red flag.
 
 ## The domain (EVOLVABLE)
 
-> This section starts empty. It is the authoritative statement of *what this
-> server is and does*. It grows only through specs and reviewer-approved PRs, and
-> it is the source of truth that `docs/domain-model.md` elaborates.
+This repository is an umbrella for two Legend Pure products:
 
-*(No domain rules yet. The kit ships domain-agnostic. Add the first rule with the
-first feature — see `docs/methodology/spec-driven.md`.)*
+- **`pure-analyzer`** is a deterministic, standalone static-analysis toolchain
+  for the modern `Relation<>` dialect. Its current implementation is an early
+  scaffold: lexer and diagnostics are substantive; syntax, parser, model,
+  resolve, analysis, and `libpure` are mostly version stubs; CLI subcommands are
+  not implemented. Its design document describes target behavior, not shipped
+  capability.
+- **`pure-analyzer-purecard` (PureCARD)** is a grammar-constrained decoder with an
+  implemented partial schema overlay. Its M0–M5 code artifacts are implemented,
+  but its documented end-to-end proof obligations remain open, so it does not
+  yet claim feature completeness. It is migrated into this workspace but remains an
+  independently owned, unpublished product (`publish = false`; wheels are CI
+  verification artifacts, not releases).
+
+Both products are mechanical and domain-agnostic: no customer data or private
+domain content belongs in either. Their independent-product boundary is a
+domain invariant; sharing repository infrastructure does not merge their
+runtime architecture, source ownership, test corpora, or release authority.
+[`docs/domain-model.md`](docs/domain-model.md) elaborates these rules.

@@ -2,7 +2,19 @@
 
 **A mechanical, standalone, Rust static-analysis toolchain for Legend Pure (the modern `Relation<>` dialect)**
 
-Status: implementation-ready specification (v1). Single source of truth. An engineer or agent with no prior context can implement `pure-analyzer` from this document alone.
+Status: target design specification (v1). This document defines intended
+analyzer behavior; it is not a current implementation inventory.
+
+> **Implementation status (2026-08-26).** `pure-analyzer` is an early
+> scaffold. The lexer and diagnostic model contain substantive code; syntax,
+> parser, model, resolve, analysis, and `libpure` are mostly version stubs, and
+> CLI subcommands return `not implemented yet`. The umbrella workspace also
+> contains `pure-analyzer-purecard` as an independent, unpublished sibling
+> product. Its M0–M5 code artifacts exist, but its documented end-to-end proof
+> obligations remain, so PureCARD does not claim feature completeness. It is not part of
+> this analyzer design or its crate DAG. See the
+> [domain model](../domain-model.md) and [ADR-0004](../decisions/0004-purecard-independent-workspace-product.md)
+> for current repository topology.
 
 ---
 
@@ -10,7 +22,7 @@ Status: implementation-ready specification (v1). Single source of truth. An engi
 
 1. Overview & Scope
 2. Background an Implementer Needs
-3. Workspace / Crate Layout
+3. Analyzer Product / Crate Layout
 4. `libpure` — Parser, Model Loader, Resolver (+ the full milestoning-arity algorithm)
 5. Subcommand Contracts — `validate`, `lint`, `eq`/`diff`, `fmt`
 6. Diagnostic / Output Format, Exit Codes, Config
@@ -27,7 +39,12 @@ Status: implementation-ready specification (v1). Single source of truth. An engi
 
 `pure-analyzer` is a fast, deterministic, **no-LLM, no-runtime-engine** command-line static-analysis toolchain for **Legend Pure**, the query language of the FINOS Legend platform. It targets the **modern `Relation<>` dialect** (`meta::pure::functions::relation::*` over `Relation<(col:Type[mult], …)>`), not the legacy `TabularDataSet` (TDS) API.
 
-It is a Rust workspace built as **one shared analysis engine (`libpure`) with two first-class front-ends over it**: a CLI binary (`pure-analyzer`, five subcommands) and a Language Server (`pure-analyzer-lsp`). Both front-ends consume the same parser, resolver, and `Diagnostic` model, so every check below is available identically at the command line and live in an editor.
+Within the umbrella repository, it is designed as **one shared analysis engine
+(`libpure`) with two first-class front-ends over it**: a CLI binary
+(`pure-analyzer`, five subcommands) and a Language Server
+(`pure-analyzer-lsp`). Once implemented, both front-ends consume the same
+parser, resolver, and `Diagnostic` model, so each check below is available
+identically at the command line and live in an editor.
 
 - **`validate`** — grammar + shallow well-formedness. Converges on the Legend engine's acceptance behavior. Needs no model.
 - **`lint`** — the differentiated value: **milestoning `%latest`-arity checking** (the proven core), unknown-property, and statically-determinate multiplicity misuse. Needs a model.
@@ -306,14 +323,18 @@ The compiled-model protocol (M3 JSON, produced by engine `grammarToJson`/model b
 
 ---
 
-## 3. Workspace / Crate Layout
+## 3. Analyzer Product / Crate Layout
 
-A Cargo workspace of small crates, modeled on ruff / rust-analyzer / Biome: **parse once → one lossless CST + one resolved model → many passes → one `Diagnostic` model → render at the boundary.**
+The analyzer target is a set of small crates, modeled on ruff / rust-analyzer /
+Biome: **parse once → one lossless CST + one resolved model → many passes →
+one `Diagnostic` model → render at the boundary.** It shares the root Cargo
+workspace with PureCARD, but no product dependencies or ownership.
 
 ```text
-pure-analyzer/                          # workspace root (Cargo.toml [workspace], resolver = "2")
+pure-analyzer/                          # workspace root (Cargo.toml [workspace], resolver = "3")
 ├── Cargo.toml                   # [workspace.dependencies] — single pin source
 ├── crates/
+│   ├── pure-analyzer-purecard/        # independent constrained decoder; NOT in the analyzer DAG
 │   ├── pure-analyzer-lexer/            # logos #[repr(u16)] token enum; % dates; # raw island tokens
 │   ├── pure-analyzer-syntax/           # SyntaxKind + rowan Language impl (num-derive FromPrimitive,
 │   │                            #   NOT unsafe transmute); ungrammar-driven typed AstNode views
@@ -332,7 +353,7 @@ pure-analyzer/                          # workspace root (Cargo.toml [workspace]
 │   ├── pure-analyzer-cli/              # the `pure-analyzer` binary: clap, config, renderers, exit codes
 │   ├── pure-analyzer-lsp/              # (v0.2, first-class surface) tower-lsp; Diagnostic -> lsp_types (byte->UTF-16, Fix->CodeAction, explain->hover)
 │   └── pure-analyzer-eq-smt/           # (v2+, feature="smt") easy-smt -> later z3; behind a flag
-├── xtask/                       # ungrammar->codegen; engine-jar differential corpus tooling
+├── xtask/                       # shared repository orchestration; not a product layer
 ├── tests/
 │   ├── corpus/{accept,reject}/  # engine-parity snippets (reject tagged with expected PUR code)
 │   ├── milestoning/             # arity fixtures (+PMCD and +Pure-file parity)
@@ -341,18 +362,34 @@ pure-analyzer/                          # workspace root (Cargo.toml [workspace]
 └── docs/reason-codes/           # one markdown page per reason/rule code (explain / url target)
 ```
 
-**Dependency DAG (acyclic, CI-enforced via `cargo-deny` + a check):**
+**Analyzer processing pipeline:**
 
 ```text
-lexer → syntax → parser → {model, resolve} → {ir → eq} → analysis → {cli, lsp}
-diagnostics : leaf, depended on by everything ≥ parser
+lexer → syntax → parser → model → resolve → analysis → libpure → cli
 ```
+
+This arrow describes processing order. Cargo dependency arrows point toward
+prerequisites. In particular, `pure-analyzer-resolve → pure-analyzer-model`
+is permitted and the reverse is forbidden. `pure-analyzer-diagnostics` is a
+shared leaf depended on by parser-and-above analyzer crates. Planned
+`pure-analyzer-ir`, `pure-analyzer-eq`, and LSP/SMT crates extend this analyzer
+graph only when their milestone updates the allow-set; they do not change the
+model-before-resolve ordering.
+
+PureCARD has no place in this graph. Analyzer and PureCARD crates have zero
+Cargo edges in either direction across normal, development, build, optional,
+and renamed dependencies. `cargo xtask verify-layering` enforces both the
+ADR-0003 analyzer allow-set and the ADR-0004 product boundary against
+`cargo metadata`.
 
 Rules:
 
 - Only the **front-end crates** (`pure-analyzer-cli`, `pure-analyzer-lsp`) may depend on renderers (`ariadne`, `codespan-reporting`, `codespan-lsp`) or protocol crates (`clap`, `tower-lsp`, `lsp-types`). Everything below them emits only structured `Diagnostic`s, so the CLI and LSP render identical findings.
 - **`pure-analyzer-eq` / `pure-analyzer-ir` are their own crates** so the sound core (validate+lint) builds/ships without pulling the heavy, soundness-critical interpreter. `pure-analyzer-analysis` must not become a grab-bag.
 - **`smt` is feature-gated** and behind `pure-analyzer-eq-smt`; a CI `--no-default-features` build asserts the sound core builds with **zero solver dependency**. Soundness never depends on a solver being installed.
+- Parser or corpus reuse with PureCARD is not implied by co-location. It needs a
+  future spec and ADR before either product may take such a dependency or share
+  ownership of an asset.
 
 **Pinned crates:** `logos`; `rowan` (evaluate `cstree` if traversal-bound); `ungrammar` + `num-derive`; `clap` (derive); `serde`/`serde_json`; `ariadne` + `codespan-reporting` (+ `codespan-lsp`); `rayon`; `ignore`/`walkdir`; `insta`; `anyhow` (CLI only — libpure returns typed errors). LSP-only: `tower-lsp` + `lsp-types`, optional `salsa` (v0.3+). SMT-only: `easy-smt` then `z3`.
 

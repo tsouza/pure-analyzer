@@ -1,12 +1,12 @@
 # CLAUDE.md
 
-You are the engineer on `pure-analyzer`: a mechanical, standalone Rust
-static-analysis toolchain for Legend Pure (design doc:
-[docs/design/pure-analyzer-design.md](docs/design/pure-analyzer-design.md)),
-built under an AI-driven engineering methodology inherited from a
-domain-agnostic starter kit. Read this file every session, then follow the
-links for depth. Keep this file thin — it has a **size budget of ~150 lines**.
-Detail lives in the ledger below, not here.
+You are the engineer in the `pure-analyzer` umbrella repository. It contains
+two independent Legend Pure products: the early-scaffold `pure-analyzer`
+static-analysis toolchain and the `pure-analyzer-purecard` constrained decoder,
+whose M0–M5 code artifacts exist but whose end-to-end proof obligations remain
+open. They share repository automation, not product code or ownership. Read this
+file every session, then follow the links for depth. Keep this file thin — it has
+a **size budget of ~150 lines**. Detail lives in the ledger below, not here.
 
 ## The hard rules (brief)
 
@@ -14,10 +14,15 @@ The authoritative, non-negotiable list is **[constitution.md](constitution.md)**
 Read it. The essentials:
 
 - **Rust 2024, `forbid(unsafe_code)`, `deny(missing_docs)` on public crates.**
-- **The analysis-engine DAG (ADR-0003), dependencies inward only:** `lexer →
-  syntax → parser → {model, resolve} → analysis → libpure → cli`, with
-  `pure-analyzer-diagnostics` a shared leaf. Only `pure-analyzer-cli` (and, in
-  v0.2, `pure-analyzer-lsp`) may depend on a renderer/protocol crate.
+- **The analyzer pipeline (ADR-0003):** `lexer → syntax → parser → model
+  → resolve → analysis → libpure → cli`, with diagnostics as a shared
+  leaf. Cargo edges point toward prerequisites: resolve may depend on model;
+  model must never depend on resolve. Only analyzer front ends may depend on a
+  renderer/protocol crate.
+- **The product boundary (ADR-0004):** zero dependency edges in either direction
+  between analyzer crates and PureCARD, in every Cargo dependency kind.
+  `xtask` is shared infrastructure. Parser or corpus sharing needs a future spec
+  and ADR; co-location alone authorizes neither.
 - **No `unwrap`/`expect`/`panic!`/`todo!`/`unimplemented!`/`dbg!` outside tests.**
   `thiserror` in libs, `anyhow` at boundaries. `tracing`, never `println!`.
 - **One change → one worktree → one PR.** Conventional Commits. Nothing merges red.
@@ -64,6 +69,10 @@ The generator writes; the **reviewer subagent is the gate**. See
 @constitution.md
 
 - **What we're building** → [docs/domain-model.md](docs/domain-model.md)
+- **Analyzer target design** →
+  [docs/design/pure-analyzer-design.md](docs/design/pure-analyzer-design.md)
+- **PureCARD product docs** →
+  [crates/pure-analyzer-purecard/docs/](crates/pure-analyzer-purecard/docs/)
 - **Heuristics we've learned** → [docs/lessons.md](docs/lessons.md)
 - **Decisions & why** → [docs/decisions/](docs/decisions/)
 - **How we work:**
@@ -71,7 +80,7 @@ The generator writes; the **reviewer subagent is the gate**. See
   - [Spec-driven](docs/methodology/spec-driven.md) — constitution + spec + `/spec`
   - [Testing](docs/methodology/testing.md) — the pyramid and its gates
   - [Quality layers](docs/methodology/quality-layers.md) — L0–L4 defense
-  - [Self-learning](docs/methodology/self-learning.md) — how the kit adapts safely
+  - [Self-learning](docs/methodology/self-learning.md) — how the repository adapts safely
   - [Model tiering](docs/methodology/model-tiering.md) — cheap generator, strong reviewer
   - [Twelve-factor](docs/methodology/twelve-factor.md) — every factor is load-bearing; env-driven, self-documenting config
 

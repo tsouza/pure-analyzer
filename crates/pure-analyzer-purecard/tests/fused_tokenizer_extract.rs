@@ -7,7 +7,7 @@
 //! rebuilds the committed fixture row. In the default (verify) mode it diffs the
 //! re-extraction against `tests/fixtures/tokenizers/fused_precision.jsonl` and fails
 //! on any drift — so a tokenizer change or a stale fixture is caught out-of-band by
-//! the nightly `qwen-oracle.yml` workflow, never silently. With
+//! the nightly `purecard-qwen-oracle.yml` workflow, never silently. With
 //! `WRITE_FUSED_FIXTURE=1` it regenerates the committed fixture instead (how the
 //! vendored file is produced in the first place).
 //!

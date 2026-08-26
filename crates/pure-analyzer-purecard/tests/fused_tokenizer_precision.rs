@@ -12,7 +12,7 @@
 //! tokenizer's byte-level token strings, byte-unicode encoded), with NO tokenizer
 //! crate and NO network. The feature-gated Tier-B extractor
 //! (`fused_tokenizer_extract.rs`) re-derives that fixture from the actual
-//! tokenizers and the nightly `qwen-oracle.yml` workflow diffs it, so the fixture
+//! tokenizers and the nightly `purecard-qwen-oracle.yml` workflow diffs it, so the fixture
 //! cannot rot silently.
 //!
 //! For each row it decodes the token strings to raw bytes (the same byte-level

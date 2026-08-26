@@ -42,8 +42,9 @@ lint:
 
 # Lint + auto-fix markdown (aligns tables for MD060, then markdownlint --fix).
 lint-md:
-    bun scripts/lib/align-md-tables.mjs $(git ls-files '*.md')
-    bunx markdownlint-cli2 --fix "**/*.md"
+    bun scripts/lib/align-md-tables.mjs $(git ls-files '*.md' '*.markdown')
+    bunx markdownlint-cli2 --fix "**/*.md" "**/*.markdown"
+    just check-doc-links
 
 # Verify commit messages on this branch follow Conventional Commits.
 lint-commits:
@@ -223,6 +224,10 @@ check-core-deplight:
 check-doc-facts:
     cargo xtask check-doc-facts
 
+# Check every tracked Markdown relative file and GitHub-style heading anchor.
+check-doc-links:
+    cargo xtask check-doc-links
+
 # Validate release-plz.toml against the workspace, so config drift fails a PR
 # instead of the post-merge trunk run. Delegates to xtask.
 release-plz-check:
@@ -298,10 +303,9 @@ lint-purecard-stale:
 label-differential:
     bun scripts/label-differential.mjs
 
-# Verify the workspace layering (constitution §1, ADR-0002): reject any layer
-# that depends outward — onto a sibling or outer layer — in any dependency kind
-# (normal/dev/build), the edge cargo-deny's global bans miss. Delegates to xtask
-# (reads `cargo metadata`). Also runs inside `just ci`.
+# Verify analyzer layering (ADR-0003) and analyzer/PureCARD independence
+# (ADR-0004 and PureCARD ADR-0009) across normal/dev/build dependencies.
+# Delegates to xtask (reads `cargo metadata`). Also runs inside `just ci`.
 verify-layering:
     cargo xtask verify-layering
 

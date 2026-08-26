@@ -4,18 +4,38 @@ _[Spec index](README.md) · [domain model](../domain-model.md)_
 
 ## 3. Architecture
 
+PureCARD is an independent sibling product inside the Pure Analyzer monorepo.
+The root workspace, `just`, CI, constitution, and methodology orchestrate it,
+but neither product may depend on the other's internals. The Cargo package is
+`pure-analyzer-purecard`; the Rust library and Python module are `purecard`
+([ADR-0009](../decisions/0009-monorepo-placement.md)).
+
 ### 3.1 Design stance: CFG skeleton (L1) + semantic narrowing (L2)
 
-A pushdown automaton (PDA) handles Pure's context-free shape (the `->` pipeline, bracket matching, lambda structure). A thin type/scope tracker handles the context-sensitive parts — specifically, _which property is legal after `$x.`_ depends on the class `$x` is bound to, which a pure CFG cannot express. This mirrors PICARD's lexical/grammatical/schema-consistency tiers, adapted to Pure: **L1 = the PDA over the emitted grammar; L2 = a typed-scope overlay that intersects L1's terminal set with the schema-legal set at exactly the identifier/type positions L1 defines.**
+The design target uses a pushdown automaton (PDA) for Pure's context-free shape
+(the `->` pipeline, bracket matching, and lambda structure) and a thin
+type/scope tracker for context-sensitive decisions such as which property may
+follow `$x.`. This mirrors PICARD's lexical/grammatical/schema-consistency tiers,
+adapted to Pure: **L1 = the PDA over the emitted grammar; L2 = a typed-scope
+overlay that intersects L1's terminal set with the schema-legal set at covered
+identifier/type positions.** The shipped PDA is a deliberate emitted-subset
+recognizer, and the shipped tracker implements only the N/T positions named in
+§6.7; neither is a general Pure compiler.
 
-L2 never _widens_ what L1 allows — it only narrows. `DecoderSession::new(grammar)` runs L1-only (pure syntactic guarantee, no schema needed) — useful before a schema is available and as a fast path; `DecoderSession::with_schema(grammar, schema)` is the additive L2 constructor.
+L2 never _widens_ what L1 allows — it only narrows. `DecoderSession::new(grammar)`
+runs the fixed PDA without schema narrowing — useful before a schema is
+available and as a fast path. `DecoderSession::with_schema(grammar, schema)`
+adds the currently implemented partial L2 overlay.
 
 ### 3.2 Crate layout
 
-Single Rust crate, `purecard`, with an optional PyO3 feature exposing bindings. Internal modules (the shipped layout):
+Single Cargo package, `pure-analyzer-purecard`, whose Rust library is named
+`purecard`, with an optional PyO3 feature exposing bindings. Internal modules
+(the shipped layout):
 
 ```
-purecard/
+src/
+  lib.rs          crate root, public exports, and guarantee-level taxonomy
   grammar/        L1: emitted-Pure grammar -> byte-level pushdown automaton (PDA)
     mod.rs          Envelope classifier + DeadState carrier
     pda.rs          hand-written pushdown automaton (states, stack frames, byte transitions)
@@ -23,11 +43,11 @@ purecard/
   vocab.rs        model vocabulary as raw byte strings per token id
   mask.rs         BitMask: the dense per-step token bitset (§4)
   recognizer.rs   ByteRecognizer trait (the byte-at-a-time surface)
-  schema/          L2: schema-consistency overlay
+  schema/          partial L2 schema-consistency overlay
     mod.rs          Schema / SchemaError re-exports
     model.rs        Schema { classes -> {prop -> type} }, passed from the host at session init
     scope.rs        lambda scope / type environment tracker (what class is the row var bound to)
-    narrow.rs       at identifier/type positions, restrict terminals to the schema-legal set
+    narrow.rs       at implemented positions, restrict terminals to the schema-legal set
     trie.rs         byte-prefix trie: keep a token iff it can extend a legal name (BPE-aware)
   session.rs      DecoderSession: state + stack + scope; accept_token / allowed_mask / is_complete
   selfcheck.rs    tokenizer self-check (M5): vocab round-trip before decode
@@ -35,7 +55,13 @@ purecard/
   ffi.rs          #[cfg(feature="python")] PyO3 bindings (§9)
 ```
 
-There is no `grammar/spec.rs` or `grammar/build.rs`: the emitted-Pure grammar (§5) is fixed, so `CompiledGrammar::from_spec` accepts a `spec` argument but compiles that single fixed PDA against the vocab (see `src/grammar/mod.rs`). Masking lives in one `mask.rs` (there is no `mask/` directory), and the soundness/differential harness lives under `tests/`, not an in-crate `testing/` module (ADR-0003).
+There is no `grammar/spec.rs` or `grammar/build.rs`: the emitted-Pure grammar
+(§5) is fixed, so `CompiledGrammar::from_spec` accepts a `spec` argument but
+selects that single hand-written PDA against the vocab (see
+`src/grammar/mod.rs`). Grammar-spec lowering is an explicit outstanding item,
+not a capability implied by the method name. Masking lives in one `mask.rs`
+(there is no `mask/` directory), and the soundness/differential harness lives
+under `tests/`, not an in-crate `testing/` module (ADR-0003).
 
 ### 3.3 Core data flow (per generation)
 
@@ -48,13 +74,18 @@ loop each decode step:
   mask   = session.allowed_mask()  ◀──   BitMask over vocab (cached + runtime + schema-narrowed)
   logits[!mask] = -inf
   tok    = sample(logits)
-  session.accept_token(tok)        ──▶   advance PDA state + stack + scope; err if illegal
+  session.accept_token(tok)        ──▶   advance PDA state + stack + scope; err if PDA-illegal
   if session.is_complete() and tok==EOS: break
 ```
 
 - `allowed_mask` is called every step over the full vocab (~150k tokens) — it must be cheap (§4).
-- `accept_token` advances the recognizer (PDA state + stack + scope), erroring if the token is illegal.
-- `is_complete` is true when the PDA is in an accepting state (a syntactically — and, under L2, schema- — complete query), so the loop knows EOS is legal.
+- `accept_token` advances the recognizer (PDA state + stack + scope), erroring
+  if the token dead-ends the fixed PDA. It does not re-apply the schema mask;
+  honoring `allowed_mask` before sampling is the host contract.
+- `is_complete` is true when the fixed PDA is in an accepting state, so the loop
+  knows EOS is legal to the recognizer. Even in a schema-enabled session it does
+  not validate that the host honored earlier masks, nor is it a general Pure
+  compiler or schema-validation result.
 
 ---
 
@@ -64,7 +95,13 @@ Naive per-token PDA replay at every step over a 150k vocab is far too slow. Pure
 
 ### 4.1 Compile once
 
-1. **Compile** the grammar to a byte-level PDA once per **(model vocabulary, grammar)** pair — the masks are vocabulary-indexed, so a different tokenizer needs its own compile (matching `docs/domain-model.md`'s "once per model + grammar"). Bind the model vocabulary (`Vocab`: each token id → its raw byte string) into the `CompiledGrammar`, which owns it, sizing an empty lazy per-state mask cache. Tokens are indexed directly by id — there is no separate trie; per-state acceptance is resolved by probing the PDA on first visit to each state (§4.5).
+1. **Bind** the fixed byte-level PDA to a vocabulary once per model vocabulary —
+   the masks are vocabulary-indexed, so a different tokenizer needs its own
+   `CompiledGrammar`. Bind the model vocabulary (`Vocab`: each token id → its
+   raw byte string) into the grammar object, sizing an empty lazy per-state mask
+   cache. Tokens are indexed directly by id; per-state acceptance is resolved by
+   probing the PDA on first visit to each state (§4.5). Once spec lowering exists,
+   the cache identity also needs to include the lowered grammar.
 
 ### 4.2 Partition the vocabulary per PDA state
 
@@ -79,16 +116,24 @@ Naive per-token PDA replay at every step over a 150k vocab is far too slow. Pure
    ```
    mask = cache[state]                         # cached context-independent bitmask
    mask = flip_context_dependent(mask, stack)  # small runtime stack check
-   if L2 active and state is an identifier/type position:
+   if an implemented L2 rule covers the current position:
        mask = mask ∩ schema_legal_terminals(scope)   # §6 narrowing
    return mask
    ```
 
-   The context-dependent flip touches only the small set of stack-sensitive terminals. The L2 intersection applies **only** at identifier/type positions (§7 table), keeping the runtime fraction small.
+   The context-dependent flip touches only the small set of stack-sensitive
+   terminals. The current L2 intersection applies **only** at the selected
+   identifier/type positions implemented from the §7 table, keeping the runtime
+   fraction small.
 
 ### 4.4 Byte-level detokenization (BPE↔Pure alignment, solved)
 
-1. Detokenization is **byte-level**, so subword boundaries never need special alignment: a candidate token is admissible iff **feeding its raw bytes advances the byte-PDA to a non-dead state**. This sidesteps the BPE/Pure-token misalignment that PICARD handled with explicit incremental parsing (§1.1). The decoder treats every model token as an opaque byte string; the host is responsible for supplying the correct raw bytes per token id (§9).
+1. Detokenization is **byte-level**, so subword boundaries never need special
+   alignment: at L1, a candidate token is admissible iff **feeding its raw bytes
+   advances the byte-PDA to a non-dead state**. This sidesteps the BPE/Pure-token
+   misalignment that PICARD handled with explicit incremental parsing (§1.1).
+   The decoder treats every model token as an opaque byte string; the host is
+   responsible for supplying the correct raw bytes per token id (§9).
 
 ### 4.5 Latency target and cache construction
 
@@ -132,8 +177,8 @@ impl Schema { pub fn from_json(s: &str) -> Result<Self, SchemaError>; }
 
 pub struct DecoderSession<'g> { /* state, stack, scope, &CompiledGrammar */ }
 impl<'g> DecoderSession<'g> {
-    pub fn new(g: &'g CompiledGrammar) -> Self;                       // L1-only
-    pub fn with_schema(g: &'g CompiledGrammar, schema: Schema) -> Self; // additive L2 overlay
+    pub fn new(g: &'g CompiledGrammar) -> Self;                       // fixed PDA only
+    pub fn with_schema(g: &'g CompiledGrammar, schema: Schema) -> Self; // partial L2 overlay
     pub fn allowed_mask(&mut self) -> &BitMask;  // over vocab; EOS bit set iff is_complete().
                                                  // `&mut` because it refills the session's
                                                  // reused mask buffer and lazy per-state cache
@@ -159,9 +204,17 @@ sess.accept_token(tok_id)         # advance; raises on illegal token
 sess.is_complete()                # bool
 ```
 
+Maturin packages this module into a wheel to verify the boundary. The Cargo
+package has `publish = false`, and the wheel is not a published release artifact.
+
 ### 9.3 Integration boundary (host code lives elsewhere, stated so the API is right)
 
-PureCARD is the **Rust half of a Python/Rust split**. Python owns training, datagen, and orchestration (it is ecosystem-bound: MLX, HuggingFace, tokenizers); Rust owns the durable, performance- and correctness-critical serving kernels. PureCARD exposes itself via PyO3 to a Python inference loop and constrains **only the final-query span** of an agentic trajectory (not the whole trajectory).
+PureCARD is the **Rust half of a Python/Rust split**. Python owns training,
+datagen, inference orchestration, tokenization, and sampling; Rust owns the
+decoder state and mask. PureCARD exposes itself via PyO3 and is designed to
+constrain **only the final-query span** of an agentic trajectory (not the whole
+trajectory). The boundary exists, but a real-model Python-to-live-Legend e2e
+harness has not yet been implemented.
 
 Host-side contract for the inference loop (out of scope to build here):
 

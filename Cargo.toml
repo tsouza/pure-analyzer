@@ -55,7 +55,7 @@ rust-version = "1.90"
 # ---------------------------------------------------------------------------
 # Internal workspace crates — the analysis-engine DAG (see docs/decisions and
 # constitution.md §1). Dependencies point one way only:
-#   lexer -> syntax -> parser -> {model, resolve} -> analysis -> {cli}
+#   lexer -> syntax -> parser -> model -> resolve -> analysis -> libpure -> cli
 # `pure-analyzer-diagnostics` is a leaf depended on by parser and everything
 # above it. `libpure` is a thin facade re-exporting syntax/parser/model/
 # resolve/analysis for the front-end crates (cli today; lsp in v0.2).
@@ -81,6 +81,10 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt"] }
 # --- Serialization ---
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
+
+# --- Repository documentation tooling ---
+pulldown-cmark = { version = "0.13.0", default-features = false }
+toml = { version = "1.1.4", default-features = false, features = ["parse", "serde"] }
 
 # --- CLI (front-end crates only — see ast-grep-rules/no-front-end-deps-in-core.yml) ---
 clap = { version = "4.6.4", features = ["derive"] }

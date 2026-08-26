@@ -3,7 +3,7 @@
 //! Runs ONLY under `--features qwen-oracle` (heavy: loads the actual Qwen2.5-Coder
 //! tokenizer and replays the whole gold corpus token-by-token through the real
 //! byte-level BPE). It is a `just qwen-oracle` local/on-demand gate and the
-//! nightly `qwen-oracle.yml` workflow, **not** a per-PR gate. This is what the
+//! nightly `purecard-qwen-oracle.yml` workflow, **not** a per-PR gate. This is what the
 //! synthetic `bpe_split_soundness` reproducer
 //! approximates: it asserts L2 stays sound against the *actual* tokenizer merge
 //! boundaries (the H1/H2 class), where a token can straddle a lexeme boundary

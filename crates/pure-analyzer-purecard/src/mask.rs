@@ -151,7 +151,9 @@ impl BitMask {
     pub fn iter_ones(&self) -> impl Iterator<Item = u32> + '_ {
         self.words.iter().enumerate().flat_map(|(word, &bits)| {
             let base = (word as u32) * WORD_BITS;
-            (0..WORD_BITS).filter_map(move |bit| (bits & (1u64 << bit) != 0).then_some(base + bit))
+            (0..WORD_BITS).filter_map(move |bit| {
+                (bits & (1u64 << bit) != 0).then_some(base - /* ~ changed by cargo-mutants ~ */ bit)
+            })
         })
     }
 }

@@ -1,9 +1,10 @@
 # Methodology: Spec-Driven Development
 
-The kit ships domain-agnostic. Nothing about *what* the tool does is assumed, so
-the "what" has to enter deliberately and be written down before code is written.
-That entry happens in exactly three places, and spec-driven development is how they
-connect to a change.
+The repository's two products remain domain-agnostic with respect to customer
+data, but their product contracts are no longer empty. New behavior still enters
+deliberately and is written down before code. That entry happens in three root
+governance locations, with PureCARD's nested product specs supplying additional
+decoder-specific detail.
 
 ## Where the "what" lives
 
@@ -15,6 +16,11 @@ connect to a change.
 3. **[`domain-model.md`](../domain-model.md)** — the evolving elaboration of the
    domain: entities, workflows, invariants, vocabulary. Grows one feature at a
    time.
+
+The analyzer target design lives in
+[`docs/design/pure-analyzer-design.md`](../design/pure-analyzer-design.md), while
+PureCARD owns its nested [`docs/spec/`](../../crates/pure-analyzer-purecard/docs/spec/).
+Neither document makes the products one architecture.
 
 Code is downstream of all three. The generator implements *to* them; the reviewer
 checks *against* them.
@@ -28,9 +34,13 @@ A feature moves through three phases, driven by `/spec` and scaffolded by
 
 Turn the spec into an approach *before* writing code. Read the constitution and
 the current domain model, identify the entities and invariants involved, decide
-where each piece lands in the analysis-engine DAG (`lexer → syntax → parser →
-{model, resolve} → analysis → libpure → cli`, see ADR-0003), and name
-the tests that will prove it. Surface open questions here, not mid-implementation.
+which product or shared-infrastructure surface owns each piece, and name the
+tests that will prove it. Analyzer work follows the processing pipeline `lexer
+→ syntax → parser → model → resolve → analysis → libpure → cli`
+(see ADR-0003); Cargo edges point toward prerequisites, so resolve may depend on
+model and the reverse is forbidden. PureCARD is not a node in that DAG. Any
+proposal to share a parser or corpus across products must include a new ADR.
+Surface open questions here, not mid-implementation.
 
 ### implement
 
@@ -67,7 +77,7 @@ is the scarcest thing in the loop.
 
 ## Why spec-first
 
-Three payoffs, each central to the kit:
+Four payoffs, each central to the methodology:
 
 - **The reviewer gets an oracle.** "Does the diff match the spec?" is a far
   sharper question than "is this good?" — it turns review from taste into
@@ -78,3 +88,6 @@ Three payoffs, each central to the kit:
   `domain-model.md` and the constitution's domain section grow — deliberately,
   reviewably, one feature at a time — instead of the "what" living only in the
   agent's head for one session.
+- **Product ownership stays reviewable.** A spec names whether work belongs to
+  the analyzer, PureCARD, or shared repository infrastructure, so co-location
+  cannot silently turn into runtime coupling or shared corpus ownership.
