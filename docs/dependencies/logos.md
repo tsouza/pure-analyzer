@@ -21,8 +21,9 @@
   (the actual DFA-generation logic) plus `fnv` — a small, well-scoped
   transitive tree for a codegen crate. `cargo audit` clean (0 RustSec
   advisories against `logos`/`logos-derive`/`logos-codegen`/`fnv` in this
-  workspace's 64-crate dependency tree). Not yet in the local `cargo-vet`
-  store (first use in this repo).
+  workspace's dependency tree). The cargo-vet bootstrap records the current
+  `logos` version as an exact-version exemption, so future version changes fail
+  closed until an audit or updated exemption is reviewed.
 - **Unsafe-code surface — the one axis needing real scrutiny.** `logos`'s
   default codegen path can emit `unsafe` blocks in the state-machine it
   generates (a performance optimization). Since that code is generated

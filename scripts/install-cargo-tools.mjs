@@ -1,8 +1,7 @@
 #!/usr/bin/env bun
-// Installs pinned cargo-based dev tools with --locked (reproducible builds).
-// Cargo tools aren't distributed via mise, so this is the single source of
-// truth for versions; CI and local dev both run this script
-// (via `mise run install-cargo-tools`).
+// Installs pinned cargo-based dev tools that lack a checksum-locked mise binary.
+// cargo-vet is the deliberate exception and is pinned in .mise.toml/mise.lock;
+// the remaining tools build from their locked source releases here.
 import { $ } from "bun";
 
 const TOOLS = [

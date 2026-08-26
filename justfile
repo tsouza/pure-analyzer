@@ -209,6 +209,14 @@ audit:
 deny:
     cargo deny check
 
+# Verify committed dependency-review coverage without refreshing imports.
+vet:
+    cargo vet --locked
+
+# Show why a third-party crate is present in the workspace graph.
+tree crate:
+    cargo tree -i {{ quote(crate) }}
+
 # Unused-dependency scan.
 machete:
     cargo machete
@@ -353,7 +361,7 @@ ci:
 # nightly for cargo-fuzz's sanitizers) — so they are only enforced in CI. Run the
 # fuzz-smoke directly with `just fuzz diagnostics 60` if you have nightly. Use
 # before a PR when a change touches what the fast gate skips.
-ci-full: ci coverage test-mutation deny audit machete release-plz-check semver sweep postponed-markers docs test-scripts lint-actions zizmor
+ci-full: ci coverage test-mutation deny audit vet machete release-plz-check semver sweep postponed-markers docs test-scripts lint-actions zizmor
     @echo "ci-full: ran every locally reproducible PR gate; codspeed bench, the no-warnings log sweep, the opt-in public-api snapshot, and the fuzz-smoke are enforced only in CI"
 
 # Install git hooks (managed by lefthook.yml). Also run automatically by the

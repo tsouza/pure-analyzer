@@ -48,9 +48,11 @@ jobs:
               - 'Cargo.lock'
               - '.cargo/**'
               - 'deny.toml'
+              - 'supply-chain/**'
               - 'clippy.toml'
               - 'rust-toolchain.toml'
               - '.mise.toml'
+              - 'mise.lock'
               - 'rustfmt.toml'
               - 'public-api/**'
               - '.config/nextest.toml'
@@ -156,9 +158,9 @@ jobs:
             target/mutants-ffi
           if-no-files-found: error
 
-  # --- Supply chain: deny + audit + unused deps ----------------------------
+  # --- Supply chain: deny + audit + vet + unused deps ----------------------
   supply-chain:
-    name: deny / audit / unused-deps
+    name: deny / audit / vet / unused-deps
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
@@ -167,6 +169,9 @@ jobs:
         with:
           persist-credentials: false
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+        with:
+          install_args: --locked cargo-vet
       - uses: taiki-e/install-action@b6ff580856c41316412a0b9b60540fbc6f8c82cc # v2.86.7
         with:
           tool: cargo-deny,cargo-audit,cargo-machete,just
@@ -174,6 +179,8 @@ jobs:
         run: just deny
       - name: cargo audit
         run: just audit
+      - name: cargo vet
+        run: just vet
       - name: cargo machete (unused deps)
         run: just machete
       # Fail a PR on release-plz config drift instead of the post-merge trunk

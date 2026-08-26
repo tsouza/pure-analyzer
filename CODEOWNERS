@@ -14,6 +14,9 @@
 # Guardrail configuration — thresholds, bans, and gate wiring. Changes to these
 # paths need explicit maintainer judgment (see docs/methodology/self-learning.md).
 /deny.toml                  @tsouza
+/.mise.toml                @tsouza
+/mise.lock                  @tsouza
+/supply-chain/              @tsouza
 /rust-toolchain.toml        @tsouza
 /.github/                   @tsouza
 /xtask/                     @tsouza

@@ -6,10 +6,18 @@ documentation:
       - any-glob-to-any-file: ['**/*.md', 'docs/**']
 ci:
   - changed-files:
-      - any-glob-to-any-file: ['.github/**', '.mise.toml', 'lefthook.yml']
+      - any-glob-to-any-file: ['.github/**', '.mise.toml', 'mise.lock', 'lefthook.yml']
 dependencies:
   - changed-files:
-      - any-glob-to-any-file: ['**/Cargo.lock', 'bun.lock', 'package.json', '**/pyproject.toml', '**/uv.lock', 'deny.toml']
+      - any-glob-to-any-file:
+          - '**/Cargo.lock'
+          - 'bun.lock'
+          - 'package.json'
+          - '**/pyproject.toml'
+          - '**/uv.lock'
+          - 'deny.toml'
+          - 'mise.lock'
+          - 'supply-chain/**'
 purecard:
   - changed-files:
       - any-glob-to-any-file: ['crates/pure-analyzer-purecard/**', '.github/workflows/purecard-*.yml']
@@ -30,6 +38,8 @@ security:
           - '.cargo/audit.toml'
           - '.gitleaks.toml'
           - 'deny.toml'
+          - 'mise.lock'
+          - 'supply-chain/**'
           - 'SECURITY.md'
           - 'CODEOWNERS'
           - '.github/ISSUE_TEMPLATE/config.yml'

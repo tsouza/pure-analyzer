@@ -60,11 +60,11 @@ afterward — it is not a substitute for pinning correctly the first time.
 ## Run the tooling (through `just`)
 
 ```sh
-just lint            # includes cargo-deny gate
-cargo deny check licenses bans sources    # focused license/ban/source check
-cargo audit                                # RustSec advisories
-cargo vet check                            # supply-chain audit state
-cargo tree -i <crate>                      # what pulls it in / its transitive tree
+just lint           # clippy and compiler warnings
+just deny           # license, ban, advisory, and source policy
+just audit          # RustSec advisories
+just vet            # locked supply-chain audit coverage
+just tree <crate>   # reverse dependency tree
 ```
 
 ## Decision: adopt vs. write-our-own
@@ -97,6 +97,9 @@ cargo tree -i <crate>                      # what pulls it in / its transitive t
 **2. cargo-deny / cargo-vet entry.** On ADOPT, add the crate to
 `[workspace.dependencies]` and, if it needs an explicit exception, the entry in
 `deny.toml` (license/ban/source) and/or record the audit via
-`cargo vet certify <crate> <version>`. Loosening `deny.toml` (allowing a new
-license or ban skip) is a **protected-gate change** — the reviewer requires human
-sign-off (see `reviewer`).
+`cargo vet certify <crate> <version>` only after performing the source review
+that certification asserts. Otherwise, add the exact version as a visible
+exemption and record why. Loosening `deny.toml`, broadening an exemption, adding
+publisher trust, weakening criteria, remapping imported criteria, or removing
+audit/import coverage is a **protected-gate change** — the reviewer requires
+explicit maintainer sign-off (see `reviewer`).

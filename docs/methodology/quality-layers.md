@@ -16,6 +16,8 @@ The baseline every Rust project should have, wired as hard gates:
 - **cargo-deny** — license, ban, and advisory policy. The dependency-direction
   layering check lives in the `ast-grep` / `cargo xtask ci` gate, not here.
 - **cargo-audit** — known-vulnerability check on dependencies.
+- **cargo-vet** — committed review coverage for each exact dependency version;
+  imported audits and explicit exemptions are locked so CI cannot refresh them.
 
 If L0 is red, nothing else runs. It's the cheapest possible feedback.
 

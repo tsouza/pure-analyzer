@@ -134,10 +134,11 @@ just ci-full     # the full local mirror of the CI matrix
 `just ci` is the fast pre-PR gate — necessary but not sufficient. The heavier
 gates — coverage (`just coverage`), mutation (`just test-mutation`), the
 structural sweep (`just sweep`), and the supply-chain audits (`just deny` /
-`just audit` / `just machete`) — are separate targets that run as their own
-parallel CI jobs. Run the one that guards what you changed, or run them all at
-once with `just ci-full`, which chains every PR-blocking gate in CI's order
-(reporting the few environment-bound gates it can't reproduce locally).
+`just audit` / `just vet` / `just machete`) — are separate targets that run as
+their own parallel CI jobs. Run the one that guards what you changed, or run
+them all at once with `just ci-full`, which chains every PR-blocking gate in
+CI's order (reporting the few environment-bound gates it can't reproduce
+locally).
 
 If you need a finer-grained target than exists, add it to the `justfile` — `just`
 is the frontend, and a missing target is a bug in the frontend.
