@@ -989,13 +989,8 @@ mod tests {
         (tracker, pda)
     }
 
-    // Pre-existing, migration-exposed complexity debt (purecard's floating
-    // `rust-toolchain.toml` never checked this against current clippy; see
-    // grammar/pda.rs::step for the full explanation) — a test asserting many
-    // lexeme classes in one place, not new debt.
     #[test]
-    #[allow(clippy::cognitive_complexity)]
-    fn classify_distinguishes_every_lexeme_class() {
+    fn classify_distinguishes_structural_lexemes() {
         assert_eq!(classify(b""), Lexeme::Ws);
         assert_eq!(classify(b"  \n"), Lexeme::Ws);
         assert_eq!(classify(b"->"), Lexeme::Arrow);
@@ -1007,6 +1002,10 @@ mod tests {
         assert_eq!(classify(b","), Lexeme::Comma);
         assert_eq!(classify(b"("), Lexeme::Open);
         assert_eq!(classify(b"]"), Lexeme::Close);
+    }
+
+    #[test]
+    fn classify_distinguishes_value_lexemes() {
         assert_eq!(classify(b"42"), Lexeme::Number);
         assert_eq!(classify(b"-7"), Lexeme::Number);
         assert_eq!(classify(b"%2018-01-01"), Lexeme::Date);
