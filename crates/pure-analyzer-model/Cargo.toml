@@ -1,6 +1,6 @@
 [package]
 name = "pure-analyzer-model"
-description = "Model component of the pure-analyzer workspace."
+description = "Deterministic ModelGraph types and typed PMCD JSON ingestion for the Pure analyzer."
 edition.workspace = true
 version.workspace = true
 license.workspace = true
@@ -12,5 +12,11 @@ publish = false
 [lints]
 workspace = true
 
-# Scaffold only — no dependencies until the first model-loader feature lands.
 [dependencies]
+pure-analyzer-diagnostics.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
