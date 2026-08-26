@@ -995,4 +995,262 @@ mod tests {
         assert!(!probe.alive);
         assert!(!probe.consulted_ambient);
     }
+
+    #[test]
+    fn compiled_guard_matches_every_variant_both_ways() {
+        assert!(CompiledGuard::Always.matches(None));
+        assert!(CompiledGuard::Always.matches(Some(0)));
+
+        assert!(CompiledGuard::StackTopIs(0).matches(Some(0)));
+        assert!(!CompiledGuard::StackTopIs(0).matches(Some(1)));
+        assert!(!CompiledGuard::StackTopIs(0).matches(None));
+
+        assert!(!CompiledGuard::StackTopIsNot(0).matches(Some(0)));
+        assert!(CompiledGuard::StackTopIsNot(0).matches(Some(1)));
+        assert!(
+            !CompiledGuard::StackTopIsNot(0).matches(None),
+            "an empty stack is not 'some other frame'"
+        );
+
+        assert!(CompiledGuard::StackNonEmpty.matches(Some(0)));
+        assert!(!CompiledGuard::StackNonEmpty.matches(None));
+
+        assert!(CompiledGuard::StackEmpty.matches(None));
+        assert!(!CompiledGuard::StackEmpty.matches(Some(0)));
+    }
+
+    #[test]
+    fn same_guard_compares_stack_top_is_by_frame() {
+        assert!(same_guard(
+            CompiledGuard::StackTopIs(0),
+            CompiledGuard::StackTopIs(0)
+        ));
+        assert!(!same_guard(
+            CompiledGuard::StackTopIs(0),
+            CompiledGuard::StackTopIs(1)
+        ));
+        assert!(same_guard(
+            CompiledGuard::StackTopIsNot(0),
+            CompiledGuard::StackTopIsNot(0)
+        ));
+        assert!(!same_guard(
+            CompiledGuard::StackTopIsNot(0),
+            CompiledGuard::StackTopIsNot(1)
+        ));
+    }
+
+    /// A spec exercising two distinct frames, so a stack-top query can
+    /// distinguish `Some(0)` from `Some(1)`, not just `None` from `Some(_)`.
+    const TWO_FRAME_SPEC: &str = r#"{
+        "version": "1",
+        "start": "start",
+        "frames": ["alpha", "beta"],
+        "states": {
+            "start": { "rules": [
+                { "match": { "kind": "exact", "byte": 97 }, "action": { "kind": "push", "frame": "alpha", "state": "in_alpha" } },
+                { "match": { "kind": "exact", "byte": 98 }, "action": { "kind": "push", "frame": "beta", "state": "in_beta" } }
+            ] },
+            "in_alpha": { "accepting": true, "rules": [
+                { "match": { "kind": "exact", "byte": 41 }, "guard": { "kind": "stack_top_is", "frame": "alpha" }, "action": { "kind": "pop", "state": "start" } },
+                { "match": { "kind": "any" }, "guard": { "kind": "stack_top_is_not", "frame": "alpha" }, "action": { "kind": "dead" } }
+            ] },
+            "in_beta": { "accepting": true, "rules": [
+                { "match": { "kind": "exact", "byte": 41 }, "guard": { "kind": "stack_top_is", "frame": "beta" }, "action": { "kind": "pop", "state": "start" } }
+            ] }
+        }
+    }"#;
+
+    #[test]
+    fn rtn_pda_state_reports_the_current_dense_id() {
+        let automaton = compile(TWO_FRAME_SPEC);
+        let mut pda = RtnPda::new(&automaton);
+        assert_eq!(pda.state(), automaton.start());
+        assert!(pda.advance(b'a'));
+        assert_ne!(pda.state(), automaton.start());
+    }
+
+    #[test]
+    fn rtn_pda_stack_top_distinguishes_which_frame_is_on_top() {
+        let automaton = compile(TWO_FRAME_SPEC);
+        let mut pda = RtnPda::new(&automaton);
+        assert_eq!(
+            pda.stack_top(),
+            None,
+            "a fresh automaton has an empty stack"
+        );
+        assert!(pda.advance(b'a'));
+        let alpha_top = pda.stack_top().expect("alpha was pushed");
+        pda.reset();
+        assert!(pda.advance(b'b'));
+        let beta_top = pda.stack_top().expect("beta was pushed");
+        assert_ne!(
+            alpha_top, beta_top,
+            "two distinct frame kinds must report distinct ids"
+        );
+    }
+
+    #[test]
+    fn rtn_pda_reset_restores_the_initial_configuration() {
+        let automaton = compile(TWO_FRAME_SPEC);
+        let mut pda = RtnPda::new(&automaton);
+        assert!(pda.advance(b'a'));
+        assert_ne!(pda.state(), automaton.start());
+        assert!(pda.stack_top().is_some());
+        pda.reset();
+        assert_eq!(pda.state(), automaton.start());
+        assert_eq!(pda.stack_top(), None);
+    }
+
+    #[test]
+    fn rtn_pda_admits_reports_whether_bytes_keep_the_configuration_alive() {
+        let automaton = compile(TWO_FRAME_SPEC);
+        let pda = RtnPda::new(&automaton);
+        let mut scratch = Vec::new();
+        assert!(
+            pda.admits(b"a", &mut scratch),
+            "a live byte from the start state must be admitted"
+        );
+        assert!(
+            !pda.admits(b")", &mut scratch),
+            "a closer with nothing to close must not be admitted"
+        );
+    }
+
+    #[test]
+    fn state_name_and_frame_name_report_the_declared_names() {
+        let automaton = compile(TWO_FRAME_SPEC);
+        assert_eq!(automaton.state_name(automaton.start()), "start");
+        assert_eq!(automaton.state_name(999), "unknown");
+        // `in_alpha` pushes `alpha` (frame id resolved via the same sorted
+        // order `compile_v1` assigns ids in — `alpha` < `beta`).
+        assert_eq!(automaton.frame_name(Some(0)), "alpha");
+        assert_eq!(automaton.frame_name(Some(1)), "beta");
+        assert_eq!(automaton.frame_name(None), "none");
+        assert_eq!(automaton.frame_name(Some(999)), "unknown");
+    }
+
+    #[test]
+    fn state_count_matches_the_declared_state_count() {
+        let automaton = compile(TWO_FRAME_SPEC);
+        assert_eq!(automaton.state_count(), 3);
+        let literal_ok = compile(LITERAL_OK_SPEC);
+        assert_eq!(literal_ok.state_count(), 3);
+    }
+
+    /// Build a minimal valid spec with `state_count` states (a single
+    /// self-looping accepting state, then `state_count - 1` unreachable
+    /// filler states) — used to probe the `MAX_STATES` boundary without
+    /// hand-writing hundreds of states.
+    fn spec_with_state_count(state_count: usize) -> String {
+        let mut states = String::from(
+            r#""s0": {"accepting": true, "rules": [{"match": {"kind": "any"}, "action": {"kind": "next", "state": "s0"}}]}"#,
+        );
+        for i in 1..state_count {
+            states.push_str(&format!(r#","s{i}": {{"rules": []}}"#));
+        }
+        format!(r#"{{"version": "1", "start": "s0", "frames": [], "states": {{{states}}}}}"#)
+    }
+
+    #[test]
+    fn exactly_max_states_compiles_but_one_more_is_rejected() {
+        let at_limit = spec_with_state_count(MAX_STATES);
+        compile(&at_limit);
+        let spec = GrammarSpec::parse(&spec_with_state_count(MAX_STATES + 1)).expect("valid JSON");
+        let error = CompiledAutomaton::compile(&spec).expect_err("one over MAX_STATES");
+        assert!(matches!(error, SpecError::TooManyStates { .. }));
+    }
+
+    /// Build a minimal valid spec whose single state declares `rule_count`
+    /// rules, each testing a distinct byte (so none shadow one another,
+    /// requiring `rule_count <= 256`) — used to probe the
+    /// `MAX_RULES_PER_STATE` boundary independently of `MAX_FRAMES`.
+    fn spec_with_rule_count(rule_count: usize) -> String {
+        assert!(rule_count <= 256, "distinct byte values are exhausted");
+        let rules: Vec<String> = (0..rule_count)
+            .map(|byte| {
+                format!(
+                    r#"{{"match": {{"kind": "exact", "byte": {byte}}}, "action": {{"kind": "dead"}}}}"#
+                )
+            })
+            .collect();
+        format!(
+            r#"{{"version": "1", "start": "s0", "frames": [], "states": {{"s0": {{"accepting": true, "rules": [{}]}}}}}}"#,
+            rules.join(",")
+        )
+    }
+
+    #[test]
+    fn exactly_max_rules_per_state_compiles_but_one_more_is_rejected() {
+        let at_limit = spec_with_rule_count(MAX_RULES_PER_STATE);
+        compile(&at_limit);
+        let spec =
+            GrammarSpec::parse(&spec_with_rule_count(MAX_RULES_PER_STATE + 1)).expect("valid JSON");
+        let error = CompiledAutomaton::compile(&spec).expect_err("one over MAX_RULES_PER_STATE");
+        assert!(matches!(error, SpecError::TooManyRules { .. }));
+    }
+
+    /// Build a minimal valid spec with `total_rules` total rules spread
+    /// evenly (well under `MAX_RULES_PER_STATE` each) across as many states
+    /// as needed — used to probe the `MAX_TOTAL_RULES` boundary
+    /// independently of the per-state bound.
+    fn spec_with_total_rule_count(total_rules: usize) -> String {
+        // Exactly `MAX_RULES_PER_STATE`, so reaching `MAX_TOTAL_RULES` needs
+        // only `MAX_TOTAL_RULES / MAX_RULES_PER_STATE` states — comfortably
+        // under `MAX_STATES` — rather than tripping that bound first.
+        const PER_STATE: usize = MAX_RULES_PER_STATE;
+        let state_count = total_rules.div_ceil(PER_STATE);
+        let mut states = Vec::new();
+        let mut remaining = total_rules;
+        for s in 0..state_count {
+            let here = remaining.min(PER_STATE);
+            remaining -= here;
+            let next = format!("s{}", (s + 1) % state_count);
+            let rules: Vec<String> = (0..here)
+                .map(|i| {
+                    let byte = (s * PER_STATE + i) % 256;
+                    format!(
+                        r#"{{"match": {{"kind": "exact", "byte": {byte}}}, "action": {{"kind": "next", "state": "{next}"}}}}"#
+                    )
+                })
+                .collect();
+            states.push(format!(
+                r#""s{s}": {{"accepting": true, "rules": [{}]}}"#,
+                rules.join(",")
+            ));
+        }
+        format!(
+            r#"{{"version": "1", "start": "s0", "frames": [], "states": {{{}}}}}"#,
+            states.join(",")
+        )
+    }
+
+    #[test]
+    fn exactly_max_total_rules_compiles_but_one_more_is_rejected() {
+        let at_limit = spec_with_total_rule_count(MAX_TOTAL_RULES);
+        compile(&at_limit);
+        let spec = GrammarSpec::parse(&spec_with_total_rule_count(MAX_TOTAL_RULES + 1))
+            .expect("valid JSON");
+        let error = CompiledAutomaton::compile(&spec).expect_err("one over MAX_TOTAL_RULES");
+        assert!(matches!(error, SpecError::TooManyTotalRules { .. }));
+    }
+
+    /// Build a minimal valid spec declaring `frame_count` distinct frame
+    /// names, none of them referenced by any rule — used to probe the
+    /// `MAX_FRAMES` boundary independently of the state/rule bounds.
+    fn spec_with_frame_count(frame_count: usize) -> String {
+        let frames: Vec<String> = (0..frame_count).map(|i| format!(r#""f{i}""#)).collect();
+        format!(
+            r#"{{"version": "1", "start": "s0", "frames": [{}], "states": {{"s0": {{"accepting": true, "rules": []}}}}}}"#,
+            frames.join(",")
+        )
+    }
+
+    #[test]
+    fn exactly_max_frames_compiles_but_one_more_is_rejected() {
+        let at_limit = spec_with_frame_count(MAX_FRAMES);
+        compile(&at_limit);
+        let spec = GrammarSpec::parse(&spec_with_frame_count(MAX_FRAMES + 1)).expect("valid JSON");
+        let error = CompiledAutomaton::compile(&spec).expect_err("one over MAX_FRAMES");
+        assert!(matches!(error, SpecError::TooManyFrames { .. }));
+    }
 }

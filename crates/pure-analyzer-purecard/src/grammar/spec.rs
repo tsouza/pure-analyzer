@@ -391,3 +391,28 @@ impl GrammarSpec {
         Ok(serde_json::from_str(text)?)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{ByteTest, GrammarSpec};
+
+    #[test]
+    fn display_names_the_version() {
+        let spec = GrammarSpec::parse(
+            r#"{"version": "1", "start": "s", "frames": [], "states": {"s": {}}}"#,
+        )
+        .expect("valid spec");
+        assert_eq!(spec.to_string(), "grammar spec v1");
+    }
+
+    #[test]
+    fn none_of_admits_every_byte_except_the_listed_ones() {
+        let test = ByteTest::NoneOf {
+            bytes: vec![b'\'', b'"'],
+        };
+        assert!(!test.matches(b'\''), "a listed byte must not match");
+        assert!(!test.matches(b'"'), "a listed byte must not match");
+        assert!(test.matches(b'x'), "an unlisted byte must match");
+        assert!(test.matches(b' '), "an unlisted byte must match");
+    }
+}

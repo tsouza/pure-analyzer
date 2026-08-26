@@ -486,7 +486,7 @@ impl ByteRecognizer for DecoderSession<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::DecoderSession;
+    use super::{Cursor, DecoderSession};
     use crate::error::DecodeError;
     use crate::grammar::compiled::CompiledGrammar;
     use crate::recognizer::ByteRecognizer;
@@ -497,6 +497,24 @@ mod tests {
     /// byte-recognizer surface, which does not consult the vocab.
     fn l1_grammar() -> CompiledGrammar {
         CompiledGrammar::compile(Vocab::from_byte_tokens(Vec::new(), 0))
+    }
+
+    #[test]
+    fn cursor_stack_top_present_tracks_the_live_stack_not_a_constant() {
+        let grammar = l1_grammar();
+        let mut cursor = Cursor::new(&grammar);
+        assert!(
+            !cursor.stack_top_present(),
+            "a fresh cursor has an empty stack"
+        );
+        // `(` opens a `Paren` frame from `ExpectValue` after a source.
+        for &byte in b"|X.all()->take(" {
+            assert!(matches!(cursor.advance_byte(&grammar, byte), Ok(())));
+        }
+        assert!(
+            cursor.stack_top_present(),
+            "a pushed frame must be reported present"
+        );
     }
 
     /// A byte-token grammar: one single-byte token per value, so token id == byte.
@@ -778,5 +796,56 @@ mod tests {
             session.allowed_mask().test(eos),
             "completed stream allows EOS"
         );
+    }
+
+    /// Accepts exactly the literal `"ok"` — used to drive a spec-compiled
+    /// (`Cursor::Spec`) session, mirroring `grammar::compile::tests`'
+    /// `LITERAL_OK_SPEC` but kept local so this module doesn't depend on a
+    /// `#[cfg(test)]`-only item from another module.
+    const LITERAL_OK_SPEC: &str = r#"{
+        "version": "1",
+        "start": "start",
+        "frames": [],
+        "states": {
+            "start": { "rules": [
+                { "match": { "kind": "exact", "byte": 111 }, "action": { "kind": "next", "state": "saw_o" } }
+            ] },
+            "saw_o": { "rules": [
+                { "match": { "kind": "exact", "byte": 107 }, "action": { "kind": "next", "state": "done" } }
+            ] },
+            "done": { "accepting": true, "rules": [] }
+        }
+    }"#;
+
+    fn spec_vocab() -> Vocab {
+        // 0: the whole valid literal; 1: a token that dies on its second byte
+        // (alive on `o`, dead on `x` — never reaching `saw_o`'s `k` rule).
+        Vocab::from_byte_tokens(vec![b"ok".to_vec(), b"ox".to_vec()], 2)
+    }
+
+    #[test]
+    fn a_spec_compiled_session_streams_its_literal_and_completes() {
+        let grammar =
+            crate::grammar::compiled::CompiledGrammar::from_spec(LITERAL_OK_SPEC, spec_vocab())
+                .expect("valid spec");
+        let mut session = DecoderSession::new(&grammar);
+        session.accept_token(0).expect("the literal is admissible");
+        assert!(session.is_complete());
+    }
+
+    #[test]
+    fn a_spec_compiled_session_rejects_a_token_that_dies_partway_through() {
+        let grammar =
+            crate::grammar::compiled::CompiledGrammar::from_spec(LITERAL_OK_SPEC, spec_vocab())
+                .expect("valid spec");
+        let mut session = DecoderSession::new(&grammar);
+        let err = session
+            .accept_token(1)
+            .expect_err("the second byte dead-ends the spec-compiled automaton");
+        assert!(matches!(err, DecodeError::InadmissibleToken { id: 1 }));
+        // The rejected token must leave the session untouched (§8.5 rollback),
+        // exactly like the fixed-engine contract.
+        assert_eq!(session.offset(), 0);
+        assert!(!session.is_complete());
     }
 }
