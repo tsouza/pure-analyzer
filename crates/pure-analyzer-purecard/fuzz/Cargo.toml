@@ -51,6 +51,13 @@ test = false
 doc = false
 bench = false
 
+[[bin]]
+name = "spec_equivalence"
+path = "fuzz_targets/spec_equivalence.rs"
+test = false
+doc = false
+bench = false
+
 [profile.release]
 debug = 1
 
