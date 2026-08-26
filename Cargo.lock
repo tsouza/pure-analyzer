@@ -1153,6 +1153,13 @@ dependencies = [
 [[package]]
 name = "pure-analyzer-model"
 version = "0.1.0"
+dependencies = [
+ "proptest",
+ "pure-analyzer-diagnostics",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
 
 [[package]]
 name = "pure-analyzer-parser"

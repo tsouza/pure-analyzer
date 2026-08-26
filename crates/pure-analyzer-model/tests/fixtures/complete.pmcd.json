@@ -1,0 +1,262 @@
+{
+  "_type": "data",
+  "elements": [
+    {
+      "_type": "mapping",
+      "name": 17,
+      "package": false,
+      "content": "ignored out-of-scope record"
+    },
+    {
+      "_type": "class",
+      "package": "model",
+      "name": "Entity",
+      "superTypes": [],
+      "stereotypes": [],
+      "properties": [],
+      "qualifiedProperties": []
+    },
+    {
+      "_type": "class",
+      "package": "model",
+      "name": "Product",
+      "superTypes": [],
+      "stereotypes": [
+        {
+          "profile": "meta::pure::profiles::temporal",
+          "value": "businesstemporal"
+        }
+      ],
+      "properties": [
+        {
+          "name": "id",
+          "genericType": {
+            "rawType": {
+              "_type": "packageableType",
+              "fullPath": "Integer"
+            },
+            "typeArguments": []
+          },
+          "multiplicity": {
+            "lowerBound": 1,
+            "upperBound": 1
+          }
+        }
+      ],
+      "qualifiedProperties": [
+        {
+          "name": "priceAfter",
+          "returnGenericType": {
+            "rawType": {
+              "_type": "packageableType",
+              "fullPath": "Decimal"
+            },
+            "typeArguments": []
+          },
+          "returnMultiplicity": {
+            "lowerBound": 0,
+            "upperBound": 1
+          },
+          "stereotypes": [],
+          "parameters": [
+            {
+              "genericType": {
+                "rawType": {
+                  "_type": "packageableType",
+                  "fullPath": "StrictDate"
+                },
+                "typeArguments": []
+              }
+            }
+          ]
+        },
+        {
+          "name": "quotes",
+          "returnGenericType": {
+            "rawType": {
+              "_type": "packageableType",
+              "fullPath": "model::Quote"
+            },
+            "typeArguments": []
+          },
+          "returnMultiplicity": {
+            "lowerBound": 0,
+            "upperBound": 1
+          },
+          "stereotypes": [
+            {
+              "profile": "meta::pure::profiles::milestoning",
+              "value": "generatedmilestoningproperty"
+            }
+          ],
+          "parameters": []
+        },
+        {
+          "name": "quotesAllVersions",
+          "returnGenericType": {
+            "rawType": {
+              "_type": "packageableType",
+              "fullPath": "model::Quote"
+            },
+            "typeArguments": []
+          },
+          "returnMultiplicity": {
+            "lowerBound": 0
+          },
+          "stereotypes": [
+            {
+              "profile": "meta::pure::profiles::milestoning",
+              "value": "generatedmilestoningproperty"
+            }
+          ],
+          "parameters": []
+        },
+        {
+          "name": "quotesAllVersionsInRange",
+          "returnGenericType": {
+            "rawType": {
+              "_type": "packageableType",
+              "fullPath": "model::Quote"
+            },
+            "typeArguments": []
+          },
+          "returnMultiplicity": {
+            "lowerBound": 0,
+            "upperBound": null
+          },
+          "stereotypes": [
+            {
+              "profile": "meta::pure::profiles::milestoning",
+              "value": "generatedmilestoningproperty"
+            }
+          ],
+          "parameters": []
+        },
+        {
+          "name": "quotesEdge",
+          "genericType": {
+            "rawType": {
+              "_type": "packageableType",
+              "fullPath": "model::Quote"
+            },
+            "typeArguments": []
+          },
+          "returnMultiplicity": {
+            "lowerBound": 0
+          },
+          "stereotypes": [
+            {
+              "profile": "meta::pure::profiles::milestoning",
+              "value": "generatedmilestoningproperty"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "_type": "class",
+      "package": "model",
+      "name": "Quote",
+      "superTypes": [],
+      "stereotypes": [],
+      "properties": [],
+      "qualifiedProperties": []
+    },
+    {
+      "_type": "class",
+      "package": "model",
+      "name": "Trade",
+      "superTypes": [
+        {
+          "path": "model::Entity",
+          "type": "CLASS"
+        }
+      ],
+      "stereotypes": [
+        {
+          "profile": "meta::pure::profiles::temporal",
+          "value": "bitemporal"
+        }
+      ],
+      "properties": [
+        {
+          "name": "quantity",
+          "genericType": {
+            "rawType": {
+              "_type": "packageableType",
+              "fullPath": "Integer"
+            },
+            "typeArguments": []
+          },
+          "multiplicity": {
+            "lowerBound": 1,
+            "upperBound": 1
+          }
+        }
+      ],
+      "qualifiedProperties": [
+        {
+          "name": "product",
+          "returnGenericType": {
+            "rawType": {
+              "_type": "packageableType",
+              "fullPath": "model::Product"
+            },
+            "typeArguments": []
+          },
+          "returnMultiplicity": {
+            "lowerBound": 0,
+            "upperBound": 1
+          },
+          "stereotypes": [
+            {
+              "profile": "meta::pure::profiles::milestoning",
+              "value": "generatedmilestoningproperty"
+            }
+          ],
+          "parameters": []
+        }
+      ]
+    },
+    {
+      "_type": "association",
+      "package": "model",
+      "name": "Trade_Product",
+      "stereotypes": [
+        {
+          "profile": "meta::pure::profiles::temporal",
+          "value": "processingtemporal"
+        }
+      ],
+      "properties": [
+        {
+          "name": "trades",
+          "genericType": {
+            "rawType": {
+              "_type": "packageableType",
+              "fullPath": "model::Trade"
+            },
+            "typeArguments": []
+          },
+          "multiplicity": {
+            "lowerBound": 0
+          }
+        },
+        {
+          "name": "product",
+          "genericType": {
+            "rawType": {
+              "_type": "packageableType",
+              "fullPath": "model::Product"
+            },
+            "typeArguments": []
+          },
+          "multiplicity": {
+            "lowerBound": 1,
+            "upperBound": 1
+          }
+        }
+      ]
+    }
+  ]
+}

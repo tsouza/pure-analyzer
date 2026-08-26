@@ -1,0 +1,734 @@
+use std::collections::BTreeMap;
+use std::path::PathBuf;
+
+use pure_analyzer_diagnostics::{Diagnostic, Label, Severity, TextRange, TextSize};
+use serde_json::Value;
+
+use crate::error::{ModelError, ModelErrorKind};
+use crate::raw::{
+    RawAssociation, RawClass, RawGenericType, RawMultiplicity, RawProperty, RawQualifiedProperty,
+    RawStereotype,
+};
+use crate::{
+    AssocInfo, AssociationEndInfo, ClassId, ClassInfo, MODEL_MERGE_CONFLICT, ModelGraph,
+    ModelSourceInfo, Multiplicity, Name, PropInfo, Provenance, QName, QpInfo, QpKind, SourceId,
+    Temporal, TypeRef,
+};
+
+const DOCUMENT_TYPE: &str = "data";
+const CLASS_TYPE: &str = "class";
+const ASSOCIATION_TYPE: &str = "association";
+const TEMPORAL_PROFILE: &str = "meta::pure::profiles::temporal";
+const TEMPORAL_PROFILE_PROTOCOL: &str = "temporal";
+const MILESTONING_PROFILE: &str = "meta::pure::profiles::milestoning";
+const MILESTONING_PROFILE_PROTOCOL: &str = "milestoning";
+const GENERATED_MILESTONING_PROPERTY: &str = "generatedmilestoningproperty";
+const BITEMPORAL: &str = "bitemporal";
+const BUSINESS_TEMPORAL: &str = "businesstemporal";
+const PROCESSING_TEMPORAL: &str = "processingtemporal";
+const ALL_VERSIONS_SUFFIX: &str = "AllVersions";
+const ALL_VERSIONS_IN_RANGE_SUFFIX: &str = "AllVersionsInRange";
+
+/// Borrowed in-memory PMCD JSON with a stable diagnostic label.
+#[derive(Debug, Clone, Copy)]
+pub struct PmcdDocument<'a> {
+    label: &'a str,
+    json: &'a str,
+}
+
+impl<'a> PmcdDocument<'a> {
+    /// Construct an in-memory PMCD input.
+    #[must_use]
+    pub const fn new(label: &'a str, json: &'a str) -> Self {
+        Self { label, json }
+    }
+
+    /// Source label used in errors and merge diagnostics.
+    #[must_use]
+    pub const fn label(self) -> &'a str {
+        self.label
+    }
+
+    /// Borrow the PMCD JSON text.
+    #[must_use]
+    pub const fn json(self) -> &'a str {
+        self.json
+    }
+}
+
+/// Load and merge PMCD files in caller-supplied order.
+///
+/// A later source replaces an earlier class or association with the same
+/// packageable path and adds a `PUR9000` warning to [`ModelGraph::diagnostics`].
+/// Irrelevant element kinds are ignored. Relevant records, association
+/// direction, and every multiplicity are validated before a graph is returned.
+///
+/// # Errors
+///
+/// Returns [`ModelError`] for I/O, malformed JSON, an invalid class or
+/// association, or a merged-graph invariant violation.
+pub fn load_pmcd_files(paths: &[PathBuf]) -> Result<ModelGraph, ModelError> {
+    let mut merger = ModelMerger::default();
+    for (index, path) in paths.iter().enumerate() {
+        let source = source_id(index)?;
+        let json = std::fs::read_to_string(path).map_err(|error| ModelError::Read {
+            path: path.clone(),
+            source: error,
+        })?;
+        merger.ingest(source, path.display().to_string(), &json)?;
+    }
+    merger.finish()
+}
+
+/// Load and merge borrowed PMCD documents in caller-supplied order.
+///
+/// This is semantically identical to [`load_pmcd_files`] and is suitable for
+/// LSP hosts, tests, and callers that fetched PMCD through their own boundary.
+/// The loader itself performs no network access.
+///
+/// # Errors
+///
+/// Returns [`ModelError`] for malformed JSON, an invalid class or association,
+/// or a merged-graph invariant violation.
+pub fn load_pmcd_documents(documents: &[PmcdDocument<'_>]) -> Result<ModelGraph, ModelError> {
+    let mut merger = ModelMerger::default();
+    for (index, document) in documents.iter().copied().enumerate() {
+        let source = source_id(index)?;
+        merger.ingest(source, document.label.to_owned(), document.json)?;
+    }
+    merger.finish()
+}
+
+fn source_id(index: usize) -> Result<SourceId, ModelError> {
+    u32::try_from(index)
+        .map(SourceId::new)
+        .map_err(|_| ModelError::TooManySources { index })
+}
+
+#[derive(Debug)]
+enum FragmentElement {
+    Class(ClassInfo),
+    Association(AssocDraft),
+}
+
+impl FragmentElement {
+    const fn source(&self) -> SourceId {
+        match self {
+            Self::Class(class) => class.source(),
+            Self::Association(association) => association.source,
+        }
+    }
+}
+
+#[derive(Debug)]
+struct AssocDraft {
+    path: QName,
+    first: PropInfo,
+    second: PropInfo,
+    temporal: Option<Temporal>,
+    source: SourceId,
+}
+
+#[derive(Debug, Default)]
+struct ModelMerger {
+    elements: BTreeMap<QName, FragmentElement>,
+    sources: Vec<ModelSourceInfo>,
+    diagnostics: Vec<Diagnostic>,
+}
+
+impl ModelMerger {
+    fn ingest(&mut self, source: SourceId, label: String, json: &str) -> Result<(), ModelError> {
+        let fragment = parse_document(&label, json, source)?;
+        self.sources.push(ModelSourceInfo::new(
+            source,
+            label.clone(),
+            Provenance::Pmcd,
+        ));
+        for (path, replacement) in fragment {
+            if let Some(previous) = self.elements.insert(path.clone(), replacement) {
+                let diagnostic = self.merge_diagnostic(&path, previous.source(), source, &label);
+                self.diagnostics.push(diagnostic);
+            }
+        }
+        Ok(())
+    }
+
+    fn merge_diagnostic(
+        &self,
+        path: &QName,
+        previous: SourceId,
+        replacement: SourceId,
+        replacement_label: &str,
+    ) -> Diagnostic {
+        let previous_label = self
+            .sources
+            .get(previous.index() as usize)
+            .map_or("<unknown source>", ModelSourceInfo::label);
+        let empty = TextRange::empty(TextSize::new(0));
+        Diagnostic::builder(
+            MODEL_MERGE_CONFLICT,
+            Severity::Warning,
+            format!(
+                "model element `{path}` from `{replacement_label}` replaces the definition from `{previous_label}`"
+            ),
+            Label::with_note(
+                replacement.file_id(),
+                empty,
+                format!("winning definition from `{replacement_label}`"),
+            ),
+        )
+        .secondary(Label::with_note(
+            previous.file_id(),
+            empty,
+            format!("replaced definition from `{previous_label}`"),
+        ))
+        .build()
+    }
+
+    fn finish(self) -> Result<ModelGraph, ModelError> {
+        let mut classes = BTreeMap::new();
+        let mut associations = Vec::new();
+        for (path, element) in self.elements {
+            match element {
+                FragmentElement::Class(class) => {
+                    classes.insert(path, class);
+                }
+                FragmentElement::Association(association) => associations.push(association),
+            }
+        }
+        let materialized = materialize_associations(&mut classes, associations)?;
+        let (by_path, paths_by_id) = index_classes(&classes)?;
+        Ok(ModelGraph {
+            classes,
+            by_path,
+            paths_by_id,
+            associations: materialized,
+            sources: self.sources,
+            diagnostics: self.diagnostics,
+        })
+    }
+}
+
+fn parse_document(
+    source_name: &str,
+    json: &str,
+    source: SourceId,
+) -> Result<BTreeMap<QName, FragmentElement>, ModelError> {
+    let document: Value = serde_json::from_str(json).map_err(|error| ModelError::Json {
+        source_name: source_name.to_owned(),
+        source: error,
+    })?;
+    let object = document
+        .as_object()
+        .ok_or_else(|| ModelError::InvalidDocument {
+            source_name: source_name.to_owned(),
+            message: "top level must be an object".to_owned(),
+        })?;
+    validate_document_type(source_name, object.get("_type"))?;
+    let elements = object
+        .get("elements")
+        .and_then(Value::as_array)
+        .ok_or_else(|| ModelError::InvalidDocument {
+            source_name: source_name.to_owned(),
+            message: "`elements` must be an array".to_owned(),
+        })?;
+    lower_elements(source_name, elements, source)
+}
+
+fn validate_document_type(source_name: &str, value: Option<&Value>) -> Result<(), ModelError> {
+    let Some(value) = value else {
+        return Ok(());
+    };
+    if value.as_str() == Some(DOCUMENT_TYPE) {
+        return Ok(());
+    }
+    Err(ModelError::InvalidDocument {
+        source_name: source_name.to_owned(),
+        message: "`_type`, when present, must be `data`".to_owned(),
+    })
+}
+
+fn lower_elements(
+    source_name: &str,
+    elements: &[Value],
+    source: SourceId,
+) -> Result<BTreeMap<QName, FragmentElement>, ModelError> {
+    let mut lowered = BTreeMap::new();
+    for (index, element) in elements.iter().enumerate() {
+        let kind = element_kind(source_name, index, element)?;
+        let normalized = match kind {
+            CLASS_TYPE => Some(lower_class_element(source_name, index, element, source)?),
+            ASSOCIATION_TYPE => Some(lower_association_element(
+                source_name,
+                index,
+                element,
+                source,
+            )?),
+            _ => None,
+        };
+        if let Some((path, normalized)) = normalized
+            && lowered.insert(path.clone(), normalized).is_some()
+        {
+            return Err(invalid_element(
+                source_name,
+                index,
+                kind,
+                ModelErrorKind::DuplicateElement { path },
+            ));
+        }
+    }
+    Ok(lowered)
+}
+
+fn element_kind<'a>(
+    source_name: &str,
+    index: usize,
+    element: &'a Value,
+) -> Result<&'a str, ModelError> {
+    let Some(object) = element.as_object() else {
+        return Err(invalid_element(
+            source_name,
+            index,
+            "unknown",
+            ModelErrorKind::InvalidRecord("element must be an object".to_owned()),
+        ));
+    };
+    object.get("_type").and_then(Value::as_str).ok_or_else(|| {
+        invalid_element(
+            source_name,
+            index,
+            "unknown",
+            ModelErrorKind::InvalidRecord("`_type` must be a string".to_owned()),
+        )
+    })
+}
+
+fn lower_class_element(
+    source_name: &str,
+    index: usize,
+    value: &Value,
+    source: SourceId,
+) -> Result<(QName, FragmentElement), ModelError> {
+    let raw: RawClass = serde_json::from_value(value.clone()).map_err(|error| {
+        invalid_element(
+            source_name,
+            index,
+            CLASS_TYPE,
+            ModelErrorKind::InvalidRecord(error.to_string()),
+        )
+    })?;
+    let class = lower_class(raw, source)
+        .map_err(|kind| invalid_element(source_name, index, CLASS_TYPE, kind))?;
+    Ok((class.path().clone(), FragmentElement::Class(class)))
+}
+
+fn lower_association_element(
+    source_name: &str,
+    index: usize,
+    value: &Value,
+    source: SourceId,
+) -> Result<(QName, FragmentElement), ModelError> {
+    let raw: RawAssociation = serde_json::from_value(value.clone()).map_err(|error| {
+        invalid_element(
+            source_name,
+            index,
+            ASSOCIATION_TYPE,
+            ModelErrorKind::InvalidRecord(error.to_string()),
+        )
+    })?;
+    let association = lower_association(raw, source)
+        .map_err(|kind| invalid_element(source_name, index, ASSOCIATION_TYPE, kind))?;
+    Ok((
+        association.path.clone(),
+        FragmentElement::Association(association),
+    ))
+}
+
+fn invalid_element(
+    source_name: &str,
+    element_index: usize,
+    element_kind: &str,
+    kind: ModelErrorKind,
+) -> ModelError {
+    ModelError::InvalidElement {
+        source_name: source_name.to_owned(),
+        element_index,
+        element_kind: element_kind.to_owned(),
+        kind: Box::new(kind),
+    }
+}
+
+fn lower_class(raw: RawClass, source: SourceId) -> Result<ClassInfo, ModelErrorKind> {
+    let path = QName::from_package_and_name(&raw.package, &raw.name)?;
+    let temporal = lower_temporal(&path, &raw.stereotypes)?;
+    let supertypes = raw
+        .super_types
+        .into_iter()
+        .map(|supertype| QName::new(supertype.into_string()).map_err(ModelErrorKind::from))
+        .collect::<Result<Vec<_>, _>>()?;
+    let properties = lower_properties(&path, raw.properties)?;
+    let qualified_properties = lower_qualified_properties(&path, raw.qualified_properties)?;
+    Ok(ClassInfo::new(
+        path,
+        supertypes,
+        temporal,
+        properties,
+        qualified_properties,
+        source,
+    ))
+}
+
+fn lower_properties(
+    class: &QName,
+    properties: Vec<RawProperty>,
+) -> Result<BTreeMap<Name, PropInfo>, ModelErrorKind> {
+    let mut lowered = BTreeMap::new();
+    for property in properties {
+        let property = lower_property(property)?;
+        let name = property.name().clone();
+        if lowered.insert(name.clone(), property).is_some() {
+            return Err(ModelErrorKind::DuplicateProperty {
+                class: class.clone(),
+                property: name,
+            });
+        }
+    }
+    Ok(lowered)
+}
+
+fn lower_property(raw: RawProperty) -> Result<PropInfo, ModelErrorKind> {
+    let name = Name::new(raw.name)?;
+    let target = lower_type_ref(raw.generic_type)?;
+    let multiplicity = lower_multiplicity(raw.multiplicity)?;
+    Ok(PropInfo::declared(name, target, multiplicity))
+}
+
+fn lower_qualified_properties(
+    class: &QName,
+    properties: Vec<RawQualifiedProperty>,
+) -> Result<BTreeMap<Name, QpInfo>, ModelErrorKind> {
+    let mut lowered = BTreeMap::new();
+    for property in properties {
+        let property = lower_qualified_property(property)?;
+        let name = property.name().clone();
+        if lowered.insert(name.clone(), property).is_some() {
+            return Err(ModelErrorKind::DuplicateQualifiedProperty {
+                class: class.clone(),
+                property: name,
+            });
+        }
+    }
+    Ok(lowered)
+}
+
+fn lower_qualified_property(raw: RawQualifiedProperty) -> Result<QpInfo, ModelErrorKind> {
+    let name = Name::new(raw.name)?;
+    let target = lower_type_ref(raw.return_generic_type)?;
+    let multiplicity = lower_multiplicity(raw.return_multiplicity)?;
+    let kind = classify_qualified_property(&name, multiplicity, &raw.stereotypes);
+    let signature = if kind == QpKind::UserQualified {
+        lower_signature(raw.parameters)?
+    } else {
+        None
+    };
+    Ok(QpInfo::new(name, target, multiplicity, kind, signature))
+}
+
+fn lower_signature(
+    parameters: Option<Vec<crate::raw::RawParameter>>,
+) -> Result<Option<Vec<TypeRef>>, ModelErrorKind> {
+    parameters
+        .map(|parameters| {
+            parameters
+                .into_iter()
+                .map(|parameter| lower_type_ref(parameter.generic_type))
+                .collect::<Result<Vec<_>, _>>()
+        })
+        .transpose()
+}
+
+fn classify_qualified_property(
+    name: &Name,
+    multiplicity: Multiplicity,
+    stereotypes: &[RawStereotype],
+) -> QpKind {
+    let milestoning = stereotypes
+        .iter()
+        .any(|stereotype| is_milestoning_profile(&stereotype.profile));
+    let generated = stereotypes.iter().any(|stereotype| {
+        is_milestoning_profile(&stereotype.profile)
+            && stereotype.value == GENERATED_MILESTONING_PROPERTY
+    });
+    if milestoning && name.as_str().ends_with(ALL_VERSIONS_IN_RANGE_SUFFIX) {
+        QpKind::AllVersionsInRange
+    } else if milestoning && name.as_str().ends_with(ALL_VERSIONS_SUFFIX) {
+        QpKind::AllVersions
+    } else if generated && multiplicity.is_unbounded() {
+        QpKind::EdgePoint
+    } else if generated {
+        QpKind::MilestonedPoint
+    } else {
+        QpKind::UserQualified
+    }
+}
+
+fn is_milestoning_profile(profile: &str) -> bool {
+    matches!(profile, MILESTONING_PROFILE | MILESTONING_PROFILE_PROTOCOL)
+}
+
+fn lower_type_ref(raw: RawGenericType) -> Result<TypeRef, ModelErrorKind> {
+    let raw_type = QName::new(raw.raw_type.into_string())?;
+    let type_arguments = raw
+        .type_arguments
+        .into_iter()
+        .map(lower_type_ref)
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(TypeRef::new(raw_type, type_arguments))
+}
+
+fn lower_multiplicity(raw: RawMultiplicity) -> Result<Multiplicity, ModelErrorKind> {
+    Multiplicity::new(raw.lower_bound, raw.upper_bound).map_err(ModelErrorKind::from)
+}
+
+fn lower_temporal(
+    element: &QName,
+    stereotypes: &[RawStereotype],
+) -> Result<Option<Temporal>, ModelErrorKind> {
+    let mut temporal = None;
+    for stereotype in stereotypes.iter().filter(|stereotype| {
+        matches!(
+            stereotype.profile.as_str(),
+            TEMPORAL_PROFILE | TEMPORAL_PROFILE_PROTOCOL
+        )
+    }) {
+        let current = match stereotype.value.as_str() {
+            BITEMPORAL => Temporal::Bitemporal,
+            BUSINESS_TEMPORAL => Temporal::BusinessTemporal,
+            PROCESSING_TEMPORAL => Temporal::ProcessingTemporal,
+            value => {
+                return Err(ModelErrorKind::UnknownTemporalStereotype {
+                    element: element.clone(),
+                    value: value.to_owned(),
+                });
+            }
+        };
+        if temporal.replace(current).is_some() {
+            return Err(ModelErrorKind::MultipleTemporalStereotypes {
+                element: element.clone(),
+            });
+        }
+    }
+    Ok(temporal)
+}
+
+fn lower_association(raw: RawAssociation, source: SourceId) -> Result<AssocDraft, ModelErrorKind> {
+    let path = QName::from_package_and_name(&raw.package, &raw.name)?;
+    let temporal = lower_temporal(&path, &raw.stereotypes)?;
+    let actual = raw.properties.len();
+    let [first, second]: [RawProperty; 2] =
+        raw.properties
+            .try_into()
+            .map_err(|_| ModelErrorKind::AssociationArity {
+                association: path.clone(),
+                actual,
+            })?;
+    Ok(AssocDraft {
+        path,
+        first: lower_property(first)?,
+        second: lower_property(second)?,
+        temporal,
+        source,
+    })
+}
+
+fn materialize_associations(
+    classes: &mut BTreeMap<QName, ClassInfo>,
+    associations: Vec<AssocDraft>,
+) -> Result<Vec<AssocInfo>, ModelError> {
+    let mut materialized = Vec::with_capacity(associations.len());
+    for association in associations {
+        let path = association.path.clone();
+        let first_owner = association.second.target().raw_type().clone();
+        let second_owner = association.first.target().raw_type().clone();
+        let first = association.first.with_association(association.path.clone());
+        let second = association
+            .second
+            .with_association(association.path.clone());
+        insert_association_end(
+            classes,
+            association.source,
+            &first_owner,
+            first.clone(),
+            &path,
+        )?;
+        insert_association_end(
+            classes,
+            association.source,
+            &second_owner,
+            second.clone(),
+            &path,
+        )?;
+        materialized.push(AssocInfo::new(
+            association.path,
+            AssociationEndInfo::new(first_owner, first),
+            AssociationEndInfo::new(second_owner, second),
+            association.temporal,
+            association.source,
+        ));
+    }
+    Ok(materialized)
+}
+
+fn insert_association_end(
+    classes: &mut BTreeMap<QName, ClassInfo>,
+    source: SourceId,
+    owner: &QName,
+    property: PropInfo,
+    association: &QName,
+) -> Result<(), ModelError> {
+    let property_name = property.name().clone();
+    let Some(class) = classes.get_mut(owner) else {
+        return Err(merged_graph_error(
+            source,
+            ModelErrorKind::MissingAssociationOwner {
+                association: association.clone(),
+                property: property_name,
+                owner: owner.clone(),
+            },
+        ));
+    };
+    if class
+        .properties_mut()
+        .insert(property_name.clone(), property)
+        .is_some()
+    {
+        return Err(merged_graph_error(
+            source,
+            ModelErrorKind::AssociationPropertyConflict {
+                association: association.clone(),
+                owner: owner.clone(),
+                property: property_name,
+            },
+        ));
+    }
+    Ok(())
+}
+
+fn merged_graph_error(source_id: SourceId, kind: ModelErrorKind) -> ModelError {
+    ModelError::InvalidMergedGraph { source_id, kind }
+}
+
+fn index_classes(
+    classes: &BTreeMap<QName, ClassInfo>,
+) -> Result<(BTreeMap<QName, ClassId>, Vec<QName>), ModelError> {
+    let mut by_path = BTreeMap::new();
+    let mut paths_by_id = Vec::with_capacity(classes.len());
+    for (index, path) in classes.keys().enumerate() {
+        let raw = u32::try_from(index).map_err(|_| ModelError::TooManyClasses { index })?;
+        by_path.insert(path.clone(), ClassId::new(raw));
+        paths_by_id.push(path.clone());
+    }
+    Ok((by_path, paths_by_id))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const USER_STEREOTYPE: RawStereotype = RawStereotype {
+        profile: String::new(),
+        value: String::new(),
+    };
+
+    #[test]
+    fn qualified_property_classification_has_explicit_precedence() {
+        let generated = [RawStereotype {
+            profile: MILESTONING_PROFILE.to_owned(),
+            value: GENERATED_MILESTONING_PROPERTY.to_owned(),
+        }];
+        let bounded = Multiplicity::new(0, Some(1)).expect("valid");
+        let unbounded = Multiplicity::new(0, None).expect("valid");
+        assert_eq!(
+            classify_qualified_property(&Name::new("orders").expect("valid"), bounded, &generated),
+            QpKind::MilestonedPoint
+        );
+        assert_eq!(
+            classify_qualified_property(
+                &Name::new("ordersAllVersions").expect("valid"),
+                unbounded,
+                &generated
+            ),
+            QpKind::AllVersions
+        );
+        assert_eq!(
+            classify_qualified_property(
+                &Name::new("ordersEdge").expect("valid"),
+                unbounded,
+                &generated
+            ),
+            QpKind::EdgePoint
+        );
+        assert_eq!(
+            classify_qualified_property(
+                &Name::new("ordersAllVersionsInRange").expect("valid"),
+                bounded,
+                &generated
+            ),
+            QpKind::AllVersionsInRange
+        );
+        assert_eq!(
+            classify_qualified_property(
+                &Name::new("ordersAllVersions").expect("valid"),
+                bounded,
+                std::slice::from_ref(&USER_STEREOTYPE)
+            ),
+            QpKind::UserQualified
+        );
+
+        let other_milestoning = [RawStereotype {
+            profile: MILESTONING_PROFILE.to_owned(),
+            value: "notgenerated".to_owned(),
+        }];
+        assert_eq!(
+            classify_qualified_property(
+                &Name::new("orders").expect("valid"),
+                bounded,
+                &other_milestoning
+            ),
+            QpKind::UserQualified
+        );
+
+        let generated_value_in_another_profile = [RawStereotype {
+            profile: "example::profile".to_owned(),
+            value: GENERATED_MILESTONING_PROPERTY.to_owned(),
+        }];
+        assert_eq!(
+            classify_qualified_property(
+                &Name::new("orders").expect("valid"),
+                bounded,
+                &generated_value_in_another_profile
+            ),
+            QpKind::UserQualified
+        );
+
+        let short_generated = [RawStereotype {
+            profile: MILESTONING_PROFILE_PROTOCOL.to_owned(),
+            value: GENERATED_MILESTONING_PROPERTY.to_owned(),
+        }];
+        assert_eq!(
+            classify_qualified_property(
+                &Name::new("orders").expect("valid"),
+                bounded,
+                &short_generated
+            ),
+            QpKind::MilestonedPoint
+        );
+    }
+
+    #[test]
+    fn borrowed_documents_expose_their_exact_inputs() {
+        let document = PmcdDocument::new("memory:model", "{\"elements\":[]}");
+        assert_eq!(document.label(), "memory:model");
+        assert_eq!(document.json(), "{\"elements\":[]}");
+    }
+}
