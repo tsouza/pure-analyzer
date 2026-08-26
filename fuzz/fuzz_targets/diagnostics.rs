@@ -12,11 +12,12 @@
 //! Run with `cargo +nightly fuzz run diagnostics` from the `fuzz/` directory.
 
 use libfuzzer_sys::fuzz_target;
-use pure_analyzer_diagnostics::{Diagnostic, FileId, Label, Severity, TextRange};
+use pure_analyzer_diagnostics::{DiagCode, Diagnostic, FileId, Label, Severity, TextRange};
 
 fuzz_target!(|data: &str| {
     let label = Label::with_note(FileId::new(0), TextRange::new(0.into(), 0.into()), data);
-    let diagnostic = Diagnostic::builder("PUR0000", Severity::Info, data, label).build();
+    let diagnostic =
+        Diagnostic::builder(DiagCode::BadToken, Severity::Info, data, label).build();
 
     let value = serde_json::to_value(&diagnostic).expect("Diagnostic must always serialize");
 

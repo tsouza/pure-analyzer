@@ -123,11 +123,12 @@ model under-resolution. See design doc §6.1.
 
 **Invariants.** `Diagnostic` carries no renderer-specific state — no ANSI
 codes, no LSP types — so future CLI and LSP front ends can render identical
-findings from the same value. `code` and `ReasonCode::id`/`blurb` are
-`&'static str`: every code is a compile-time constant a pass references, never
-one it constructs at runtime, which is also why `Diagnostic` and `ReasonCode`
-are `Serialize`-only (a `&'static str` field cannot soundly round-trip through
-`Deserialize`) — findings flow one way, from passes to renderers.
+findings from the same value. `code` is a closed `DiagCode` enum and `reason` is
+a closed `ReasonCode` enum: every identifier, reason bucket, and explanatory
+blurb is registered at compile time rather than constructed by a pass. The
+diagnostic remains serialization-only because findings flow one way, from
+passes to renderers; boundary-facing code and reason parsers accept only exact
+registered identifiers.
 
 **Relationships.** Analyzer-only. It is intended to be produced by every crate
 from `pure-analyzer-parser` upward (parser syntax errors,
@@ -137,9 +138,8 @@ producers remain scaffolds. `Label.file`/`.span` use `FileId`/`TextRange` from
 this crate and `text-size` respectively, the span representation intended for
 the lexer/syntax/parser layers.
 
-**Introduced by.** Repository bootstrap (no `specs/` entry — this is the
-verbatim design doc §6.1 shape, not a design decision made during
-implementation). `crates/pure-analyzer-diagnostics/`.
+**Introduced by.** Repository bootstrap; closed registries are implemented in
+`crates/pure-analyzer-diagnostics/`.
 
 ## Workflows
 
