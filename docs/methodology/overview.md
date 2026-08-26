@@ -39,9 +39,10 @@ spec  →  worktree  →  implement  →  just ci  →  review  →  merge  → 
    structural sweep, and the supply-chain audits run as their own `just` targets
    and as separate CI jobs, not from `just ci`. Nothing proceeds red. See
    [testing.md](testing.md).
-5. **Review.** The reviewer subagent is the gate; CodeRabbit backs it up on OSS
-   PRs. They check the diff against the spec, hunt for gaming and gate-tampering,
-   and enforce craft (DRY/KISS, comment economy).
+5. **Review.** A reviewer subagent checks the diff against the spec, hunts for
+   gaming and gate-tampering, and enforces craft (DRY/KISS, comment economy).
+   Risky changes receive a separate reviewer pass; deterministic aggregate
+   checks remain independent required gates.
 6. **Merge.** One change, one PR, Conventional Commits, green.
 7. **Reflect.** The loop feeds itself: what we learned updates the domain model,
    the lessons ledger, or the ADRs — and recurring findings graduate into new

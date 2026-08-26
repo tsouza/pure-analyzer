@@ -55,10 +55,17 @@ Then open a PR. In the description:
 
 ## Review
 
-Every PR is reviewed by the project's reviewer agent (the gate) and, for OSS PRs,
-by CodeRabbit as an independent second opinion. Reviewers check the diff against
-its spec, look for gaming or gate-tampering, and enforce DRY/KISS and comment
-economy. See [`docs/methodology/model-tiering.md`](docs/methodology/model-tiering.md).
+Every PR is reviewed against its spec, with a separate reviewer pass for risky
+changes. Reviewers look for gaming or gate-tampering and enforce DRY/KISS and
+comment economy. The default-branch ruleset independently requires an up-to-date
+branch, resolved review conversations, and the `ci-gate`, `lint-gate`,
+`security-gate`, `purecard-fuzz-gate`, and `purecard-wheels-gate` checks. See
+[`docs/methodology/model-tiering.md`](docs/methodology/model-tiering.md).
+
+GitHub approval is not required while the project has only one maintainer:
+GitHub does not allow a PR author to approve their own change. This avoids a
+deadlock; it does not waive review. Add a second trusted maintainer before
+enabling required code-owner approval.
 
 ## Dependencies
 

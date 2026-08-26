@@ -1,13 +1,15 @@
 name: Security
 
 # Scheduled + on-demand security scans: secret scanning (gitleaks) and
-# advisory scanning (cargo-audit). Runs on PRs, on push to main, and weekly so
-# newly-disclosed advisories are caught even without a code change.
+# advisory scanning (cargo-audit). Runs on PRs, merge-queue entries, pushes to
+# main, and weekly so newly disclosed advisories are caught without a code
+# change.
 
 on:
   push:
     branches: [main]
   pull_request:
+  merge_group:
   schedule:
     # Every Monday 05:00 UTC.
     - cron: "0 5 * * 1"
@@ -62,3 +64,13 @@ jobs:
       actions: read
       contents: read
     uses: ./.github/workflows/no-warnings.yml
+
+  security-gate:
+    name: security-gate
+    needs: [gitleaks, audit, no-warnings]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if any security job failed
+        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+        run: exit 1

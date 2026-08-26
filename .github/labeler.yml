@@ -26,4 +26,13 @@ python:
           - '.github/workflows/purecard-wheels.yml'
 security:
   - changed-files:
-      - any-glob-to-any-file: ['.gitleaks.toml', 'SECURITY.md', '.github/zizmor.yml', '.github/workflows/security.yml', '.github/workflows/lint.yml']
+      - any-glob-to-any-file:
+          - '.cargo/audit.toml'
+          - '.gitleaks.toml'
+          - 'deny.toml'
+          - 'SECURITY.md'
+          - 'CODEOWNERS'
+          - '.github/ISSUE_TEMPLATE/config.yml'
+          - '.github/zizmor.yml'
+          - '.github/workflows/security.yml'
+          - '.github/workflows/lint.yml'

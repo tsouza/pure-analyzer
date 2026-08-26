@@ -146,3 +146,13 @@ jobs:
       actions: read # reusable sweep reads this workflow run's completed logs
       contents: read
     uses: ./.github/workflows/no-warnings.yml
+
+  purecard-fuzz-gate:
+    name: purecard-fuzz-gate
+    needs: [changes, build, fuzz, no-warnings]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if any PureCARD fuzz job failed
+        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+        run: exit 1

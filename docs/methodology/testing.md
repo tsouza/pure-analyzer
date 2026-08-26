@@ -118,9 +118,10 @@ countermeasures:
 - **A capped-score suspicion signal**: a suite that scores suspiciously *perfectly*
   is itself a flag for the reviewer, on top of `cargo-mutants` catching
   assertion-free tests.
-- **Independent recomputation in CI.** Every threshold and gate value is
-  recomputed by CI from PROTECTED config the agent can't edit. The agent may raise
-  a floor; it may never lower one. See [self-learning.md](self-learning.md).
+- **Recomputation in CI.** CI evaluates each threshold and gate from the submitted
+  branch and runs anti-gaming tests for mechanically detectable weakening. The
+  agent may raise a floor; lowering one requires an explicit maintainer decision.
+  See [self-learning.md](self-learning.md).
 
 ## Running it
 

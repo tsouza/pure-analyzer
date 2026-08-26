@@ -5,11 +5,10 @@ name: no-warnings
 # apt, useradd, cargo-deny's `warn` checks, …) can warn while exiting 0. This
 # sweeps a workflow run's job logs and fails on any un-allowlisted tool warning.
 #
-# It is a `workflow_call` reusable job so every workflow that runs tools invokes
-# the same sweep over its OWN run — ci, lint, security, release-plz each add a
-# job `uses: ./.github/workflows/no-warnings.yml` that `needs` its other jobs and
-# runs `if: always()`, so the sweep sees every finished job's log. A workflow
-# without this job leaves its tool warnings unswept.
+# It is a `workflow_call` reusable job so each caller invokes the same sweep
+# over its OWN run. The caller adds a job that `needs` its other jobs and runs
+# `if: always()`, so the sweep sees every finished job's log. A workflow without
+# this job leaves its tool warnings unswept.
 
 on:
   workflow_call:

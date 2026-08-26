@@ -75,14 +75,13 @@ Findings feed [`lessons.md`](../lessons.md). And crucially: a finding that recur
 **N=3** times is **promoted into a new L1 deterministic rule**. The judgment that
 caught it three times becomes a free check that catches it forever after.
 
-## L4 — Reviewer as gate, with an independent backstop
+## L4 — Reviewer judgment with an independent backstop
 
-- The **homegrown reviewer subagent is the gate** — the change does not merge
-  without its approval. It's tuned to this project's rules and reads the diff
-  against its spec.
-- **CodeRabbit** (free for OSS) runs alongside as an *independent* second opinion.
-  A backstop, not the primary gate — so a blind spot in one reviewer isn't a blind
-  spot in the system.
+- The **reviewer subagent supplies the judgmental gate**. It is tuned to this
+  project's rules and reads the diff against its spec.
+- Risky changes receive a **separate reviewer pass** with fresh context. The
+  default-branch ruleset independently enforces the deterministic aggregate
+  checks, branch freshness, and resolved conversations.
 
 ## The flywheel
 

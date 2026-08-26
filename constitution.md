@@ -9,8 +9,8 @@ Two tiers of rule live here:
   refine, or retire them through the normal PR + reviewer flow as understanding
   grows.
 - **PROTECTED** rules are the guardrails that keep the system honest. The agent
-  may only ever make them **stricter**. Loosening a PROTECTED rule requires a
-  human and a machine-checkable ratchet (see `docs/methodology/self-learning.md`).
+  may only ever make them **stricter**. Loosening a PROTECTED rule requires an
+  explicit maintainer decision (see `docs/methodology/self-learning.md`).
 
 Every rule is tagged. If a rule is untagged, treat it as PROTECTED.
 
@@ -171,9 +171,11 @@ the PR description**. The reviewer checks that judgment.
 ## 7. Anti-gaming — PROTECTED
 
 The agent may not tamper with, disable, or self-lower any quality gate, threshold
-file, held-out test suite, or reviewer configuration. CI recomputes all gate
-values independently; a gate the agent tries to weaken is a CI failure and a
-reviewer red flag.
+file, held-out test suite, or reviewer configuration. CI recomputes gate values
+from the submitted branch and anti-gaming tests reject mechanically detectable
+weakening; every attempted weakening is also a reviewer red flag. Policy and
+implementation share a repository, so residual changes that cannot be classified
+mechanically require explicit maintainer judgment.
 
 ---
 

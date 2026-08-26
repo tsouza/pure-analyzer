@@ -30,11 +30,18 @@ understanding grows.
 - the anti-gaming suites and reviewer configuration.
 
 **The ratchet:** an agent may *tighten* a PROTECTED value in a PR (raise a floor,
-add a ban) and it merges normally. *Loosening* one requires a human — enforced by
-a **machine-checkable ratchet**: CI recomputes each PROTECTED value independently
-from config the agent cannot edit, and fails any PR where a gate moved the wrong
-way without maintainer sign-off (see [`CODEOWNERS`](../../CODEOWNERS)). The agent
-literally cannot lower its own bar to make a change pass.
+add a ban) and it merges normally. *Loosening* one requires an explicit
+maintainer decision. Deterministic anti-gaming tests reject weakening that can be
+encoded mechanically; [`CODEOWNERS`](../../CODEOWNERS) routes the remaining
+guardrail changes for judgment, and the default-branch ruleset makes the required
+aggregate gates unskippable. Because policy and implementation live in the same
+repository, CI cannot prove that every possible policy edit is a tightening.
+
+The repository currently has one maintainer, so requiring code-owner approval
+would deadlock that maintainer's own PRs. Add a second trusted maintainer before
+enabling one required approval and code-owner review. Until then, the ruleset
+enforces pull requests, branch freshness, resolved conversations, linear history,
+and deterministic checks, while the maintainer owns the residual judgment.
 
 ## The learning loop
 
