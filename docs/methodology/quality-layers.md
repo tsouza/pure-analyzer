@@ -80,7 +80,8 @@ future changes receive the check for free.
 ## L4 — Reviewer judgment with an independent backstop
 
 - The **reviewer subagent supplies the judgmental gate**. It is tuned to this
-  project's rules and reads the diff against its linked issue and PR.
+  project's rules, reads the diff against its linked issue, and checks the PR's
+  implementation evidence.
 - Risky changes receive a **separate reviewer pass** with fresh context. The
   default-branch ruleset independently enforces the deterministic aggregate
   checks, branch freshness, and resolved conversations.

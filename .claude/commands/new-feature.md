@@ -10,7 +10,8 @@ Use the **`start-feature`** skill to bootstrap work on `$ARGUMENTS`.
 2. `just new-feature $ARGUMENTS` — create the git worktree + `feat/$ARGUMENTS`
    branch (worktree-per-branch). `cd` into the reported worktree.
 3. Confirm the GitHub issue has the goal, non-goals, acceptance criteria, and
-   dependencies. Work state belongs in that issue and its PR, never in a checked-in spec.
+   dependencies. Scope belongs in that issue; the PR holds implementation evidence
+   only, never a checked-in spec.
 4. Ensure a `just` target covers the work; add a minimal one to the `justfile` if
    none fits.
 5. Write the **failing test first** (test-first) at the right layer, and confirm

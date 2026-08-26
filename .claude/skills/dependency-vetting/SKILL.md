@@ -18,7 +18,8 @@ crate clears this rubric. This repo is **Apache-2.0** and gates dependencies wit
 ## When this triggers
 
 Before running `cargo add`, before editing `[workspace.dependencies]` in the root
-`Cargo.toml`, or whenever an issue or PR scope introduces a new external crate.
+`Cargo.toml`, or whenever a linked issue or the current change introduces a new
+external crate.
 
 ## Rubric — score each axis, record the evidence
 

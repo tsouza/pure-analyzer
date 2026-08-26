@@ -13,9 +13,9 @@ Generation and review are *not* the same job and don't need the same model.
   gates, and by review — so it doesn't need to be the strongest model available. It
   needs to be fast and cheap, because it does the high-volume work.
 - **Reviewer — stronger model, as a subagent.** Gates the change. It reads the
-  diff against its linked issue and PR, hunts for gaming and gate-tampering, and enforces craft
-  (DRY/KISS, comment economy). This is where judgment lives, so this is where the
-  capability budget goes.
+  diff against its linked issue and uses the PR's implementation evidence, hunts
+  for gaming and gate-tampering, and enforces craft (DRY/KISS, comment economy).
+  This is where judgment lives, so this is where the capability budget goes.
 
 The asymmetry is the whole trick: you get strong-model rigor on the *decision that
 matters* (does this merge?) without paying strong-model rates on every token of
