@@ -1317,9 +1317,37 @@ impl Pda {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::{HashMap, VecDeque, hash_map::Entry};
+
     use super::{
-        Frame, LexKind, Pda, State, Step, WS, is_date_char, is_ident_start, is_ident_tail, step,
+        ALL_FRAMES, Frame, LexKind, Pda, State, Step, WS, is_date_char, is_ident_start,
+        is_ident_tail, step,
     };
+
+    /// The deepest stack included in the bounded reachability regression.
+    ///
+    /// Three levels exercise genuine nesting while capping the theoretical graph
+    /// at 3,995 configurations. Pushes beyond this depth are deliberately omitted:
+    /// this is a bounded witness check, not a proof of unbounded reachability.
+    const MAX_STACK_DEPTH: usize = 3;
+
+    /// Empty stack plus every registered frame as a possible top.
+    const TOP_COUNT: usize = ALL_FRAMES.len() + 1;
+
+    #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+    struct Config {
+        state: State,
+        stack: Vec<usize>,
+    }
+
+    type Predecessors = HashMap<Config, Option<(Config, u8)>>;
+
+    struct Exploration {
+        predecessors: Predecessors,
+        state_witnesses: Vec<Option<Config>>,
+        pushed_frames: [bool; ALL_FRAMES.len()],
+        black_holes: Vec<Config>,
+    }
 
     /// Every distinct automaton state, for the `index`/`COUNT` bijection check.
     /// [`State::index`]'s exhaustive match already makes a new variant a compile
@@ -1374,6 +1402,164 @@ mod tests {
         State::SawTilde,
     ];
 
+    fn seed_config() -> Config {
+        Config {
+            state: State::Start,
+            stack: Vec::new(),
+        }
+    }
+
+    fn registered_frame_index(frame: Frame) -> usize {
+        ALL_FRAMES
+            .iter()
+            .position(|&registered| registered == frame)
+            .expect("step pushed a frame missing from ALL_FRAMES")
+    }
+
+    fn top_frame(config: &Config) -> Option<Frame> {
+        config.stack.last().map(|&index| ALL_FRAMES[index])
+    }
+
+    fn top_from_code(code: usize) -> Option<Frame> {
+        if code == 0 {
+            None
+        } else {
+            Some(ALL_FRAMES[code - 1])
+        }
+    }
+
+    fn unique_live_transitions(state: State, top: Option<Frame>) -> Vec<(u8, Step)> {
+        let mut transitions = Vec::new();
+        for byte in 0..=u8::MAX {
+            let transition = step(state, top, byte);
+            if matches!(transition, Step::Dead)
+                || transitions
+                    .iter()
+                    .any(|&(_, existing)| existing == transition)
+            {
+                continue;
+            }
+            transitions.push((byte, transition));
+        }
+        transitions
+    }
+
+    fn transition_rows() -> Vec<Vec<(u8, Step)>> {
+        let mut rows = vec![Vec::new(); State::COUNT * TOP_COUNT];
+        for state in ALL_STATES {
+            for top_code in 0..TOP_COUNT {
+                let row_index = state.index() * TOP_COUNT + top_code;
+                rows[row_index] = unique_live_transitions(state, top_from_code(top_code));
+            }
+        }
+        rows
+    }
+
+    fn bounded_successor(config: &Config, transition: Step) -> Option<Config> {
+        let mut next = config.clone();
+        match transition {
+            Step::Dead => return None,
+            Step::Next(state) => next.state = state,
+            Step::Push(frame, state) => {
+                let frame_index = registered_frame_index(frame);
+                if next.stack.len() >= MAX_STACK_DEPTH {
+                    return None;
+                }
+                next.stack.push(frame_index);
+                next.state = state;
+            }
+            Step::Pop(state) => {
+                assert!(
+                    next.stack.pop().is_some(),
+                    "step returned Pop for an empty bounded stack"
+                );
+                next.state = state;
+            }
+        }
+        Some(next)
+    }
+
+    fn explore_bounded() -> Exploration {
+        let rows = transition_rows();
+        let seed = seed_config();
+        let mut predecessors = HashMap::from([(seed.clone(), None)]);
+        let mut queue = VecDeque::from([seed]);
+        let mut state_witnesses = vec![None; State::COUNT];
+        let mut pushed_frames = [false; ALL_FRAMES.len()];
+        let mut black_holes = Vec::new();
+
+        while let Some(config) = queue.pop_front() {
+            if state_witnesses[config.state.index()].is_none() {
+                state_witnesses[config.state.index()] = Some(config.clone());
+            }
+            let top_code = config.stack.last().map_or(0, |index| index + 1);
+            let row_index = config.state.index() * TOP_COUNT + top_code;
+            let mut has_bounded_successor = false;
+
+            for &(byte, transition) in &rows[row_index] {
+                let Some(next) = bounded_successor(&config, transition) else {
+                    continue;
+                };
+                has_bounded_successor = true;
+                if let Step::Push(frame, _) = transition {
+                    pushed_frames[registered_frame_index(frame)] = true;
+                }
+                if let Entry::Vacant(entry) = predecessors.entry(next.clone()) {
+                    entry.insert(Some((config.clone(), byte)));
+                    queue.push_back(next);
+                }
+            }
+
+            if !has_bounded_successor {
+                black_holes.push(config);
+            }
+        }
+
+        Exploration {
+            predecessors,
+            state_witnesses,
+            pushed_frames,
+            black_holes,
+        }
+    }
+
+    fn witness_bytes(config: &Config, predecessors: &Predecessors) -> Vec<u8> {
+        let mut reversed = Vec::new();
+        let mut cursor = config;
+        loop {
+            match predecessors
+                .get(cursor)
+                .expect("every witness config has a predecessor entry")
+            {
+                Some((previous, byte)) => {
+                    reversed.push(*byte);
+                    cursor = previous;
+                }
+                None => {
+                    reversed.reverse();
+                    return reversed;
+                }
+            }
+        }
+    }
+
+    fn replay_witness(bytes: &[u8]) -> Config {
+        let mut config = seed_config();
+        for &byte in bytes {
+            let transition = step(config.state, top_frame(&config), byte);
+            config = bounded_successor(&config, transition)
+                .expect("a recorded bounded witness must replay within the cap");
+        }
+        config
+    }
+
+    fn frame_names(stack: &[usize]) -> Vec<&'static str> {
+        stack
+            .iter()
+            .map(|&index| ALL_FRAMES[index].name())
+            .collect()
+    }
+
     #[test]
     fn index_is_a_bijection_onto_zero_to_count() {
         let mut seen = [false; State::COUNT];
@@ -1384,6 +1570,50 @@ mod tests {
             seen[idx] = true;
         }
         assert!(seen.iter().all(|&hit| hit), "index left a gap in 0..COUNT");
+    }
+
+    #[test]
+    fn bounded_exploration_reaches_every_state_and_frame_without_black_holes() {
+        let exploration = explore_bounded();
+
+        for state in ALL_STATES {
+            assert!(
+                exploration.state_witnesses[state.index()].is_some(),
+                "{} has no witness from Start within stack depth {}",
+                state.name(),
+                MAX_STACK_DEPTH,
+            );
+        }
+
+        for config in exploration.state_witnesses.iter().flatten() {
+            let witness = witness_bytes(config, &exploration.predecessors);
+            assert_eq!(
+                replay_witness(&witness),
+                *config,
+                "recorded witness did not replay to {} with stack {:?}",
+                config.state.name(),
+                frame_names(&config.stack),
+            );
+        }
+
+        for (index, frame) in ALL_FRAMES.iter().enumerate() {
+            assert!(
+                exploration.pushed_frames[index],
+                "{} was never pushed within stack depth {}",
+                frame.name(),
+                MAX_STACK_DEPTH,
+            );
+        }
+
+        let black_holes: Vec<_> = exploration
+            .black_holes
+            .iter()
+            .map(|config| (config.state.name(), frame_names(&config.stack)))
+            .collect();
+        assert!(
+            black_holes.is_empty(),
+            "reached configs without a live in-bound successor: {black_holes:?}",
+        );
     }
 
     #[test]
