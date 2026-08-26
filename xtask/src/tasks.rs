@@ -3,7 +3,7 @@
 //! Each task shells out to the underlying tool via [`crate::process`] and
 //! propagates exit codes, so `xtask` stays a thin, auditable orchestrator.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
@@ -99,6 +99,8 @@ const PURECARD_FUZZ_DIR: &str = "crates/pure-analyzer-purecard/fuzz";
 const PURECARD_FUZZ_MANIFEST: &str = "crates/pure-analyzer-purecard/fuzz/Cargo.toml";
 /// Every target in PureCARD's dedicated fuzz project.
 const PURECARD_FUZZ_TARGETS: &[&str] = &["accept_token", "allowed_mask", "schema_from_json"];
+/// Directory containing the source file for every registered PureCARD fuzz target.
+const PURECARD_FUZZ_TARGET_DIR: &str = "crates/pure-analyzer-purecard/fuzz/fuzz_targets";
 
 /// Resolve a path owned by the nested PureCARD crate.
 fn purecard_path(relative: impl AsRef<Path>) -> PathBuf {
@@ -294,7 +296,92 @@ fn verify_purecard_fuzz_workspace() -> Result<()> {
              {workspace_root} instead of {PURECARD_FUZZ_DIR}"
         );
     }
+
+    let registered: BTreeSet<String> = PURECARD_FUZZ_TARGETS
+        .iter()
+        .map(|target| (*target).to_string())
+        .collect();
+    let manifest_targets = fuzz_target_names_from_metadata(&metadata)?;
+    let source_targets = fuzz_target_names_on_disk(Path::new(PURECARD_FUZZ_TARGET_DIR))?;
+    let drift = fuzz_target_registry_problems(&registered, &manifest_targets, &source_targets);
+    if !drift.is_empty() {
+        anyhow::bail!(
+            "PureCARD fuzz target registry drift (xtask, Cargo manifest, and fuzz_targets/*.rs \
+             must agree): {}",
+            drift.join("; ")
+        );
+    }
     Ok(())
+}
+
+/// Binary target names declared by the nested PureCARD fuzz manifest.
+fn fuzz_target_names_from_metadata(metadata: &serde_json::Value) -> Result<BTreeSet<String>> {
+    let packages = metadata["packages"]
+        .as_array()
+        .context("PureCARD fuzz cargo metadata has no packages array")?;
+    let package = packages
+        .iter()
+        .find(|package| {
+            package["manifest_path"]
+                .as_str()
+                .is_some_and(|path| Path::new(path).ends_with(PURECARD_FUZZ_MANIFEST))
+        })
+        .with_context(|| format!("cargo metadata has no package at {PURECARD_FUZZ_MANIFEST}"))?;
+    let targets = package["targets"]
+        .as_array()
+        .context("PureCARD fuzz cargo metadata has no targets array")?;
+
+    Ok(targets
+        .iter()
+        .filter(|target| {
+            target["kind"]
+                .as_array()
+                .is_some_and(|kinds| kinds.iter().any(|kind| kind.as_str() == Some("bin")))
+        })
+        .filter_map(|target| target["name"].as_str().map(str::to_string))
+        .collect())
+}
+
+/// Rust source stems present in the dedicated PureCARD fuzz target directory.
+fn fuzz_target_names_on_disk(directory: &Path) -> Result<BTreeSet<String>> {
+    let mut names = BTreeSet::new();
+    for entry in
+        std::fs::read_dir(directory).with_context(|| format!("reading {}", directory.display()))?
+    {
+        let path = entry?.path();
+        if path.extension().is_some_and(|extension| extension == "rs") {
+            let stem = path
+                .file_stem()
+                .and_then(|value| value.to_str())
+                .with_context(|| format!("non-UTF-8 fuzz target path: {}", path.display()))?;
+            names.insert(stem.to_string());
+        }
+    }
+    Ok(names)
+}
+
+/// Deterministic diagnostics for any disagreement among fuzz target registries.
+fn fuzz_target_registry_problems(
+    registered: &BTreeSet<String>,
+    manifest: &BTreeSet<String>,
+    sources: &BTreeSet<String>,
+) -> Vec<String> {
+    let mut problems = Vec::new();
+    if manifest != registered {
+        problems.push(format!(
+            "Cargo targets [{}], xtask targets [{}]",
+            manifest.iter().cloned().collect::<Vec<_>>().join(", "),
+            registered.iter().cloned().collect::<Vec<_>>().join(", ")
+        ));
+    }
+    if sources != registered {
+        problems.push(format!(
+            "source targets [{}], xtask targets [{}]",
+            sources.iter().cloned().collect::<Vec<_>>().join(", "),
+            registered.iter().cloned().collect::<Vec<_>>().join(", ")
+        ));
+    }
+    problems
 }
 
 /// The minimum acceptable line-coverage percentage. Enforced as a hard floor so
@@ -938,7 +1025,7 @@ fn count_corpus_records_with(path: &Path, needle: &str) -> Result<usize> {
     Ok(content.lines().filter(|line| line.contains(needle)).count())
 }
 
-/// Module basenames named in the fenced tree under [`MODULE_TREE_HEADING`].
+/// Module paths named in the fenced tree under [`MODULE_TREE_HEADING`].
 fn module_names_in_tree(architecture: &str) -> Result<BTreeSet<String>> {
     let heading = architecture
         .find(MODULE_TREE_HEADING)
@@ -949,37 +1036,63 @@ fn module_names_in_tree(architecture: &str) -> Result<BTreeSet<String>> {
         .context("no code fence after the heading")?;
     let body = &after_heading[fence_open + 3..];
     let fence_close = body.find("```").context("unterminated code fence")?;
-    Ok(body[..fence_close]
-        .lines()
-        .flat_map(rs_stems_in_line)
-        .collect())
+    Ok(module_paths_in_tree_body(&body[..fence_close]))
 }
 
-/// Extract `.rs` file stems from one documented tree line.
-fn rs_stems_in_line(line: &str) -> Vec<String> {
-    let bytes = line.as_bytes();
-    let mut stems = Vec::new();
-    let mut search_from = 0;
-    while let Some(relative) = line[search_from..].find(".rs") {
-        let dot = search_from + relative;
-        let start = line[..dot]
-            .rfind(|character: char| !(character.is_ascii_alphanumeric() || character == '_'))
-            .map_or(0, |index| index + 1);
-        let stem = &line[start..dot];
-        let after = bytes.get(dot + 3).copied();
-        let boundary = after.is_none_or(|byte| !byte.is_ascii_alphanumeric() && byte != b'_');
-        if !stem.is_empty() && boundary {
-            stems.push(stem.to_string());
+/// Normalize one indented source tree to paths relative to `src/`.
+///
+/// Directory entries establish the parent for more-indented `.rs` entries;
+/// this keeps `grammar/mod.rs` and `schema/mod.rs` distinct instead of
+/// collapsing both to the bare stem `mod`.
+fn module_paths_in_tree_body(body: &str) -> BTreeSet<String> {
+    let mut directories: BTreeMap<usize, String> = BTreeMap::new();
+    let mut modules = BTreeSet::new();
+
+    for line in body.lines() {
+        let indent = line.len() - line.trim_start_matches(' ').len();
+        let Some(entry) = line.split_whitespace().next() else {
+            continue;
+        };
+
+        if let Some(directory) = entry.strip_suffix('/') {
+            directories.retain(|existing_indent, _| *existing_indent < indent);
+            if indent == 0 {
+                directories.clear();
+                continue;
+            }
+            let parent = directories
+                .range(..indent)
+                .next_back()
+                .map(|(_, path)| path.as_str());
+            let path = parent.map_or_else(
+                || directory.to_string(),
+                |parent| format!("{parent}/{directory}"),
+            );
+            directories.insert(indent, path);
+            continue;
         }
-        search_from = dot + 3;
+
+        let Some(file) = entry.strip_suffix(".rs") else {
+            continue;
+        };
+        let parent = directories
+            .range(..indent)
+            .next_back()
+            .map(|(_, path)| path.as_str());
+        let path = parent.map_or_else(|| file.to_string(), |parent| format!("{parent}/{file}"));
+        if path != CRATE_ROOT_STEM {
+            modules.insert(path);
+        }
     }
-    stems
+
+    modules
 }
 
-/// Module basenames under PureCARD's nested `src/`, excluding `lib.rs`.
+/// Module paths under PureCARD's nested `src/`, excluding root `lib.rs`.
 fn src_module_names() -> Result<BTreeSet<String>> {
     let mut names = BTreeSet::new();
-    let mut stack = vec![purecard_path("src")];
+    let source_root = purecard_path("src");
+    let mut stack = vec![source_root.clone()];
     while let Some(directory) = stack.pop() {
         for entry in std::fs::read_dir(&directory)
             .with_context(|| format!("reading {}", directory.display()))?
@@ -987,15 +1100,32 @@ fn src_module_names() -> Result<BTreeSet<String>> {
             let path = entry?.path();
             if path.is_dir() {
                 stack.push(path);
-            } else if path.extension().is_some_and(|extension| extension == "rs")
-                && let Some(stem) = path.file_stem().and_then(|value| value.to_str())
-                && stem != CRATE_ROOT_STEM
-            {
-                names.insert(stem.to_string());
+            } else if let Some(module) = normalized_rs_module_path(&source_root, &path)? {
+                names.insert(module);
             }
         }
     }
     Ok(names)
+}
+
+/// Normalize one Rust source path to an extensionless path relative to `src/`.
+fn normalized_rs_module_path(source_root: &Path, path: &Path) -> Result<Option<String>> {
+    if !path.extension().is_some_and(|extension| extension == "rs") {
+        return Ok(None);
+    }
+    let relative = path
+        .strip_prefix(source_root)
+        .with_context(|| format!("{} is outside {}", path.display(), source_root.display()))?;
+    if relative == Path::new("lib.rs") {
+        return Ok(None);
+    }
+    let without_extension = relative.with_extension("");
+    let normalized = without_extension
+        .components()
+        .map(|component| component.as_os_str().to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("/");
+    Ok(Some(normalized))
 }
 
 /// PureCARD's README and every Markdown file below its copied `docs/` tree.
@@ -1028,6 +1158,10 @@ fn collect_docs() -> Result<Vec<(String, String)>> {
 const BRACE_STOPWORDS: &[&str] = &["and", "the", "for", "not", "but", "with", "plus"];
 /// Maximum length of a brace body treated as a dependency enumeration.
 const MAX_ALLOWLIST_BRACE_LEN: usize = 80;
+/// Minimum token length in a candidate dependency enumeration.
+const MIN_ALLOWLIST_TOKEN_LEN: usize = 3;
+/// Leading authoritative dependencies needed to identify an allowlist claim.
+const ALLOWLIST_TRIGGER_DEPENDENCIES: usize = 2;
 
 /// Dependency-set enumerations that claim the widened PureCARD allowlist.
 fn allowlist_sets(text: &str) -> Vec<Vec<String>> {
@@ -1045,13 +1179,10 @@ fn allowlist_sets(text: &str) -> Vec<Vec<String>> {
             continue;
         }
         from = open + 1 + relative_close + 1;
-        if !(inner.contains("thiserror") && inner.contains("serde")) {
-            continue;
-        }
         let tokens: Vec<String> = inner
             .split(|character: char| !(character.is_ascii_alphanumeric() || character == '_'))
             .filter(|token| {
-                token.len() >= 3
+                token.len() >= MIN_ALLOWLIST_TOKEN_LEN
                     && token.chars().all(|character| {
                         character.is_ascii_lowercase()
                             || character == '_'
@@ -1061,7 +1192,11 @@ fn allowlist_sets(text: &str) -> Vec<Vec<String>> {
             .filter(|token| !BRACE_STOPWORDS.contains(token))
             .map(str::to_string)
             .collect();
-        if !tokens.is_empty() {
+        let is_allowlist_claim = CORE_DEP_ALLOWLIST
+            .iter()
+            .take(ALLOWLIST_TRIGGER_DEPENDENCIES)
+            .all(|dependency| tokens.iter().any(|token| token == dependency));
+        if is_allowlist_claim {
             sets.push(tokens);
         }
     }
@@ -1527,19 +1662,6 @@ mod tests {
     }
 
     #[test]
-    fn rs_stems_in_line_extracts_module_basenames() {
-        assert_eq!(
-            rs_stems_in_line("    compiled.rs     CompiledGrammar"),
-            ["compiled"]
-        );
-        assert_eq!(
-            rs_stems_in_line("  grammar/        L1 automaton"),
-            Vec::<String>::new()
-        );
-        assert_eq!(rs_stems_in_line("see foo.rsx here"), Vec::<String>::new());
-    }
-
-    #[test]
     fn module_names_in_tree_reads_only_the_fenced_tree_after_the_heading() {
         let architecture = "\
 intro\n\n### 3.2 Crate layout\n\n```\npurecard/\n  vocab.rs   the vocab\n  session.rs the session\n```\n\nProse mentioning a ghost engine.rs must be ignored.\n";
@@ -1551,6 +1673,36 @@ intro\n\n### 3.2 Crate layout\n\n```\npurecard/\n  vocab.rs   the vocab\n  sessi
     }
 
     #[test]
+    fn module_paths_keep_nested_mod_files_distinct() {
+        let architecture = "\
+### 3.2 Crate layout\n\n```\npurecard/\n  grammar/\n    mod.rs grammar root\n  schema/\n    mod.rs schema root\n  session.rs session\n```\n";
+        let actual = module_names_in_tree(architecture).expect("tree parses");
+        let expected: BTreeSet<String> = ["grammar/mod", "schema/mod", "session"]
+            .into_iter()
+            .map(str::to_string)
+            .collect();
+        assert_eq!(actual, expected);
+
+        let root = Path::new("src");
+        assert_eq!(
+            normalized_rs_module_path(root, Path::new("src/grammar/mod.rs"))
+                .expect("path normalizes")
+                .as_deref(),
+            Some("grammar/mod")
+        );
+        assert_eq!(
+            normalized_rs_module_path(root, Path::new("src/schema/mod.rs"))
+                .expect("path normalizes")
+                .as_deref(),
+            Some("schema/mod")
+        );
+        assert_eq!(
+            normalized_rs_module_path(root, Path::new("src/lib.rs")).expect("path normalizes"),
+            None
+        );
+    }
+
+    #[test]
     fn allowlist_sets_flags_the_widened_form_and_exempts_the_historical_one() {
         assert!(allowlist_sets("M1 widened it to `{ thiserror }`.").is_empty());
         assert_eq!(
@@ -1559,6 +1711,33 @@ intro\n\n### 3.2 Crate layout\n\n```\npurecard/\n  vocab.rs   the vocab\n  sessi
         );
         let long = format!("{{ thiserror {} serde }}", "x".repeat(100));
         assert!(allowlist_sets(&long).is_empty());
+    }
+
+    #[test]
+    fn allowlist_detection_derives_its_trigger_from_the_authoritative_set() {
+        let trigger = CORE_DEP_ALLOWLIST[..ALLOWLIST_TRIGGER_DEPENDENCIES].join(", ");
+        let text = format!("the widened `{{ {trigger}, tokio, io }}` set");
+        let sets = allowlist_sets(&text);
+        assert_eq!(sets.len(), 1);
+        assert!(sets[0].iter().any(|dependency| dependency == "tokio"));
+        assert!(!sets[0].iter().any(|dependency| dependency == "io"));
+    }
+
+    #[test]
+    fn purecard_fuzz_target_registry_detects_manifest_and_source_drift() {
+        let registered: BTreeSet<String> = ["accept_token", "allowed_mask"]
+            .into_iter()
+            .map(str::to_string)
+            .collect();
+        let manifest: BTreeSet<String> = ["accept_token", "new_target"]
+            .into_iter()
+            .map(str::to_string)
+            .collect();
+        let sources: BTreeSet<String> = ["accept_token"].into_iter().map(str::to_string).collect();
+        let problems = fuzz_target_registry_problems(&registered, &manifest, &sources);
+        assert_eq!(problems.len(), 2);
+        assert!(problems[0].contains("new_target"));
+        assert!(problems[1].contains("allowed_mask"));
     }
 
     #[test]

@@ -42,12 +42,17 @@ export const HEADER_BANNED = [/\bfor now\b/i, /\bthrowaway\b/i];
 // A justified suppression: `// stale-ok: <reason>`. The reason must be real
 // (>= this many chars) or the marker is itself an error.
 const SUPPRESS = /\/\/\s*stale-ok:\s*(.*)$/;
+const STANDALONE_SUPPRESS = /^\s*\/\/\s*stale-ok:\s*(.*)$/;
 export const MIN_REASON_LEN = 12;
 
-/** The trimmed stale-ok reason on `line`, or null if it carries no marker. */
-function markerReason(line) {
+/**
+ * The trimmed stale-ok reason on `line`, or null if it carries no marker.
+ * Preceding-line suppressions must be standalone Rust `//` comments; inline
+ * suppressions are considered only on the doc-comment currently being scanned.
+ */
+function markerReason(line, { standalone = false } = {}) {
   if (line === undefined) return null;
-  const match = line.match(SUPPRESS);
+  const match = line.match(standalone ? STANDALONE_SUPPRESS : SUPPRESS);
   return match ? match[1].trim() : null;
 }
 
@@ -71,7 +76,7 @@ export function scan(text) {
     if (!pattern) return;
 
     const here = markerReason(raw);
-    const above = markerReason(lines[index - 1]);
+    const above = markerReason(lines[index - 1], { standalone: true });
     const reason = [here, above].find(
       (candidate) => candidate !== null && candidate.length >= MIN_REASON_LEN,
     );
@@ -83,9 +88,12 @@ export function scan(text) {
   });
 
   // A bare or too-short `// stale-ok:` is itself an error: the escape hatch must
-  // always carry a real justification, wherever it appears.
+  // always carry a real justification. Ignore marker-shaped source text: only a
+  // doc-comment's inline marker or a standalone Rust comment is an escape hatch.
   lines.forEach((raw, index) => {
-    const reason = markerReason(raw);
+    const trimmed = raw.trimStart();
+    const isDoc = trimmed.startsWith("///") || trimmed.startsWith("//!");
+    const reason = markerReason(raw, { standalone: !isDoc });
     if (reason !== null && reason.length < MIN_REASON_LEN) {
       hits.push({
         line: index + 1,

@@ -61,6 +61,23 @@ test("a stale-ok on the immediately preceding line suppresses the hit", () => {
   expect(suppressions).toHaveLength(1);
 });
 
+test("a long marker-like Rust string does not suppress the next doc-comment", () => {
+  const src = [
+    'let marker = "// stale-ok: sufficiently long but only string data";',
+    "/// a stub for now",
+  ].join("\n");
+  const { hits, suppressions } = scan(src);
+  expect(hits).toHaveLength(1);
+  expect(suppressions).toHaveLength(0);
+});
+
+test("a short marker-like Rust string is not a stale-ok violation", () => {
+  const src = ['let marker = "// stale-ok: short";', "/// Current, accurate docs."].join("\n");
+  const { hits, suppressions } = scan(src);
+  expect(hits).toHaveLength(0);
+  expect(suppressions).toHaveLength(0);
+});
+
 test("a bare stale-ok is itself an error", () => {
   const { hits } = scan("/// a stub. // stale-ok:\n");
   expect(hits.some((hit) => hit.pattern.includes("bare stale-ok"))).toBe(true);
