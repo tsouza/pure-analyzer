@@ -83,6 +83,20 @@ unpublished and independent from analyzer crates.
 - Run `just fmt`, `just lint`, `just test-unit`, and `just ci`; mutation and the
   remaining full gates run before the eventual PR.
 
+## Verification
+
+- `just ci` passes on the final branch: all 397 Nextest cases and the
+  all-features doctest lane are green with no skipped tests.
+- `just test-mutation` classifies all 545 default-workspace mutants as 447
+  caught and 98 unviable, with zero missed or timed-out mutants. Its separate
+  FFI pass classifies all 23 mutants as seven caught and 16 unviable, again with
+  zero misses or timeouts.
+- The new structural test independently kills cargo-mutants perturbations that
+  delete the transition into `SawTilde` and that leave reached
+  `InMultiplicity` configurations without any in-bound live successor. The
+  diagnostics name the orphan state and every black-hole stack witness.
+- `git diff --check` passes, and the branch descends from current `origin/main`.
+
 ## Risks & rollout
 
 - **Bounded-search interpretation:** truncation can omit a legitimate deeper
