@@ -92,11 +92,7 @@ ignore = "0.4.31"
 
 # --- Lexing / parsing / syntax tree ---
 logos = "0.16.1"
-rowan = "0.16.1"
 text-size = { version = "1.1.1", features = ["serde"] }
-num-derive = "0.5.1"
-num-traits = "0.2.19"
-ungrammar = "1.16.1"
 
 # --- Diagnostics rendering (front-end crates only) ---
 ariadne = "0.6.0"
