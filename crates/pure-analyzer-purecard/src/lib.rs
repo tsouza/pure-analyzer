@@ -6,14 +6,13 @@
 //! An emitted-subset grammar decoder for **Legend Pure** with a partial
 //! schema-aware overlay. PureCARD sits between a language model's logits and its
 //! sampler and masks tokens that leave its hand-written recognizer, with further
-//! narrowing at implemented schema-sensitive positions. End-to-end inference
-//! and live compiler proof obligations remain open, so accepted output is not
-//! yet guaranteed to compile in every case.
+//! narrowing at covered schema-sensitive positions. It does not include a model
+//! inference loop or a full Pure compiler, so its mask is not a general compiler
+//! validity guarantee.
 //!
-//! It models two nested product-target levels and deliberately refuses a third;
-//! see [`GuaranteeLevel`]. The design — grammar, masking algorithm, schema
-//! overlay, current evidence, and the oracle-driven test strategy — is specified under
-//! `docs/spec/`.
+//! It models two nested constraint levels and deliberately refuses a third; see
+//! [`GuaranteeLevel`]. The grammar, masking algorithm, schema overlay, and test
+//! strategy are documented under `docs/spec/`.
 //!
 //! ## Usage
 //!
@@ -91,30 +90,28 @@
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 //!
-//! ## Status
+//! ## Components
 //!
-//! The code artifacts labeled **M0–M5** are implemented; this is not a claim
-//! that their original end-to-end acceptance obligations are complete. The core
-//! is the conceptual [`GuaranteeLevel`] lattice, the [`vocab`] module's [`Vocab`]
-//! table (token id → raw bytes), the
+//! The core is the conceptual [`GuaranteeLevel`] lattice, the [`vocab`] module's
+//! [`Vocab`] table (token id → raw bytes), the
 //! byte-level recogniser (the [`grammar`] module's hand-written pushdown
 //! automaton [`Pda`] over the emitted-Pure grammar (§5), the [`DecoderSession`]
 //! that drives it as a [`ByteRecognizer`], and the [`DecodeError`] it reports),
-//! the M2 mask cache ([`CompiledGrammar`]), and the M3 [`schema`] overlay:
+//! the mask cache ([`CompiledGrammar`]), and the [`schema`] overlay:
 //! [`Schema::from_json`] ingests the host contract as JSON and
 //! [`DecoderSession::with_schema`] narrows the mask at the identifier/operand
-//! positions covered by the implemented N/T subset. The gold-corpus loader and the Legend
-//! completeness probe live in the test-oracle harness under `tests/` (see
+//! positions covered by its N/T rules. The gold-corpus loader and Legend probe
+//! live in the test-oracle harness under `tests/` (see
 //! `docs/decisions/0003-non-core-in-tests-deplight-core.md`); the core's runtime
 //! dependencies are `thiserror` (error types) and `serde`/`serde_json` (the L2
 //! JSON ingress, ADR-0005).
 //!
-//! Milestone **M4** adds the PyO3 boundary: the feature-gated `ffi` module
+//! The feature-gated `ffi` module
 //! (compiled only under `--features python`) marshals the core to a Python
 //! `purecard` extension module — a thin, decode-logic-free surface packaged as a
 //! maturin abi3 wheel. The default build stays pyo3-free and pure.
 //!
-//! Milestone **M5** is the hardening pass: the [`selfcheck`] surface
+//! The [`selfcheck`] surface
 //! ([`self_check`], [`self_check_smoke`], [`SelfCheckError`]) round-trips a host
 //! tokenizer against the vocabulary before decode; [`accept_token`] finalizes on
 //! the reserved EOS sentinel — the id one past the last vocab token
@@ -139,7 +136,7 @@ pub mod selfcheck;
 pub mod session;
 pub mod vocab;
 
-// The Python extension surface (M4): a private, feature-gated boundary module.
+// The Python extension surface is a private, feature-gated boundary module.
 // Its items are not part of the Rust public API — they are reachable only from
 // Python via the generated `purecard` module — so `deny(missing_docs)` does not
 // reach them, but they are documented all the same.
@@ -168,13 +165,8 @@ pub use vocab::Vocab;
 /// faithful ⊂ schema-consistent ⊂ syntactic
 /// ```
 ///
-/// PureCARD's product target is emitted-subset
-/// [`Syntactic`](GuaranteeLevel::Syntactic) output (L1) and, with a complete
-/// schema overlay, [`SchemaConsistent`](GuaranteeLevel::SchemaConsistent) output
-/// (L2). The current code enforces membership in its fixed PDA and narrows only
-/// the positions covered by the implemented schema subset; the open live and
-/// end-to-end obligations mean this enum is not evidence that either full target
-/// has been proven. No decode-time mask can reach
+/// PureCARD enforces membership in its fixed emitted-subset PDA and narrows the
+/// positions covered by its schema rules. No decode-time mask can reach
 /// [`Faithful`](GuaranteeLevel::Faithful) (L3): it sees the schema and partial
 /// output, but never the question's intent.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -191,8 +183,7 @@ pub enum GuaranteeLevel {
 
 impl GuaranteeLevel {
     /// The theoretical strongest level a decode-time grammar/schema constraint
-    /// can target: schema-consistency (L2). This ceiling is not a claim that the
-    /// current partial overlay has achieved full L2. Faithfulness (L3) remains
+    /// can target: schema-consistency (L2). Faithfulness (L3) remains
     /// structurally out of reach.
     pub const MAX_ENFORCEABLE: GuaranteeLevel = GuaranteeLevel::SchemaConsistent;
 
@@ -208,8 +199,7 @@ impl GuaranteeLevel {
 
     /// Whether this level is structurally enforceable by a decode-time
     /// grammar/schema constraint — i.e. it is no stronger than the theoretical
-    /// [`MAX_ENFORCEABLE`](GuaranteeLevel::MAX_ENFORCEABLE). This does not report
-    /// whether the current implementation has proven that level end to end.
+    /// [`MAX_ENFORCEABLE`](GuaranteeLevel::MAX_ENFORCEABLE).
     #[must_use]
     pub fn is_enforceable(self) -> bool {
         self <= Self::MAX_ENFORCEABLE

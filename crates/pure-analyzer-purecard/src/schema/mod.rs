@@ -16,18 +16,16 @@
 //! `L2 ⊆ L1` guarantee is structural. When a [`DecoderSession`](crate::DecoderSession)
 //! holds no schema the overlay is skipped entirely (zero added per-step cost).
 //!
-//! # Shipped vs. deferred rules
+//! # Covered and pass-through rules
 //!
-//! This milestone ships the rules the 8 committed schema fixtures prove sound and
+//! This overlay applies the rules the 8 committed schema fixtures exercise and
 //! precise: **N3** (source-class exists), **N1/N2** (member/nav after `.`), **N6**
 //! (relation-column strings), and **T1** (comparison operand type-class — the
-//! `car_1` `horsepower:String` lever). T1 ships only its **string/numeric** levers
-//! (the classes with a corpus operand); Boolean and Temporal operand narrowing is
-//! deferred and passes through (see `narrow`). The `ScopeTracker` (S1–S3) ships **whole**
-//! — a partial scope machine is a soundness hazard. Deferred (documented, not
-//! half-built): N5-as-a-distinct-rule (the `navigable` map still ships — N1/N2
-//! need it), T2/T3/T4/T6/T7 (thin corpus coverage), and N4/T5 (inert — no corpus
-//! enum operand exists; they mask nothing).
+//! `car_1` `horsepower:String` lever). T1 applies its **string/numeric** levers;
+//! Boolean and Temporal operands pass through (see `narrow`). The `ScopeTracker`
+//! (S1–S3) is whole — a partial scope machine is a soundness hazard. N5 as a
+//! distinct rule, T2/T3/T4/T6/T7, and N4/T5 pass through; the `navigable` map is
+//! retained because N1/N2 need it.
 
 pub(crate) mod model;
 pub(crate) mod narrow;

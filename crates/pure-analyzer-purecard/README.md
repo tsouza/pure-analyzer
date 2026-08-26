@@ -21,15 +21,15 @@ architecture.
 
 ## The guarantee boundary
 
-The intended levels form a strict containment hierarchy:
+The constraint levels form a strict containment hierarchy:
 
 | Level                     | Contract                                                                       | Scope                                                      |
 | ------------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------- |
-| **L1 · Syntactic**        | Output belongs to the hand-written emitted-subset Pure grammar                 | Fixed-PDA membership implemented; live validity proof open |
-| **L2 · SchemaConsistent** | Implemented identifier/type positions narrow against the supplied model schema | Implemented, partial overlay                               |
+| **L1 · Syntactic**        | Output belongs to the hand-written emitted-subset Pure grammar                 | Fixed-PDA membership                                       |
+| **L2 · SchemaConsistent** | Covered identifier/type positions narrow against the supplied model schema     | Selected schema positions only                             |
 | **L3 · Faithful**         | The query answers the question that was asked                                  | Out of scope                                               |
 
-See [the specification](docs/spec/README.md) for the emitted-Pure grammar, the
+See [the product reference](docs/spec/README.md) for the emitted-Pure grammar, the
 byte-level masking algorithm, the implemented schema overlay, the public API,
 and the oracle-driven test strategy.
 
@@ -50,36 +50,14 @@ scope overlay narrows selected identifier and type positions against a supplied
 schema (L2). A lazy per-state mask cache keeps repeated mask generation off the
 critical path.
 
-## Current status
+## Operating limits
 
-The code artifacts planned for M0–M5 are implemented:
-
-- **M0:** committed oracle/corpus harness and offline replay;
-- **M1:** hand-written PDA for the emitted subset;
-- **M2:** lazy mask cache, equivalence tests, and benchmarks;
-- **M3:** the implemented schema-overlay subset;
-- **M4:** thin, feature-gated PyO3 boundary and maturin wheel build; and
-- **M5:** tokenizer self-check, EOS/error hardening, fuzz targets, and benches.
-
-The always-on offline lanes replay the 5,034-query corpus and the modern-dialect
-seeds. In addition, [`tests/qwen_soundness.rs`](tests/qwen_soundness.rs) loads the
-actual pinned Qwen tokenizer and replays real tokenizer token IDs; it runs
-on-demand and in the scheduled
-[`purecard-qwen-oracle.yml`](../../.github/workflows/purecard-qwen-oracle.yml)
-workflow. This is real-tokenizer token-ID evidence. It is **not** real-model
-inference and it does not invoke Legend.
-
-The following end-to-end proof obligations remain open:
-
-1. validate a 100% constrained-walk compile rate against a live Legend engine;
-2. lower grammar specifications into the PDA (`CompiledGrammar::from_spec`
-   currently selects the fixed PDA);
-3. generate schema-constrained accepting walks; and
-4. run real-model Python inference, constrain the produced query, and compile it
-   against live Legend.
-
-Accordingly, PureCARD does not claim to be feature-complete or to have proven
-the original M0–M5 milestone definitions end to end.
+PureCARD does not include a model-inference runner, a full Pure compiler, or a
+full type checker. `CompiledGrammar::from_spec` selects the fixed PDA and the
+walker is schema-agnostic. The Qwen lane verifies tokenizer token-ID replay; it
+does not establish host inference-loop behavior or compiler validity of every
+accepted query. See the [product reference](docs/spec/overview.md#10-operating-limits)
+for the precise boundary.
 
 ## Corpus
 

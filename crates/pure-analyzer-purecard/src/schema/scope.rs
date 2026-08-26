@@ -187,7 +187,7 @@ const REF_METHODS: &[&str] = &[
 /// Byte-level BPE fragments a schema identifier (`countryName` → `country` +
 /// `Name`); the tracker buffers the fragments and dispatches the scope transition
 /// (resolve / bind / emit) only once the *whole* lexeme completes, so
-/// [`resolve_member`](ScopeTracker::resolve_member) sees the whole name (M3). The
+/// [`resolve_member`](ScopeTracker::resolve_member) sees the whole name. The
 /// buffered bytes also serve as the trie-walk prefix the narrower reads (B1), so
 /// the constraint persists across the sub-tokens rather than firing only at the
 /// leading one.
@@ -335,7 +335,7 @@ impl ScopeTracker {
     /// the same per-lexeme logic a lexeme-granular stream uses (constitution §4,
     /// DRY). A run still open at the token's end (an identifier/string arriving in
     /// fragments) is buffered into [`Pending`] and resolved when a later token
-    /// closes it (§6.4, B1/M3); a run that closes inside the token is dispatched at
+    /// closes it (§6.4, B1); a run that closes inside the token is dispatched at
     /// once, so a buried `.`/`(` fires `on_dot`/`on_open` (H2) and a merged closing
     /// quote records the true column bytes (H1). The seed stack lets an interior
     /// closer (`)`) route through the matching frame rather than dying.
@@ -465,7 +465,7 @@ impl ScopeTracker {
     }
 
     /// Buffer a lexeme still open at the token's end into [`Pending`], resolved and
-    /// narrowed once a later token closes it (§6.4, B1/M3). A continuation extends
+    /// narrowed once a later token closes it (§6.4, B1). A continuation extends
     /// the existing buffer; a fresh run opens a new one, stamping the rule its
     /// anchor establishes (T1's `ReValue` lever is a whole-token literal-class
     /// test, so its continuation sub-tokens pass through untouched).

@@ -21,9 +21,8 @@ use text_size::{TextRange, TextSize};
 /// A terminal token kind, as produced by [`lex`].
 ///
 /// One flat `logos`-derived enum covering every token class design doc §4.1
-/// specifies, plus a documented handful it omits but the grammar clearly
-/// needs (see `specs/lexer.md`'s non-goals: `SEMICOLON`, and a concrete
-/// arithmetic/comparison operator set for the doc's unspecified "arithmetic").
+/// specifies, plus the semicolon and concrete arithmetic/comparison operators
+/// the grammar requires under the document's broad "arithmetic" category.
 /// Trivia (whitespace, comments) are real variants, never skipped, so the
 /// token stream is lossless — required for `fmt` later.
 #[derive(Logos, Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -74,8 +73,7 @@ pub enum SyntaxKind {
     EQ,
     #[token("!=")]
     NEQ,
-    // Not in design doc §4.1's symbol list (it only says "arithmetic") —
-    // a documented interpretation; see specs/lexer.md non-goals.
+    // The design's broad arithmetic category is represented by concrete token kinds.
     #[token("+")]
     PLUS,
     #[token("-")]
@@ -92,8 +90,7 @@ pub enum SyntaxKind {
     GE,
     #[token(">")]
     GT,
-    // Not in §4.1 either, but required by §4.2's `CodeBlock = Stmt (';'
-    // Stmt)*` and used in §1.1's own worked example — see specs/lexer.md.
+    // Required by §4.2's `CodeBlock = Stmt (';' Stmt)*` and §1.1's worked example.
     #[token(";")]
     SEMICOLON,
     // Shared by lambda bodies (`{x,y| ...}`) and islands (`#{...}#`) alike;
@@ -127,7 +124,7 @@ pub enum SyntaxKind {
     #[token("false")]
     BOOLEAN,
     // Pascal/SQL-style: `'...'` with `''` as an escaped literal quote — a
-    // documented assumption, not yet engine-verified; see specs/lexer.md.
+    // documented assumption, not yet engine-verified.
     #[regex(r"'([^']|'')*'", allow_greedy = true)]
     STRING,
 
@@ -360,10 +357,9 @@ mod tests {
 
     #[test]
     fn lexes_single_quoted_string_with_doubled_quote_escape() {
-        // Pascal/SQL-style escaping: '' inside a '...' literal is one
-        // embedded quote character, not the string's end (see specs/lexer.md
-        // non-goals — corroborated by purecard's ADR-0004, not yet verified
-        // against the real engine).
+        // Pascal/SQL-style escaping: '' inside a '...' literal is one embedded
+        // quote character, not the string's end; it remains unverified against
+        // the real engine.
         assert_eq!(kinds("'it''s a test'"), [SyntaxKind::STRING]);
     }
 

@@ -10,7 +10,7 @@ valid query needs. A **completeness** bug admits a path that the real Legend
 compiler rejects. Both can stay invisible in ordinary unit tests, so each claim
 below names its input, oracle, and execution lane.
 
-## Current evidence map
+## Test map
 
 - **Unit, hermetic:** hand-authored assertions prove local PDA, mask, schema,
   error, and FFI contracts.
@@ -19,18 +19,15 @@ below names its input, oracle, and execution lane.
 - **Corpus replay, hermetic:** 5,034 execution-verified queries and the
   provenance-distinct modern seeds prove membership in the fixed PDA.
 - **L2 replay and precision, hermetic:** committed schemas, BPE regressions, and
-  Spider-derived cases exercise the implemented narrowing subset.
+  Spider-derived cases exercise the covered narrowing rules.
 - **Real tokenizer, scheduled/on-demand:** the pinned Qwen tokenizer and
   `tests/qwen_soundness.rs` prove actual token-ID replay.
 - **Accepting walks, hermetic:** seeded PDA walks prove the deterministic walker
   emits non-trivial strings accepted by an independent session.
-- **Live Legend, local/on-demand:** placeholder protocol fixtures and annotated
-  walks prove managed stack reachability and response classification.
+- **Live Legend, local/on-demand:** protocol fixtures and annotated walks verify
+  managed-stack reachability and response classification.
 - **Python/wheel, CI verification:** Rust FFI tests, Python tests, and built
   wheels prove that the PyO3 surface builds, imports, and delegates.
-
-The last two rows do **not** currently combine into real-model inference followed
-by live compilation.
 
 ## Why end to end is not a unit test
 
@@ -40,30 +37,24 @@ mask to a model's logits produces a complete query, or that Legend accepts the
 result. Those are integration properties across independently implemented
 systems.
 
-The real-Qwen lane closes the tokenizer-boundary portion: it loads the actual
-pinned tokenizer, builds `Vocab` in token-ID order, tokenizes the corpus, and
-replays the actual IDs. It does not execute a model. The live Legend lane closes
-engine reachability and response classification. It does not yet lower raw walks
-through `grammarToJson` into real protocol values or establish their compile
-rate. Keeping those boundaries separate prevents a green partial lane from being
-reported as a green e2e guarantee.
+The real-Qwen lane loads the pinned tokenizer, builds `Vocab` in token-ID order,
+tokenizes the corpus, and replays the actual IDs. The live Legend lane verifies
+engine reachability and response classification. These are distinct test
+boundaries, not a claim about host model behavior or general compiler validity.
 
 ## Differential Legend oracle
 
 Do not fork Legend. PureCARD is a recognizer and mask generator, not an AST
-producer, and the stock engine already exposes the two signals the completed
-differential lane needs:
+producer, and the stock engine exposes two relevant signals:
 
 1. `POST /pure/v1/grammar/grammarToJson/lambda` tests parse membership and
    produces protocol JSON.
 2. `POST /pure/v1/compilation/lambdaReturnType` tests name/type resolution
    against a supplied PMCD.
 
-The pinned stack under `corpus/legend-stack/` is therefore the oracle. The
-current client exercises health and `lambdaReturnType` classification with
-placeholder protocol fixtures. The missing work is to feed each raw constrained
-walk through the first endpoint, generate under a real schema, and assert that
-the second endpoint succeeds for every output.
+The pinned stack under `corpus/legend-stack/` is therefore the oracle. The test
+client exercises health and `lambdaReturnType` classification with protocol
+fixtures; the decoder itself remains independent of the engine.
 
 ## How test inputs are derived
 
@@ -162,15 +153,10 @@ property inputs become committed regressions.
 
 All commands run from the monorepo root through the shared `just` frontend.
 
-## Milestone evidence and open obligations
+## Decoder boundary
 
-The code artifacts for M0–M5 exist: the oracle/corpus harness, hand-written
-emitted-subset PDA, lazy cache and benches, implemented schema overlay subset,
-PyO3/wheel boundary, self-check, hardened errors, fuzz targets, and final
-benchmarks. That implementation inventory is not an end-to-end completion claim.
-
-The authoritative
-[acceptance obligations](../spec/overview.md#10-milestone-implementation-status-m0m5)
-remain explicit. Until each is proven by a named test, do not call PureCARD
-feature-complete or say that the original milestone definitions are delivered
-end to end.
+The test suite covers the oracle/corpus harness, hand-written emitted-subset
+PDA, lazy mask cache, selected schema overlay, PyO3/wheel boundary, self-check,
+error handling, fuzz targets, and benchmarks. The decoder's behavioral limits
+are defined in the [product reference](../spec/overview.md#10-operating-limits),
+not in a checked-in task ledger.

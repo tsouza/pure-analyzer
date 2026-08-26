@@ -1,5 +1,5 @@
 //! The precision (negative) corpus — the pin no other gate can replace
-//! (`specs/m1-l1-grammar.md`, Fix 1a; ADR-0004).
+//! (`docs/spec/grammar.md`; ADR-0004).
 //!
 //! Gold soundness (`tests/soundness_replay.rs`) proves the PDA *accepts* every
 //! valid query; coverage and mutation observe which lines run and which mutants

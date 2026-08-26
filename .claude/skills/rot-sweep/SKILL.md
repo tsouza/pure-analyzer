@@ -59,38 +59,30 @@ decide:
 Do **not** re-derive with the LLM anything L1 already decides — that's wasted
 budget. Judge the residue, not the repo.
 
-## Record findings → `docs/lessons.md`
+## Record findings in GitHub
 
-Append every material finding as a dated entry:
-
-```md
-## <YYYY-MM-DD> — rot-sweep
-- Finding: <what>  @ <path(s)>
-  Trigger: <how it was found: L1 tool name | L2 judgment>
-  Confidence: high | med | low
-  Action: <fixed in PR #… | branched | rule promoted>
-```
-
-`docs/lessons.md` is the institutional memory; each sweep reads prior entries so
-it doesn't re-litigate settled calls.
+Fix an in-scope finding in the current PR. For any independent finding, open or
+update a GitHub Issue with the affected paths and acceptance criteria. The PR
+that addresses it supplies implementation evidence. Do not create a checked-in
+lesson, plan, or status ledger.
 
 ## Promotion rule (this is the point)
 
-**Any finding class that recurs `N = 3` times gets promoted from L2 (LLM
-judgment) into an L1 deterministic rule** — an **ast-grep** pattern (or a
-clippy `disallowed-methods` entry). Once promoted:
+When a finding class can be decided mechanically, promote it from L2 (LLM
+judgment) into an L1 deterministic rule — an **ast-grep** pattern (or a clippy
+`disallowed-methods` entry). Once promoted:
 
 - It's caught for free on every future sweep *and* in per-change gates.
 - The LLM never has to reason about that class again.
-- Record the promotion in `docs/lessons.md` and add the rule with a test.
+- Link the rule and its test as implementation evidence in the PR.
 
 This is "fix the system, not the instance" applied to review itself: the sweep
-teaches the deterministic layer, and the deterministic layer shrinks future token
-cost. A sweep that promotes at least one rule has paid for itself twice.
+improves the deterministic layer, and the deterministic layer shrinks future
+token cost.
 
 ## Output
 
 - L1: list of tool findings (fixed / filed).
 - L2: judged residue with confidence.
-- `docs/lessons.md` updated.
-- Any `N=3` class promoted to an ast-grep rule (with a test) this sweep.
+- Linked Issues for unfixed independent findings.
+- Any new deterministic rule (with a test).

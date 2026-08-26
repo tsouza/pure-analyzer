@@ -9,28 +9,16 @@ infrastructure, but remain independent products.
 
 `pure-analyzer` is a mechanical, standalone static-analysis toolchain for
 [Legend Pure](https://legend.finos.org/) and its modern `Relation<>` dialect.
-Its target design is deterministic and engine-free at runtime: lexer, parser,
-model loader, resolver, analysis passes, and thin CLI/LSP front ends.
-
-The analyzer is currently an **early scaffold**. The lexer and shared diagnostic
-model contain real implementations. Syntax, parser, model, resolver, analysis,
-and `libpure` are mostly version-reporting stubs, and the CLI subcommands return
-`not implemented yet`. The planned `validate`, `lint`, `eq`/`diff`, `fmt`, and
-LSP behavior is a roadmap, not a claim about the current binary.
-
-See [`docs/design/pure-analyzer-design.md`](docs/design/pure-analyzer-design.md)
-for that target design and [`docs/domain-model.md`](docs/domain-model.md) for
-current domain and implementation truth.
+Its analyzer crates follow the dependency direction described in the
+[domain model](docs/domain-model.md).
 
 ### pure-analyzer-purecard
 
 [`pure-analyzer-purecard`](crates/pure-analyzer-purecard/) is the PureCARD
-constrained decoder. It masks language-model tokens against its emitted-subset
-grammar and, at implemented L2 positions, an optional schema. Its M0–M5 code
-artifacts—including the L1/L2 decoder, PyO3 boundary, offline gold corpus, fuzz
-targets, and benchmarks—are implemented, while its
-[end-to-end proof obligations](crates/pure-analyzer-purecard/docs/spec/overview.md#10-milestone-implementation-status-m0m5)
-remain open; PureCARD does not yet claim feature completeness.
+constrained decoder. It masks language-model tokens against its fixed
+emitted-subset grammar and, at covered L2 positions, an optional schema. Its
+[product reference](crates/pure-analyzer-purecard/docs/spec/README.md) defines
+the decoder boundary and operating limits.
 
 PureCARD remains unpublished here: its Rust package has `publish = false`, and
 CI builds Python wheels only as verification artifacts. See the
@@ -50,7 +38,7 @@ The products are co-located, not layered together:
   toward prerequisites: notably, resolver may depend on model; model must not
   depend on resolver. Diagnostics is a shared leaf within the analyzer product.
 - Co-location does not authorize parser, corpus, or ownership sharing. Any such
-  integration requires a dedicated spec and ADR.
+  integration requires a GitHub Issue and ADR.
 
 `cargo xtask verify-layering` enforces both the analyzer DAG and the
 analyzer–PureCARD product boundary. See
@@ -63,19 +51,18 @@ PureCARD's
 
 ```text
 crates/
-  pure-analyzer-lexer/       implemented analyzer lexer
-  pure-analyzer-syntax/      analyzer syntax scaffold
-  pure-analyzer-parser/      analyzer parser scaffold
-  pure-analyzer-model/       analyzer model-loader scaffold
-  pure-analyzer-resolve/     analyzer resolver scaffold
-  pure-analyzer-analysis/    analyzer pass scaffold
-  pure-analyzer-diagnostics/ implemented shared analyzer diagnostics
-  libpure/                   analyzer facade scaffold
-  pure-analyzer-cli/         analyzer CLI scaffold
+  pure-analyzer-lexer/       analyzer lexer
+  pure-analyzer-syntax/      analyzer syntax types
+  pure-analyzer-parser/      analyzer parser
+  pure-analyzer-model/       analyzer model loader
+  pure-analyzer-resolve/     analyzer resolver
+  pure-analyzer-analysis/    analyzer passes
+  pure-analyzer-diagnostics/ shared analyzer diagnostics
+  libpure/                   analyzer facade
+  pure-analyzer-cli/         analyzer CLI
   pure-analyzer-purecard/    independent constrained-decoder product
 xtask/                       shared repository automation
 docs/                        root governance, design, and methodology
-specs/                       root change specifications
 ```
 
 ## Building

@@ -2,8 +2,8 @@
 // Reject time-frozen self-description in PureCARD's shipped src/** doc-comments.
 // A shipped crate must not call itself a scaffold/stub/future work: code is the
 // source of truth for what exists, and a module doc frozen at an earlier
-// milestone silently lies to every reader. Status lives in one tracked place,
-// not scattered across module headers (constitution §5; docs/lessons.md).
+// milestone silently lies to every reader. Source documentation describes
+// present behavior; mutable work state belongs in GitHub Issues and PRs.
 //   default : scan staged crates/pure-analyzer-purecard/src/**/*.rs
 //   --all   : scan all tracked crates/pure-analyzer-purecard/src/**/*.rs
 //

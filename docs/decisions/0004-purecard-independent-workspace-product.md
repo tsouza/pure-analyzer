@@ -48,11 +48,11 @@ The product boundary has these rules:
 3. `xtask`, the root `just` interface, root CI, toolchain declarations, and root
    governance may orchestrate or constrain both products. They are shared
    repository infrastructure, not a third product and not an analyzer layer.
-4. Each product retains ownership of its runtime code, domain records, specs,
+4. Each product retains ownership of its runtime code, domain records,
    ADRs, tests, and corpus. Co-location grants no implied right to reuse or
    redefine the other product's assets.
 5. Sharing a parser implementation, model type, corpus, or other product asset
-   requires a future change with both a dedicated spec and a new ADR. That ADR
+   requires a future change with a GitHub Issue and a new ADR. That ADR
    must identify ownership direction, stable contract, versioning impact, and
    why the zero-edge boundary is no longer preferable.
 6. The migrated PureCARD Cargo package remains unpublished with
@@ -87,7 +87,7 @@ remain outside the product-edge prohibition.
   their runtime graphs remain independent.
 - Analyzer refactors cannot silently become PureCARD dependencies, and PureCARD
   cannot become an undeclared analyzer feature.
-- Cross-product reuse carries deliberate spec-and-ADR overhead. That friction is
+- Cross-product reuse carries deliberate issue-and-ADR overhead. That friction is
   intentional and makes ownership, compatibility, and release consequences
   reviewable before code couples the products.
 - PureCARD's package name follows workspace conventions while its Rust library

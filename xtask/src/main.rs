@@ -59,11 +59,6 @@ enum Command {
         /// Feature name; becomes branch `feature/<name>`.
         name: String,
     },
-    /// Scaffold a feature spec at `specs/<name>.md`.
-    Spec {
-        /// Feature name; becomes `specs/<name>.md`.
-        name: String,
-    },
     /// Verify analyzer layering and the analyzer/PureCARD product boundary.
     VerifyLayering,
     /// Verify every crate inherits the workspace lints (forbid-unsafe / deny-missing-docs).
@@ -89,7 +84,6 @@ fn main() -> Result<()> {
         Command::CheckDocLinks => markdown::check_doc_links(),
         Command::PublicApi { bless } => tasks::public_api(bless),
         Command::NewFeature { name } => tasks::new_feature(&name),
-        Command::Spec { name } => tasks::spec(&name),
         Command::VerifyLayering => tasks::verify_layering(),
         Command::VerifyLints => tasks::verify_lints(),
         Command::PurecardFuzzCi { secs } => tasks::purecard_fuzz_ci(secs),

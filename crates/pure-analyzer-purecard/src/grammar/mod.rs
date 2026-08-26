@@ -40,7 +40,7 @@ pub struct DeadState {
 /// the modern Relation/Function API (any `~`-column construct — `project(~[…])`,
 /// `groupBy(~[…])`, `over(~…)`, …). The soundness gate partitions each corpus by
 /// this classifier and asserts an exact record count per arm
-/// (`specs/m1-l1-grammar.md`, G2; ADR-0007), so a mis-partitioned or missing query
+/// (`docs/spec/grammar.md`; ADR-0007), so a mis-partitioned or missing query
 /// reddens the gate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Envelope {

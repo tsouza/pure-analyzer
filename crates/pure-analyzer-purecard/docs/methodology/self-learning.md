@@ -1,6 +1,7 @@
-# Methodology: Self-Learning
+# Methodology: Guardrail Ratchet
 
-The canonical self-learning and guardrail-ratchet policy lives in the root
-[self-learning document](../../../../docs/methodology/self-learning.md).
-PureCARD's local [lessons ledger](../lessons.md) records decoder-specific
-provenance without duplicating the repository-wide policy.
+PureCARD follows the repository-wide
+[guardrail policy](../../../../docs/methodology/self-learning.md). Its source
+and nested documentation describe durable decoder behavior and decisions only.
+Scope, progress, and acceptance criteria belong in GitHub Issues; PRs contain
+the implementation evidence.

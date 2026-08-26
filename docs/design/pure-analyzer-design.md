@@ -2,20 +2,6 @@
 
 **A mechanical, standalone, Rust static-analysis toolchain for Legend Pure (the modern `Relation<>` dialect)**
 
-Status: target design specification (v1). This document defines intended
-analyzer behavior; it is not a current implementation inventory.
-
-> **Implementation status (2026-08-26).** `pure-analyzer` is an early
-> scaffold. The lexer and diagnostic model contain substantive code; syntax,
-> parser, model, resolve, analysis, and `libpure` are mostly version stubs, and
-> CLI subcommands return `not implemented yet`. The umbrella workspace also
-> contains `pure-analyzer-purecard` as an independent, unpublished sibling
-> product. Its M0–M5 code artifacts exist, but its documented end-to-end proof
-> obligations remain, so PureCARD does not claim feature completeness. It is not part of
-> this analyzer design or its crate DAG. See the
-> [domain model](../domain-model.md) and [ADR-0004](../decisions/0004-purecard-independent-workspace-product.md)
-> for current repository topology.
-
 ---
 
 ## Table of Contents
@@ -28,8 +14,7 @@ analyzer behavior; it is not a current implementation inventory.
 6. Diagnostic / Output Format, Exit Codes, Config
 7. Model Input (PMCD JSON and/or Pure-model stereotypes — staying engine-free)
 8. Test Strategy
-9. Staged Milestones
-10. Honest Limits & Explicitly Out of Scope
+9. Honest Limits & Explicitly Out of Scope
 
 ---
 
@@ -63,40 +48,23 @@ No fast standalone static-analysis toolchain for Pure exists today; current tool
 - **Engine-free model path is first-class.** The single fact milestoning arity needs — the *target class's temporal stereotype* — is present in Pure model source (`<<temporal.X>>`). A parsed **Pure model file is the first-class model input**; PMCD JSON is an **optional coverage booster** (associations, richer qualified properties). pure-analyzer must deliver full-strength arity linting **without** running the engine. (See §7.)
 - **Rust; FINOS-open-source-friendly; domain-agnostic.** pure-analyzer is about the *language*, never any customer data or private domain. Zero private-domain content.
 - **Correct-first.** `validate` must not over-reject (breaking legal code is as fatal as over-admitting). `eq` **soundness is sacred**: it must never wrongly commit `EQUIVALENT` or `NOT_EQUIVALENT`.
-- **Ships incrementally, LSP-first in the core.** validate+lint ship first (small, complete, high value), then eq+fmt and the LSP surface. The **LSP is a first-class front-end, not an afterthought** — the `Diagnostic` model, byte-offset spans, structured `Fix`es, and `explain` text are designed to drive an editor from v0.1 onward (see §1.5); the LSP *server* lands as soon as there are diagnostics to serve.
+- **Two surfaces, one core.** `libpure` is the shared analysis engine; the CLI
+  and LSP are thin adapters over its diagnostics and structured fixes (see §1.4).
 
-### 1.4 What is IN v1 vs future
-
-| Capability                                                                                             | v0.1                           | v0.2 | v0.3 | v2+ |
-| ------------------------------------------------------------------------------------------------------ | ------------------------------ | ---- | ---- | --- |
-| lexer + resilient parser + lossless CST + spans                                                        | ✅                             |      |      |     |
-| `validate` (grammar fidelity + over-admission guards)                                                  | ✅                             |      |      |     |
-| model loader (Pure-file **and** PMCD) + resolver                                                       | ✅                             |      |      |     |
-| `lint` (milestoning arity core + unknown-property + cardinality)                                       | ✅                             |      |      |     |
-| `fmt` **default layout mode** (lossless-CST re-emit)                                                   | ✅                             |      |      |     |
-| `eq`/`diff` structural NF + schema/structural refutation (**M4a**)                                     |                                | ✅   |      |     |
-| `eq` bounded bag-interpreter witness search (**M4b**)                                                  |                                | ✅¹  |      |     |
-| `fmt --canonical` (serialize eq NF)                                                                    |                                | ✅   |      |     |
-| reason-code taxonomy + `explain` + doc pages                                                           |                                | ✅   |      |     |
-| **`pure-analyzer-lsp` — diagnostics-on-change + code-actions (`Fix`) + hover (`explain`) + go-to-def** |                                | ✅   |      |     |
-| LSP `salsa` incremental recompute (only if profiling demands)                                          |                                |      | ✅   |     |
-| SMT symbolic eq arm (feature-gated)                                                                    |                                |      |      | ✅  |
-| Research-grade milestoning-equivalence THEORY                                                          | ❌ never in this project scope |      |      |     |
-
-¹ M4b ships only after its null/constraint/partiality semantics are pinned by the engine differential corpus (§8). If not ready, v0.2 ships M4a only; the general witness refuter waits.
-
-**Explicitly OUT of v1 forever-as-far-as-this-doc-is-concerned:** the research-grade milestoning-equivalence decision procedure (SMT/semiring bitemporal as-of laws for window/pareto/multi-step-fiscal/division equivalence). `eq` is honestly `INDECISIVE` (with a `FUNDAMENTAL` reason code) on all of these. See §10.
-
----
-
-### 1.5 Two surfaces, one core (the LSP is first-class)
+### 1.4 Two surfaces, one core
 
 `pure-analyzer` is **an analysis engine with two co-equal front-ends**, not a CLI that might grow an LSP later. `libpure` (parser → resolved model → passes → `Diagnostic`) is the whole product; the CLI and the LSP are thin adapters over it:
 
 - The **CLI** (`pure-analyzer`) renders `Diagnostic`s to a terminal / JSON / SARIF and returns exit codes.
 - The **LSP** (`pure-analyzer-lsp`, `tower-lsp`) renders the *same* `Diagnostic`s as live editor squiggles, turns each `Fix` into an LSP `CodeAction`/`WorkspaceEdit`, serves `explain` text as hover, and answers go-to-definition on navigation via the resolver — over VS Code, JetBrains (LSP4IJ), Neovim, and any LSP client.
 
-Three things in the core exist **specifically** so the LSP is a free adapter rather than a rewrite: (1) every `Diagnostic` carries **byte-offset spans** convertible to LSP UTF-16 positions at the boundary only (`codespan-lsp`); (2) `Fix` is a **structured edit** (span + replacement), not a rendered string, so it maps directly to a `WorkspaceEdit`; (3) the parser is **resilient** (error-recovering, lossless CST) so it yields a usable tree + diagnostics on every keystroke, including on incomplete input. `salsa` incremental recomputation is added **only** if profiling shows re-parse cost matters (§9) — resilient full re-parse of a single query file is already sub-millisecond, so correctness never depends on it.
+Three things in the core make the LSP an adapter rather than a rewrite: (1) every
+`Diagnostic` carries **byte-offset spans** convertible to LSP UTF-16 positions at
+the boundary only (`codespan-lsp`); (2) `Fix` is a **structured edit** (span +
+replacement), not a rendered string, so it maps directly to a `WorkspaceEdit`;
+and (3) the parser is **resilient** (error-recovering, lossless CST), yielding a
+usable tree and diagnostics on incomplete input. Core correctness does not
+depend on incremental recomputation.
 
 ---
 
@@ -388,7 +356,7 @@ Rules:
 - **`pure-analyzer-eq` / `pure-analyzer-ir` are their own crates** so the sound core (validate+lint) builds/ships without pulling the heavy, soundness-critical interpreter. `pure-analyzer-analysis` must not become a grab-bag.
 - **`smt` is feature-gated** and behind `pure-analyzer-eq-smt`; a CI `--no-default-features` build asserts the sound core builds with **zero solver dependency**. Soundness never depends on a solver being installed.
 - Parser or corpus reuse with PureCARD is not implied by co-location. It needs a
-  future spec and ADR before either product may take such a dependency or share
+  future issue and ADR before either product may take such a dependency or share
   ownership of an asset.
 
 **Pinned crates:** `logos`; `rowan` (evaluate `cstree` if traversal-bound); `ungrammar` + `num-derive`; `clap` (derive); `serde`/`serde_json`; `ariadne` + `codespan-reporting` (+ `codespan-lsp`); `rayon`; `ignore`/`walkdir`; `insta`; `anyhow` (CLI only — libpure returns typed errors). LSP-only: `tower-lsp` + `lsp-types`, optional `salsa` (v0.3+). SMT-only: `easy-smt` then `z3`.
@@ -961,26 +929,7 @@ Four tiers, all gating CI.
 
 ---
 
-## 9. Staged Milestones
-
-- **v0.1 — validate + lint + default fmt (the shippable MVP, small/complete/high-value).**
-  lexer + syntax + resilient parser + rowan CST + spans (M3 query grammar **and** the Domain-model subset); `validate` with the corrected over-admission roster + the **mandatory** engine-parity corpus; `pure-analyzer-model` (**Pure-file first-class** + PMCD booster) with supertypes/associations/QP classification; `pure-analyzer-resolve` with the local lambda-param/let TypeEnv + generalization walk + the corrected fresh-per-hop context gate + generated-vs-user-QP gate; `lint` (arity core, unknown-property, cardinality; **all fixes Suggested-only**); **default-layout `fmt`** (CST re-emit, idempotent) — a freebie that exercises the re-emitter early; human + json output (sarif optional), unified exit codes, config, `explain`.
-
-- **v0.2 — eq + diff + `fmt --canonical`.**
-  `pure-analyzer-ir` (RA-IR + confluent/terminating normalizer, column-order-significant, guarded rewrites); **M4a first:** structural NF match + schema/structural refutation (3a, 3b) — no bag interpreter; **M4b next (only after the interpreter semantics corpus passes):** the model-legal, 3VL-pinned bounded witness search (3c). `diff` verdict + span-anchored delta. `fmt --canonical` from the NF (emitter-injectivity fuzzed). Reason-code taxonomy (FUNDAMENTAL/RECOVERABLE) wired through diagnostics + `docs/reason-codes/`; exit code 2 for INDECISIVE. eq lives in its own `pure-analyzer-eq`/`pure-analyzer-ir` crates.
-
-- **v0.2 (co-shipped) — LSP surface (first-class).**
-  `pure-analyzer-lsp` (tower-lsp): diagnostics-on-change, `Fix`→code-actions, `explain`→hover, go-to-definition on navigation via the resolver. Ships alongside eq because every input it needs — `Diagnostic`, structured `Fix`, `explain`, the resolved model — already exists from v0.1; it is an adapter, not new analysis.
-
-- **v0.3 — LSP performance hardening (optional).**
-  Add `salsa` incremental recomputation to `pure-analyzer-lsp` **only** if profiling shows single-file re-parse cost matters on large (multi-hundred-file) workspaces; the v0.2 server is already correct without it.
-
-- **v2+ — SMT symbolic eq arm (feature-gated, strictly additive).**
-  `pure-analyzer-eq-smt`: `easy-smt` prototype → `z3` for throughput; ships behind `--features smt`; UNKNOWN/timeout maps to INDECISIVE, never a commit; default builds stay solver-free.
-
----
-
-## 10. Honest Limits & Explicitly Out of Scope
+## 9. Honest Limits & Explicitly Out of Scope
 
 - **The research-grade milestoning-equivalence THEORY is OUT** (of this project, not just v1). The SMT/semiring decision procedure with mechanized bitemporal as-of laws for window/pareto/multi-step-fiscal/division/ratio equivalence is a **separate research project**. pure-analyzer `eq` is honestly `INDECISIVE(FUNDAMENTAL)` on all of it (`IND_WINDOW`, `IND_PARETO`, `IND_MULTISTEP_FISCAL`, `IND_DIVISION_RATIO`, `IND_MILESTONING_ASOF`). No solver in the sound core.
 

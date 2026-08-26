@@ -265,16 +265,15 @@ From `gate0-findings.md` + the stack. Keep to what affects _compiling lambdas_ (
 
 The repository separates the lanes by cost and evidence:
 
-| Lane                      | Inputs                                            | Current evidence                                                      |
+| Lane                      | Inputs                                            | Coverage boundary                                                     |
 | ------------------------- | ------------------------------------------------- | --------------------------------------------------------------------- |
 | Hermetic corpus replay    | Committed gold, modern seeds, and schema fixtures | Always-on byte/L2 soundness and regression evidence; no engine        |
 | Real-Qwen token-ID replay | Pinned tokenizer artifact, fetched cache-first    | Scheduled/on-demand actual tokenization; no model inference or engine |
 | Live Legend               | Two pinned amd64 images plus health-wait          | Local/on-demand reachability and response classification              |
 
-Run the offline soundness suite in every CI run. Keep the real-tokenizer oracle
-scheduled/on-demand and the live stack isolated behind `just test-legend`. The
-live lane may only become a 100% compile-rate gate after raw grammar lowering and
-schema-constrained accepting-walk generation are implemented; until then its
-green result must not be described as completeness proof.
+The offline soundness suite runs in every CI execution. The real-tokenizer oracle
+is scheduled/on-demand and the live stack is isolated behind `just test-legend`.
+The live lane exercises stack reachability and response classification; it does
+not claim a compiler-validity guarantee for every decoder output.
 
 ---

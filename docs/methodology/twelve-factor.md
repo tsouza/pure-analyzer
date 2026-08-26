@@ -37,4 +37,4 @@ effect, which is the load-bearing property this factor is actually protecting
 (no setting takes effect without being visible in one place). If the config
 surface grows past what flags/a config file can hand-document, revisit this
 section with the same "a figure a doc cites must be machine-asserted against its
-source, not hand-copied" principle the lessons ledger records elsewhere.
+source, not hand-copied" principle enforced by the repository's checks.

@@ -1,6 +1,6 @@
 //! The byte-recognizer surface of the decoder core.
 //!
-//! This ships the [`ByteRecognizer`] contract in `src/` (M1). The concrete
+//! This defines the [`ByteRecognizer`] contract in `src/`. The concrete
 //! byte-PDA is the hand-written pushdown automaton in [`Pda`](crate::Pda)
 //! (`src/grammar/pda.rs`); [`DecoderSession`](crate::DecoderSession)
 //! (`src/session.rs`) is the shipped implementation of this trait, folding each

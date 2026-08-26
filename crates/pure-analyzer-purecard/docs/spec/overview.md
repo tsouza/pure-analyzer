@@ -3,9 +3,9 @@
 _[Spec index](README.md) · [domain model](../domain-model.md)_
 
 This file covers the interface and guarantee boundary (§1), scope and non-goals
-(§2), the build milestones (§10), risks (§11), the roadmap (§12), and prior art
-(Appendix B). The grammar, schema, architecture, and testing rules live in the
-other [`docs/spec/`](README.md) files — see the [index](README.md) to route.
+(§2), operating limits (§10), and prior art (Appendix B). The grammar, schema,
+architecture, and testing rules live in the other [`docs/spec/`](README.md)
+files — see the [index](README.md) to route.
 
 ## 1. What PureCARD is — the interface and the guarantee boundary
 
@@ -36,30 +36,25 @@ for a restricted subset of **Legend Pure** (the functional query/modeling
 language of the FINOS Legend platform). At every decode step the model proposes
 a distribution over its vocabulary (~150k tokens); PureCARD, given the tokens
 generated so far, returns a boolean bitmask marking tokens that keep the partial
-output inside its hand-written emitted-subset recognizer. The Python inference
-loop is designed to apply the mask (sets disallowed logits to −∞) before
-sampling. That loop and live Legend compilation are not yet exercised end to
-end, so the current implementation does not guarantee compiler-valid output in
-every case.
+output inside its hand-written emitted-subset recognizer. A host inference loop
+applies the mask (sets disallowed logits to −∞) before sampling. PureCARD does
+not include that loop or a full Legend compiler, so it is not a general
+compiler-validity guarantee.
 
-Two constraint levels are product targets; a third is explicitly out of scope:
+Two constraint levels are represented; a third is structurally out of scope:
 
-| Level                      | Target boundary                                                                             | Current implementation                                        |
+| Level                      | Boundary                                                                                    | PureCARD behavior                                             |
 | -------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| **L1 — syntactic**         | output parses as emitted-subset Pure                                                        | hand-written emitted-subset recognizer; live proof pending    |
-| **L2 — schema-consistent** | identifiers/types resolve against _this_ model — no phantom classes/props, no type mismatch | partial overlay at selected positions; not full type-checking |
-| L3 — faithful              | query answers the question that was asked                                                   | out of scope and impossible to guarantee at decode time       |
+| **L1 — syntactic**         | output parses as emitted-subset Pure                                                        | fixed hand-written emitted-subset recognizer                  |
+| **L2 — schema-consistent** | identifiers/types resolve against _this_ model — no phantom classes/props, no type mismatch | schema overlay at covered positions                           |
+| L3 — faithful              | query answers the question that was asked                                                   | structurally unavailable to a decode-time mask                |
 
-### 1.3 The target guarantee boundary and current evidence
+### 1.3 The guarantee boundary
 
-The product target is **validity** (L1: the query parses) and
-**schema-consistency** (L2: the query compiles against this model). The current
-L1 code preserves reachability in the hand-written emitted-subset recognizer,
-and the current L2 code narrows selected class/property positions against a
-schema fixture. Neither constitutes a full Pure compiler or end-to-end proof:
-the obligations listed in §10 remain open, and accepted output is not yet
-guaranteed to compile in every case. PureCARD does **NOT** and **CANNOT**
-guarantee **faithfulness** — that the query means what was asked.
+PureCARD preserves reachability in its hand-written emitted-subset recognizer
+and narrows selected class/property positions against a supplied schema. It is
+not a full Pure compiler or type checker, and it does **NOT** and **CANNOT**
+guarantee **faithfulness** — that a query means what was asked.
 
 The three levels form a strict containment hierarchy:
 
@@ -93,15 +88,11 @@ implemented overlay can block a non-existent member at those covered positions;
 it does not yet guarantee full name resolution or type-checking across the
 query.
 
-**False-confidence risk to state prominently.** Even if the complete L2 target
-is eventually proven, a compiling query can still be 100% wrong (wrong column,
-wrong join, wrong aggregate). A complete L2 constraint would narrow the _error
-surface_ from {syntax errors ∪ phantom-reference errors ∪ type errors ∪
-wrong-answer errors} down to {wrong-answer errors}; it would not shrink the
-wrong-answer class and may enlarge it at the margin (see the over-constraint
-caveat in §11). The current partial overlay does not establish that full
-compilation boundary. Evaluation must keep measuring execution-equivalence
-(faithfulness) with the constraint ON.
+**False-confidence risk.** A compiling query can still be 100% wrong (wrong
+column, wrong join, wrong aggregate). Schema constraints can narrow syntax,
+phantom-reference, and type-error surfaces; they cannot shrink the wrong-answer
+class and may enlarge it at the margin. Evaluation therefore measures
+execution-equivalence (faithfulness) with the constraint enabled.
 
 ---
 
@@ -132,99 +123,30 @@ over a thin PyO3 boundary — plus the oracle-driven test harness that measures 
 
 ---
 
-## 10. Milestone implementation status (M0–M5)
+## 10. Operating limits
 
-The milestone labels now describe implemented code slices, not a claim that every
-original end-to-end acceptance criterion is green:
+PureCARD exposes a fixed hand-written emitted-subset PDA, an optional L2 schema
+overlay at its covered positions, and a PyO3 masking boundary. Those are not a
+full Pure compiler, a full type checker, or a model-inference runner. In
+particular, `CompiledGrammar::from_spec` selects the fixed PDA rather than
+lowering a supplied grammar, and accepting-walk generation is schema-agnostic.
+The frozen corpus includes `map` (6 gold records), so the fixed grammar includes
+that emitted pipeline step.
 
-- **M0 — oracle/corpus harness implemented.** The committed corpus loader,
-  byte-level replay, Legend client boundary, and classified live response path
-  exist.
-- **M1 — emitted-subset L1 PDA implemented.** The hand-written PDA admits the
-  frozen gold and modern-dialect seed corpora. Hermetic accepting walks exercise
-  recognizer liveness. The earlier `map` (6 gold records) grammar gap is resolved
-  in the fixed PDA. Live validation that 100% of those walks compile remains
-  open.
-- **M2 — performance layer implemented.** Lazy per-state masks, cache-equivalence
-  tests, and criterion benchmarks exist.
-- **M3 — schema-overlay subset implemented.** The shipped N/T subset narrows L1
-  against committed schema fixtures. Full schema-constrained accepting-walk
-  generation and live zero-error validation remain open.
-- **M4 — PyO3 boundary implemented.** The feature-gated module and maturin wheel
-  build exist. Wheels are verification artifacts (`publish = false`), and no
-  real-model Python inference-to-Legend test is implemented.
-- **M5 — hardening implemented.** Tokenizer self-check, EOS/finalization and
-  error hardening, fuzz targets, and final benchmark coverage exist.
-
-The real-Qwen oracle (`tests/qwen_soundness.rs`) additionally tokenizes with the
-actual pinned Qwen tokenizer and replays real token IDs on-demand and on a
-schedule. It proves real-tokenizer token-ID replay, not real-model inference or
-live Legend compilation.
-
-The remaining proof obligations are:
-
-1. validate a 100% constrained-walk compile rate against live Legend;
-2. lower a supplied grammar spec into the PDA (`from_spec` currently selects the
-   fixed hand-written machine);
-3. generate accepting walks under the supplied schema; and
-4. drive real-model Python inference through constraint and live Legend
-   compilation.
-
-Until those land, PureCARD is not described as feature-complete and the original
-milestone definitions are not treated as proven end to end.
+The real-Qwen lane (`tests/qwen_soundness.rs`) verifies token-ID replay against
+the pinned tokenizer. It does not establish behavior of a host inference loop or
+compiler validity of every accepted query. PureCARD also cannot establish
+semantic faithfulness because a decoder mask does not observe user intent.
 
 ---
 
-## 11. Risks and open questions
+## 12. Repository position
 
-- **Grammar drift.** The emitted subset co-evolves with the trained model; a query shape the model emits but the grammar rejects is a soundness failure. _Mitigation:_ the gold-corpus soundness test (§8.1) runs against the _current_ model's outputs and fails loudly on drift; treat the grammar spec as versioned alongside model checkpoints.
-- **Grammar-spec lowering.** `CompiledGrammar::from_spec` accepts a spec string
-  for API compatibility but currently selects the fixed hand-written PDA. A
-  real spec-to-PDA lowering pipeline remains outstanding.
-- **Live completeness evidence.** The Legend lane reaches the pinned engine and
-  classifies responses, but placeholder protocol fixtures mean it does not yet
-  prove a 100% constrained-walk compile rate.
-- **Schema-aware generation.** L2 can narrow token masks during replay, but the
-  accepting-walk generator does not yet construct walks under a schema.
-- **Real-model integration.** The PyO3 surface and wheel build are implemented;
-  a Python harness that masks real-model logits and compiles the resulting query
-  against live Legend is not.
-- **L2 context-dependent set size.** If schema narrowing touches too many token positions, the runtime (non-cached) fraction grows and perf degrades. _Mitigation:_ narrow only at identifier/type positions; cache per-(state, class-scope) identifier masks (§4.5).
-- **Tokenizer exactness.** Any mismatch between the host's byte representation of tokens and the model's actual tokenization breaks soundness invisibly. _Mitigation:_ the M5 startup self-check plus scheduled/on-demand real token-ID replay with the pinned Qwen tokenizer. The latter still does not exercise model inference.
-- **Possible redundancy.** The agentic schema-exploration path may already
-  suppress name hallucination enough that L2's marginal value is small. Prove
-  L1 end to end; extend and prove L2 only when measured post-training
-  schema-reference errors justify it.
-- **Over-constraint vs faithfulness.** Masking can force a valid-but-wrong token
-  the model would not otherwise pick. A complete L2 implementation would trade
-  compile failures for compiling-but-sometimes-wrong output; the current subset
-  does not establish that compile guarantee. Host-side evaluation must watch
-  for faithfulness regressions when the constraint is enabled.
-- **False confidence (restated from §1.3).** Neither the current partial L2
-  overlay nor a future full L2 guarantee establishes faithfulness. Keep
-  measuring execution-equivalence with the constraint ON; a rise in "compiles
-  but wrong" is the signal to watch.
-
----
-
-## 12. Roadmap and repository position
-
-PureCARD remains an inference-time serving component, not a dependency of the
-Pure Analyzer engine. It is colocated so both products can share root toolchain,
-CI, constitution, and methodology while keeping independent internals and
-release posture.
-
-The follow-on order is evidence-driven:
-
-1. implement grammar-spec lowering rather than silently ignoring the spec input;
-2. extend the walker to generate under a supplied schema;
-3. use those outputs to establish the 100% live Legend compile target; and
-4. add the real-model Python inference → constrained query → live Legend path.
-
-L2's value should continue to be measured against residual schema-reference
-errors and faithfulness with constraints enabled. A compiling query can still be
-wrong. Any proposal to share analyzer parser code, model types, or corpora must
-first revise the product boundary through a new ADR.
+PureCARD is an inference-time serving component, not a dependency of the Pure
+Analyzer engine. It is colocated so both products share root toolchain, CI, and
+governance while retaining independent internals and release posture. Any
+cross-product parser, model, or corpus sharing requires a GitHub Issue and an
+ADR that revises the product boundary.
 
 ---
 

@@ -53,12 +53,15 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       - uses: taiki-e/install-action@b6ff580856c41316412a0b9b60540fbc6f8c82cc # v2.86.7
         with:
           tool: just@1.55.1
       - name: Check relative files and anchors
         run: just check-doc-links
+      - name: Reject checked-in work ledger
+        run: just no-work-ledger
   commitlint:
     # Runs on every PR (all PRs have commits); harmless on push.
     runs-on: ubuntu-latest

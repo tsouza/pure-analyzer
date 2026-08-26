@@ -11,8 +11,8 @@ At M0 the only code that genuinely ships is the constrained-decoder core: the
 `std`. Everything else in the M0 changeset is *oracle harness* — the gold-corpus
 loader, the throwaway byte recognizer + replay driver, and the Legend
 completeness probe (a pure `classify_return_type` plus a feature-gated live-HTTP
-client). Those exist to prove the two feedback loops are wired (see
-`specs/m0-oracle-harness.md`); none of them is decoder API.
+client). Those exist to prove the two feedback loops are wired; none of them is
+decoder API.
 
 While the harness sat under `src/`, it dragged `serde`, `serde_json`,
 `thiserror`, `ureq`, and `anyhow` into the crate's `[dependencies]`. A downstream

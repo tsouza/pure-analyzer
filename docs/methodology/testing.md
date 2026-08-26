@@ -95,7 +95,7 @@ Testing isn't only "does it pass." Several gates run alongside:
   ships **unprotected** — see the [optional-gates checklist](../../README.md#optional-gates-off-by-default).
 - **Diagnostic-code stability** — a `PUR<nnnn>` code, once shipped, is a contract
   with editor/CI integrations that key off it; retiring or repurposing one is a
-  breaking change and belongs in a spec, not a drive-by rename.
+  breaking change and belongs in a linked issue, not a drive-by rename.
 
 ## Zero tolerance for flakes and skips
 

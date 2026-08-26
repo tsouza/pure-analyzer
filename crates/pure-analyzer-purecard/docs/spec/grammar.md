@@ -186,7 +186,7 @@ Counts in the **Queries** column are **distinct queries containing the construct
 at least once** — _not_ raw occurrence totals — over the full **5,034-query**
 corpus (`corpus/gold_queries.jsonl`: 4,639 arm-A + 395 arm-C), recomputed this
 session. This is deliberately a different measure from the _total occurrences_
-quoted in prose (§5.2 and `specs/m1-l1-grammar.md`): a construct that repeats
+quoted in prose (§5.2): a construct that repeats
 within one query (`pair` appears 32,308 times but in 2,378 queries; `tableReference`
 8,455 times in 4,639 queries) has a higher occurrence total than its
 queries-containing count, while a once-per-query construct (`limit`, `between`)

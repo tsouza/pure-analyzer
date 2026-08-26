@@ -2,7 +2,7 @@
 name: start-feature
 description: >-
   Bootstrap a new unit of work the right way: isolated git worktree + feature
-  branch, a spec, a `just` target for the work, and a failing test first. Use
+  branch, a GitHub issue, a `just` target for the work, and a failing test first. Use
   when the user says "start a feature", "let's build X", "new feature", "begin
   work on", or when kicking off any non-trivial change. Enforces
   worktree-per-branch and test-first.
@@ -33,16 +33,11 @@ everything through `just` so the workflow matches CI.
    the target reports. If the target is missing, create the worktree manually and
    fix the `justfile` in a follow-up — but prefer `just`.
 
-2. **Scaffold the spec.**
+2. **Confirm the GitHub issue.**
 
-   ```sh
-   just spec <name>
-   ```
-
-   This drops a spec skeleton (see the `spec` skill for the template). Fill in
-   context, goal, non-goals, acceptance criteria, and risks *before* coding. The
-   acceptance criteria become the tests you write in step 4, and the reviewer
-   checks the diff against this spec.
+   Its goal, non-goals, acceptance criteria, risks, and dependencies live in the
+   issue; the PR records implementation evidence. Do not create a checked-in
+   feature spec or other work ledger.
 
 3. **Ensure a `just` target exists for the work.**
    - The unit of work should be runnable/verifiable via a `just` target
@@ -63,7 +58,7 @@ everything through `just` so the workflow matches CI.
    - A test that passes before you've implemented anything is not testing what
      you think — fix the test, not the timing.
 
-5. **Only now implement**, looping plan → implement → verify (see `spec`) until
+5. **Only now implement**, looping issue → implement → verify until
    the failing tests pass and `just lint` / `just test` are green.
 
 ## Guardrails
@@ -77,6 +72,6 @@ everything through `just` so the workflow matches CI.
 
 ## Definition of done for this skill
 
-Worktree + `feat/<name>` branch exist, a filled-in spec is committed, a `just`
-target covers the work, and there is at least one test that **fails** pending the
+Worktree + `feat/<name>` branch exist, the linked issue states the work, a `just`
+target covers it, and there is at least one test that **fails** pending the
 implementation. Hand off to normal implement/verify from here.

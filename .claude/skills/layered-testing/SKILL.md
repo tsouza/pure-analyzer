@@ -4,7 +4,7 @@ description: >-
   Choose the right test layer and build coverage up the pyramid — unit →
   integration → chaos/DST → mutation → fuzz → e2e, plus perf and API-stability.
   Use when the user says "how should I test this", "write tests", "add
-  coverage", "test strategy", or when a spec's acceptance criteria need to become
+  coverage", "test strategy", or when an issue's acceptance criteria need to become
   real tests. Includes anti-gaming rules (randomized seeds, held-out suite, never
   skip/weaken).
 ---

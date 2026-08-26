@@ -1,12 +1,11 @@
 # CLAUDE.md
 
 You are the engineer in the `pure-analyzer` umbrella repository. It contains
-two independent Legend Pure products: the early-scaffold `pure-analyzer`
-static-analysis toolchain and the `pure-analyzer-purecard` constrained decoder,
-whose M0–M5 code artifacts exist but whose end-to-end proof obligations remain
-open. They share repository automation, not product code or ownership. Read this
-file every session, then follow the links for depth. Keep this file thin — it has
-a **size budget of ~150 lines**. Detail lives in the ledger below, not here.
+two independent Legend Pure products: the `pure-analyzer` static-analysis
+toolchain and the `pure-analyzer-purecard` constrained decoder. They share
+repository automation, not product code or ownership. Read this file every
+session, then follow the links for depth. Keep this file thin — it has a **size
+budget of ~150 lines**. Detail lives in the reference material below, not here.
 
 ## The hard rules (brief)
 
@@ -21,7 +20,7 @@ Read it. The essentials:
   renderer/protocol crate.
 - **The product boundary (ADR-0004):** zero dependency edges in either direction
   between analyzer crates and PureCARD, in every Cargo dependency kind.
-  `xtask` is shared infrastructure. Parser or corpus sharing needs a future spec
+  `xtask` is shared infrastructure. Parser or corpus sharing needs a future issue
   and ADR; co-location alone authorizes neither.
 - **No `unwrap`/`expect`/`panic!`/`todo!`/`unimplemented!`/`dbg!` outside tests.**
   `thiserror` in libs, `anyhow` at boundaries. `tracing`, never `println!`.
@@ -56,7 +55,6 @@ Read it. The essentials:
 ```bash
 mise install && mise run install-cargo-tools  # provision toolchain + git hooks (once)
 just new-feature <name> # spin up a worktree + branch
-just spec <name>        # scaffold a feature spec, then /spec plan→implement→verify
 just ci                 # fast inner-loop gate (necessary, not sufficient)
 just ci-full            # full local mirror of the CI matrix; run before a PR
 ```
@@ -64,20 +62,16 @@ just ci-full            # full local mirror of the CI matrix; run before a PR
 The generator writes; the **reviewer subagent is the gate**. See
 [docs/methodology/model-tiering.md](docs/methodology/model-tiering.md).
 
-## The ledger (read on demand)
+## Reference map (read on demand)
 
 @constitution.md
 
 - **What we're building** → [docs/domain-model.md](docs/domain-model.md)
-- **Analyzer target design** →
-  [docs/design/pure-analyzer-design.md](docs/design/pure-analyzer-design.md)
 - **PureCARD product docs** →
   [crates/pure-analyzer-purecard/docs/](crates/pure-analyzer-purecard/docs/)
-- **Heuristics we've learned** → [docs/lessons.md](docs/lessons.md)
 - **Decisions & why** → [docs/decisions/](docs/decisions/)
 - **How we work:**
   - [Overview](docs/methodology/overview.md) — the whole loop, and the vetting rubric
-  - [Spec-driven](docs/methodology/spec-driven.md) — constitution + spec + `/spec`
   - [Testing](docs/methodology/testing.md) — the pyramid and its gates
   - [Quality layers](docs/methodology/quality-layers.md) — L0–L4 defense
   - [Self-learning](docs/methodology/self-learning.md) — how the repository adapts safely
@@ -89,7 +83,7 @@ The generator writes; the **reviewer subagent is the gate**. See
 1. `just ci` is green (the fast gate). For anything beyond a trivial change, run
    `just ci-full` (the full CI mirror) too — a green `just ci` alone is not
    sufficient. No skips, no weakened gates.
-2. The diff matches its spec; the domain-model/lessons/ADRs are updated if the
-   change taught us something.
+2. The diff satisfies its linked issue; product documentation and ADRs are
+   updated only when they describe present product truth.
 3. Any pre-existing issue you touched is accounted for in the PR description.
 4. You added the rule/test/lint that prevents this change's bugs from recurring.
