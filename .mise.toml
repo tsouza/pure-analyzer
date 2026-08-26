@@ -5,9 +5,13 @@
 # components) so rustup and mise never disagree; we only assert the channel
 # here for parity.
 #
-# Cargo-based tools are not distributed via mise, so they are installed by the
-# `install-cargo-tools` task at pinned versions with `--locked` for
-# reproducibility.
+# Most Cargo-based tools are installed from source by the
+# `install-cargo-tools` task at pinned versions with `--locked`. cargo-vet is
+# the exception: its current stable crate release has no matching upstream
+# binary release, so mise installs the checksum-locked QuickInstall asset below.
+
+[tool_alias]
+cargo-vet = "github:cargo-bins/cargo-quickinstall"
 
 [tools]
 # Rust is owned entirely by rust-toolchain.toml (channel = "stable" = latest
@@ -48,16 +52,24 @@ python = "3.12.14"
 # Portable, lockable Python environment runner for `just test-python`.
 uv = "0.12.5"
 
+# Committed dependency-review coverage gate. The release tag and asset prefix
+# are both exact; platform autodetection selects one of the seven archives in
+# mise.lock. Those checksums were authenticated against cargo-quickinstall's
+# pinned Minisign key before being committed; installs must use locked mode.
+[tools.cargo-vet]
+version = "cargo-vet-0.10.2"
+version_prefix = ""
+matching_regex = "^cargo-vet-0\\.10\\.2-.*\\.(tar\\.gz|zip)$"
+filter_bins = "cargo-vet"
+
 [env]
 # Keep cargo output deterministic in CI logs.
 CARGO_TERM_COLOR = "always"
 
 # ---------------------------------------------------------------------------
-# Cargo-installed tools. mise cannot pin these directly, so we install them
-# with `cargo install --locked` at explicit versions via a Bun script (the
-# repo forbids shell scripts — see constitution §2). That script is the
-# canonical list of dev tool versions; CI and local dev both run this same
-# task.
+# Remaining Cargo-installed tools. These lack a verified binary pin above, so
+# we install them with `cargo install --locked` at explicit versions via a Bun
+# script (the repo forbids shell scripts — see constitution §2).
 # ---------------------------------------------------------------------------
 [tasks.install-cargo-tools]
 description = "Install all cargo-based dev tools at pinned versions (--locked)."

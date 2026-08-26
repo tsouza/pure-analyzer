@@ -88,6 +88,11 @@ clears the bar, **write our own** — small, owned, and tested — rather than t
 a liability. Either way, the decision and its reasoning go in the PR, and a
 recurring gap becomes a lesson (and possibly a vetted default).
 
+An adopted crate must also keep `just deny`, `just audit`, and `just vet` green.
+The cargo-vet gate distinguishes reviewed or imported audit coverage from an
+explicit exact-version exemption; an exemption is visible audit debt, not a
+certification.
+
 ## Where to go next
 
 - [spec-driven.md](spec-driven.md) — how the "what" enters and gets verified.

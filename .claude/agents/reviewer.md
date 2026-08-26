@@ -77,15 +77,21 @@ every numeric or boolean change:
 
 - `deny.toml`, `clippy.toml`, `rustfmt.toml`, `.config/nextest.toml`,
   `Cargo.toml` lints tables, coverage/mutation thresholds in `justfile`/CI,
-  and any ast-grep rule files.
+  `.mise.toml`, `mise.lock`, `supply-chain/**`, and any ast-grep rule files.
 
 ```sh
-git diff --merge-base origin/main -- deny.toml clippy.toml rustfmt.toml justfile '.github/**' '**/nextest.toml' ast-grep-rules/
+git diff --merge-base origin/main -- \
+  deny.toml .mise.toml mise.lock supply-chain/ clippy.toml rustfmt.toml justfile \
+  '.github/**' '**/nextest.toml' ast-grep-rules/
 ```
 
 - Allowing a new license, adding a `skip`/`ignore`/allow entry, lowering a
   coverage/mutation floor, disabling a lint, raising a timeout to mask flakiness,
   or removing a CI job → **`fail` and demand explicit human sign-off in the PR.**
+- After cargo-vet bootstrap, broadening an exemption, adding publisher trust,
+  weakening or remapping criteria, removing an audit/import, or refreshing a
+  tool checksum/URL is also a protected loosening that requires explicit
+  maintainer sign-off.
 - Tightening (stricter lint, higher floor, new denied license) is fine.
 
 ### 4. Craft: DRY / KISS / comments / magic constants

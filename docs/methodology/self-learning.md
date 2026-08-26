@@ -27,6 +27,9 @@ understanding grows.
 - test thresholds (mutation score, coverage floor),
 - the forbid-skip / postponed-marker gates,
 - `cargo-deny` policy,
+- cargo-vet audits, exemptions, publisher trust, criteria mappings, and import
+  coverage,
+- tool-install URL and checksum locks,
 - the anti-gaming suites and reviewer configuration.
 
 **The ratchet:** an agent may *tighten* a PROTECTED value in a PR (raise a floor,

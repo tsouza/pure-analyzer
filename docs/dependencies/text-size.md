@@ -31,7 +31,9 @@
   reverse-deps converge on the same version either way.
 - Supply chain: zero further dependencies (a leaf crate — newtype wrappers over
   `u32`); no `build.rs`; `cargo-audit` clean (no RustSec advisories against
-  `text-size`); not yet in the local `cargo-vet` store (first use in this repo).
+  `text-size`). The cargo-vet bootstrap records its current version as an exact
+  exemption, so an update must add audit coverage or an explicitly reviewed new
+  exemption.
 - Fit / adaptation cost: exact match, zero adaptation — this *is* the type the
   design doc's shared span representation is specified against.
 - Decision: **ADOPT** — already a mandatory dependency via
