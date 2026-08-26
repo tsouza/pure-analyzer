@@ -29,6 +29,8 @@ enum Command {
     Ci,
     /// Run cargo-machete / dependency & formatting sweep to tidy the tree.
     Sweep,
+    /// Bring up the Legend stack, test only PureCARD, and always tear down.
+    TestLegend,
     /// Produce a test-coverage report via cargo-llvm-cov.
     Coverage {
         /// Emit an HTML report in addition to the summary.
@@ -37,6 +39,10 @@ enum Command {
     },
     /// Validate `release-plz.toml` against the actual workspace (config gate).
     ReleasePlzCheck,
+    /// Assert PureCARD's non-optional runtime dependencies stay allowlisted.
+    CheckCoreDeplight,
+    /// Assert PureCARD's documented facts match their authoritative sources.
+    CheckDocFacts,
     /// Snapshot / verify the public API surface via cargo-public-api (nightly).
     PublicApi {
         /// Update the committed baselines instead of checking against them.
@@ -57,6 +63,11 @@ enum Command {
     VerifyLayering,
     /// Verify every crate inherits the workspace lints (forbid-unsafe / deny-missing-docs).
     VerifyLints,
+    /// Time-box every target in PureCARD's dedicated fuzz project.
+    PurecardFuzzCi {
+        /// Per-target time budget in seconds.
+        secs: u64,
+    },
 }
 
 fn main() -> Result<()> {
@@ -64,12 +75,16 @@ fn main() -> Result<()> {
     match cli.command {
         Command::Ci => tasks::ci(),
         Command::Sweep => tasks::sweep(),
+        Command::TestLegend => tasks::test_legend(),
         Command::Coverage { html } => tasks::coverage(html),
         Command::ReleasePlzCheck => tasks::release_plz_check(),
+        Command::CheckCoreDeplight => tasks::check_core_deplight(),
+        Command::CheckDocFacts => tasks::check_doc_facts(),
         Command::PublicApi { bless } => tasks::public_api(bless),
         Command::NewFeature { name } => tasks::new_feature(&name),
         Command::Spec { name } => tasks::spec(&name),
         Command::VerifyLayering => tasks::verify_layering(),
         Command::VerifyLints => tasks::verify_lints(),
+        Command::PurecardFuzzCi { secs } => tasks::purecard_fuzz_ci(secs),
     }
 }

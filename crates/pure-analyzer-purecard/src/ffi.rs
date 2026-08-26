@@ -222,3 +222,87 @@ fn purecard(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add("PureCARDError", module.py().get_type::<PureCARDError>())?;
     Ok(())
 }
+
+#[cfg(all(test, feature = "python-test"))]
+mod tests {
+    use pyo3::prelude::*;
+    use pyo3::types::{PyBytesMethods, PyModule};
+
+    use super::{DecodeError, PureCARDError, Schema, Session, compile_grammar, purecard};
+
+    const EOS_ID: u32 = 4;
+    const VOCAB_LEN: usize = 5;
+    const GOLD_QUERY: [u32; 4] = [0, 1, 2, 3];
+
+    fn grammar() -> super::Grammar {
+        compile_grammar(
+            "",
+            vec![
+                b"|X.all()".to_vec(),
+                b"->take(".to_vec(),
+                b"1".to_vec(),
+                b")".to_vec(),
+                Vec::new(),
+            ],
+            EOS_ID,
+        )
+    }
+
+    #[test]
+    fn core_errors_keep_their_python_type_and_message() {
+        Python::attach(|py| {
+            let decode: PyErr = DecodeError::UnknownToken { id: 42 }.into();
+            assert!(decode.is_instance_of::<PureCARDError>(py));
+            assert_eq!(
+                decode.value(py).to_string(),
+                "token id 42 is unknown: no entry in the host vocabulary"
+            );
+
+            let schema = Schema::from_json("{").expect_err("invalid JSON must fail");
+            let message = schema.to_string();
+            let schema: PyErr = schema.into();
+            assert!(schema.is_instance_of::<PureCARDError>(py));
+            assert_eq!(schema.value(py).to_string(), message);
+        });
+    }
+
+    #[test]
+    fn session_surface_delegates_to_the_decoder_core() {
+        let grammar = grammar();
+        let mut session = Session::new(&grammar, None).expect("valid grammar opens a session");
+        assert_eq!(session.vocab_len(), VOCAB_LEN);
+        assert!(!session.is_complete());
+
+        Python::attach(|py| {
+            let mask = session.allowed_mask(py);
+            assert_eq!(mask.as_bytes().len(), 1);
+            assert_ne!(mask.as_bytes()[0] & 1, 0);
+        });
+
+        for id in GOLD_QUERY {
+            session
+                .accept_token(id)
+                .expect("gold token must be accepted");
+        }
+        assert!(session.is_complete());
+        Python::attach(|py| {
+            let mask = session.allowed_mask(py);
+            assert_ne!(mask.as_bytes()[0] & (1 << VOCAB_LEN), 0);
+        });
+
+        session.reset();
+        assert!(!session.is_complete());
+        assert!(session.accept_token(999).is_err());
+    }
+
+    #[test]
+    fn module_exports_the_complete_python_surface() {
+        Python::attach(|py| {
+            let module = PyModule::new(py, "purecard").expect("module allocation must succeed");
+            purecard(&module).expect("module registration must succeed");
+            for name in ["compile_grammar", "Grammar", "Session", "PureCARDError"] {
+                assert!(module.hasattr(name).expect("attribute lookup must succeed"));
+            }
+        });
+    }
+}

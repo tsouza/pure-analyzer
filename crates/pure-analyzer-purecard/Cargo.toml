@@ -99,9 +99,15 @@ legend = []
 # extension module, and targets the stable ABI (abi3) for CPython >= 3.9 so a
 # single wheel serves every supported interpreter. Off by default (the core
 # builds pyo3-free); the wheel build (`just wheel`) and the `just check-ffi`
-# type-check gate enable it. `dep:` keeps the optional pyo3/self_cell crates
-# from implying a like-named feature.
-python = ["dep:pyo3", "dep:self_cell", "pyo3/extension-module", "pyo3/abi3-py39"]
+# type-check gate enable it. Maturin sets `PYO3_BUILD_EXTENSION_MODULE` only
+# while packaging, leaving Rust tests linked to libpython as PyO3 recommends.
+# `dep:` keeps the optional pyo3/self_cell crates from implying a like-named
+# feature.
+python = ["dep:pyo3", "dep:self_cell", "pyo3/abi3-py39"]
+
+# Rust-side boundary tests embed CPython and therefore opt into interpreter
+# initialization separately; wheels enable only `python` and stay extensions.
+python-test = ["python", "pyo3/auto-initialize"]
 
 # The real-Qwen tokenizer soundness oracle (`tests/qwen_soundness.rs`): loads
 # the actual Qwen2.5-Coder tokenizer and replays the gold corpus token-by-

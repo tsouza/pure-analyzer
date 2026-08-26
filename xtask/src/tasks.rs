@@ -3,6 +3,9 @@
 //! Each task shells out to the underlying tool via [`crate::process`] and
 //! propagates exit codes, so `xtask` stays a thin, auditable orchestrator.
 
+use std::collections::BTreeSet;
+use std::path::{Path, PathBuf};
+
 use anyhow::{Context, Result};
 
 use crate::process::{run, run_cargo_steps, run_stdout};
@@ -30,8 +33,21 @@ fn validate_name(name: &str, usage: &str) -> Result<()> {
 pub fn ci() -> Result<()> {
     verify_lints()?;
     verify_layering()?;
+    check_core_deplight()?;
+    check_doc_facts()?;
     run_cargo_steps(&[
         &["fmt", "--all", "--check"],
+        // PureCARD's always-on classifier binary is cfg(not(feature =
+        // "legend")), so an all-features-only pass would compile it out and
+        // leave that configuration without Clippy coverage.
+        &[
+            "clippy",
+            "--workspace",
+            "--all-targets",
+            "--",
+            "-D",
+            "warnings",
+        ],
         // clippy with --all-features is compile-checking, not execution — safe
         // and correct to check every feature combination actually builds.
         &[
@@ -66,6 +82,219 @@ pub fn ci() -> Result<()> {
 pub fn sweep() -> Result<()> {
     // `sg scan` reads sgconfig.yml at the repo root and applies every rule.
     run("ast-grep", &["scan"])
+}
+
+/// Root of the migrated PureCARD workspace member.
+const PURECARD_ROOT: &str = "crates/pure-analyzer-purecard";
+/// Cargo package name of the migrated PureCARD workspace member.
+const PURECARD_PACKAGE: &str = "pure-analyzer-purecard";
+/// PureCARD's manifest, relative to the workspace root.
+const PURECARD_MANIFEST: &str = "crates/pure-analyzer-purecard/Cargo.toml";
+/// Docker Compose file for the pinned Legend engine stack.
+const PURECARD_LEGEND_COMPOSE: &str =
+    "crates/pure-analyzer-purecard/corpus/legend-stack/docker-compose.yml";
+/// PureCARD's workspace-excluded cargo-fuzz project.
+const PURECARD_FUZZ_DIR: &str = "crates/pure-analyzer-purecard/fuzz";
+/// PureCARD fuzz manifest, explicitly isolated from the ancestor workspace.
+const PURECARD_FUZZ_MANIFEST: &str = "crates/pure-analyzer-purecard/fuzz/Cargo.toml";
+/// Every target in PureCARD's dedicated fuzz project.
+const PURECARD_FUZZ_TARGETS: &[&str] = &["accept_token", "allowed_mask", "schema_from_json"];
+
+/// Resolve a path owned by the nested PureCARD crate.
+fn purecard_path(relative: impl AsRef<Path>) -> PathBuf {
+    Path::new(PURECARD_ROOT).join(relative)
+}
+
+/// Run the opt-in PureCARD Legend lane with guaranteed stack teardown.
+///
+/// The checked-in stack is brought up before package-scoped tests run. Teardown
+/// is attempted after a failed startup as well as after tests, and the primary
+/// startup or test error is retained if cleanup also fails.
+///
+/// # Errors
+///
+/// Returns the startup or test failure, or a teardown failure after successful
+/// tests. If the primary operation and cleanup both fail, cleanup is attached
+/// as context to the primary error.
+pub fn test_legend() -> Result<()> {
+    let started = run(
+        "docker",
+        &["compose", "-f", PURECARD_LEGEND_COMPOSE, "up", "-d"],
+    );
+    if let Err(start_err) = started {
+        let torn_down = run(
+            "docker",
+            &["compose", "-f", PURECARD_LEGEND_COMPOSE, "down"],
+        );
+        return match torn_down {
+            Ok(()) => Err(start_err),
+            Err(teardown_err) => Err(start_err.context(format!(
+                "PureCARD Legend stack startup failed and cleanup failed; containers may remain: \
+                 {teardown_err:#}"
+            ))),
+        };
+    }
+    let tested = run(
+        "cargo",
+        &[
+            "nextest",
+            "run",
+            "-p",
+            PURECARD_PACKAGE,
+            "--features",
+            "legend",
+        ],
+    );
+    let torn_down = run(
+        "docker",
+        &["compose", "-f", PURECARD_LEGEND_COMPOSE, "down"],
+    );
+    match (tested, torn_down) {
+        (Err(test_err), Err(teardown_err)) => Err(test_err.context(format!(
+            "PureCARD Legend tests failed and stack teardown failed; containers may remain: \
+             {teardown_err:#}"
+        ))),
+        (Err(test_err), Ok(())) => Err(test_err),
+        (Ok(()), teardown) => teardown,
+    }
+}
+
+/// Time-box every target in PureCARD's dedicated cargo-fuzz project.
+///
+/// The explicit `--fuzz-dir` prevents cargo-fuzz from selecting the umbrella
+/// analyzer's unrelated top-level fuzz project.
+///
+/// # Errors
+///
+/// Returns the first target failure, including a crash or missing nightly/tool.
+pub fn purecard_fuzz_ci(secs: u64) -> Result<()> {
+    let budget = format!("-max_total_time={secs}");
+    for target in PURECARD_FUZZ_TARGETS {
+        run(
+            "cargo",
+            &[
+                "+nightly",
+                "fuzz",
+                "run",
+                "--fuzz-dir",
+                PURECARD_FUZZ_DIR,
+                target,
+                "--",
+                &budget,
+            ],
+        )?;
+    }
+    Ok(())
+}
+
+/// PureCARD's permitted non-optional, normal runtime dependencies.
+const CORE_DEP_ALLOWLIST: &[&str] = &["thiserror", "serde", "serde_json"];
+
+/// Names of the non-optional normal dependencies in one metadata package.
+fn non_optional_runtime_dependencies(package: &serde_json::Value) -> Result<BTreeSet<String>> {
+    let dependencies = package["dependencies"]
+        .as_array()
+        .context("PureCARD cargo metadata has no dependencies array")?;
+    let mut names = BTreeSet::new();
+    for dependency in dependencies {
+        let is_normal = dependency["kind"].is_null();
+        let is_optional = dependency["optional"]
+            .as_bool()
+            .context("PureCARD cargo metadata dependency has no optional flag")?;
+        if is_normal && !is_optional {
+            let name = dependency["name"]
+                .as_str()
+                .context("PureCARD cargo metadata dependency has no name")?;
+            names.insert(name.to_string());
+        }
+    }
+    Ok(names)
+}
+
+/// Runtime dependency names outside PureCARD's protected allowlist.
+fn disallowed_core_deps(dependencies: &BTreeSet<String>) -> Vec<String> {
+    dependencies
+        .iter()
+        .filter(|dependency| !CORE_DEP_ALLOWLIST.contains(&dependency.as_str()))
+        .cloned()
+        .collect()
+}
+
+/// Assert that PureCARD stays dep-light in its default shipped configuration.
+///
+/// Reads Cargo metadata for the nested package and rejects every non-optional
+/// normal dependency outside [`CORE_DEP_ALLOWLIST`]. Optional Python/tokenizer
+/// boundaries and dev/build-only oracle dependencies are intentionally outside
+/// this default runtime surface. Unlike standalone PureCARD's former gate, this
+/// performs no `cargo package --list` check: the migrated crate is unpublished.
+///
+/// # Errors
+///
+/// Returns an error when the package cannot be located at its migrated manifest
+/// or its non-optional normal dependency set contains an unallowlisted crate.
+pub fn check_core_deplight() -> Result<()> {
+    let json = run_stdout("cargo", &["metadata", "--no-deps", "--format-version", "1"])?;
+    let metadata: serde_json::Value =
+        serde_json::from_str(&json).context("parsing `cargo metadata` output")?;
+    let packages = metadata["packages"]
+        .as_array()
+        .context("`cargo metadata` has no packages array")?;
+    let package = packages
+        .iter()
+        .find(|package| package["name"].as_str() == Some(PURECARD_PACKAGE))
+        .with_context(|| {
+            format!("workspace has no `{PURECARD_PACKAGE}` package at {PURECARD_MANIFEST}")
+        })?;
+    let manifest = package["manifest_path"]
+        .as_str()
+        .context("PureCARD cargo metadata has no manifest_path")?;
+    if !Path::new(manifest).ends_with(PURECARD_MANIFEST) {
+        anyhow::bail!("`{PURECARD_PACKAGE}` resolved to {manifest}, expected {PURECARD_MANIFEST}");
+    }
+
+    let dependencies = non_optional_runtime_dependencies(package)?;
+    let disallowed = disallowed_core_deps(&dependencies);
+    if !disallowed.is_empty() {
+        anyhow::bail!(
+            "`{PURECARD_PACKAGE}` non-optional runtime dependencies may contain only {{ {} }}, \
+             but found: {}. Move oracle dependencies to dev-dependencies or make an explicit \
+             boundary optional.",
+            CORE_DEP_ALLOWLIST.join(", "),
+            disallowed.join(", ")
+        );
+    }
+    verify_purecard_fuzz_workspace()
+}
+
+/// Verify Cargo resolves the nested fuzz project as its own workspace.
+///
+/// A root `workspace.exclude` entry is insufficient for a fuzz crate nested
+/// below a workspace member; without the fuzz manifest's empty `[workspace]`,
+/// every `cargo fuzz` command fails before compilation.
+fn verify_purecard_fuzz_workspace() -> Result<()> {
+    let json = run_stdout(
+        "cargo",
+        &[
+            "metadata",
+            "--manifest-path",
+            PURECARD_FUZZ_MANIFEST,
+            "--no-deps",
+            "--format-version",
+            "1",
+        ],
+    )?;
+    let metadata: serde_json::Value =
+        serde_json::from_str(&json).context("parsing PureCARD fuzz cargo metadata")?;
+    let workspace_root = metadata["workspace_root"]
+        .as_str()
+        .context("PureCARD fuzz cargo metadata has no workspace_root")?;
+    if !Path::new(workspace_root).ends_with(PURECARD_FUZZ_DIR) {
+        anyhow::bail!(
+            "{PURECARD_FUZZ_MANIFEST} must define its own `[workspace]`; Cargo resolved it under \
+             {workspace_root} instead of {PURECARD_FUZZ_DIR}"
+        );
+    }
+    Ok(())
 }
 
 /// The minimum acceptable line-coverage percentage. Enforced as a hard floor so
@@ -385,6 +614,506 @@ fn civil_from_days(days: i64) -> (i64, u32, u32) {
     (if month <= 2 { year + 1 } else { year }, month, day)
 }
 
+// ---------------------------------------------------------------------------
+// PureCARD doc-fact assertions (L3): every discrete fact a copied doc cites is
+// checked against its one authoritative source inside the nested crate.
+// ---------------------------------------------------------------------------
+
+/// PureCARD README path relative to [`PURECARD_ROOT`].
+const DOC_README: &str = "README.md";
+/// PureCARD documentation directory relative to [`PURECARD_ROOT`].
+const DOC_DIR: &str = "docs";
+/// Gold-soundness source relative to [`PURECARD_ROOT`].
+const SOUNDNESS_REPLAY_SRC: &str = "tests/soundness_replay.rs";
+/// Gold-count source relative to [`PURECARD_ROOT`].
+const SELFCHECK_CORPUS_SRC: &str = "tests/selfcheck_corpus.rs";
+/// L2 in-scope split source relative to [`PURECARD_ROOT`].
+const L2_SOUNDNESS_SRC: &str = "tests/l2_soundness.rs";
+/// Independent L2 total source relative to [`PURECARD_ROOT`].
+const L2_PROPERTIES_SRC: &str = "tests/l2_properties.rs";
+/// Gold corpus relative to [`PURECARD_ROOT`].
+const GOLD_CORPUS: &str = "corpus/gold_queries.jsonl";
+/// PureCARD architecture document relative to [`PURECARD_ROOT`].
+const ARCHITECTURE_DOC: &str = "docs/spec/architecture.md";
+/// Heading preceding the fenced source-module tree in the architecture doc.
+const MODULE_TREE_HEADING: &str = "### 3.2 Crate layout";
+/// The crate root is represented as the tree root, not as a leaf module.
+const CRATE_ROOT_STEM: &str = "lib";
+/// Root-level differential labeler that owns the Legend engine version pin.
+const LABELER_SRC: &str = "scripts/label-differential.mjs";
+/// JavaScript constant in [`LABELER_SRC`] holding the engine pin.
+const ENGINE_PIN_CONST: &str = "PINNED_ENGINE_VERSION";
+/// PureCARD grammar spec relative to [`PURECARD_ROOT`].
+const GRAMMAR_DOC: &str = "docs/spec/grammar.md";
+/// PureCARD overview relative to [`PURECARD_ROOT`].
+const OVERVIEW_DOC: &str = "docs/spec/overview.md";
+/// PureCARD decoder-testing guide relative to [`PURECARD_ROOT`].
+const DECODER_TESTING_DOC: &str = "docs/methodology/decoder-testing.md";
+/// Enum literals whose combined corpus occurrence count is documented.
+const SORT_DIRECTION_LITERALS: [&str; 2] = ["SortDirection.ASC", "SortDirection.DESC"];
+/// Pipeline step whose per-record gold count is documented.
+const MAP_STEP: &str = "->map(";
+
+/// Assert every discrete PureCARD documentation fact matches its source.
+///
+/// The scan is intentionally rooted at [`PURECARD_ROOT`], so similarly named
+/// analyzer docs, tests, and modules cannot contaminate PureCARD's figures.
+/// All violations are collected before returning to make one run actionable.
+///
+/// # Errors
+///
+/// Returns an error if an authoritative source cannot be read, the documented
+/// module tree cannot be found, or one or more cited facts have drifted.
+pub fn check_doc_facts() -> Result<()> {
+    let mut errors = Vec::new();
+    let gold = check_gold_count_facts(&mut errors)?;
+    check_in_scope_facts(&mut errors)?;
+    check_module_tree_fact(&mut errors)?;
+    check_doc_enumerations(&collect_docs()?, gold, &mut errors);
+    check_grammar_and_usage_facts(&mut errors)?;
+
+    if !errors.is_empty() {
+        anyhow::bail!(
+            "PureCARD doc-fact drift; every cited fact must match its single source:\n{}",
+            errors
+                .iter()
+                .map(|error| format!("  - {error}"))
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
+    }
+    Ok(())
+}
+
+/// Check the gold partition constants and physical corpus count.
+fn check_gold_count_facts(errors: &mut Vec<String>) -> Result<usize> {
+    let soundness_replay = purecard_path(SOUNDNESS_REPLAY_SRC);
+    let selfcheck_corpus = purecard_path(SELFCHECK_CORPUS_SRC);
+    let gold_corpus = purecard_path(GOLD_CORPUS);
+    let arm_a = read_usize_const(&soundness_replay, "ARM_A")?;
+    let arm_c = read_usize_const(&soundness_replay, "ARM_C")?;
+    let gold = read_usize_const(&selfcheck_corpus, "EXPECTED_GOLD_RECORDS")?;
+    if arm_a + arm_c != gold {
+        errors.push(format!(
+            "gold-count consts disagree: {} ARM_A+ARM_C = {} but {} \
+             EXPECTED_GOLD_RECORDS = {gold}",
+            soundness_replay.display(),
+            arm_a + arm_c,
+            selfcheck_corpus.display()
+        ));
+    }
+    let corpus = count_corpus_records(&gold_corpus)?;
+    if corpus != gold {
+        errors.push(format!(
+            "{} holds {corpus} records but EXPECTED_GOLD_RECORDS = {gold}",
+            gold_corpus.display()
+        ));
+    }
+    Ok(gold)
+}
+
+/// Check the independently maintained L2 in-scope totals.
+fn check_in_scope_facts(errors: &mut Vec<String>) -> Result<()> {
+    let l2_soundness = purecard_path(L2_SOUNDNESS_SRC);
+    let l2_properties = purecard_path(L2_PROPERTIES_SRC);
+    let in_a = read_usize_const(&l2_soundness, "IN_SCOPE_ARM_A")?;
+    let in_c = read_usize_const(&l2_soundness, "IN_SCOPE_ARM_C")?;
+    let in_total = read_usize_const(&l2_soundness, "IN_SCOPE_TOTAL")?;
+    if in_a + in_c != in_total {
+        errors.push(format!(
+            "in-scope consts disagree in {}: {in_a} + {in_c} != {in_total}",
+            l2_soundness.display()
+        ));
+    }
+    let in_total_props = read_usize_const(&l2_properties, "IN_SCOPE_TOTAL")?;
+    if in_total_props != in_total {
+        errors.push(format!(
+            "IN_SCOPE_TOTAL drifted: {} = {in_total}, {} = {in_total_props}",
+            l2_soundness.display(),
+            l2_properties.display()
+        ));
+    }
+    Ok(())
+}
+
+/// Check the documented module tree against PureCARD's nested source tree.
+fn check_module_tree_fact(errors: &mut Vec<String>) -> Result<()> {
+    let architecture_doc = purecard_path(ARCHITECTURE_DOC);
+    let architecture = std::fs::read_to_string(&architecture_doc)
+        .with_context(|| format!("reading {}", architecture_doc.display()))?;
+    let documented_modules = module_names_in_tree(&architecture).with_context(|| {
+        format!(
+            "locating the module tree in {} §3.2",
+            architecture_doc.display()
+        )
+    })?;
+    let source_modules = src_module_names()?;
+    let ghosts: Vec<String> = documented_modules
+        .difference(&source_modules)
+        .cloned()
+        .collect();
+    let missing: Vec<String> = source_modules
+        .difference(&documented_modules)
+        .cloned()
+        .collect();
+    if !ghosts.is_empty() {
+        errors.push(format!(
+            "{} §3.2 lists modules absent from src/: {}",
+            architecture_doc.display(),
+            ghosts.join(", ")
+        ));
+    }
+    if !missing.is_empty() {
+        errors.push(format!(
+            "{} §3.2 omits src/ modules: {}",
+            architecture_doc.display(),
+            missing.join(", ")
+        ));
+    }
+    Ok(())
+}
+
+/// Check dependency-set prose and gold-total ratios across copied PureCARD docs.
+fn check_doc_enumerations(docs: &[(String, String)], gold: usize, errors: &mut Vec<String>) {
+    let allow: BTreeSet<String> = CORE_DEP_ALLOWLIST
+        .iter()
+        .map(|dependency| (*dependency).to_string())
+        .collect();
+    for (path, text) in docs {
+        for set in allowlist_sets(text) {
+            let documented: BTreeSet<String> = set.iter().cloned().collect();
+            if documented != allow {
+                errors.push(format!(
+                    "{path} states a core-dep allowlist {{ {} }} that contradicts \
+                     CORE_DEP_ALLOWLIST {{ {} }}",
+                    set.join(", "),
+                    CORE_DEP_ALLOWLIST.join(", ")
+                ));
+            }
+        }
+    }
+    for (path, text) in docs {
+        for cited in gold_ratio_citations(text) {
+            if cited != gold {
+                errors.push(format!(
+                    "{path} cites a gold ratio {cited}/…; the gold total is {gold}"
+                ));
+            }
+        }
+    }
+}
+
+/// Check the engine pin, SortDirection count, and `map` record count.
+fn check_grammar_and_usage_facts(errors: &mut Vec<String>) -> Result<()> {
+    let gold_corpus = purecard_path(GOLD_CORPUS);
+    let grammar_doc_path = purecard_path(GRAMMAR_DOC);
+    let engine_pin = read_js_str_const(Path::new(LABELER_SRC), ENGINE_PIN_CONST)?;
+    let grammar_doc = std::fs::read_to_string(&grammar_doc_path)
+        .with_context(|| format!("reading {}", grammar_doc_path.display()))?;
+    if !grammar_doc.contains(&engine_pin) {
+        errors.push(format!(
+            "{} does not cite Legend engine version {engine_pin} pinned by \
+             {LABELER_SRC} {ENGINE_PIN_CONST}",
+            grammar_doc_path.display()
+        ));
+    }
+    let sort_direction = count_corpus_occurrences(&gold_corpus, &SORT_DIRECTION_LITERALS)?;
+    if !grammar_doc.contains(&format!("({sort_direction} occurrences)")) {
+        errors.push(format!(
+            "{} does not cite the SortDirection occurrence count ({sort_direction}) from {}",
+            grammar_doc_path.display(),
+            gold_corpus.display()
+        ));
+    }
+    let map_gold = count_corpus_records_with(&gold_corpus, MAP_STEP)?;
+    let map_citation = format!("`map` ({map_gold} gold");
+    for relative in [OVERVIEW_DOC, DECODER_TESTING_DOC] {
+        let path = purecard_path(relative);
+        let text = std::fs::read_to_string(&path)
+            .with_context(|| format!("reading {}", path.display()))?;
+        if !text.contains(&map_citation) {
+            errors.push(format!(
+                "{} does not cite `map` ({map_gold} gold) from {}",
+                path.display(),
+                gold_corpus.display()
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Read an integer `const <name>: usize = <literal>;` from `path`.
+fn read_usize_const(path: &Path, name: &str) -> Result<usize> {
+    let content =
+        std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+    parse_usize_const(&content, name)
+        .with_context(|| format!("no integer `const {name}: usize` in {}", path.display()))
+}
+
+/// Parse an integer usize constant, tolerating `_` digit separators.
+fn parse_usize_const(content: &str, name: &str) -> Option<usize> {
+    for line in content.lines() {
+        let Some(rest) = line.trim_start().strip_prefix("const ") else {
+            continue;
+        };
+        let Some(after_name) = rest.trim_start().strip_prefix(name) else {
+            continue;
+        };
+        let after = after_name.trim_start();
+        if !after.starts_with(':') {
+            continue;
+        }
+        let Some(eq) = after.find('=') else {
+            continue;
+        };
+        let digits: String = after[eq + 1..]
+            .trim_start()
+            .chars()
+            .take_while(|character| character.is_ascii_digit() || *character == '_')
+            .filter(|character| *character != '_')
+            .collect();
+        if let Ok(value) = digits.parse::<usize>() {
+            return Some(value);
+        }
+    }
+    None
+}
+
+/// Read a double-quoted JavaScript string constant from `path`.
+fn read_js_str_const(path: &Path, name: &str) -> Result<String> {
+    let content =
+        std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+    parse_js_str_const(&content, name)
+        .with_context(|| format!("no string `const {name}` in {}", path.display()))
+}
+
+/// Parse `const <name> = "<value>"`, rejecting prefix-name matches.
+fn parse_js_str_const(content: &str, name: &str) -> Option<String> {
+    for line in content.lines() {
+        let Some(rest) = line.trim_start().strip_prefix("const ") else {
+            continue;
+        };
+        let Some(after_name) = rest.trim_start().strip_prefix(name) else {
+            continue;
+        };
+        let after = after_name.trim_start();
+        if !after.starts_with('=') {
+            continue;
+        }
+        let value = after[1..].trim_start();
+        let Some(inner) = value.strip_prefix('"') else {
+            continue;
+        };
+        if let Some(end) = inner.find('"') {
+            return Some(inner[..end].to_owned());
+        }
+    }
+    None
+}
+
+/// Count non-empty records in a JSONL corpus.
+fn count_corpus_records(path: &Path) -> Result<usize> {
+    let content =
+        std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+    Ok(content
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .count())
+}
+
+/// Count every raw occurrence of any `needle` across a corpus.
+fn count_corpus_occurrences(path: &Path, needles: &[&str]) -> Result<usize> {
+    let content =
+        std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+    Ok(needles
+        .iter()
+        .map(|needle| content.matches(needle).count())
+        .sum())
+}
+
+/// Count corpus records containing `needle` at least once.
+fn count_corpus_records_with(path: &Path, needle: &str) -> Result<usize> {
+    let content =
+        std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+    Ok(content.lines().filter(|line| line.contains(needle)).count())
+}
+
+/// Module basenames named in the fenced tree under [`MODULE_TREE_HEADING`].
+fn module_names_in_tree(architecture: &str) -> Result<BTreeSet<String>> {
+    let heading = architecture
+        .find(MODULE_TREE_HEADING)
+        .context("module-tree heading not found")?;
+    let after_heading = &architecture[heading..];
+    let fence_open = after_heading
+        .find("```")
+        .context("no code fence after the heading")?;
+    let body = &after_heading[fence_open + 3..];
+    let fence_close = body.find("```").context("unterminated code fence")?;
+    Ok(body[..fence_close]
+        .lines()
+        .flat_map(rs_stems_in_line)
+        .collect())
+}
+
+/// Extract `.rs` file stems from one documented tree line.
+fn rs_stems_in_line(line: &str) -> Vec<String> {
+    let bytes = line.as_bytes();
+    let mut stems = Vec::new();
+    let mut search_from = 0;
+    while let Some(relative) = line[search_from..].find(".rs") {
+        let dot = search_from + relative;
+        let start = line[..dot]
+            .rfind(|character: char| !(character.is_ascii_alphanumeric() || character == '_'))
+            .map_or(0, |index| index + 1);
+        let stem = &line[start..dot];
+        let after = bytes.get(dot + 3).copied();
+        let boundary = after.is_none_or(|byte| !byte.is_ascii_alphanumeric() && byte != b'_');
+        if !stem.is_empty() && boundary {
+            stems.push(stem.to_string());
+        }
+        search_from = dot + 3;
+    }
+    stems
+}
+
+/// Module basenames under PureCARD's nested `src/`, excluding `lib.rs`.
+fn src_module_names() -> Result<BTreeSet<String>> {
+    let mut names = BTreeSet::new();
+    let mut stack = vec![purecard_path("src")];
+    while let Some(directory) = stack.pop() {
+        for entry in std::fs::read_dir(&directory)
+            .with_context(|| format!("reading {}", directory.display()))?
+        {
+            let path = entry?.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.extension().is_some_and(|extension| extension == "rs")
+                && let Some(stem) = path.file_stem().and_then(|value| value.to_str())
+                && stem != CRATE_ROOT_STEM
+            {
+                names.insert(stem.to_string());
+            }
+        }
+    }
+    Ok(names)
+}
+
+/// PureCARD's README and every Markdown file below its copied `docs/` tree.
+fn collect_docs() -> Result<Vec<(String, String)>> {
+    let mut docs = Vec::new();
+    let readme_path = purecard_path(DOC_README);
+    let readme = std::fs::read_to_string(&readme_path)
+        .with_context(|| format!("reading {}", readme_path.display()))?;
+    docs.push((readme_path.to_string_lossy().into_owned(), readme));
+
+    let mut stack = vec![purecard_path(DOC_DIR)];
+    while let Some(directory) = stack.pop() {
+        for entry in std::fs::read_dir(&directory)
+            .with_context(|| format!("reading {}", directory.display()))?
+        {
+            let path = entry?.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.extension().is_some_and(|extension| extension == "md") {
+                let text = std::fs::read_to_string(&path)
+                    .with_context(|| format!("reading {}", path.display()))?;
+                docs.push((path.to_string_lossy().into_owned(), text));
+            }
+        }
+    }
+    Ok(docs)
+}
+
+/// English stopwords excluded from candidate `{ dependency, … }` sets.
+const BRACE_STOPWORDS: &[&str] = &["and", "the", "for", "not", "but", "with", "plus"];
+/// Maximum length of a brace body treated as a dependency enumeration.
+const MAX_ALLOWLIST_BRACE_LEN: usize = 80;
+
+/// Dependency-set enumerations that claim the widened PureCARD allowlist.
+fn allowlist_sets(text: &str) -> Vec<Vec<String>> {
+    let mut sets = Vec::new();
+    let mut from = 0;
+    while let Some(relative) = text[from..].find('{') {
+        let open = from + relative;
+        let Some(relative_close) = text[open + 1..].find('}') else {
+            from = open + 1;
+            continue;
+        };
+        let inner = &text[open + 1..open + 1 + relative_close];
+        if inner.len() >= MAX_ALLOWLIST_BRACE_LEN {
+            from = open + 1;
+            continue;
+        }
+        from = open + 1 + relative_close + 1;
+        if !(inner.contains("thiserror") && inner.contains("serde")) {
+            continue;
+        }
+        let tokens: Vec<String> = inner
+            .split(|character: char| !(character.is_ascii_alphanumeric() || character == '_'))
+            .filter(|token| {
+                token.len() >= 3
+                    && token.chars().all(|character| {
+                        character.is_ascii_lowercase()
+                            || character == '_'
+                            || character.is_ascii_digit()
+                    })
+            })
+            .filter(|token| !BRACE_STOPWORDS.contains(token))
+            .map(str::to_string)
+            .collect();
+        if !tokens.is_empty() {
+            sets.push(tokens);
+        }
+    }
+    sets
+}
+
+/// Numbers from every unspaced `N/N` ratio on a line mentioning gold.
+fn gold_ratio_citations(text: &str) -> Vec<usize> {
+    let mut citations = Vec::new();
+    for line in text.lines() {
+        if !line.to_ascii_lowercase().contains("gold") {
+            continue;
+        }
+        let characters: Vec<char> = line.chars().collect();
+        let is_run = |character: char| character.is_ascii_digit() || character == ',';
+        for slash in 0..characters.len() {
+            if characters[slash] != '/' {
+                continue;
+            }
+            let mut left = slash;
+            while left > 0 && is_run(characters[left - 1]) {
+                left -= 1;
+            }
+            let mut right = slash + 1;
+            while right < characters.len() && is_run(characters[right]) {
+                right += 1;
+            }
+            if left == slash || right == slash + 1 {
+                continue;
+            }
+            let left_token: String = characters[left..slash].iter().collect();
+            let right_token: String = characters[slash + 1..right].iter().collect();
+            if let (Some(left_value), Some(right_value)) =
+                (parse_grouped(&left_token), parse_grouped(&right_token))
+            {
+                citations.push(left_value);
+                citations.push(right_value);
+            }
+        }
+    }
+    citations
+}
+
+/// Parse a possibly comma-grouped integer.
+fn parse_grouped(token: &str) -> Option<usize> {
+    let digits: String = token.chars().filter(char::is_ascii_digit).collect();
+    if digits.is_empty() {
+        return None;
+    }
+    digits.parse().ok()
+}
+
 /// The analysis-engine crate DAG (design doc §3, constitution §1, ADR-0003):
 /// for each enforced workspace crate, the set of internal crates it may
 /// depend on, in any dependency kind. This is a DAG, not a linear rank —
@@ -676,6 +1405,227 @@ fn workspace_member_manifests() -> Result<Vec<(String, String)>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn purecard_paths_are_rooted_at_the_migrated_crate() {
+        assert_eq!(
+            purecard_path("tests/soundness_replay.rs"),
+            PathBuf::from("crates/pure-analyzer-purecard/tests/soundness_replay.rs")
+        );
+        assert_eq!(
+            PURECARD_MANIFEST,
+            "crates/pure-analyzer-purecard/Cargo.toml"
+        );
+        assert_eq!(PURECARD_FUZZ_DIR, "crates/pure-analyzer-purecard/fuzz");
+        assert_eq!(
+            PURECARD_FUZZ_MANIFEST,
+            "crates/pure-analyzer-purecard/fuzz/Cargo.toml"
+        );
+    }
+
+    fn metadata_dependency(name: &str, kind: Option<&str>, optional: bool) -> serde_json::Value {
+        let mut dependency = serde_json::Map::new();
+        dependency.insert("name".to_string(), serde_json::Value::from(name));
+        dependency.insert(
+            "kind".to_string(),
+            kind.map_or(serde_json::Value::Null, serde_json::Value::from),
+        );
+        dependency.insert("optional".to_string(), serde_json::Value::from(optional));
+        serde_json::Value::Object(dependency)
+    }
+
+    fn metadata_package(dependencies: Vec<serde_json::Value>) -> serde_json::Value {
+        let mut package = serde_json::Map::new();
+        package.insert(
+            "dependencies".to_string(),
+            serde_json::Value::Array(dependencies),
+        );
+        serde_json::Value::Object(package)
+    }
+
+    #[test]
+    fn core_dependency_classification_keeps_only_non_optional_normal_edges() {
+        let package = metadata_package(vec![
+            metadata_dependency("thiserror", None, false),
+            metadata_dependency("serde", None, false),
+            metadata_dependency("pyo3", None, true),
+            metadata_dependency("ureq", Some("dev"), false),
+            metadata_dependency("build-helper", Some("build"), false),
+        ]);
+        let dependencies = non_optional_runtime_dependencies(&package).expect("metadata parses");
+        assert_eq!(
+            dependencies,
+            ["serde".to_string(), "thiserror".to_string()]
+                .into_iter()
+                .collect()
+        );
+    }
+
+    #[test]
+    fn core_dependency_allowlist_flags_only_unapproved_runtime_edges() {
+        let dependencies = [
+            "thiserror".to_string(),
+            "serde".to_string(),
+            "serde_json".to_string(),
+            "tokio".to_string(),
+        ]
+        .into_iter()
+        .collect();
+        assert_eq!(disallowed_core_deps(&dependencies), ["tokio"]);
+
+        let allowed = CORE_DEP_ALLOWLIST
+            .iter()
+            .map(|dependency| (*dependency).to_string())
+            .collect();
+        assert!(disallowed_core_deps(&allowed).is_empty());
+    }
+
+    #[test]
+    fn parse_js_str_const_reads_a_quoted_value_and_rejects_prefix_names() {
+        assert_eq!(
+            parse_js_str_const(
+                "const PINNED_ENGINE_VERSION = \"4.113.0\";",
+                "PINNED_ENGINE_VERSION"
+            ),
+            Some("4.113.0".to_owned())
+        );
+        assert_eq!(
+            parse_js_str_const(
+                "const PINNED_ENGINE_VERSION_X = \"9\";",
+                "PINNED_ENGINE_VERSION"
+            ),
+            None
+        );
+        assert_eq!(parse_js_str_const("const N = 8000;", "N"), None);
+    }
+
+    #[test]
+    fn parse_usize_const_reads_a_literal_and_tolerates_separators() {
+        assert_eq!(
+            parse_usize_const("const ARM_A: usize = 4639;", "ARM_A"),
+            Some(4639)
+        );
+        assert_eq!(
+            parse_usize_const("const N: usize = 1_024;", "N"),
+            Some(1024)
+        );
+    }
+
+    #[test]
+    fn parse_usize_const_ignores_a_prefix_name_and_a_derived_value() {
+        assert_eq!(
+            parse_usize_const("const ARM_ABC: usize = 7;", "ARM_A"),
+            None
+        );
+        assert_eq!(
+            parse_usize_const(
+                "const EXPECTED_GOLD_RECORDS: usize = ARM_A + ARM_C;",
+                "EXPECTED_GOLD_RECORDS"
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn rs_stems_in_line_extracts_module_basenames() {
+        assert_eq!(
+            rs_stems_in_line("    compiled.rs     CompiledGrammar"),
+            ["compiled"]
+        );
+        assert_eq!(
+            rs_stems_in_line("  grammar/        L1 automaton"),
+            Vec::<String>::new()
+        );
+        assert_eq!(rs_stems_in_line("see foo.rsx here"), Vec::<String>::new());
+    }
+
+    #[test]
+    fn module_names_in_tree_reads_only_the_fenced_tree_after_the_heading() {
+        let architecture = "\
+intro\n\n### 3.2 Crate layout\n\n```\npurecard/\n  vocab.rs   the vocab\n  session.rs the session\n```\n\nProse mentioning a ghost engine.rs must be ignored.\n";
+        let actual = module_names_in_tree(architecture).expect("tree parses");
+        let expected: BTreeSet<String> = ["vocab".to_string(), "session".to_string()]
+            .into_iter()
+            .collect();
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn allowlist_sets_flags_the_widened_form_and_exempts_the_historical_one() {
+        assert!(allowlist_sets("M1 widened it to `{ thiserror }`.").is_empty());
+        assert_eq!(
+            allowlist_sets("the widened `{ thiserror, serde, serde_json }` set")[0],
+            ["thiserror", "serde", "serde_json"]
+        );
+        let long = format!("{{ thiserror {} serde }}", "x".repeat(100));
+        assert!(allowlist_sets(&long).is_empty());
+    }
+
+    #[test]
+    fn allowlist_sets_keeps_scanning_past_a_brace_that_cannot_form_a_set() {
+        let filler = "prose ".repeat(20);
+        let text = format!(
+            "a stray {{ {filler}then `{{ thiserror, serde, tokio }}` widens it, trailing {{"
+        );
+        assert_eq!(
+            allowlist_sets(&text),
+            vec![vec![
+                "thiserror".to_string(),
+                "serde".to_string(),
+                "tokio".to_string(),
+            ]]
+        );
+    }
+
+    #[test]
+    fn gold_ratio_citations_reads_only_ratios_on_gold_lines() {
+        assert_eq!(
+            gold_ratio_citations("the is_accepting change keeps gold at 5034/5034."),
+            [5034, 5034]
+        );
+        assert!(gold_ratio_citations("see src/grammar for the gold path").is_empty());
+        assert!(gold_ratio_citations("the ratio 12/12 on a plain line").is_empty());
+    }
+
+    #[test]
+    fn gold_ratio_citations_survives_multibyte_section_refs() {
+        assert!(
+            gold_ratio_citations(
+                "not in the gold corpus; oracle'd by the seed corpus (gap report §5/G2)."
+            )
+            .is_empty()
+        );
+        assert_eq!(
+            gold_ratio_citations("§8 gold soundness stays 5034/5034 (see §5.8)"),
+            [5034, 5034]
+        );
+    }
+
+    #[test]
+    fn gold_ratio_citations_handles_comments_whitespace_and_quotes() {
+        assert_eq!(
+            gold_ratio_citations("assert_eq!(n, 5034); // gold stays 5034/5034"),
+            [5034, 5034]
+        );
+        assert_eq!(
+            gold_ratio_citations("# gold soundness note: 5,034/5,034 replayed"),
+            [5034, 5034]
+        );
+        assert_eq!(
+            gold_ratio_citations(r#"the gold ratio is "5034/5034" today"#),
+            [5034, 5034]
+        );
+        assert!(gold_ratio_citations("gold stays 5034 / 5034").is_empty());
+        assert!(gold_ratio_citations("gold 5034/ 5034").is_empty());
+        assert!(gold_ratio_citations("gold 5034 /5034").is_empty());
+    }
+
+    #[test]
+    fn parse_grouped_strips_separators() {
+        assert_eq!(parse_grouped("5,034"), Some(5034));
+        assert_eq!(parse_grouped("395"), Some(395));
+        assert_eq!(parse_grouped("nope"), None);
+    }
 
     #[test]
     fn civil_from_days_matches_known_anchors() {

@@ -33,6 +33,17 @@ bun = "1.3.14"
 # Declarative git hooks (no hand-written hook scripts).
 lefthook = "2.1.9"
 
+# Builds pure-analyzer-purecard's abi3 Python wheel (`just wheel`) and its
+# in-place extension for the hermetic pytest lane (`just test-python`).
+maturin = "1.15.0"
+
+# Host interpreter for PureCARD's PyO3 build and Python boundary tests. The
+# produced abi3-py39 wheel remains compatible with CPython >= 3.9.
+python = "3.12.14"
+
+# Portable, lockable Python environment runner for `just test-python`.
+uv = "0.12.5"
+
 [env]
 # Keep cargo output deterministic in CI logs.
 CARGO_TERM_COLOR = "always"

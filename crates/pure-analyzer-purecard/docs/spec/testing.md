@@ -153,14 +153,23 @@ The **soundness** half of §8 is offline (§13.1). The **completeness** half (§
 
 The engine runs `org.finos.legend.engine.server.Server server /config/engine-config.yml`; the SDLC runs `org.finos.legend.sdlc.server.startup.LegendSDLCServerFS server /config/sdlc-config.yml` (filesystem backend, entities under `/data/sdlc`). Both configs use `AnonymousClient` (`deployment.mode: TEST_IGNORE_FUNCTION_MATCH`; `pac4j.bypassPaths: ["/api/server/v1/info"]`). Total image footprint ≈ **1.7 GB**.
 
-Bring-up (from `corpus/legend-stack/`):
+Managed completeness run (from the umbrella workspace root):
 
 ```bash
-docker compose -f corpus/legend-stack/docker-compose.yml up -d
+just test-legend
+```
+
+For manual inspection, bring the stack up from the workspace root and tear it
+down afterward:
+
+```bash
+docker compose -f crates/pure-analyzer-purecard/corpus/legend-stack/docker-compose.yml up -d
 
 # health-wait (compose sets engine start_period 60s, sdlc 30s):
 curl -sf http://localhost:6300/api/server/v1/info   # engine ready
 curl -sf http://localhost:6100/api/info             # sdlc ready
+
+docker compose -f crates/pure-analyzer-purecard/corpus/legend-stack/docker-compose.yml down
 ```
 
 The compose file already declares matching healthchecks (engine: `curl -sf http://localhost:6300/api/server/v1/info`, 60s start / 10s interval / 10 retries; sdlc: `curl -sf http://localhost:6100/api/info`, 30s start). A CI job should poll those two endpoints until 200 before running completeness tests.

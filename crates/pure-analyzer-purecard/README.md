@@ -87,7 +87,7 @@ merge gate.
 
 ```sh
 mise install && mise run install-cargo-tools   # provision toolchain + hooks (once)
-just ci                                        # the full local gate
+just ci                                        # the fast hermetic gate
 just new-feature <name>                        # worktree + branch for a change
 just spec <name>                               # scaffold a spec, then /spec
 ```

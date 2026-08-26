@@ -7,12 +7,16 @@
 # across OSes (macOS ships `shasum`, not `sha256sum`; BSD `date`/`sed` differ from
 # GNU). This is an ALLOWLIST, not a denylist: it flags every string-literal
 # program name that is NOT one of the vetted external tools (`cargo`, `git`,
-# `buf`, `ast-grep`). A denylist would only close the class of binaries someone
-# already thought of — the same failure mode that let a `date` shell-out slip in
-# before a rule existed (§5 "fix the system, not the instance"). Dynamic
+# `buf`, `ast-grep`, `docker`). A denylist would only close the class of binaries
+# someone already thought of — the same failure mode that let a `date` shell-out
+# slip in before a rule existed (§5 "fix the system, not the instance"). Dynamic
 # (non-literal) program names are left to review, not flagged here.
+#
+# `docker` is the container-runtime boundary for PureCARD's opt-in Legend
+# completeness lane. There is no portable in-process substitute for bringing
+# that checked-in Compose stack up and unconditionally back down.
 id: no-platform-shellout
-message: "Automation may shell out only to a vetted external tool (cargo/git/buf/ast-grep). Use a built-in / in-process Rust function instead of a platform-specific binary (constitution §2 'portable automation'); if this is a genuine new external tool, add it to the allowlist in ast-grep-rules/no-platform-shellout.yml."
+message: "Automation may shell out only to a vetted external tool (cargo/git/buf/ast-grep/docker). Use a built-in / in-process Rust function instead of a platform-specific binary (constitution §2 'portable automation'); if this is a genuine new external tool, add it to the allowlist in ast-grep-rules/no-platform-shellout.yml."
 severity: error
 language: rust
 rule:
@@ -23,6 +27,6 @@ constraints:
   BIN:
     kind: string_literal
     not:
-      regex: '^"(cargo|git|buf|ast-grep)"$'
+      regex: '^"(cargo|git|buf|ast-grep|docker)"$'
 files:
   - "xtask/**/*.rs"
