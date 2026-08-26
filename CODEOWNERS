@@ -1,6 +1,8 @@
-# Code owners. These paths require maintainer review on every PR, regardless of
-# who (or what) authored the change. The PROTECTED tier of the methodology is
-# enforced here: an agent cannot self-approve a change to a guardrail.
+# Ownership map for review routing. The default-branch ruleset enforces PRs,
+# branch freshness, resolved conversations, and deterministic aggregate checks.
+# Code-owner approval is intentionally not required while @tsouza is the sole
+# maintainer because GitHub does not allow authors to approve their own PRs.
+# Add a second trusted maintainer before enabling that requirement.
 
 # Default owner for everything.
 *                           @tsouza
@@ -9,8 +11,8 @@
 /constitution.md            @tsouza
 /CLAUDE.md                  @tsouza
 
-# Guardrail configuration — thresholds, bans, gate wiring. Loosening any of
-# these is human-gated (see docs/methodology/self-learning.md).
+# Guardrail configuration — thresholds, bans, and gate wiring. Changes to these
+# paths need explicit maintainer judgment (see docs/methodology/self-learning.md).
 /deny.toml                  @tsouza
 /rust-toolchain.toml        @tsouza
 /.github/                   @tsouza

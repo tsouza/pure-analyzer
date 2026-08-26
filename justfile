@@ -34,14 +34,17 @@ fmt:
 fmt-check:
     cargo fmt --all -- --check
 
-# Clippy with warnings denied across all targets and features.
+# Clippy with warnings denied in both default and all-feature configurations.
+# The first pass covers PureCARD's cfg(not(feature = "legend")) test binary.
 lint:
-    cargo clippy --all-targets --all-features -- -D warnings
+    cargo clippy --workspace --all-targets -- -D warnings
+    cargo clippy --workspace --all-targets --all-features -- -D warnings
 
 # Lint + auto-fix markdown (aligns tables for MD060, then markdownlint --fix).
 lint-md:
-    bun scripts/lib/align-md-tables.mjs $(git ls-files '*.md')
-    bunx markdownlint-cli2 --fix "**/*.md"
+    bun scripts/lib/align-md-tables.mjs $(git ls-files '*.md' '*.markdown')
+    bunx markdownlint-cli2 --fix "**/*.md" "**/*.markdown"
+    just check-doc-links
 
 # Verify commit messages on this branch follow Conventional Commits.
 lint-commits:
@@ -51,17 +54,30 @@ lint-commits:
 lint-actions:
     actionlint
 
+# Audit GitHub Actions for unsafe triggers, permissions, and unpinned uses.
+# Accepted findings, if any, are narrowly scoped in .github/zizmor.yml.
+zizmor:
+    zizmor --config .github/zizmor.yml .github/
+
 # ---------------------------------------------------------------------------
 # Testing (layered: unit -> integration -> chaos -> mutation -> fuzz)
 # ---------------------------------------------------------------------------
 
-# Run the full test suite via nextest (all layers except mutation/fuzz).
+# Run the hermetic default-feature test suite via nextest (all layers except
+# mutation/fuzz). PureCARD's Legend and real-tokenizer features are exercised
+# only through their explicit opt-in recipes below.
 test:
-    cargo nextest run --workspace --all-features
+    cargo nextest run --workspace
 
 # Fast inner-loop: unit tests only (lib targets).
 test-unit:
     cargo nextest run --workspace --lib
+
+# Run doctests explicitly: nextest does not execute them. All features remain
+# compile-checked here; PureCARD's environment-bound feature tests are separate
+# integration-test binaries, so they are not executed by this doc-only command.
+doctest:
+    cargo test --workspace --doc --all-features
 
 # Integration tests (files under crates/*/tests/, compiled as separate
 # `test`-kind binaries — `kind(test)` selects exactly those, unlike the
@@ -78,15 +94,20 @@ test-integration:
 test-chaos:
     cargo nextest run --workspace --all-features -E 'test(/chaos/)' --no-tests=warn
 
+# Legend-backed PureCARD completeness lane (opt-in). xtask owns Compose startup,
+# the package-scoped `legend` test invocation, and unconditional teardown.
+test-legend:
+    cargo xtask test-legend
+
 # Run the Bun test suite for the .mjs automation under scripts/ (CI: test-scripts).
 test-scripts:
     bun test scripts/
 
-# Mutation testing — verifies the test suite actually catches regressions.
-# Runs in-place (mutates the checked-out tree directly, reverting after each
-# trial) for speed on both CI's disposable checkout and a developer's own tree.
+# Mutation testing verifies that the test suite actually catches regressions.
+# The default workspace and feature-gated PureCARD FFI surface run separately
+# so neither pass can succeed vacuously; xtask portably prepares their output.
 test-mutation:
-    cargo mutants --workspace --in-place
+    cargo xtask test-mutation
 
 # ---------------------------------------------------------------------------
 # Fuzzing & benchmarking
@@ -102,9 +123,75 @@ test-mutation:
 fuzz target="" time="60" triple="":
     cargo +nightly fuzz run {{ if triple == "" { "" } else { "--target " + triple } }} {{ target }} -- -max_total_time={{ time }}
 
+# Run one target from PureCARD's separate, workspace-excluded fuzz project.
+# The target is required so this can never accidentally select the analyzer's
+# top-level fuzz crate. CI may pass the GNU triple explicitly for ASan.
+purecard-fuzz target time="60" triple="":
+    cargo +nightly fuzz run --fuzz-dir crates/pure-analyzer-purecard/fuzz {{ if triple == "" { "" } else { "--target " + triple } }} {{ target }} -- -max_total_time={{ time }}
+
+# Compile every PureCARD fuzz target without executing it (bit-rot gate). CI
+# supplies the GNU triple because the static installer otherwise selects musl,
+# which is incompatible with ASan; local developers normally omit it.
+purecard-fuzz-build triple="":
+    cargo +nightly fuzz build --fuzz-dir crates/pure-analyzer-purecard/fuzz {{ if triple == "" { "" } else { "--target " + triple } }}
+
+# Time-box all three PureCARD fuzz targets. The per-target loop and nested fuzz
+# manifest selection live in xtask rather than shell control flow here.
+purecard-fuzz-ci time="60":
+    cargo xtask purecard-fuzz-ci {{ time }}
+
+# Immutable real-tokenizer revisions and repo-root cache locations used by the
+# opt-in PureCARD oracle recipes. Bump only deliberately and keep future CI in
+# sync with these values.
+purecard_qwen_revision := "c03e6d358207e414f1eca0bb1891e29f1db0e242"
+purecard_qwen_tokenizer := justfile_directory() + "/target/purecard/qwen/tokenizer.json"
+purecard_gpt4_revision := "1d9f1f1b1fae88c0e4df1dab0a397f8de6229075"
+purecard_gpt4_tokenizer := justfile_directory() + "/target/purecard/gpt4/tokenizer.json"
+
+# Fetch the pinned Qwen2.5-Coder tokenizer into the shared local/CI cache.
+qwen-tokenizer-fetch:
+    curl -sSL --fail --create-dirs -z {{ quote(purecard_qwen_tokenizer) }} -o {{ quote(purecard_qwen_tokenizer) }} "https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct/resolve/{{ purecard_qwen_revision }}/tokenizer.json"
+
+# Fetch the pinned GPT-4 tokenizer used by the fused-precision fixture.
+gpt4-tokenizer-fetch:
+    curl -sSL --fail --create-dirs -z {{ quote(purecard_gpt4_tokenizer) }} -o {{ quote(purecard_gpt4_tokenizer) }} "https://huggingface.co/Xenova/gpt-4/resolve/{{ purecard_gpt4_revision }}/tokenizer.json"
+
+# Fetch the pinned Qwen tokenizer and run PureCARD's real-tokenizer L2
+# soundness oracle. Heavy and network-fed, so deliberately outside `test`/`ci`.
+qwen-oracle: qwen-tokenizer-fetch
+    just qwen-oracle-run
+
+# Run the Qwen oracle from an already-populated cache (the CI-friendly entry
+# point). `-p` prevents Cargo from applying the feature to another member.
+qwen-oracle-run:
+    QWEN_TOKENIZER_JSON={{ quote(purecard_qwen_tokenizer) }} cargo test -p pure-analyzer-purecard --features qwen-oracle --test qwen_soundness -- --nocapture
+
+# Fetch both immutable byte-level BPE tokenizers used to verify the committed
+# fused-navigation fixture. Each recipe uses `curl -z` to preserve fresh caches.
+fused-tokenizers-fetch: qwen-tokenizer-fetch gpt4-tokenizer-fetch
+
+# Re-extract the fixture from the real tokenizers and compare it with the
+# committed hermetic replay data.
+fused-tokenizers: fused-tokenizers-fetch
+    just fused-tokenizers-run
+
+# Run the fused-tokenizer comparison from already-populated caches.
+fused-tokenizers-run:
+    QWEN_TOKENIZER_JSON={{ quote(purecard_qwen_tokenizer) }} GPT4_TOKENIZER_JSON={{ quote(purecard_gpt4_tokenizer) }} cargo test -p pure-analyzer-purecard --features fused-extract --test fused_tokenizer_extract -- --nocapture
+
+# Intentionally regenerate the committed fixture after a reviewed tokenizer or
+# extractor change. The resulting diff must be inspected before commit.
+fused-tokenizers-write: fused-tokenizers-fetch
+    QWEN_TOKENIZER_JSON={{ quote(purecard_qwen_tokenizer) }} GPT4_TOKENIZER_JSON={{ quote(purecard_gpt4_tokenizer) }} WRITE_FUSED_FIXTURE=1 cargo test -p pure-analyzer-purecard --features fused-extract --test fused_tokenizer_extract -- --nocapture
+
 # Criterion benchmarks. On CI these run under CodSpeed (see ci.yml).
 bench:
     cargo bench --workspace
+
+# Build and run the workspace benchmarks under cargo-codspeed.
+codspeed:
+    cargo codspeed build --workspace
+    cargo codspeed run
 
 # ---------------------------------------------------------------------------
 # Coverage, supply-chain & API-stability gates
@@ -125,6 +212,21 @@ deny:
 # Unused-dependency scan.
 machete:
     cargo machete
+
+# Assert that PureCARD's non-optional shipped dependency set remains the three
+# ADR-approved runtime crates. The migrated crate is unpublished, so this does
+# not restore the standalone repository's obsolete package-content allowlist.
+check-core-deplight:
+    cargo xtask check-core-deplight
+
+# Verify PureCARD's copied documentation facts against its nested sources,
+# tests, and corpora so similarly named analyzer facts cannot contaminate them.
+check-doc-facts:
+    cargo xtask check-doc-facts
+
+# Check every tracked Markdown relative file and GitHub-style heading anchor.
+check-doc-links:
+    cargo xtask check-doc-links
 
 # Validate release-plz.toml against the workspace, so config drift fails a PR
 # instead of the post-merge trunk run. Delegates to xtask.
@@ -154,6 +256,31 @@ docs:
     RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --all-features
 
 # ---------------------------------------------------------------------------
+# PureCARD Python boundary (PyO3 + maturin)
+# ---------------------------------------------------------------------------
+
+# Type-check only PureCARD's feature-gated PyO3 boundary.
+check-ffi:
+    cargo check -p pure-analyzer-purecard --features python
+
+# Exercise the Rust side of the PyO3 boundary so mutation testing can observe
+# its marshaling delegates without rebuilding a wheel for every mutant.
+test-ffi:
+    cargo test -p pure-analyzer-purecard --features python-test --lib
+
+# Build PureCARD's abi3 wheel. Run from the nested crate so maturin discovers
+# its pyproject.toml rather than looking for one at the workspace root.
+[working-directory('crates/pure-analyzer-purecard')]
+wheel:
+    maturin build --release --features python
+
+# Build/install the extension in uv's project-local environment, then run the
+# pinned hermetic Python tests. No pre-activated virtualenv is required.
+[working-directory('crates/pure-analyzer-purecard')]
+test-python:
+    uv run --locked --python 3.12 --no-managed-python --group test python -m pytest python/tests
+
+# ---------------------------------------------------------------------------
 # Structural / hygiene checks
 # ---------------------------------------------------------------------------
 
@@ -166,10 +293,19 @@ sweep:
 postponed-markers:
     bun scripts/checks/postponed-markers.mjs --all
 
-# Verify the workspace layering (constitution §1, ADR-0002): reject any layer
-# that depends outward — onto a sibling or outer layer — in any dependency kind
-# (normal/dev/build), the edge cargo-deny's global bans miss. Delegates to xtask
-# (reads `cargo metadata`). Also runs inside `just ci`.
+# Reject stale milestone/scaffold self-description in shipped PureCARD source
+# docs. The restored scanner is monorepo-aware and intentionally crate-scoped.
+lint-purecard-stale:
+    bun scripts/checks/stale-selfdescription.mjs --all
+
+# Re-label PureCARD's frozen differential corpus against a running Legend
+# engine. The script owns the nested paths and verifies the engine version pin.
+label-differential:
+    bun scripts/label-differential.mjs
+
+# Verify analyzer layering (ADR-0003) and analyzer/PureCARD independence
+# (ADR-0004 and PureCARD ADR-0009) across normal/dev/build dependencies.
+# Delegates to xtask (reads `cargo metadata`). Also runs inside `just ci`.
 verify-layering:
     cargo xtask verify-layering
 
@@ -217,7 +353,7 @@ ci:
 # nightly for cargo-fuzz's sanitizers) — so they are only enforced in CI. Run the
 # fuzz-smoke directly with `just fuzz diagnostics 60` if you have nightly. Use
 # before a PR when a change touches what the fast gate skips.
-ci-full: ci coverage test-mutation deny audit machete release-plz-check semver sweep postponed-markers docs test-scripts
+ci-full: ci coverage test-mutation deny audit machete release-plz-check semver sweep postponed-markers docs test-scripts lint-actions zizmor
     @echo "ci-full: ran every locally reproducible PR gate; codspeed bench, the no-warnings log sweep, the opt-in public-api snapshot, and the fuzz-smoke are enforced only in CI"
 
 # Install git hooks (managed by lefthook.yml). Also run automatically by the

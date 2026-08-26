@@ -5,67 +5,124 @@ _Part of the [PureCARD spec](README.md); see also the [domain model](../domain-m
 > The layered testing pyramid that operationalizes this strategy is in
 > [../methodology/decoder-testing.md](../methodology/decoder-testing.md).
 
-## 8. Correctness — the oracle-driven test strategy (most important section)
+## 8. Correctness — the oracle-driven test strategy
 
-A constrained decoder fails _silently and catastrophically_: a **soundness** bug masks valid tokens (the model can never produce correct queries); a **completeness** bug lets the model down a dead end. Both are mechanically testable here because the project owns a ground-truth oracle and a large verified corpus. This is the crux of the whole component — build it test-first.
+A constrained decoder can fail silently: a **soundness** bug masks a continuation
+that a valid query needs, while a **completeness** bug admits a path that the real
+compiler cannot accept. The repository has strong offline evidence for the first
+class. The live end-to-end evidence for the second remains incomplete and is
+called out explicitly below.
 
-### 8.1 Soundness — never mask a valid continuation (the killer test)
+### 8.1 Soundness — never mask a valid continuation
 
-The repo has **thousands of execution-verified gold Pure queries** (~1,791+ at drafting time). Where they live and how to obtain the test corpus:
+The committed oracle inputs live under `corpus/`:
 
-- **`data/phase2/armC_*.jsonl`** — verified armC gold queries (JSONL). The Pure query is in the `pure_text` / `final_query` field of each record.
-- **`data/pilot/armC2_results_*.jsonl`** — pilot armC2 results (JSONL); same `pure_text` / `final_query` fields.
-- **`data/phase2/navC_train.jsonl`** — navigation-heavy training queries.
-- (also present: `data/phase2/armA_*.jsonl`.)
+- `gold_queries.jsonl` contains 5,034 execution-verified queries across 161
+  databases;
+- `modern_dialect_seeds.jsonl` carries provenance-distinct newer constructs; and
+- `schemas/*.md` supplies the fixtures used by the implemented L2 subset.
 
-Each record's `pure_text` (equivalently `final_query`) field holds a single execution-verified gold Pure query string — extract those to form the soundness test set. The upstream project accesses these via `uv run` Python tooling; for the decoder's Rust tests, read the JSONL directly and pull the query field.
+The always-on Rust lanes replay those query bytes through the hand-written PDA
+and assert that the recognizer never dead-states and ends accepting. L2 replay
+adds the matching schema and asserts that the implemented N/T rules never mask a
+gold continuation. The relevant tests include `soundness_replay.rs`,
+`modern_dialect_soundness.rs`, `l2_soundness.rs`, and the BPE/fused-token
+regression suites.
 
-**The soundness test.** For each gold query: tokenize with the target model's tokenizer, replay through the decoder, and **assert at every step that the actual next token is in `allowed_mask()`**. Any gold token masked = soundness bug. This corpus _is_ the L1 test spec, and, with schemas attached, the L2 test spec. For L2, replay against the query's matching `Schema` (built from the DB's ctx brief / MCP reflection) and assert no N/T rule masks a token that actually appears — this catches navigability-direction, inheritance, and multiplicity mistakes mechanically.
+`tests/qwen_soundness.rs` is the stronger tokenizer-specific lane. It loads the
+actual pinned Qwen tokenizer, builds `Vocab` in token-ID order, tokenizes every
+gold query, and checks each actual next token ID against `allowed_mask()`. It
+runs via `just qwen-oracle` and the scheduled/on-demand tokenizer workflow, not
+the per-PR lane. This proves real-tokenizer token-ID replay. It does **not** run a
+model forward pass and does **not** compile output with Legend.
 
-### 8.2 Completeness — no dead ends (differential compile test)
+### 8.2 Completeness — the live differential target
 
-Generate under constraint (random accepting walks over the PDA, or model-driven walks), then **compile every result via the real Legend engine**. The engine runs at:
+The target is to generate under constraint and compile every result through the
+pinned Legend engine:
 
+```text
+http://localhost:6300/api
+/pure/v1/grammar/grammarToJson/lambda
+/pure/v1/compilation/lambdaReturnType
 ```
-http://localhost:6300/api           (self-hosted docker stack, engine 4.113.0)
-compile endpoint:  /pure/v1/compilation/lambdaReturnType
-```
 
-Target: **100% of constrained generations compile.** Any compile failure = a grammar/overlay gap; tighten the grammar there (oracle-driven, never speculative). This reuses the project's existing engine client and applies the same execution-verification philosophy to the decoder.
+The current `legend_completeness.rs` lane health-waits the live engine, posts the
+committed placeholder protocol fixtures, and classifies every response. It also
+feeds every deterministic accepting walk through that live path. It proves
+engine reachability, teardown-safe orchestration, and response classification;
+it does **not** prove the target 100% compile rate. Raw-walk `grammarToJson`
+lowering and schema-constrained walk generation remain outstanding.
 
 ### 8.3 Schema-consistency verification (L2)
 
-Constrained generation against schema `S` must never reference a non-`S` identifier or a type-illegal operation. Verify against the compiler's name/type resolution on the `S` model: assert **zero** phantom-identifier / type-mismatch compile errors under L2, using the same `/pure/v1/compilation/lambdaReturnType` oracle.
+The implemented L2 subset is covered hermetically by gold replay, targeted
+precision/counterfactual tests, property tests, and the real-Qwen token-ID lane.
+The end-state target remains zero phantom-identifier and type-mismatch compile
+errors for schema-constrained accepting walks against live Legend. That live
+claim is not yet established because the schema-aware generator is missing.
 
 ### 8.4 Differential fuzzing
 
-Random accepting walks over the PDA → all must compile; feed adversarial near-miss prefixes to check masks reject exactly the invalid next-tokens.
+Committed-seed accepting walks test recognizer liveness and reproducibility;
+near-miss and structured-corpus tests probe mask precision. The excluded nightly
+fuzz crate exercises decoder entry points. A live compiler verdict for every
+generated walk remains part of §8.2's open target.
 
 ### 8.5 Property tests
 
-Using `proptest`: `accept_token` after any token in `allowed_mask()` never panics and never dead-ends before an accepting state is reachable.
+`mask_properties.rs` and `l2_properties.rs` use `proptest` to exercise rollback,
+mask/accept agreement, and the invariant that L2 only narrows L1. Seeds are
+reported and regressions are committed.
 
 ### 8.6 Corpus-derivation invariant
 
-Any production/rule a gold query violates is _wrong_ and must be relaxed to admit the corpus; any construct the corpus lacks stays out until a gold query adds it. The verified queries, not intuition, bound the grammar and the rules.
+Any production or narrowing rule a gold query violates is wrong and must be
+relaxed. A construct absent from the frozen corpus requires a provenance-bearing
+seed before the PDA is widened. The oracle inputs, not intuition, bound changes.
 
-### 8.7 CI gate (non-negotiable)
+### 8.7 Enforced gates and acceptance target
 
-**100% gold-corpus soundness + 100% constrained-generation compile rate on a held-out schema set.** These are mechanical and non-negotiable gates for the component.
+The enforced hermetic gates include full byte-level corpus replay, the
+implemented L2 fixture replay, properties/precision regressions, doc facts, and
+normal workspace quality checks. Real-Qwen token-ID replay is scheduled and
+on-demand because it is heavy and network-fed.
+
+The **acceptance target**, not a currently satisfied pre-merge gate, is 100%
+constrained-walk compilation plus zero schema-resolution/type errors on a
+representative schema set. Do not report that target as achieved until
+grammar-to-protocol lowering and schema-constrained walk generation make the live
+Legend assertion real.
 
 ---
 
 ## 13. Test corpus — contents, provenance, location
 
-The oracle-driven test strategy of §8 needs two concrete inputs: a large set of execution-verified gold Pure queries (the **soundness** oracle) and per-database schemas (the **L2** test inputs). Both are already assembled and ship **inside the PureCARD workspace** under `corpus/` (committed to the PureCARD repo). A fresh Claude on a fresh machine needs nothing but this checkout to run the entire soundness backbone; the corpus is self-contained and engine-free. This section documents exactly what is in `corpus/`, where it came from, and how to extend it.
+The oracle-driven test strategy of §8 uses two concrete inputs: a large set of
+execution-verified gold Pure queries (the **soundness** oracle) and per-database
+schemas (the **L2** test inputs). Both ship under this package's `corpus/`
+directory in the monorepo. A fresh checkout is sufficient for the byte-level
+soundness backbone; no live engine is needed. This section documents what is in
+`corpus/`, where it came from, and how to extend it.
 
 ### 13.1 `corpus/gold_queries.jsonl` — the soundness oracle
 
-**5,034 unique, execution-verified gold Pure query strings** spanning **161 databases**. This is the SOUNDNESS oracle of §8.1: replay every gold query through the L1 decoder and assert at every step that the actual next token is in `allowed_mask()`; any gold token the mask would forbid is a grammar (soundness) bug. It is simultaneously the **empirical basis the L1 grammar (§5) was derived from** — the verified corpus _is_ the spec (§5, §8.6), and this file is that corpus in shippable form.
+**5,034 unique, execution-verified gold Pure query strings** spanning **161
+databases**. This is the frozen oracle of §8.1: replay every query through L1 and
+assert that each byte continuation remains live and the complete query is
+accepted. Token-ID replay is a separate tokenizer-specific lane. The file is
+also the empirical basis from which the hand-written grammar was derived.
 
-**Soundness testing over this file is FULLY OFFLINE — no Legend engine required.** It needs only the gold query text + the grammar + the model tokenizer's byte representation of tokens (§9). This is the whole point: the core correctness backbone runs in any CI with zero infrastructure.
+**Byte-level soundness testing over this file is fully offline — no Legend
+engine or model tokenizer is required.** The real-Qwen token-ID lane additionally
+needs the pinned tokenizer artifact, fetched cache-first by its scheduled or
+on-demand workflow.
 
-Provenance: distilled from the upstream **pure-lingua** project's Phase-2 output — `data/phase2/armA_*.jsonl` + `data/phase2/armC_*.jsonl`, keeping only `accepted=true` (execution-verified) records and de-duplicating query strings. The full `data/phase2/` directory is **231 MB** (not GitHub-committable); this distillation is **4.8 MB** and is committed to the PureCARD repo.
+Provenance: distilled from the upstream **pure-lingua** project's Phase-2 output
+— `data/phase2/armA_*.jsonl` + `data/phase2/armC_*.jsonl`, keeping only
+`accepted=true` (execution-verified) records and de-duplicating query strings.
+The full `data/phase2/` directory is **231 MB**; this distillation is **4.8 MB**
+and is committed in the PureCARD package subtree.
 
 Line schema (JSONL, one gold query per line):
 
@@ -98,7 +155,12 @@ Line schema (JSONL, one gold query per line):
 - Pilot: `concert_singer`, `pets_1`, `battle_death`, `car_1`, `employee_hire_evaluation`
 - OOS: `dog_kennels`, `student_transcripts_tracking`, `world_1`
 
-These are the **L2 test inputs** (§6, §8.1 L2-mode, §8.3): the `Schema` data-contract (§6.2) is populated **from these files** (host-side, never by the decoder), then a gold query for that DB is replayed under L2 asserting no N/T rule masks a token that actually appears. This is what mechanically catches navigability-direction (§6.2.3), inheritance, and multiplicity mistakes. The pilot set backs M3 schema-soundness; the 3 OOS DBs are the **held-out schema set** the §8.7 CI gate and M3 done-criterion refer to.
+These are the **L2 test inputs** (§6, §8.1 L2-mode, §8.3): the
+`Schema` data contract is populated from these files, then matching gold queries
+are replayed under the implemented L2 subset. The three OOS files form an in-repo
+generalization partition. Because contributors and generators can read them,
+they are not a reviewer-controlled held-out suite and no anti-gaming claim rests
+on them.
 
 **File format** (from the `concert_singer` example). Each file is Markdown with two load-bearing blocks:
 
@@ -128,19 +190,26 @@ Association spider::concert_singer::model::fk_1
 
 ### 13.3 Where it lives, and regenerating/extending
 
-|              | pure-lingua source repo                                   | PureCARD workspace                                         |
+|              | pure-lingua source repo                                   | PureCARD package subtree                                   |
 | ------------ | --------------------------------------------------------- | ---------------------------------------------------------- |
 | Gold queries | `data/phase2/armA_*.jsonl` + `armC_*.jsonl` (231 MB, raw) | `corpus/gold_queries.jsonl` (4.8 MB, distilled, committed) |
 | Schemas      | `data/pilot/armC_ctx_<db>.md` (+ OOS ctx briefs)          | `corpus/schemas/<db>.md` (committed)                       |
 | Legend stack | `infra/legend-stack/`                                     | `corpus/legend-stack/` (§14)                               |
 
-**The shipped `corpus/` is sufficient for M0–M3** (M1 L1 soundness, M2 perf, M3 L2 overlay) with no upstream access. To **regenerate or extend** the corpus — more schemas, more query shapes, new constructs the grammar does not yet exercise — the reader needs the full **pure-lingua repo + its Legend stack** (the datagen pipeline that produced `data/phase2/` and the ctx briefs). That is out of scope for building PureCARD; note it only so a future maintainer knows the upstream provenance path exists. For the decoder itself, the committed corpus is the complete test spec.
+The shipped `corpus/` is sufficient for the implemented offline M0–M3 lanes
+without upstream access. Regenerating or extending its provenance requires the
+upstream pure-lingua datagen inputs. The committed corpus is a frozen empirical
+oracle, not proof that every legal emitted-Pure construct or schema is covered.
 
 ---
 
 ## 14. Legend engine setup (for the completeness oracle) + CI
 
-The **soundness** half of §8 is offline (§13.1). The **completeness** half (§8.2 — _do constrained generations actually compile?_ — and §8.3 — _does L2 output resolve on the real model?_) needs a **live Legend engine**. This section documents that engine, taken verbatim from the real infra files (`infra/legend-stack/docker-compose.yml`, `engine-config.yml`, `sdlc-config.yml`) and the Gate-0 probe findings (`docs/probes/gate0-findings.md`) — not invented. The stack ships to the PureCARD workspace under `corpus/legend-stack/`.
+The byte-level **soundness** half of §8 is offline (§13.1). The live
+**completeness** target needs a Legend engine. The pinned stack ships in the
+PureCARD package subtree under `corpus/legend-stack/`. The current lane proves
+reachability and classified responses; §8.2 records the lowering and generation
+work still needed before it can claim compile-rate completeness.
 
 ### 14.1 The stack
 
@@ -153,14 +222,23 @@ The **soundness** half of §8 is offline (§13.1). The **completeness** half (§
 
 The engine runs `org.finos.legend.engine.server.Server server /config/engine-config.yml`; the SDLC runs `org.finos.legend.sdlc.server.startup.LegendSDLCServerFS server /config/sdlc-config.yml` (filesystem backend, entities under `/data/sdlc`). Both configs use `AnonymousClient` (`deployment.mode: TEST_IGNORE_FUNCTION_MATCH`; `pac4j.bypassPaths: ["/api/server/v1/info"]`). Total image footprint ≈ **1.7 GB**.
 
-Bring-up (from `corpus/legend-stack/`):
+Managed completeness run (from the umbrella workspace root):
 
 ```bash
-docker compose -f corpus/legend-stack/docker-compose.yml up -d
+just test-legend
+```
+
+For manual inspection, bring the stack up from the workspace root and tear it
+down afterward:
+
+```bash
+docker compose -f crates/pure-analyzer-purecard/corpus/legend-stack/docker-compose.yml up -d
 
 # health-wait (compose sets engine start_period 60s, sdlc 30s):
 curl -sf http://localhost:6300/api/server/v1/info   # engine ready
 curl -sf http://localhost:6100/api/info             # sdlc ready
+
+docker compose -f crates/pure-analyzer-purecard/corpus/legend-stack/docker-compose.yml down
 ```
 
 The compose file already declares matching healthchecks (engine: `curl -sf http://localhost:6300/api/server/v1/info`, 60s start / 10s interval / 10 retries; sdlc: `curl -sf http://localhost:6100/api/info`, 30s start). A CI job should poll those two endpoints until 200 before running completeness tests.
@@ -183,15 +261,20 @@ From `gate0-findings.md` + the stack. Keep to what affects _compiling lambdas_ (
 - **DuckDB is a dead end on stock images — H2 is the store.** The stock engine image lacks the DuckDB execution connector and the SDLC drops DuckDB connections in PMCD conversion. Both are closed facts; do not retry. H2 (`LocalH2`) is the proven store. This only matters if you regenerate models with a relational connection; for pure lambda _compilation_ against a supplied PMCD it is moot.
 - **Images are amd64.** On Apple Silicon they run under Rosetta/QEMU emulation (works, slower). The intended **Ubuntu host is native x86**, so no emulation there — the stack runs natively on the target machine.
 
-### 14.4 CI guidance (the reader must decide — here is the reasoning)
+### 14.4 CI lanes
 
-Two test classes with very different infrastructure cost:
+The repository separates the lanes by cost and evidence:
 
-| Test class                                                                                                      | What it needs                                                                                    | CI stance                                                                                                                                                                                                                                           |
-| --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Soundness** — replay 5,034 gold queries through L1 (§8.1); L2 replay against `corpus/schemas/` (§8.1 L2-mode) | **Nothing** — just the committed `corpus/` + the model tokenizer bytes. Fully offline, hermetic. | **Run in EVERY CI run.** Zero infra. This is the core correctness backbone.                                                                                                                                                                         |
-| **Completeness** — constrained generations must compile (§8.2); L2 resolves on the real model (§8.3)            | **A live Legend engine** — two amd64 images, ≈ 1.7 GB, docker-compose up + health-wait.          | **Separate engine-backed job.** Either (a) spin the compose up in a dedicated CI job on an **x86 runner** (feasible; document the health-wait of §14.1), or (b) gate it as **opt-in / nightly / local-only** to keep the main CI fast and hermetic. |
+| Lane                      | Inputs                                            | Current evidence                                                      |
+| ------------------------- | ------------------------------------------------- | --------------------------------------------------------------------- |
+| Hermetic corpus replay    | Committed gold, modern seeds, and schema fixtures | Always-on byte/L2 soundness and regression evidence; no engine        |
+| Real-Qwen token-ID replay | Pinned tokenizer artifact, fetched cache-first    | Scheduled/on-demand actual tokenization; no model inference or engine |
+| Live Legend               | Two pinned amd64 images plus health-wait          | Local/on-demand reachability and response classification              |
 
-**Recommendation:** run **offline soundness in every CI run**; run **completeness as a separate engine-backed job — nightly or on-demand** — on an x86 runner. State plainly to the reader: **the core correctness backbone (soundness replay of all 5,034 gold queries) needs NO engine**, so PureCARD is CI-testable out of the box with only the committed corpus; the Legend engine is required **only** for the completeness half, and that half can be deferred to a nightly/on-demand job without weakening the always-on soundness gate. (The §8.7 CI gate remains the target — 100% gold soundness always, 100% constrained-generation compile rate on the completeness job.)
+Run the offline soundness suite in every CI run. Keep the real-tokenizer oracle
+scheduled/on-demand and the live stack isolated behind `just test-legend`. The
+live lane may only become a 100% compile-rate gate after raw grammar lowering and
+schema-constrained accepting-walk generation are implemented; until then its
+green result must not be described as completeness proof.
 
 ---

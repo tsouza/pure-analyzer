@@ -31,6 +31,15 @@ junit.xml
 # --- Benchmarks ---
 /criterion
 
+# --- Python boundary: maturin wheel + pytest lane artifacts ---
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+# Wheels land in target/wheels (already covered by /target); a local venv for
+# `just test-python` must never be committed.
+.venv/
+
 # --- Editor / OS cruft ---
 .idea/
 .vscode/

@@ -53,9 +53,10 @@ truth for terminality (constitution §4).
   stable pin) while gaining a real no-panic backstop; any future value-terminal
   state added to `step` is covered by `is_accepting` for free.
 - **Harder / obligations:** the fuzz crate carries its own lockfile and nightly
-  requirement, and needs its own CI job (`fuzz.yml`) — it is *not* covered by
-  `just ci`. New fuzz targets must be registered in both `fuzz/Cargo.toml` and
-  the `FUZZ_TARGETS` list in `xtask` (and the `fuzz.yml` matrix).
+  requirement, and needs its own CI workflow
+  (`.github/workflows/purecard-fuzz.yml`) — it is *not* covered by `just ci`.
+  New fuzz targets must be registered in `fuzz/Cargo.toml`, the
+  `PURECARD_FUZZ_TARGETS` list in `xtask`, and the `purecard-fuzz.yml` matrix.
 - **Soundness argument (why gold stays 5034/5034):** the `is_accepting` change
   reads `step` but never mutates it, so it **strictly adds** accepting
   configurations — it never turns a live byte dead or clears a mask bit. Every

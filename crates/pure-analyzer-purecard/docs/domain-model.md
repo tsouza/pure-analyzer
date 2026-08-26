@@ -1,7 +1,8 @@
 # Domain Model
 
 The evolving statement of **what PureCARD is and does**. It is the elaboration of
-the domain section of [`../constitution.md`](../constitution.md): the constitution
+the domain section of the root
+[`constitution.md`](../../../constitution.md): the constitution
 states the non-negotiable domain *rules*; this file describes the *entities,
 workflows, and invariants* those rules govern. When the two disagree, the
 constitution wins.
@@ -27,9 +28,12 @@ one reviewer-approved PR at a time.
 
 ### GuaranteeLevel
 
-**What it is.** The three nested guarantees a constrained decoder can offer:
-`Syntactic` (L1), `SchemaConsistent` (L2), and `Faithful` (L3). PureCARD enforces
-up to L2 and refuses L3. Implemented in `src/lib.rs`.
+**What it is.** The three nested target guarantees a constrained decoder can
+offer: `Syntactic` (L1), `SchemaConsistent` (L2), and `Faithful` (L3). The
+taxonomy is implemented in `src/lib.rs`. The current decoder constrains output
+to membership in its fixed emitted-subset PDA and applies a partial L2 overlay
+at selected schema-sensitive positions; it has not established the full L1 or
+L2 target end to end. PureCARD refuses L3.
 
 **Invariants.** The levels form a strict containment hierarchy —
 `Faithful ⊂ SchemaConsistent ⊂ Syntactic`. A stronger guarantee implies every
@@ -37,11 +41,29 @@ weaker one. `Faithful` is never enforceable at decode time (the mask never sees
 the question's intent).
 
 **Relationships.** Every other entity exists to move a model's output up this
-hierarchy: the grammar/PDA delivers L1; the schema overlay delivers L2.
+hierarchy: the grammar/PDA enforces membership in the fixed L1 recognizer, and
+the schema overlay narrows toward L2 only where its N/T rules are implemented.
+Live compiler validation of the full targets remains open.
 
-**Introduced by.** [`spec/overview.md`](spec/overview.md) §1. *(The entities below
-are shipped: all milestones M0–M5 are merged, so each entry describes the decoder
-as built — `src/` is authoritative where a detail is load-bearing.)*
+**Introduced by.** [`spec/overview.md`](spec/overview.md) §1. *(The M0–M5 code
+artifacts exist, so each entry describes the implemented decoder. This does not
+mean every original milestone acceptance criterion has been proven end to end;
+`src/` and the named tests are authoritative where a detail is load-bearing.)*
+
+### RepositoryBoundary
+
+**What it is.** PureCARD is an independent sibling product colocated in the Pure
+Analyzer monorepo. Its Cargo package is `pure-analyzer-purecard`; its Rust
+library and Python module are `purecard`. The package is unpublished
+(`publish = false`), and wheels are verification artifacts rather than releases.
+
+**Invariants.** PureCARD and the analyzer have zero dependency edges in either
+direction. Root `just` recipes, CI, the constitution, and the canonical
+methodology may orchestrate both products; shared governance does not authorize
+either product to import the other's internals. Parser or corpus sharing requires
+a new ADR before a dependency edge is introduced.
+
+**Introduced by.** [ADR-0009](decisions/0009-monorepo-placement.md).
 
 ### Vocab
 
@@ -51,9 +73,12 @@ direct table index; per-state acceptance is resolved by probing the byte-level P
 on first visit to a state, not by a trie walk). A token is admissible iff feeding
 its raw bytes advances the byte-level automaton to a non-dead state. This avoids a
 trie traversal, but it does **not** eliminate host tokenizer/vocabulary alignment
-risk: the host must still supply each token's exact bytes (the §11 tokenizer-exactness
-concern), and neither the byte-level replay nor the M5 self-check proves token-id
-soundness — that is exercised only live in the M4 e2e lane.
+risk: the host must still supply each token's exact bytes (the §11
+tokenizer-exactness concern). The byte-level replay and M5 self-check do not prove
+token-ID soundness. The scheduled/on-demand real-Qwen lane does:
+`tests/qwen_soundness.rs` tokenizes with the pinned Qwen tokenizer and replays the
+actual token IDs. That lane still does not prove real-model inference or live
+Legend compilation.
 
 **Introduced by.** [`spec/architecture.md`](spec/architecture.md) §4.1, §4.4, §9.1.
 
@@ -66,7 +91,9 @@ per-state context-independent mask caches.
 **Invariants.** The grammar is derived from, and testable against, the gold
 corpus: any production a gold query violates is wrong and must be relaxed; any
 construct the corpus lacks stays out until a gold query adds it (oracle-driven,
-never speculative).
+never speculative). The shipped machine is hand-written. `from_spec` currently
+selects that fixed PDA; lowering a grammar specification into PDA states remains
+outstanding.
 
 **Introduced by.** [`spec/architecture.md`](spec/architecture.md) §3, §4 and [`spec/grammar.md`](spec/grammar.md) §5.
 
@@ -89,9 +116,11 @@ soundness bug.
 
 **What it is.** The typed-scope state threaded through the parse: `ClassScope`
 (a row of a class) or `RelationScope` (a TDS/relation with named columns). The top
-of the scope stack determines which identifiers L2 admits.
+of the scope stack determines which identifiers the implemented L2 narrowing
+rules admit at their covered positions.
 
-**Shipped (M3).** `Schema::from_json` + `DecoderSession::with_schema` deliver L2 as
+**Implemented subset (M3).** `Schema::from_json` +
+`DecoderSession::with_schema` deliver the current L2 subset as
 `src/schema/{model, scope, narrow}`. The scope machine (`ScopeTracker`) advances in
 lockstep with `accept_token`, and `allowed_mask` intersects the L1 mask with the
 schema-legal set. The shipped rules are N3 (source is a real class **or** the store
@@ -149,9 +178,11 @@ zero core dependencies.
 
 ### Compile a grammar (once per model + grammar)
 
-`CompiledGrammar::compile(vocab)` (or the stub `from_spec(spec, vocab)`) binds the
-vocab and **sizes** the lazy per-state mask cache — it probes no token up front;
-each state's partition is built on first visit (`cached(state)`).
+`CompiledGrammar::compile(vocab)` (or the compatibility surface
+`from_spec(spec, vocab)`) binds the vocab and **sizes** the lazy per-state mask
+cache — it probes no token up front; each state's partition is built on first
+visit (`cached(state)`). `from_spec` does not lower `spec` yet; it selects the
+fixed emitted-subset PDA.
 [`spec/architecture.md`](spec/architecture.md) §4.5, §9.1.
 
 ### Constrain one generation (per decode step)
@@ -167,11 +198,15 @@ trajectory. [`spec/architecture.md`](spec/architecture.md) §3.3, §4.3, §9.3.
   verified gold query actually emits. Replaying the 5,034-query gold corpus and
   asserting every next token is in `allowed_mask()` is the always-on gate
   ([`spec/testing.md`](spec/testing.md) §8.1) — and it runs offline, with no Legend engine.
-- **L2 only narrows, never widens.** The schema overlay intersects L1's terminal
-  set; it can only remove admissible tokens, never add them ([`spec/architecture.md`](spec/architecture.md) §3.1).
-- **Completeness.** Constrained generations must compile against the real Legend
-  engine; a compile failure is a grammar/overlay gap to tighten oracle-driven
-  ([`spec/testing.md`](spec/testing.md) §8.2).
+- **The implemented L2 overlay only narrows, never widens.** It intersects the
+  fixed PDA's terminal set at its covered positions; it can only remove
+  admissible tokens, never add them
+  ([`spec/architecture.md`](spec/architecture.md) §3.1).
+- **Completeness target.** Constrained generations should compile against the
+  real Legend engine; a compile failure is a grammar/overlay gap to tighten
+  oracle-driven ([`spec/testing.md`](spec/testing.md) §8.2). The current live lane
+  proves engine reachability and result classification, not a 100% compile rate;
+  schema-constrained walk generation and real lowering remain open.
 
 ## Glossary
 

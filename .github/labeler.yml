@@ -9,7 +9,30 @@ ci:
       - any-glob-to-any-file: ['.github/**', '.mise.toml', 'lefthook.yml']
 dependencies:
   - changed-files:
-      - any-glob-to-any-file: ['Cargo.lock', 'bun.lock', 'package.json', 'deny.toml']
+      - any-glob-to-any-file: ['**/Cargo.lock', 'bun.lock', 'package.json', '**/pyproject.toml', '**/uv.lock', 'deny.toml']
+purecard:
+  - changed-files:
+      - any-glob-to-any-file: ['crates/pure-analyzer-purecard/**', '.github/workflows/purecard-*.yml']
+corpus:
+  - changed-files:
+      - any-glob-to-any-file: ['crates/pure-analyzer-purecard/corpus/**']
+python:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'crates/pure-analyzer-purecard/python/**'
+          - 'crates/pure-analyzer-purecard/src/ffi.rs'
+          - 'crates/pure-analyzer-purecard/pyproject.toml'
+          - 'crates/pure-analyzer-purecard/uv.lock'
+          - '.github/workflows/purecard-wheels.yml'
 security:
   - changed-files:
-      - any-glob-to-any-file: ['.gitleaks.toml', 'SECURITY.md', '.github/workflows/security.yml']
+      - any-glob-to-any-file:
+          - '.cargo/audit.toml'
+          - '.gitleaks.toml'
+          - 'deny.toml'
+          - 'SECURITY.md'
+          - 'CODEOWNERS'
+          - '.github/ISSUE_TEMPLATE/config.yml'
+          - '.github/zizmor.yml'
+          - '.github/workflows/security.yml'
+          - '.github/workflows/lint.yml'

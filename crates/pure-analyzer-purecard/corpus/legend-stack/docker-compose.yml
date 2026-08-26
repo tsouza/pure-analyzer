@@ -1,6 +1,5 @@
-# Self-hosted Legend stack for the SQL=>Pure curated-dataset pipeline
-# (docs/design/sql-to-pure-datagen.md §3). Pinned versions; never the private instance.
-# Usage: docker compose -f infra/legend-stack/docker-compose.yml up -d
+# Self-hosted, pinned Legend stack for PureCARD's completeness oracle.
+# From the umbrella workspace root, run `just test-legend`; it owns teardown.
 services:
   legend-engine:
     image: finos/legend-engine-server-http-server:4.113.0

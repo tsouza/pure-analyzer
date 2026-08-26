@@ -17,17 +17,18 @@ jobs:
       actions: ${{ steps.filter.outputs.actions }}
       scripts: ${{ steps.filter.outputs.scripts }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         # fetch-depth: 0 so paths-filter can diff a push against its base commit
         # locally; persist-credentials: false means it cannot fetch the base
         # over the network, and a depth-1 checkout lacks it.
         with: { persist-credentials: false, fetch-depth: 0 }
-      - uses: dorny/paths-filter@v4
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
         with:
           filters: |
             md:
               - '**/*.md'
+              - '**/*.markdown'
               - '.markdownlint.yaml'
             actions:
               - '.github/**'
@@ -39,20 +40,34 @@ jobs:
     if: needs.changes.outputs.md == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
-      - uses: DavidAnson/markdownlint-cli2-action@v24
+      - uses: DavidAnson/markdownlint-cli2-action@21c1be1b93ad9ed58fa840aacc3f279cde2a72ff # v24.2.0
         with:
-          globs: '**/*.md'
+          globs: |
+            '**/*.md'
+            '**/*.markdown'
+
+  doc-links:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: taiki-e/install-action@b6ff580856c41316412a0b9b60540fbc6f8c82cc # v2.86.7
+        with:
+          tool: just@1.55.1
+      - name: Check relative files and anchors
+        run: just check-doc-links
   commitlint:
     # Runs on every PR (all PRs have commits); harmless on push.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: wagoid/commitlint-github-action@v6
+      - uses: wagoid/commitlint-github-action@b948419dd99f3fd78a6548d48f94e3df7f6bf3ed # v6.2.1
   actionlint:
     needs: changes
     if: needs.changes.outputs.actions == 'true'
@@ -61,28 +76,43 @@ jobs:
       contents: read
       checks: write   # reviewdog's github-check reporter needs this
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
-      - uses: reviewdog/action-actionlint@v1
+      - uses: reviewdog/action-actionlint@dbe5299849118fd6f099ba563d263d770955a64a # v1.73.2
         with:
           reporter: github-check
           fail_level: error
+  zizmor:
+    needs: changes
+    if: needs.changes.outputs.actions == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - name: Audit workflows
+        uses: zizmorcore/zizmor-action@3dc1ecc9bcb9e94e9b2c709687979e1298497054 # v0.6.2
+        with:
+          version: 1.29.0
+          advanced-security: false
+          persona: regular
   test-scripts:
     needs: changes
     if: needs.changes.outputs.scripts == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
-      - uses: oven-sh/setup-bun@v2
-      - uses: taiki-e/install-action@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - uses: taiki-e/install-action@b6ff580856c41316412a0b9b60540fbc6f8c82cc # v2.86.7
         with:
           tool: just
       - run: just test-scripts
   # Warnings-are-errors net (constitution §2): sweep this run's job logs for a
   # tool warning that exited 0. Same reusable sweep as ci/security/release-plz.
   no-warnings:
-    needs: [changes, markdownlint, commitlint, actionlint, test-scripts]
+    needs: [changes, markdownlint, doc-links, commitlint, actionlint, zizmor, test-scripts]
     if: always()
     permissions:
       actions: read
@@ -90,7 +120,7 @@ jobs:
     uses: ./.github/workflows/no-warnings.yml
   lint-gate:
     name: lint-gate
-    needs: [changes, markdownlint, commitlint, actionlint, test-scripts, no-warnings]
+    needs: [changes, markdownlint, doc-links, commitlint, actionlint, zizmor, test-scripts, no-warnings]
     if: always()
     runs-on: ubuntu-latest
     steps:

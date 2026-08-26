@@ -1,0 +1,95 @@
+name: PureCARD tokenizer oracles
+
+# Real-tokenizer validation is too expensive and network-dependent for the PR
+# lane. Immutable model revisions and cache-first downloads keep each replay
+# reproducible while preserving an on-demand escape hatch for investigation.
+on:
+  schedule:
+    - cron: "23 4 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: purecard-tokenizer-oracles-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: "1"
+  QWEN_REVISION: c03e6d358207e414f1eca0bb1891e29f1db0e242
+  GPT4_REVISION: 1d9f1f1b1fae88c0e4df1dab0a397f8de6229075
+
+jobs:
+  qwen-oracle:
+    name: Qwen L2 soundness oracle
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Install just
+        uses: taiki-e/install-action@b6ff580856c41316412a0b9b60540fbc6f8c82cc # v2.86.7
+        with:
+          tool: just@1.55.1
+      - name: Restore Qwen tokenizer
+        id: qwen
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: target/purecard/qwen
+          key: purecard-qwen-tokenizer-${{ env.QWEN_REVISION }}
+      - name: Fetch Qwen tokenizer on cache miss
+        if: steps.qwen.outputs.cache-hit != 'true'
+        run: just qwen-tokenizer-fetch
+      - name: Replay the PureCARD corpus
+        run: just qwen-oracle-run
+
+  fused-tokenizer-extract:
+    name: Fused fixture anti-rot
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Install just
+        uses: taiki-e/install-action@b6ff580856c41316412a0b9b60540fbc6f8c82cc # v2.86.7
+        with:
+          tool: just@1.55.1
+      - name: Restore Qwen tokenizer
+        id: qwen
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: target/purecard/qwen
+          key: purecard-qwen-tokenizer-${{ env.QWEN_REVISION }}
+      - name: Restore GPT-4 tokenizer
+        id: gpt4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: target/purecard/gpt4
+          key: purecard-gpt4-tokenizer-${{ env.GPT4_REVISION }}
+      - name: Fetch Qwen tokenizer on cache miss
+        if: steps.qwen.outputs.cache-hit != 'true'
+        run: just qwen-tokenizer-fetch
+      - name: Fetch GPT-4 tokenizer on cache miss
+        if: steps.gpt4.outputs.cache-hit != 'true'
+        run: just gpt4-tokenizer-fetch
+      - name: Compare the committed fused fixture
+        run: just fused-tokenizers-run
+
+  no-warnings:
+    name: no-warnings (log sweep)
+    needs: [qwen-oracle, fused-tokenizer-extract]
+    if: always()
+    permissions:
+      actions: read # reusable sweep reads this workflow run's completed logs
+      contents: read
+    uses: ./.github/workflows/no-warnings.yml

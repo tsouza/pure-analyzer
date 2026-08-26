@@ -105,6 +105,18 @@ export function scannableJobs(jobs) {
   );
 }
 
+/**
+ * Whether a failed `gh api .../logs` request is the known archive-readiness
+ * race. GitHub returns HTTP 404 briefly after marking a real runner job
+ * complete; authentication, authorization, malformed-request, and network
+ * failures are permanent for this invocation and must fail immediately.
+ * @param {{exitCode: number, stderr: Uint8Array|string}} result command result
+ * @returns {boolean} true only for the retryable HTTP 404 response
+ */
+export function isTransientLogArchiveFailure(result) {
+  return result.exitCode !== 0 && /\bHTTP\s+404\b/i.test(result.stderr.toString());
+}
+
 // Fetch the run's job logs and sweep them. Guarded by `import.meta.main` so the
 // pure exports above can be imported by tests without hitting the network.
 if (import.meta.main) {
@@ -126,13 +138,25 @@ if (import.meta.main) {
   // A dropped log means its warnings go unscanned, so a fetch failure must fail
   // the gate — never vanish silently. Retry first so a transient gh/API blip
   // doesn't flake the gate (constitution §3), then die if a log stays unreadable.
-  const FETCH_ATTEMPTS = 3;
-  const RETRY_BACKOFF_MS = 1000;
+  // GitHub can acknowledge a completed job several seconds before its per-job
+  // log archive is readable. Allow up to roughly one minute of linear backoff;
+  // three near-immediate attempts proved too short on clean hosted runs.
+  const FETCH_ATTEMPTS = 8;
+  const RETRY_BACKOFF_MS = 2000;
 
   async function fetchJobLog(job) {
     for (let attempt = 1; attempt <= FETCH_ATTEMPTS; attempt++) {
-      const out = await $`gh api /repos/${repo}/actions/jobs/${job.databaseId}/logs`.nothrow().quiet();
+      // Recent gh releases reject otherwise-valid log responses containing ANSI
+      // control sequences unless the caller opts in. Runner logs routinely
+      // contain colour output, so accept those bytes and scan the decoded text.
+      const out = await $`gh api --allow-escape-sequences /repos/${repo}/actions/jobs/${job.databaseId}/logs`
+        .nothrow()
+        .quiet();
       if (out.exitCode === 0) return out.stdout.toString();
+      if (!isTransientLogArchiveFailure(out)) {
+        const detail = out.stderr.toString().trim() || `gh api exited ${out.exitCode}`;
+        die(`could not read logs for job "${job.name}" (${job.databaseId}): ${detail}`);
+      }
       if (attempt < FETCH_ATTEMPTS) await Bun.sleep(RETRY_BACKOFF_MS * attempt);
     }
     die(

@@ -1,0 +1,10 @@
+# cargo-audit config. cargo-audit reads its ignore list here; it does not read
+# deny.toml, which governs the separate `cargo deny` gate.
+
+[advisories]
+# RUSTSEC-2024-0436: `paste` is unmaintained (informational, with no known
+# vulnerability). It is a transitive dependency of `tokenizers`, which is an
+# optional, feature-gated, test-only PureCARD oracle dependency and never ships
+# in the default build. No upstream fix is available because tokenizers still
+# pulls it. This mirrors the already-reviewed exception in deny.toml.
+ignore = ["RUSTSEC-2024-0436"]

@@ -8,7 +8,12 @@
 // flakes are bugs). It is now allowlisted — but ONLY that exact wording, so a
 // genuine tool warning is still caught (constitution §2: never weaken a gate).
 import { expect, test, describe } from "bun:test";
-import { findWarnings, scannableJobs, ALLOWLIST } from "./no-ci-warnings.mjs";
+import {
+  findWarnings,
+  isTransientLogArchiveFailure,
+  scannableJobs,
+  ALLOWLIST,
+} from "./no-ci-warnings.mjs";
 
 // A real CI log line carries a leading RFC3339 timestamp, matching what
 // `gh api …/logs` returns and what the sweep feeds `findWarnings`.
@@ -114,6 +119,30 @@ describe("scannableJobs — only real runner jobs are swept", () => {
     const testScripts = { name: "test-scripts", conclusion: "success", steps: [{}] };
     const noWarnings = { name: "no-warnings / no-warnings (log sweep)", conclusion: "success", steps: [{}] };
     expect(scannableJobs([real, testScripts, noWarnings])).toEqual([real]);
+  });
+});
+
+describe("isTransientLogArchiveFailure — retry only archive-readiness races", () => {
+  test("HTTP 404 from a completed job log is retryable", () => {
+    expect(
+      isTransientLogArchiveFailure({
+        exitCode: 1,
+        stderr: Buffer.from("gh: Not Found (HTTP 404)"),
+      }),
+    ).toBe(true);
+  });
+
+  test.each([
+    [4, "gh: To get started with GitHub CLI, please run: gh auth login"],
+    [1, "gh: Resource not accessible by integration (HTTP 403)"],
+    [1, "gh: Validation Failed (HTTP 422)"],
+    [1, "error connecting to api.github.com"],
+  ])("exit %d with %p fails without retry", (exitCode, stderr) => {
+    expect(isTransientLogArchiveFailure({ exitCode, stderr })).toBe(false);
+  });
+
+  test("a successful request is never classified as retryable", () => {
+    expect(isTransientLogArchiveFailure({ exitCode: 0, stderr: "HTTP 404" })).toBe(false);
   });
 });
 

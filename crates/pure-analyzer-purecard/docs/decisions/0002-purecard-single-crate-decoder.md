@@ -4,6 +4,13 @@
 - **Date:** 2026-07-10
 - **Deciders:** Thiago Souza; agent (Claude)
 
+> **Current placement (2026-08-26):**
+> [ADR-0009](0009-monorepo-placement.md) supersedes this record's standalone
+> repository, root-package, package-name, and publishing consequences. The
+> single decoder-crate decision and rejection of server layering remain product
+> architecture; references below to a published root `purecard` crate describe
+> the historical standalone state.
+
 ## Context
 
 This repository began as a domain-agnostic Rust *server* starter kit: four layered

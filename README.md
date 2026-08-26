@@ -1,83 +1,111 @@
 # pure-analyzer
 
-A mechanical, standalone Rust static-analysis toolchain for [Legend
-Pure](https://legend.finos.org/) — the modern `Relation<>` dialect
-(`meta::pure::functions::relation::*`), not the legacy `TabularDataSet` API. No
-LLM, no runtime engine, no network: identical inputs always produce
-byte-identical output.
+An umbrella Rust workspace for two Legend Pure tools that share repository
+infrastructure, but remain independent products.
 
-## Why it exists
+## Products
 
-Deep milestoned navigation — getting the count of `%latest` temporal date
-arguments right on a navigation chain — is a real Legend/Reladomo developer
-footgun, one even frontier LLMs routinely get wrong end-to-end. The required
-arity depends on the *target* class's temporal stereotype (`bitemporal` →2,
-`businesstemporal`/`processingtemporal` →1, none →0), threaded fresh through
-every hop of a chain, with a context-gate that legalizes a bare 0-arg call only
-when the immediate source class is itself compatibly milestoned. `pure-analyzer
-lint` mechanically decides this — no engine required at runtime.
+### pure-analyzer
 
-No fast, standalone static-analysis toolchain for Pure existed before this;
-prior tooling is Java/IDE-based and needs the full Legend engine.
+`pure-analyzer` is a mechanical, standalone static-analysis toolchain for
+[Legend Pure](https://legend.finos.org/) and its modern `Relation<>` dialect.
+Its target design is deterministic and engine-free at runtime: lexer, parser,
+model loader, resolver, analysis passes, and thin CLI/LSP front ends.
 
-## What it does
-
-One shared analysis engine (`libpure`: lexer → resilient parser → lossless CST
-→ model loader → resolver), two front-ends over it — a CLI and, from v0.2, a
-Language Server — so every check is available identically at the command line
-and live in an editor:
-
-- **`validate`** — grammar + shallow well-formedness, no model needed.
-- **`lint`** — the milestoning `%latest`-arity core, unknown-property, and
-  statically-determinate multiplicity misuse. Needs a model (PMCD JSON, or a
-  parsed Pure model file — engine-free either way).
-- **`eq` / `diff`** — sound, incomplete, 3-valued structural equivalence
-  (`EQUIVALENT` / `NOT_EQUIVALENT`+witness / `INDECISIVE`+reason) over the
-  decidable relational core. Never wrongly commits an equivalence verdict.
-- **`fmt`** — canonical, idempotent formatting from the lossless CST.
-- **LSP (`pure-analyzer-lsp`)** — the same `Diagnostic`s as live squiggles,
-  each `Fix` as a code-action, `explain` as hover, go-to-definition via the
-  resolver.
+The analyzer is currently an **early scaffold**. The lexer and shared diagnostic
+model contain real implementations. Syntax, parser, model, resolver, analysis,
+and `libpure` are mostly version-reporting stubs, and the CLI subcommands return
+`not implemented yet`. The planned `validate`, `lint`, `eq`/`diff`, `fmt`, and
+LSP behavior is a roadmap, not a claim about the current binary.
 
 See [`docs/design/pure-analyzer-design.md`](docs/design/pure-analyzer-design.md)
-for the full specification — grammar, the milestoning-arity algorithm,
-subcommand contracts, model formats, and staged milestones.
+for that target design and [`docs/domain-model.md`](docs/domain-model.md) for
+current domain and implementation truth.
+
+### pure-analyzer-purecard
+
+[`pure-analyzer-purecard`](crates/pure-analyzer-purecard/) is the PureCARD
+constrained decoder. It masks language-model tokens against its emitted-subset
+grammar and, at implemented L2 positions, an optional schema. Its M0–M5 code
+artifacts—including the L1/L2 decoder, PyO3 boundary, offline gold corpus, fuzz
+targets, and benchmarks—are implemented, while its
+[end-to-end proof obligations](crates/pure-analyzer-purecard/docs/spec/overview.md#10-milestone-implementation-status-m0m5)
+remain open; PureCARD does not yet claim feature completeness.
+
+PureCARD remains unpublished here: its Rust package has `publish = false`, and
+CI builds Python wheels only as verification artifacts. See the
+[`PureCARD README`](crates/pure-analyzer-purecard/README.md) for its API,
+guarantee boundary, and specialized development lanes.
+
+## Product boundary
+
+The products are co-located, not layered together:
+
+- There are zero analyzer-to-PureCARD or PureCARD-to-analyzer Cargo dependency
+  edges, including normal, development, build, optional, and renamed edges.
+- `xtask` and root automation are shared repository infrastructure, not a third
+  product or an analyzer layer.
+- The analyzer processing pipeline is `lexer → syntax → parser → model
+  → resolve → analysis → libpure → cli`. Cargo dependencies point
+  toward prerequisites: notably, resolver may depend on model; model must not
+  depend on resolver. Diagnostics is a shared leaf within the analyzer product.
+- Co-location does not authorize parser, corpus, or ownership sharing. Any such
+  integration requires a dedicated spec and ADR.
+
+`cargo xtask verify-layering` enforces both the analyzer DAG and the
+analyzer–PureCARD product boundary. See
+[ADR-0003](docs/decisions/0003-analysis-engine-crate-dag.md),
+[ADR-0004](docs/decisions/0004-purecard-independent-workspace-product.md), and
+PureCARD's
+[ADR-0009](crates/pure-analyzer-purecard/docs/decisions/0009-monorepo-placement.md).
 
 ## Layout
 
 ```text
 crates/
-  pure-analyzer-lexer/       logos-derived token layer (%latest/dates, islands)
-  pure-analyzer-syntax/      SyntaxKind + rowan Language impl, typed AST views
-  pure-analyzer-parser/      resilient RD + Pratt parser -> lossless CST
-  pure-analyzer-model/       PMCD JSON + Pure-model-file loader -> ModelGraph
-  pure-analyzer-resolve/     source-threaded nav resolution, milestoning arity
-  pure-analyzer-analysis/    Pass/visitor layer: validate + lint
-  pure-analyzer-diagnostics/ the shared Diagnostic model (leaf, no renderers)
-  libpure/                   thin facade over the above; the whole product
-  pure-analyzer-cli/         the `pure-analyzer` binary: clap, renderers, exit codes
-docs/
-  design/pure-analyzer-design.md   the full implementation spec
-  domain-model.md                  the evolving "what": entities, workflows, invariants
-  decisions/                       architecture decision records
+  pure-analyzer-lexer/       implemented analyzer lexer
+  pure-analyzer-syntax/      analyzer syntax scaffold
+  pure-analyzer-parser/      analyzer parser scaffold
+  pure-analyzer-model/       analyzer model-loader scaffold
+  pure-analyzer-resolve/     analyzer resolver scaffold
+  pure-analyzer-analysis/    analyzer pass scaffold
+  pure-analyzer-diagnostics/ implemented shared analyzer diagnostics
+  libpure/                   analyzer facade scaffold
+  pure-analyzer-cli/         analyzer CLI scaffold
+  pure-analyzer-purecard/    independent constrained-decoder product
+xtask/                       shared repository automation
+docs/                        root governance, design, and methodology
+specs/                       root change specifications
 ```
-
-Dependencies point inward only, along the DAG: `lexer -> syntax -> parser ->
-{model, resolve} -> analysis -> libpure -> cli`, with `pure-analyzer-diagnostics`
-as a shared leaf — enforced by `cargo xtask verify-layering`, not convention.
 
 ## Building
 
 ```sh
 mise install && mise run install-cargo-tools   # provision toolchain once
-just ci                                        # build, lint, test
+just ci                                        # fast workspace gate
+just ci-full                                   # local mirror of reproducible PR gates
 ```
 
-`just` is the only supported entry point — see `just --list` for every target
-(spec scaffolding, coverage, mutation testing, fuzzing, the full CI mirror).
-This project is developed under a spec-driven, gate-enforced engineering
-methodology; see [`CONTRIBUTING.md`](CONTRIBUTING.md) if you're submitting a
-change, and [`constitution.md`](constitution.md) for the rules that govern it.
+`just` is the supported entry point; use `just --list` to discover analyzer,
+PureCARD, and repository-wide tasks. Contributions follow
+[`CONTRIBUTING.md`](CONTRIBUTING.md) and the rules in
+[`constitution.md`](constitution.md).
+
+## Optional gates (off by default)
+
+Two CI protections require repository administration and therefore start
+disabled. Until enabled, their absence is an explicit protection gap rather
+than evidence that those properties were checked.
+
+- **CodSpeed:** install the CodSpeed GitHub App, then set the repository Actions
+  variable `CODSPEED_ENABLED=true`. The `bench (codspeed)` job will run
+  `just codspeed` for code changes. Without it, CI does not block performance
+  regressions; `just bench` remains available for local measurements.
+- **Public API snapshots:** run `just public-api-bless`, review and commit the
+  generated `public-api/` baselines, then set the repository Actions variable
+  `PUBLIC_API_ENABLED=true`. The nightly-backed snapshot comparison then joins
+  the always-on semantic-version check. Without it, exact public-surface drift
+  is not blocked by snapshot comparison.
 
 ## License
 

@@ -54,7 +54,7 @@ degrading — the opposite of "the agent slowly makes everything worse."
 
 ## The independent backstop
 
-The homegrown reviewer subagent is the gate, but it isn't the only reader:
-**CodeRabbit** (free for OSS) reviews in parallel as an independent second opinion.
-It costs nothing on OSS and covers blind spots the primary reviewer might share
-with the generator. Redundancy where it's free; asymmetry where it's expensive.
+The reviewer subagent is not the only line of defense. Risky changes receive a
+separate reviewer pass with fresh context, and every change must clear the
+repository's required aggregate checks. The second pass covers judgmental blind
+spots; the GitHub ruleset makes deterministic failures unmergeable.

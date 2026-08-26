@@ -21,8 +21,10 @@ before any public disclosure.
 
 ## Supported versions
 
-This is a starter kit under active development. Security fixes are applied to
-`main`. There is no long-term-support branch.
+This is a pre-1.0 umbrella repository under active development. Security fixes
+for both the analyzer scaffold and PureCARD are applied to `main`. There is no
+long-term-support branch. PureCARD's migrated Rust package and CI-built Python
+wheels are not published from this repository.
 
 ## Our own guardrails
 
@@ -32,7 +34,13 @@ Security is partly enforced in CI, not just by policy:
 - `cargo-audit` and `cargo-deny` fail the build on known-vulnerable or
   disallowed dependencies.
 - `#![forbid(unsafe_code)]` is mandatory in every crate.
-- Untrusted HTTP/gRPC input is exercised by the fuzzing layer (bolero + OSS-Fuzz).
+- `cargo-fuzz`/libFuzzer exercises analyzer diagnostic serialization and
+  PureCARD decoder boundaries in their separate fuzz workspaces. Analyzer
+  parser fuzzing lands with the parser implementation. CI runs bounded fuzz
+  lanes; long-horizon OSS-Fuzz integration is not currently deployed.
+- `cargo xtask verify-layering` rejects analyzer–PureCARD dependency edges in
+  either direction, including development and build dependencies, limiting
+  accidental cross-product attack-surface coupling.
 
 See [`docs/methodology/quality-layers.md`](docs/methodology/quality-layers.md) for
 how these fit together.

@@ -28,10 +28,18 @@ Minimal steps or a failing test. The more deterministic, the faster the fix.
 
 ## Environment
 
-- Kit version / commit:
+- Product (`pure-analyzer` or `pure-analyzer-purecard`):
+- Version / commit:
 - OS + arch:
 - `rustc --version`:
+- Python version (if the wheel/FFI is involved):
+
+## Corpus / oracle context
+
+If this involves PureCARD, identify the corpus fixture, tokenizer revision, or
+Legend version used. State whether the failure reproduces in a hermetic replay
+or only against a live external oracle.
 
 ## Additional context
 
-Logs, a captured chaos seed, or anything else relevant.
+Logs, a captured chaos/fuzz seed, or anything else relevant.

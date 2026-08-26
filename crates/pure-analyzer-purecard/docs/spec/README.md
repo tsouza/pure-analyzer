@@ -5,26 +5,44 @@ constrained-decoding library).**
 
 - **OSS project name:** `PureCARD` — _Pure_ + _PICARD_ lineage; reads as the
   "reference **card** of legal moves" for Pure generation.
-- **Crate / repo:** `purecard` — the crate is named `purecard` everywhere (the
-  `#[pymodule]` is `purecard`, the lib is `purecard`); there is no `picard_pure`
+- **Package / modules:** the Cargo package is `pure-analyzer-purecard`; the Rust
+  library and Python `#[pymodule]` remain `purecard`. There is no `picard_pure`
   identifier in the code.
-- **Status:** Implemented — all milestones M0–M5 are shipped; this spec is the
-  authoritative design the shipped decoder tracks.
+- **Repository placement:** an independent sibling product colocated in the Pure
+  Analyzer monorepo, with zero dependency edges in either direction
+  ([ADR-0009](../decisions/0009-monorepo-placement.md)).
+- **Status:** the M0–M5 code artifacts are implemented. The live and
+  real-model acceptance obligations listed below remain open, so this spec does
+  not claim feature completeness or end-to-end milestone completion.
 
-Together the files below are the _complete specification of the decoder_: a
-fresh engineer (or a fresh Claude instance) can build the PureCARD crate from
-them alone — no other design docs. Its external inputs at build/test time are
+Together the files below specify the decoder product. Its external inputs at
+build/test time are
 (a) the _test corpus_ of gold Pure queries and (b) a running _Legend engine_,
 both located in [`testing.md`](testing.md) §8. The host-side Python
 model/tokenizer/inference stack that drives it (the M4 integration surface) is
 out of scope here — see §2 and §9 — as are general Rust workspace conventions,
-CI, and agentic dev setup.
+CI, and agentic dev setup. Those shared concerns are governed by the root
+[constitution](../../../../constitution.md), `just` frontend, CI, and
+[methodology](../../../../docs/methodology/).
 
 Context in one line: an upstream project ("pure-lingua") trains an LLM to emit
-Legend Pure queries; at serving time we want _guaranteed-valid_ output without a
-compile-repair round-trip. PureCARD provides that guarantee as a per-step logits
-transform during autoregressive decoding. This spec is the authoritative source
-that [`../domain-model.md`](../domain-model.md) navigates and elaborates.
+Legend Pure queries; at serving time the target is _guaranteed-valid_ output
+without a compile-repair round-trip. PureCARD implements the per-step logits
+transform intended to provide that guarantee, but the end-to-end proof
+obligations below remain open. This spec is the authoritative source that
+[`../domain-model.md`](../domain-model.md) navigates and elaborates.
+
+The implemented decoder has a hand-written emitted-subset PDA, lazy mask cache,
+an L2 overlay at selected schema-sensitive positions, PyO3/wheel boundary,
+fuzz targets, and benches. Real-Qwen token-ID replay is implemented in
+`tests/qwen_soundness.rs` against the pinned tokenizer revision and runs on
+demand or on schedule. That evidence is not real-model inference and does not
+compile output against live Legend. The current implementation therefore does
+not guarantee that every accepted output compiles.
+
+The authoritative
+[remaining proof obligations](overview.md#10-milestone-implementation-status-m0m5)
+stay open until each has named end-to-end evidence.
 
 Section numbers (`§N`) are preserved verbatim as headings, so any `§N` reference
 resolves to the file below.

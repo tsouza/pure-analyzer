@@ -28,7 +28,7 @@ unsafe_code = "deny"
 [dependencies]
 libfuzzer-sys = "0.4.13"
 arbitrary = { version = "1.4.2", features = ["derive"] }
-purecard = { path = ".." }
+purecard = { package = "pure-analyzer-purecard", path = ".." }
 
 [[bin]]
 name = "accept_token"
@@ -53,3 +53,7 @@ bench = false
 
 [profile.release]
 debug = 1
+
+# Cargo needs an explicit boundary for a fuzz project nested below a workspace
+# member; the ancestor workspace's `exclude` is not sufficient by itself.
+[workspace]

@@ -5,11 +5,10 @@ name: no-warnings
 # apt, useradd, cargo-deny's `warn` checks, …) can warn while exiting 0. This
 # sweeps a workflow run's job logs and fails on any un-allowlisted tool warning.
 #
-# It is a `workflow_call` reusable job so every workflow that runs tools invokes
-# the same sweep over its OWN run — ci, lint, security, release-plz each add a
-# job `uses: ./.github/workflows/no-warnings.yml` that `needs` its other jobs and
-# runs `if: always()`, so the sweep sees every finished job's log. A workflow
-# without this job leaves its tool warnings unswept.
+# It is a `workflow_call` reusable job so each caller invokes the same sweep
+# over its OWN run. The caller adds a job that `needs` its other jobs and runs
+# `if: always()`, so the sweep sees every finished job's log. A workflow without
+# this job leaves its tool warnings unswept.
 
 on:
   workflow_call:
@@ -23,10 +22,10 @@ jobs:
     name: no-warnings (log sweep)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
       - name: Sweep the run's logs for tool warnings
         env:
           GH_TOKEN: ${{ github.token }}
