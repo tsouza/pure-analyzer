@@ -16,10 +16,12 @@
 
 pub mod compile;
 pub mod compiled;
+pub mod emitted_subset;
 pub mod pda;
 pub mod spec;
 
 pub use compiled::CompiledGrammar;
+pub use emitted_subset::EMITTED_SUBSET_SPEC;
 pub use spec::{GrammarSpec, SpecError};
 
 /// The automaton configuration at the point a byte was rejected: the names of the

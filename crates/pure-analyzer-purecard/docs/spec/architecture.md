@@ -42,6 +42,7 @@ src/
     compiled.rs     CompiledGrammar: vocabulary + lazy per-state mask cache (the perf core, §4)
     spec.rs         GrammarSpec: versioned, serde-based transition-table schema for a supplied grammar
     compile.rs      CompiledAutomaton/RtnPda: bounded, validated lowering of a GrammarSpec (ADR-0010)
+    emitted_subset.rs   pub const EMITTED_SUBSET_SPEC: the shipped grammar as a canonical GrammarSpec JSON asset
   vocab.rs        model vocabulary as raw byte strings per token id
   mask.rs         BitMask: the dense per-step token bitset (§4)
   recognizer.rs   ByteRecognizer trait (the byte-at-a-time surface)
