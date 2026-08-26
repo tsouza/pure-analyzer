@@ -105,6 +105,18 @@ export function scannableJobs(jobs) {
   );
 }
 
+/**
+ * Whether a failed `gh api .../logs` request is the known archive-readiness
+ * race. GitHub returns HTTP 404 briefly after marking a real runner job
+ * complete; authentication, authorization, malformed-request, and network
+ * failures are permanent for this invocation and must fail immediately.
+ * @param {{exitCode: number, stderr: Uint8Array|string}} result command result
+ * @returns {boolean} true only for the retryable HTTP 404 response
+ */
+export function isTransientLogArchiveFailure(result) {
+  return result.exitCode !== 0 && /\bHTTP\s+404\b/i.test(result.stderr.toString());
+}
+
 // Fetch the run's job logs and sweep them. Guarded by `import.meta.main` so the
 // pure exports above can be imported by tests without hitting the network.
 if (import.meta.main) {
@@ -141,6 +153,10 @@ if (import.meta.main) {
         .nothrow()
         .quiet();
       if (out.exitCode === 0) return out.stdout.toString();
+      if (!isTransientLogArchiveFailure(out)) {
+        const detail = out.stderr.toString().trim() || `gh api exited ${out.exitCode}`;
+        die(`could not read logs for job "${job.name}" (${job.databaseId}): ${detail}`);
+      }
       if (attempt < FETCH_ATTEMPTS) await Bun.sleep(RETRY_BACKOFF_MS * attempt);
     }
     die(

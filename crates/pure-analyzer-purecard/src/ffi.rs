@@ -232,6 +232,7 @@ mod tests {
 
     const EOS_ID: u32 = 4;
     const VOCAB_LEN: usize = 5;
+    const OUT_OF_RANGE_TOKEN_ID: u32 = EOS_ID + 1;
     const GOLD_QUERY: [u32; 4] = [0, 1, 2, 3];
 
     fn grammar() -> super::Grammar {
@@ -292,7 +293,7 @@ mod tests {
 
         session.reset();
         assert!(!session.is_complete());
-        assert!(session.accept_token(999).is_err());
+        assert!(session.accept_token(OUT_OF_RANGE_TOKEN_ID).is_err());
     }
 
     #[test]

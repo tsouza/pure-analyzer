@@ -34,6 +34,7 @@ pub fn ci() -> Result<()> {
     verify_lints()?;
     verify_layering()?;
     check_core_deplight()?;
+    verify_purecard_fuzz_workspace()?;
     check_doc_facts()?;
     run_cargo_steps(&[
         &["fmt", "--all", "--check"],
@@ -101,6 +102,10 @@ const PURECARD_FUZZ_MANIFEST: &str = "crates/pure-analyzer-purecard/fuzz/Cargo.t
 const PURECARD_FUZZ_TARGETS: &[&str] = &["accept_token", "allowed_mask", "schema_from_json"];
 /// Directory containing the source file for every registered PureCARD fuzz target.
 const PURECARD_FUZZ_TARGET_DIR: &str = "crates/pure-analyzer-purecard/fuzz/fuzz_targets";
+/// PureCARD's feature-gated FFI source, tested in a separate mutation pass.
+const PURECARD_FFI_SOURCE: &str = "crates/pure-analyzer-purecard/src/ffi.rs";
+/// Parent directory required by cargo-mutants before it creates its reports.
+const MUTATION_OUTPUT_ROOT: &str = "target";
 
 /// Resolve a path owned by the nested PureCARD crate.
 fn purecard_path(relative: impl AsRef<Path>) -> PathBuf {
@@ -159,6 +164,51 @@ pub fn test_legend() -> Result<()> {
         (Err(test_err), Ok(())) => Err(test_err),
         (Ok(()), teardown) => teardown,
     }
+}
+
+/// Run both mutation-test passes with portable output-directory preparation.
+///
+/// The default workspace pass excludes PureCARD's feature-gated FFI source;
+/// the second pass enables `python-test` and targets that source explicitly so
+/// neither surface can pass vacuously. Both run in place for parity with CI's
+/// disposable checkout and the existing local workflow.
+///
+/// # Errors
+///
+/// Returns an error when the output parent cannot be created or either
+/// cargo-mutants pass fails.
+pub fn test_mutation() -> Result<()> {
+    std::fs::create_dir_all(MUTATION_OUTPUT_ROOT)
+        .context("creating mutation report output parent")?;
+    run(
+        "cargo",
+        &[
+            "mutants",
+            "--workspace",
+            "--exclude",
+            PURECARD_FFI_SOURCE,
+            "--in-place",
+            "--output",
+            "target/mutants-default",
+        ],
+    )?;
+    run(
+        "cargo",
+        &[
+            "mutants",
+            "--package",
+            PURECARD_PACKAGE,
+            "--features",
+            "python-test",
+            "--file",
+            PURECARD_FFI_SOURCE,
+            "--in-place",
+            "--output",
+            "target/mutants-ffi",
+            "--",
+            "--lib",
+        ],
+    )
 }
 
 /// Time-box every target in PureCARD's dedicated cargo-fuzz project.
@@ -265,7 +315,7 @@ pub fn check_core_deplight() -> Result<()> {
             disallowed.join(", ")
         );
     }
-    verify_purecard_fuzz_workspace()
+    Ok(())
 }
 
 /// Verify Cargo resolves the nested fuzz project as its own workspace.
@@ -342,13 +392,47 @@ fn fuzz_target_names_from_metadata(metadata: &serde_json::Value) -> Result<BTree
         .collect())
 }
 
+/// Whether a repository directory walk includes nested directories.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum WalkDepth {
+    /// Inspect files directly below the root only.
+    Shallow,
+    /// Inspect files below the root and every nested directory.
+    Recursive,
+}
+
+/// Every file discovered below `root` at the requested traversal depth.
+fn files_under(root: &Path, depth: WalkDepth) -> Result<Vec<PathBuf>> {
+    let mut files = Vec::new();
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(directory) = stack.pop() {
+        for entry in std::fs::read_dir(&directory)
+            .with_context(|| format!("reading {}", directory.display()))?
+        {
+            let entry =
+                entry.with_context(|| format!("reading entry in {}", directory.display()))?;
+            let path = entry.path();
+            if entry
+                .file_type()
+                .with_context(|| format!("reading file type for {}", path.display()))?
+                .is_dir()
+            {
+                if depth == WalkDepth::Recursive {
+                    stack.push(path);
+                }
+            } else {
+                files.push(path);
+            }
+        }
+    }
+    files.sort();
+    Ok(files)
+}
+
 /// Rust source stems present in the dedicated PureCARD fuzz target directory.
 fn fuzz_target_names_on_disk(directory: &Path) -> Result<BTreeSet<String>> {
     let mut names = BTreeSet::new();
-    for entry in
-        std::fs::read_dir(directory).with_context(|| format!("reading {}", directory.display()))?
-    {
-        let path = entry?.path();
+    for path in files_under(directory, WalkDepth::Shallow)? {
         if path.extension().is_some_and(|extension| extension == "rs") {
             let stem = path
                 .file_stem()
@@ -1092,17 +1176,9 @@ fn module_paths_in_tree_body(body: &str) -> BTreeSet<String> {
 fn src_module_names() -> Result<BTreeSet<String>> {
     let mut names = BTreeSet::new();
     let source_root = purecard_path("src");
-    let mut stack = vec![source_root.clone()];
-    while let Some(directory) = stack.pop() {
-        for entry in std::fs::read_dir(&directory)
-            .with_context(|| format!("reading {}", directory.display()))?
-        {
-            let path = entry?.path();
-            if path.is_dir() {
-                stack.push(path);
-            } else if let Some(module) = normalized_rs_module_path(&source_root, &path)? {
-                names.insert(module);
-            }
+    for path in files_under(&source_root, WalkDepth::Recursive)? {
+        if let Some(module) = normalized_rs_module_path(&source_root, &path)? {
+            names.insert(module);
         }
     }
     Ok(names)
@@ -1136,19 +1212,11 @@ fn collect_docs() -> Result<Vec<(String, String)>> {
         .with_context(|| format!("reading {}", readme_path.display()))?;
     docs.push((readme_path.to_string_lossy().into_owned(), readme));
 
-    let mut stack = vec![purecard_path(DOC_DIR)];
-    while let Some(directory) = stack.pop() {
-        for entry in std::fs::read_dir(&directory)
-            .with_context(|| format!("reading {}", directory.display()))?
-        {
-            let path = entry?.path();
-            if path.is_dir() {
-                stack.push(path);
-            } else if path.extension().is_some_and(|extension| extension == "md") {
-                let text = std::fs::read_to_string(&path)
-                    .with_context(|| format!("reading {}", path.display()))?;
-                docs.push((path.to_string_lossy().into_owned(), text));
-            }
+    for path in files_under(&purecard_path(DOC_DIR), WalkDepth::Recursive)? {
+        if path.extension().is_some_and(|extension| extension == "md") {
+            let text = std::fs::read_to_string(&path)
+                .with_context(|| format!("reading {}", path.display()))?;
+            docs.push((path.to_string_lossy().into_owned(), text));
         }
     }
     Ok(docs)

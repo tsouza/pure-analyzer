@@ -31,6 +31,8 @@ enum Command {
     Sweep,
     /// Bring up the Legend stack, test only PureCARD, and always tear down.
     TestLegend,
+    /// Run the default and feature-gated mutation-test passes.
+    TestMutation,
     /// Produce a test-coverage report via cargo-llvm-cov.
     Coverage {
         /// Emit an HTML report in addition to the summary.
@@ -76,6 +78,7 @@ fn main() -> Result<()> {
         Command::Ci => tasks::ci(),
         Command::Sweep => tasks::sweep(),
         Command::TestLegend => tasks::test_legend(),
+        Command::TestMutation => tasks::test_mutation(),
         Command::Coverage { html } => tasks::coverage(html),
         Command::ReleasePlzCheck => tasks::release_plz_check(),
         Command::CheckCoreDeplight => tasks::check_core_deplight(),

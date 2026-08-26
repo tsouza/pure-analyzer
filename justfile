@@ -98,12 +98,9 @@ test-scripts:
     bun test scripts/
 
 # Mutation testing — verifies the test suite actually catches regressions.
-# Runs in-place (mutates the checked-out tree directly, reverting after each
-# trial) for speed on both CI's disposable checkout and a developer's own tree.
+# xtask creates the output parent portably and owns both mutation passes.
 test-mutation:
-    mkdir -p target
-    cargo mutants --workspace --exclude 'crates/pure-analyzer-purecard/src/ffi.rs' --in-place --output target/mutants-default
-    cargo mutants --package pure-analyzer-purecard --features python-test --file 'crates/pure-analyzer-purecard/src/ffi.rs' --in-place --output target/mutants-ffi -- --lib
+    cargo xtask test-mutation
 
 # ---------------------------------------------------------------------------
 # Fuzzing & benchmarking
@@ -142,10 +139,17 @@ purecard_qwen_tokenizer := justfile_directory() + "/target/purecard/qwen/tokeniz
 purecard_gpt4_revision := "1d9f1f1b1fae88c0e4df1dab0a397f8de6229075"
 purecard_gpt4_tokenizer := justfile_directory() + "/target/purecard/gpt4/tokenizer.json"
 
-# Fetch the pinned Qwen2.5-Coder tokenizer and run PureCARD's real-tokenizer L2
-# soundness oracle. Heavy and network-fed, so deliberately outside `test`/`ci`.
-qwen-oracle:
+# Fetch the pinned Qwen2.5-Coder tokenizer into the shared local/CI cache.
+qwen-tokenizer-fetch:
     curl -sSL --fail --create-dirs -z {{ quote(purecard_qwen_tokenizer) }} -o {{ quote(purecard_qwen_tokenizer) }} "https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct/resolve/{{ purecard_qwen_revision }}/tokenizer.json"
+
+# Fetch the pinned GPT-4 tokenizer used by the fused-precision fixture.
+gpt4-tokenizer-fetch:
+    curl -sSL --fail --create-dirs -z {{ quote(purecard_gpt4_tokenizer) }} -o {{ quote(purecard_gpt4_tokenizer) }} "https://huggingface.co/Xenova/gpt-4/resolve/{{ purecard_gpt4_revision }}/tokenizer.json"
+
+# Fetch the pinned Qwen tokenizer and run PureCARD's real-tokenizer L2
+# soundness oracle. Heavy and network-fed, so deliberately outside `test`/`ci`.
+qwen-oracle: qwen-tokenizer-fetch
     just qwen-oracle-run
 
 # Run the Qwen oracle from an already-populated cache (the CI-friendly entry
@@ -154,10 +158,8 @@ qwen-oracle-run:
     QWEN_TOKENIZER_JSON={{ quote(purecard_qwen_tokenizer) }} cargo test -p pure-analyzer-purecard --features qwen-oracle --test qwen_soundness -- --nocapture
 
 # Fetch both immutable byte-level BPE tokenizers used to verify the committed
-# fused-navigation fixture. `curl -z` avoids replacing a fresh local cache.
-fused-tokenizers-fetch:
-    curl -sSL --fail --create-dirs -z {{ quote(purecard_qwen_tokenizer) }} -o {{ quote(purecard_qwen_tokenizer) }} "https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct/resolve/{{ purecard_qwen_revision }}/tokenizer.json"
-    curl -sSL --fail --create-dirs -z {{ quote(purecard_gpt4_tokenizer) }} -o {{ quote(purecard_gpt4_tokenizer) }} "https://huggingface.co/Xenova/gpt-4/resolve/{{ purecard_gpt4_revision }}/tokenizer.json"
+# fused-navigation fixture. Each recipe uses `curl -z` to preserve fresh caches.
+fused-tokenizers-fetch: qwen-tokenizer-fetch gpt4-tokenizer-fetch
 
 # Re-extract the fixture from the real tokenizers and compare it with the
 # committed hermetic replay data.
