@@ -293,6 +293,7 @@ mod tests {
 
         session.reset();
         assert!(!session.is_complete());
+        assert_eq!(OUT_OF_RANGE_TOKEN_ID, EOS_ID + 1);
         assert!(session.accept_token(OUT_OF_RANGE_TOKEN_ID).is_err());
     }
 
