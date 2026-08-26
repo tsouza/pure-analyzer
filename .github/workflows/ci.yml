@@ -212,18 +212,15 @@ jobs:
           tool: cargo-semver-checks,cargo-public-api,just
       - name: cargo semver-checks
         run: just semver
-      # public-api needs a nightly toolchain (rustdoc JSON) and a committed
-      # baseline snapshot per crate. Skips until the API stabilizes: generate
-      # baselines with `just public-api-bless`, commit them, then set repo
-      # variable PUBLIC_API_ENABLED=true.
+      # public-api needs a nightly toolchain for rustdoc JSON. Its committed,
+      # all-features baselines are mandatory: a missing or stale file fails the
+      # PR instead of quietly dropping exact API-surface protection.
       - name: Install nightly (for cargo public-api)
-        if: ${{ vars.PUBLIC_API_ENABLED == 'true' }}
         uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
         with:
           toolchain: nightly
       - name: public API snapshot
-        if: ${{ vars.PUBLIC_API_ENABLED == 'true' }}
-        run: cargo xtask public-api
+        run: just public-api
 
   # --- Structural rules + work-ledger + postponed-marker gates (ast-grep) ---
   structural:
@@ -294,7 +291,7 @@ jobs:
       # cargo-fuzz needs nightly for its `-Zsanitizer` flags; the pinned stable in
       # rust-toolchain.toml cannot build fuzz targets. This is the sanctioned case
       # (constitution §1) of a job installing a channel the file does not provide —
-      # same as the opt-in public-api job.
+      # same as the public-api job.
       - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
         with:
           toolchain: nightly

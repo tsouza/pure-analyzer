@@ -1,0 +1,2 @@
+pub mod pure_analyzer_model
+pub fn pure_analyzer_model::version() -> &'static str

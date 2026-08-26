@@ -595,52 +595,174 @@ fn missing_overrides(overrides: &[String], members: &[String]) -> Vec<String> {
         .collect()
 }
 
-/// Public library crates whose API surface is snapshotted. `pure-analyzer-cli`
-/// is a binary (no library API) and `xtask` is dev tooling; both are
-/// intentionally excluded.
-const PUBLIC_API_CRATES: &[&str] = &[
-    "pure-analyzer-diagnostics",
-    "pure-analyzer-lexer",
-    "pure-analyzer-syntax",
-    "pure-analyzer-parser",
-    "pure-analyzer-model",
-    "pure-analyzer-resolve",
-    "pure-analyzer-analysis",
-    "libpure",
-];
-
 /// Directory holding the committed public-API baseline snapshots.
 const PUBLIC_API_DIR: &str = "public-api";
 
-/// Snapshot each public crate's API with `cargo public-api` (which needs a
-/// nightly toolchain for rustdoc JSON) and, unless `bless` is set, fail if it
+/// Return the workspace packages that expose a Rust library API.
+///
+/// A package may provide an ordinary `lib`, an `rlib` alongside a `cdylib`, or
+/// a procedural macro. All three are Rust APIs and must have a baseline. Bins
+/// and `xtask` have no Rust library surface to snapshot.
+fn public_api_packages(metadata: &serde_json::Value) -> Result<Vec<String>> {
+    let packages = metadata["packages"]
+        .as_array()
+        .context("cargo metadata has no packages array")?;
+    let mut names = BTreeSet::new();
+
+    for package in packages {
+        let name = package["name"]
+            .as_str()
+            .context("cargo metadata package has no name")?;
+        let targets = package["targets"]
+            .as_array()
+            .context("cargo metadata package has no targets array")?;
+        let has_rust_library = targets.iter().any(|target| {
+            target["crate_types"].as_array().is_some_and(|crate_types| {
+                crate_types.iter().any(|crate_type| {
+                    matches!(crate_type.as_str(), Some("lib" | "rlib" | "proc-macro"))
+                })
+            })
+        });
+        if has_rust_library {
+            names.insert(name.to_string());
+        }
+    }
+
+    Ok(names.into_iter().collect())
+}
+
+/// Discover every workspace package whose Rust API must be snapshotted.
+fn workspace_public_api_packages() -> Result<Vec<String>> {
+    let json = run_stdout("cargo", &["metadata", "--no-deps", "--format-version", "1"])?;
+    let metadata: serde_json::Value =
+        serde_json::from_str(&json).context("parsing cargo metadata output")?;
+    public_api_packages(&metadata)
+}
+
+/// The tracked baseline filename for one package's public API.
+fn public_api_baseline_name(package: &str) -> String {
+    format!("{package}.txt")
+}
+
+/// Every baseline filename required for the supplied public packages.
+fn expected_public_api_baselines(packages: &[String]) -> BTreeSet<String> {
+    packages
+        .iter()
+        .map(|package| public_api_baseline_name(package))
+        .collect()
+}
+
+/// Read the baseline directory as a set of regular-file names.
+fn actual_public_api_baselines() -> Result<BTreeSet<String>> {
+    let entries = std::fs::read_dir(PUBLIC_API_DIR).with_context(|| {
+        format!(
+            "reading {PUBLIC_API_DIR}/ (run `just public-api-bless` to create the reviewed baselines)"
+        )
+    })?;
+    let mut names = BTreeSet::new();
+    for entry in entries {
+        let entry = entry.context("reading public API baseline directory entry")?;
+        let file_type = entry
+            .file_type()
+            .with_context(|| format!("reading file type for {}", entry.path().display()))?;
+        if !file_type.is_file() {
+            anyhow::bail!(
+                "public API baseline entry {} must be a regular file",
+                entry.path().display()
+            );
+        }
+        let name = entry.file_name().into_string().map_err(|_| {
+            anyhow::anyhow!(
+                "public API baseline entry {} is not valid UTF-8",
+                entry.path().display()
+            )
+        })?;
+        names.insert(name);
+    }
+    Ok(names)
+}
+
+/// Reject missing or stale baseline files. `bless` may fill in missing files,
+/// but it never silently deletes an unexpected one: removal is a reviewable
+/// change that must be made deliberately.
+fn verify_public_api_baseline_inventory(
+    expected: &BTreeSet<String>,
+    actual: &BTreeSet<String>,
+    allow_missing: bool,
+) -> Result<()> {
+    let missing: Vec<_> = expected.difference(actual).cloned().collect();
+    let unexpected: Vec<_> = actual.difference(expected).cloned().collect();
+    if (allow_missing || missing.is_empty()) && unexpected.is_empty() {
+        return Ok(());
+    }
+
+    let mut problems = Vec::new();
+    if !missing.is_empty() {
+        problems.push(format!("missing: {}", missing.join(", ")));
+    }
+    if !unexpected.is_empty() {
+        problems.push(format!("unexpected: {}", unexpected.join(", ")));
+    }
+    anyhow::bail!(
+        "public API baseline inventory is not exact ({}){}",
+        problems.join("; "),
+        if allow_missing {
+            "; remove unexpected files before blessing"
+        } else {
+            "; run `just public-api-bless` for intended API changes"
+        }
+    );
+}
+
+/// Snapshot every public Rust crate's all-features API with `cargo public-api`
+/// (which needs a nightly toolchain) and, unless `bless` is set, fail if it
 /// drifts from the committed baseline under [`PUBLIC_API_DIR`].
 ///
 /// # Errors
 ///
 /// Returns an error if a snapshot cannot be produced or written, or (when not
-/// blessing) if the regenerated surface differs from the committed baseline.
+/// blessing) if a baseline is missing/stale or the regenerated surface differs.
 pub fn public_api(bless: bool) -> Result<()> {
     if bless {
         std::fs::create_dir_all(PUBLIC_API_DIR)
             .with_context(|| format!("creating {PUBLIC_API_DIR}/"))?;
     }
 
+    let packages = workspace_public_api_packages()?;
+    let expected = expected_public_api_baselines(&packages);
+    let actual = actual_public_api_baselines()?;
+    verify_public_api_baseline_inventory(&expected, &actual, bless)?;
+
     let mut drift = Vec::new();
-    for krate in PUBLIC_API_CRATES {
-        let surface = run_stdout("cargo", &["+nightly", "public-api", "-p", krate])?;
-        let path = format!("{PUBLIC_API_DIR}/{krate}.txt");
+    for package in packages {
+        let surface = run_stdout(
+            "cargo",
+            &[
+                "+nightly",
+                "public-api",
+                "--all-features",
+                "--color",
+                "never",
+                "-p",
+                &package,
+            ],
+        )?;
+        let path = Path::new(PUBLIC_API_DIR).join(public_api_baseline_name(&package));
 
         if bless {
-            std::fs::write(&path, surface).with_context(|| format!("writing {path}"))?;
+            std::fs::write(&path, surface)
+                .with_context(|| format!("writing {}", path.display()))?;
         } else {
             // Check-only: compare against the committed baseline in memory, never
             // touching the working tree.
             let baseline = std::fs::read_to_string(&path).with_context(|| {
-                format!("reading baseline {path} (run `just public-api-bless`)")
+                format!(
+                    "reading baseline {} (run `just public-api-bless`)",
+                    path.display()
+                )
             })?;
             if baseline != surface {
-                drift.push(krate.to_string());
+                drift.push(package);
             }
         }
     }
@@ -1901,6 +2023,80 @@ fn workspace_member_manifests() -> Result<Vec<(String, String)>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn public_api_metadata_package(name: &str, crate_types: &[&str]) -> serde_json::Value {
+        let crate_types = crate_types
+            .iter()
+            .map(|crate_type| serde_json::Value::String((*crate_type).to_owned()))
+            .collect();
+        let target = serde_json::Value::Object(serde_json::Map::from_iter([(
+            "crate_types".to_owned(),
+            serde_json::Value::Array(crate_types),
+        )]));
+        serde_json::Value::Object(serde_json::Map::from_iter([
+            (
+                "name".to_owned(),
+                serde_json::Value::String(name.to_owned()),
+            ),
+            ("targets".to_owned(), serde_json::Value::Array(vec![target])),
+        ]))
+    }
+
+    #[test]
+    fn public_api_packages_cover_every_rust_library_shape() -> Result<()> {
+        let metadata = serde_json::Value::Object(serde_json::Map::from_iter([(
+            "packages".to_owned(),
+            serde_json::Value::Array(vec![
+                public_api_metadata_package("ordinary-lib", &["lib"]),
+                public_api_metadata_package("cdylib-with-rlib", &["cdylib", "rlib"]),
+                public_api_metadata_package("macro", &["proc-macro"]),
+                public_api_metadata_package("binary-only", &["bin"]),
+            ]),
+        )]));
+        assert_eq!(
+            public_api_packages(&metadata)?,
+            [
+                "cdylib-with-rlib".to_string(),
+                "macro".to_string(),
+                "ordinary-lib".to_string(),
+            ]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn public_api_inventory_fails_closed_for_missing_and_stale_baselines() {
+        let expected = BTreeSet::from([
+            "pure-analyzer-lexer.txt".to_string(),
+            "pure-analyzer-purecard.txt".to_string(),
+        ]);
+        let actual = BTreeSet::from([
+            "pure-analyzer-lexer.txt".to_string(),
+            "removed-package.txt".to_string(),
+        ]);
+        let error = verify_public_api_baseline_inventory(&expected, &actual, false)
+            .expect_err("missing and stale baselines must fail");
+        assert_eq!(
+            error.to_string(),
+            "public API baseline inventory is not exact (missing: pure-analyzer-purecard.txt; \
+             unexpected: removed-package.txt); run `just public-api-bless` for intended API changes"
+        );
+    }
+
+    #[test]
+    fn public_api_bless_allows_missing_but_never_stale_baselines() {
+        let expected = BTreeSet::from(["pure-analyzer-lexer.txt".to_string()]);
+        assert!(verify_public_api_baseline_inventory(&expected, &BTreeSet::new(), true).is_ok());
+
+        let actual = BTreeSet::from(["removed-package.txt".to_string()]);
+        let error = verify_public_api_baseline_inventory(&expected, &actual, true)
+            .expect_err("blessing must not silently delete a stale baseline");
+        assert_eq!(
+            error.to_string(),
+            "public API baseline inventory is not exact (missing: pure-analyzer-lexer.txt; \
+             unexpected: removed-package.txt); remove unexpected files before blessing"
+        );
+    }
 
     #[test]
     fn purecard_paths_are_rooted_at_the_migrated_crate() {

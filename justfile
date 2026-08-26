@@ -245,9 +245,10 @@ release-plz-check:
 semver:
     cargo semver-checks check-release --workspace
 
-# Verify each public crate's API against its committed baseline under
-# public-api/ (needs a nightly toolchain). Run `just public-api-bless` after an
-# intended API change to refresh the baselines.
+# Verify every public Rust crate's all-features API against its committed
+# baseline under public-api/ (needs a nightly toolchain). The inventory is
+# exact: missing or stale baselines fail closed. Run `just public-api-bless`
+# after an intended API change, then review and commit the result.
 public-api:
     cargo xtask public-api
 
@@ -355,15 +356,15 @@ ci: no-work-ledger
 
 # The full local gate: every PR-blocking CI gate, chained in CI's job order,
 # fail-fast, reusing the same targets CI runs. Slow (coverage + mutation +
-# supply-chain + docs + scripts). Four CI gates are environment-bound and cannot
-# run faithfully here — the CodSpeed bench (needs the CodSpeed service), the
-# no-warnings log sweep (reads the run's own Actions logs), the opt-in public-api
-# snapshot (needs nightly + committed baselines), and the fuzz-smoke (needs
-# nightly for cargo-fuzz's sanitizers) — so they are only enforced in CI. Run the
-# fuzz-smoke directly with `just fuzz diagnostics 60` if you have nightly. Use
-# before a PR when a change touches what the fast gate skips.
-ci-full: ci coverage test-mutation deny audit vet machete release-plz-check semver sweep postponed-markers docs test-scripts lint-actions zizmor
-    @echo "ci-full: ran every locally reproducible PR gate; codspeed bench, the no-warnings log sweep, the opt-in public-api snapshot, and the fuzz-smoke are enforced only in CI"
+# supply-chain + API snapshots + docs + scripts). Three CI gates are
+# environment-bound and cannot run faithfully here — the CodSpeed bench (needs
+# the CodSpeed service), the no-warnings log sweep (reads the run's own Actions
+# logs), and the fuzz-smoke (needs nightly for cargo-fuzz's sanitizers) — so they
+# are only enforced in CI. Run the fuzz-smoke directly with `just fuzz diagnostics
+# 60` if you have nightly. Use before a PR when a change touches what the fast
+# gate skips.
+ci-full: ci coverage test-mutation deny audit vet machete release-plz-check semver public-api sweep postponed-markers docs test-scripts lint-actions zizmor
+    @echo "ci-full: ran every locally reproducible PR gate; codspeed bench, the no-warnings log sweep, and the fuzz-smoke are enforced only in CI"
 
 # Install git hooks (managed by lefthook.yml). Also run automatically by the
 # `install-cargo-tools` onboarding step, so a fresh clone is never left unwired;

@@ -1,0 +1,1266 @@
+pub mod purecard
+pub mod purecard::error
+pub enum purecard::error::DecodeError
+pub purecard::error::DecodeError::DeadState
+pub purecard::error::DecodeError::DeadState::byte: u8
+pub purecard::error::DecodeError::DeadState::offset: usize
+pub purecard::error::DecodeError::DeadState::stack_top: &'static str
+pub purecard::error::DecodeError::DeadState::state: &'static str
+pub purecard::error::DecodeError::InadmissibleToken
+pub purecard::error::DecodeError::InadmissibleToken::id: u32
+pub purecard::error::DecodeError::UnexpectedEos
+pub purecard::error::DecodeError::UnknownToken
+pub purecard::error::DecodeError::UnknownToken::id: u32
+impl core::convert::From<purecard::error::DecodeError> for pyo3::err::PyErr
+pub fn pyo3::err::PyErr::from(purecard::error::DecodeError) -> Self
+impl core::error::Error for purecard::error::DecodeError
+impl core::fmt::Debug for purecard::error::DecodeError
+pub fn purecard::error::DecodeError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for purecard::error::DecodeError
+pub fn purecard::error::DecodeError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for purecard::error::DecodeError
+impl core::marker::Send for purecard::error::DecodeError
+impl core::marker::Sync for purecard::error::DecodeError
+impl core::marker::Unpin for purecard::error::DecodeError
+impl core::marker::UnsafeUnpin for purecard::error::DecodeError
+impl core::panic::unwind_safe::RefUnwindSafe for purecard::error::DecodeError
+impl core::panic::unwind_safe::UnwindSafe for purecard::error::DecodeError
+impl<T, U> core::convert::Into<U> for purecard::error::DecodeError where U: core::convert::From<T>
+pub fn purecard::error::DecodeError::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for purecard::error::DecodeError where U: core::convert::Into<T>
+pub type purecard::error::DecodeError::Error = never
+pub fn purecard::error::DecodeError::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for purecard::error::DecodeError where U: core::convert::TryFrom<T>
+pub type purecard::error::DecodeError::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn purecard::error::DecodeError::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::string::ToString for purecard::error::DecodeError where T: core::fmt::Display + ?core::marker::Sized
+pub fn purecard::error::DecodeError::to_string(&self) -> alloc::string::String
+impl<T> core::any::Any for purecard::error::DecodeError where T: 'static + ?core::marker::Sized
+pub fn purecard::error::DecodeError::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for purecard::error::DecodeError where T: ?core::marker::Sized
+pub fn purecard::error::DecodeError::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for purecard::error::DecodeError where T: ?core::marker::Sized
+pub fn purecard::error::DecodeError::borrow_mut(&mut self) -> &mut T
+impl<T> core::convert::From<T> for purecard::error::DecodeError
+pub fn purecard::error::DecodeError::from(T) -> T
+impl<T> pyo3::marker::Ungil for purecard::error::DecodeError where T: core::marker::Send
+pub mod purecard::grammar
+pub mod purecard::grammar::compiled
+pub struct purecard::grammar::compiled::CompiledGrammar
+impl purecard::grammar::compiled::CompiledGrammar
+pub fn purecard::grammar::compiled::CompiledGrammar::compile(purecard::vocab::Vocab) -> Self
+pub fn purecard::grammar::compiled::CompiledGrammar::from_spec(&str, purecard::vocab::Vocab) -> Self
+pub fn purecard::grammar::compiled::CompiledGrammar::vocab(&self) -> &purecard::vocab::Vocab
+impl core::fmt::Debug for purecard::grammar::compiled::CompiledGrammar
+pub fn purecard::grammar::compiled::CompiledGrammar::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for purecard::grammar::compiled::CompiledGrammar
+impl core::marker::Send for purecard::grammar::compiled::CompiledGrammar
+impl !core::marker::Sync for purecard::grammar::compiled::CompiledGrammar
+impl core::marker::Unpin for purecard::grammar::compiled::CompiledGrammar
+impl core::marker::UnsafeUnpin for purecard::grammar::compiled::CompiledGrammar
+impl !core::panic::unwind_safe::RefUnwindSafe for purecard::grammar::compiled::CompiledGrammar
+impl core::panic::unwind_safe::UnwindSafe for purecard::grammar::compiled::CompiledGrammar
+impl<T, U> core::convert::Into<U> for purecard::grammar::compiled::CompiledGrammar where U: core::convert::From<T>
+pub fn purecard::grammar::compiled::CompiledGrammar::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for purecard::grammar::compiled::CompiledGrammar where U: core::convert::Into<T>
+pub type purecard::grammar::compiled::CompiledGrammar::Error = never
+pub fn purecard::grammar::compiled::CompiledGrammar::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for purecard::grammar::compiled::CompiledGrammar where U: core::convert::TryFrom<T>
+pub type purecard::grammar::compiled::CompiledGrammar::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn purecard::grammar::compiled::CompiledGrammar::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> core::any::Any for purecard::grammar::compiled::CompiledGrammar where T: 'static + ?core::marker::Sized
+pub fn purecard::grammar::compiled::CompiledGrammar::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for purecard::grammar::compiled::CompiledGrammar where T: ?core::marker::Sized
+pub fn purecard::grammar::compiled::CompiledGrammar::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for purecard::grammar::compiled::CompiledGrammar where T: ?core::marker::Sized
+pub fn purecard::grammar::compiled::CompiledGrammar::borrow_mut(&mut self) -> &mut T
+impl<T> core::convert::From<T> for purecard::grammar::compiled::CompiledGrammar
+pub fn purecard::grammar::compiled::CompiledGrammar::from(T) -> T
+impl<T> pyo3::marker::Ungil for purecard::grammar::compiled::CompiledGrammar where T: core::marker::Send
+pub mod purecard::grammar::pda
+pub enum purecard::grammar::pda::Frame
+pub purecard::grammar::pda::Frame::Brace
+pub purecard::grammar::pda::Frame::BraceLambda
+pub purecard::grammar::pda::Frame::Bracket
+pub purecard::grammar::pda::Frame::Paren
+impl purecard::grammar::pda::Frame
+pub const fn purecard::grammar::pda::Frame::name(self) -> &'static str
+impl core::clone::Clone for purecard::grammar::pda::Frame
+pub fn purecard::grammar::pda::Frame::clone(&self) -> purecard::grammar::pda::Frame
+impl core::cmp::Eq for purecard::grammar::pda::Frame
+impl core::cmp::PartialEq for purecard::grammar::pda::Frame
+pub fn purecard::grammar::pda::Frame::eq(&self, &purecard::grammar::pda::Frame) -> bool
+impl core::fmt::Debug for purecard::grammar::pda::Frame
+pub fn purecard::grammar::pda::Frame::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for purecard::grammar::pda::Frame
+impl core::marker::StructuralPartialEq for purecard::grammar::pda::Frame
+impl core::marker::Freeze for purecard::grammar::pda::Frame
+impl core::marker::Send for purecard::grammar::pda::Frame
+impl core::marker::Sync for purecard::grammar::pda::Frame
+impl core::marker::Unpin for purecard::grammar::pda::Frame
+impl core::marker::UnsafeUnpin for purecard::grammar::pda::Frame
+impl core::panic::unwind_safe::RefUnwindSafe for purecard::grammar::pda::Frame
+impl core::panic::unwind_safe::UnwindSafe for purecard::grammar::pda::Frame
+impl<T, U> core::convert::Into<U> for purecard::grammar::pda::Frame where U: core::convert::From<T>
+pub fn purecard::grammar::pda::Frame::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for purecard::grammar::pda::Frame where U: core::convert::Into<T>
+pub type purecard::grammar::pda::Frame::Error = never
+pub fn purecard::grammar::pda::Frame::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for purecard::grammar::pda::Frame where U: core::convert::TryFrom<T>
+pub type purecard::grammar::pda::Frame::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn purecard::grammar::pda::Frame::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for purecard::grammar::pda::Frame where T: core::clone::Clone
+pub type purecard::grammar::pda::Frame::Owned = T
+pub fn purecard::grammar::pda::Frame::clone_into(&self, &mut T)
+pub fn purecard::grammar::pda::Frame::to_owned(&self) -> T
+impl<T> core::any::Any for purecard::grammar::pda::Frame where T: 'static + ?core::marker::Sized
+pub fn purecard::grammar::pda::Frame::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for purecard::grammar::pda::Frame where T: ?core::marker::Sized
+pub fn purecard::grammar::pda::Frame::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for purecard::grammar::pda::Frame where T: ?core::marker::Sized
+pub fn purecard::grammar::pda::Frame::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for purecard::grammar::pda::Frame where T: core::clone::Clone
+pub unsafe fn purecard::grammar::pda::Frame::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for purecard::grammar::pda::Frame
+pub fn purecard::grammar::pda::Frame::from(T) -> T
+impl<T> pyo3::marker::Ungil for purecard::grammar::pda::Frame where T: core::marker::Send
+#[non_exhaustive] pub enum purecard::grammar::pda::State
+pub purecard::grammar::pda::State::AfterArrow
+pub purecard::grammar::pda::State::AfterBinder
+pub purecard::grammar::pda::State::AfterBraceOpen
+pub purecard::grammar::pda::State::AfterColon
+pub purecard::grammar::pda::State::AfterColon2
+pub purecard::grammar::pda::State::AfterColonWs
+pub purecard::grammar::pda::State::AfterDollar
+pub purecard::grammar::pda::State::AfterDot
+pub purecard::grammar::pda::State::AfterValue
+pub purecard::grammar::pda::State::BlockStmt
+pub purecard::grammar::pda::State::BlockStmtClose
+pub purecard::grammar::pda::State::ExpectBinder
+pub purecard::grammar::pda::State::ExpectBraceBinder
+pub purecard::grammar::pda::State::ExpectSource
+pub purecard::grammar::pda::State::ExpectValue
+pub purecard::grammar::pda::State::ExpectValueReq
+pub purecard::grammar::pda::State::InBinder
+pub purecard::grammar::pda::State::InDateLit
+pub purecard::grammar::pda::State::InExp
+pub purecard::grammar::pda::State::InIdent
+pub purecard::grammar::pda::State::InMilestoneLit
+pub purecard::grammar::pda::State::InMultiplicity
+pub purecard::grammar::pda::State::InNumberFrac
+pub purecard::grammar::pda::State::InNumberInt
+pub purecard::grammar::pda::State::InSourceIdent
+pub purecard::grammar::pda::State::InStrLit
+pub purecard::grammar::pda::State::InStrLit::escaped: bool
+pub purecard::grammar::pda::State::LetL
+pub purecard::grammar::pda::State::LetLe
+pub purecard::grammar::pda::State::LetLet
+pub purecard::grammar::pda::State::NeedExpDigit
+pub purecard::grammar::pda::State::NeedFracDigit
+pub purecard::grammar::pda::State::SawAmp
+pub purecard::grammar::pda::State::SawBang
+pub purecard::grammar::pda::State::SawDash
+pub purecard::grammar::pda::State::SawEq
+pub purecard::grammar::pda::State::SawExp
+pub purecard::grammar::pda::State::SawGt
+pub purecard::grammar::pda::State::SawLt
+pub purecard::grammar::pda::State::SawNumSign
+pub purecard::grammar::pda::State::SawPercent
+pub purecard::grammar::pda::State::SawPipe
+pub purecard::grammar::pda::State::SawTilde
+pub purecard::grammar::pda::State::SourceColon
+pub purecard::grammar::pda::State::SourceColon2
+pub purecard::grammar::pda::State::SourceDash
+pub purecard::grammar::pda::State::Start
+impl purecard::grammar::pda::State
+pub const purecard::grammar::pda::State::COUNT: usize
+pub const fn purecard::grammar::pda::State::index(self) -> usize
+pub const fn purecard::grammar::pda::State::name(self) -> &'static str
+impl core::clone::Clone for purecard::grammar::pda::State
+pub fn purecard::grammar::pda::State::clone(&self) -> purecard::grammar::pda::State
+impl core::cmp::Eq for purecard::grammar::pda::State
+impl core::cmp::PartialEq for purecard::grammar::pda::State
+pub fn purecard::grammar::pda::State::eq(&self, &purecard::grammar::pda::State) -> bool
+impl core::fmt::Debug for purecard::grammar::pda::State
+pub fn purecard::grammar::pda::State::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for purecard::grammar::pda::State
+pub fn purecard::grammar::pda::State::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::Copy for purecard::grammar::pda::State
+impl core::marker::StructuralPartialEq for purecard::grammar::pda::State
+impl core::marker::Freeze for purecard::grammar::pda::State
+impl core::marker::Send for purecard::grammar::pda::State
+impl core::marker::Sync for purecard::grammar::pda::State
+impl core::marker::Unpin for purecard::grammar::pda::State
+impl core::marker::UnsafeUnpin for purecard::grammar::pda::State
+impl core::panic::unwind_safe::RefUnwindSafe for purecard::grammar::pda::State
+impl core::panic::unwind_safe::UnwindSafe for purecard::grammar::pda::State
+impl<T, U> core::convert::Into<U> for purecard::grammar::pda::State where U: core::convert::From<T>
+pub fn purecard::grammar::pda::State::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for purecard::grammar::pda::State where U: core::convert::Into<T>
+pub type purecard::grammar::pda::State::Error = never
+pub fn purecard::grammar::pda::State::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for purecard::grammar::pda::State where U: core::convert::TryFrom<T>
+pub type purecard::grammar::pda::State::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn purecard::grammar::pda::State::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for purecard::grammar::pda::State where T: core::clone::Clone
+pub type purecard::grammar::pda::State::Owned = T
+pub fn purecard::grammar::pda::State::clone_into(&self, &mut T)
+pub fn purecard::grammar::pda::State::to_owned(&self) -> T
+impl<T> core::any::Any for purecard::grammar::pda::State where T: 'static + ?core::marker::Sized
+pub fn purecard::grammar::pda::State::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for purecard::grammar::pda::State where T: ?core::marker::Sized
+pub fn purecard::grammar::pda::State::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for purecard::grammar::pda::State where T: ?core::marker::Sized
+pub fn purecard::grammar::pda::State::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for purecard::grammar::pda::State where T: core::clone::Clone
+pub unsafe fn purecard::grammar::pda::State::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for purecard::grammar::pda::State
+pub fn purecard::grammar::pda::State::from(T) -> T
+impl<T> pyo3::marker::Ungil for purecard::grammar::pda::State where T: core::marker::Send
+pub enum purecard::grammar::pda::Step
+pub purecard::grammar::pda::Step::Dead
+pub purecard::grammar::pda::Step::Next(purecard::grammar::pda::State)
+pub purecard::grammar::pda::Step::Pop(purecard::grammar::pda::State)
+pub purecard::grammar::pda::Step::Push(purecard::grammar::pda::Frame, purecard::grammar::pda::State)
+impl core::clone::Clone for purecard::grammar::pda::Step
+pub fn purecard::grammar::pda::Step::clone(&self) -> purecard::grammar::pda::Step
+impl core::cmp::Eq for purecard::grammar::pda::Step
+impl core::cmp::PartialEq for purecard::grammar::pda::Step
+pub fn purecard::grammar::pda::Step::eq(&self, &purecard::grammar::pda::Step) -> bool
+impl core::fmt::Debug for purecard::grammar::pda::Step
+pub fn purecard::grammar::pda::Step::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for purecard::grammar::pda::Step
+impl core::marker::StructuralPartialEq for purecard::grammar::pda::Step
+impl core::marker::Freeze for purecard::grammar::pda::Step
+impl core::marker::Send for purecard::grammar::pda::Step
+impl core::marker::Sync for purecard::grammar::pda::Step
+impl core::marker::Unpin for purecard::grammar::pda::Step
+impl core::marker::UnsafeUnpin for purecard::grammar::pda::Step
+impl core::panic::unwind_safe::RefUnwindSafe for purecard::grammar::pda::Step
+impl core::panic::unwind_safe::UnwindSafe for purecard::grammar::pda::Step
+impl<T, U> core::convert::Into<U> for purecard::grammar::pda::Step where U: core::convert::From<T>
+pub fn purecard::grammar::pda::Step::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for purecard::grammar::pda::Step where U: core::convert::Into<T>
+pub type purecard::grammar::pda::Step::Error = never
+pub fn purecard::grammar::pda::Step::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for purecard::grammar::pda::Step where U: core::convert::TryFrom<T>
+pub type purecard::grammar::pda::Step::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn purecard::grammar::pda::Step::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for purecard::grammar::pda::Step where T: core::clone::Clone
+pub type purecard::grammar::pda::Step::Owned = T
+pub fn purecard::grammar::pda::Step::clone_into(&self, &mut T)
+pub fn purecard::grammar::pda::Step::to_owned(&self) -> T
+impl<T> core::any::Any for purecard::grammar::pda::Step where T: 'static + ?core::marker::Sized
+pub fn purecard::grammar::pda::Step::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for purecard::grammar::pda::Step where T: ?core::marker::Sized
+pub fn purecard::grammar::pda::Step::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for purecard::grammar::pda::Step where T: ?core::marker::Sized
+pub fn purecard::grammar::pda::Step::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for purecard::grammar::pda::Step where T: core::clone::Clone
+pub unsafe fn purecard::grammar::pda::Step::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for purecard::grammar::pda::Step
+pub fn purecard::grammar::pda::Step::from(T) -> T
+impl<T> pyo3::marker::Ungil for purecard::grammar::pda::Step where T: core::marker::Send
+pub struct purecard::grammar::pda::Pda
+impl purecard::grammar::pda::Pda
+pub fn purecard::grammar::pda::Pda::admits(&self, &[u8], &mut alloc::vec::Vec<purecard::grammar::pda::Frame>) -> bool
+pub fn purecard::grammar::pda::Pda::advance(&mut self, u8) -> core::result::Result<(), purecard::grammar::DeadState>
+pub fn purecard::grammar::pda::Pda::at(purecard::grammar::pda::State) -> Self
+pub fn purecard::grammar::pda::Pda::is_accepting(&self) -> bool
+pub fn purecard::grammar::pda::Pda::new() -> Self
+pub fn purecard::grammar::pda::Pda::probe(&self, &[u8], &mut alloc::vec::Vec<purecard::grammar::pda::Frame>) -> purecard::grammar::pda::Probe
+pub fn purecard::grammar::pda::Pda::reset(&mut self)
+pub fn purecard::grammar::pda::Pda::stack_top(&self) -> core::option::Option<purecard::grammar::pda::Frame>
+pub fn purecard::grammar::pda::Pda::state(&self) -> purecard::grammar::pda::State
+impl core::clone::Clone for purecard::grammar::pda::Pda
+pub fn purecard::grammar::pda::Pda::clone(&self) -> purecard::grammar::pda::Pda
+impl core::cmp::Eq for purecard::grammar::pda::Pda
+impl core::cmp::PartialEq for purecard::grammar::pda::Pda
+pub fn purecard::grammar::pda::Pda::eq(&self, &purecard::grammar::pda::Pda) -> bool
+impl core::default::Default for purecard::grammar::pda::Pda
+pub fn purecard::grammar::pda::Pda::default() -> Self
+impl core::fmt::Debug for purecard::grammar::pda::Pda
+pub fn purecard::grammar::pda::Pda::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for purecard::grammar::pda::Pda
+impl core::marker::Freeze for purecard::grammar::pda::Pda
+impl core::marker::Send for purecard::grammar::pda::Pda
+impl core::marker::Sync for purecard::grammar::pda::Pda
+impl core::marker::Unpin for purecard::grammar::pda::Pda
+impl core::marker::UnsafeUnpin for purecard::grammar::pda::Pda
+impl core::panic::unwind_safe::RefUnwindSafe for purecard::grammar::pda::Pda
+impl core::panic::unwind_safe::UnwindSafe for purecard::grammar::pda::Pda
+impl<T, U> core::convert::Into<U> for purecard::grammar::pda::Pda where U: core::convert::From<T>
+pub fn purecard::grammar::pda::Pda::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for purecard::grammar::pda::Pda where U: core::convert::Into<T>
+pub type purecard::grammar::pda::Pda::Error = never
+pub fn purecard::grammar::pda::Pda::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for purecard::grammar::pda::Pda where U: core::convert::TryFrom<T>
+pub type purecard::grammar::pda::Pda::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn purecard::grammar::pda::Pda::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for purecard::grammar::pda::Pda where T: core::clone::Clone
+pub type purecard::grammar::pda::Pda::Owned = T
+pub fn purecard::grammar::pda::Pda::clone_into(&self, &mut T)
+pub fn purecard::grammar::pda::Pda::to_owned(&self) -> T
+impl<T> core::any::Any for purecard::grammar::pda::Pda where T: 'static + ?core::marker::Sized
+pub fn purecard::grammar::pda::Pda::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for purecard::grammar::pda::Pda where T: ?core::marker::Sized
+pub fn purecard::grammar::pda::Pda::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for purecard::grammar::pda::Pda where T: ?core::marker::Sized
+pub fn purecard::grammar::pda::Pda::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for purecard::grammar::pda::Pda where T: core::clone::Clone
+pub unsafe fn purecard::grammar::pda::Pda::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for purecard::grammar::pda::Pda
+pub fn purecard::grammar::pda::Pda::from(T) -> T
+impl<T> pyo3::marker::Ungil for purecard::grammar::pda::Pda where T: core::marker::Send
+pub struct purecard::grammar::pda::Probe
+pub purecard::grammar::pda::Probe::alive: bool
+pub purecard::grammar::pda::Probe::consulted_ambient: bool
+impl core::clone::Clone for purecard::grammar::pda::Probe
+pub fn purecard::grammar::pda::Probe::clone(&self) -> purecard::grammar::pda::Probe
+impl core::cmp::Eq for purecard::grammar::pda::Probe
+impl core::cmp::PartialEq for purecard::grammar::pda::Probe
+pub fn purecard::grammar::pda::Probe::eq(&self, &purecard::grammar::pda::Probe) -> bool
+impl core::fmt::Debug for purecard::grammar::pda::Probe
+pub fn purecard::grammar::pda::Probe::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for purecard::grammar::pda::Probe
+impl core::marker::StructuralPartialEq for purecard::grammar::pda::Probe
+impl core::marker::Freeze for purecard::grammar::pda::Probe
+impl core::marker::Send for purecard::grammar::pda::Probe
+impl core::marker::Sync for purecard::grammar::pda::Probe
+impl core::marker::Unpin for purecard::grammar::pda::Probe
+impl core::marker::UnsafeUnpin for purecard::grammar::pda::Probe
+impl core::panic::unwind_safe::RefUnwindSafe for purecard::grammar::pda::Probe
+impl core::panic::unwind_safe::UnwindSafe for purecard::grammar::pda::Probe
+impl<T, U> core::convert::Into<U> for purecard::grammar::pda::Probe where U: core::convert::From<T>
+pub fn purecard::grammar::pda::Probe::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for purecard::grammar::pda::Probe where U: core::convert::Into<T>
+pub type purecard::grammar::pda::Probe::Error = never
+pub fn purecard::grammar::pda::Probe::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for purecard::grammar::pda::Probe where U: core::convert::TryFrom<T>
+pub type purecard::grammar::pda::Probe::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn purecard::grammar::pda::Probe::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for purecard::grammar::pda::Probe where T: core::clone::Clone
+pub type purecard::grammar::pda::Probe::Owned = T
+pub fn purecard::grammar::pda::Probe::clone_into(&self, &mut T)
+pub fn purecard::grammar::pda::Probe::to_owned(&self) -> T
+impl<T> core::any::Any for purecard::grammar::pda::Probe where T: 'static + ?core::marker::Sized
+pub fn purecard::grammar::pda::Probe::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for purecard::grammar::pda::Probe where T: ?core::marker::Sized
+pub fn purecard::grammar::pda::Probe::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for purecard::grammar::pda::Probe where T: ?core::marker::Sized
+pub fn purecard::grammar::pda::Probe::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for purecard::grammar::pda::Probe where T: core::clone::Clone
+pub unsafe fn purecard::grammar::pda::Probe::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for purecard::grammar::pda::Probe
+pub fn purecard::grammar::pda::Probe::from(T) -> T
+impl<T> pyo3::marker::Ungil for purecard::grammar::pda::Probe where T: core::marker::Send
+pub fn purecard::grammar::pda::step(purecard::grammar::pda::State, core::option::Option<purecard::grammar::pda::Frame>, u8) -> purecard::grammar::pda::Step
+pub enum purecard::grammar::Envelope
+pub purecard::grammar::Envelope::ClassNav
+pub purecard::grammar::Envelope::RelationApi
+pub purecard::grammar::Envelope::Relational
+impl purecard::grammar::Envelope
+pub fn purecard::grammar::Envelope::classify(&str) -> core::option::Option<purecard::grammar::Envelope>
+impl core::clone::Clone for purecard::grammar::Envelope
+pub fn purecard::grammar::Envelope::clone(&self) -> purecard::grammar::Envelope
+impl core::cmp::Eq for purecard::grammar::Envelope
+impl core::cmp::PartialEq for purecard::grammar::Envelope
+pub fn purecard::grammar::Envelope::eq(&self, &purecard::grammar::Envelope) -> bool
+impl core::fmt::Debug for purecard::grammar::Envelope
+pub fn purecard::grammar::Envelope::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for purecard::grammar::Envelope
+impl core::marker::StructuralPartialEq for purecard::grammar::Envelope
+impl core::marker::Freeze for purecard::grammar::Envelope
+impl core::marker::Send for purecard::grammar::Envelope
+impl core::marker::Sync for purecard::grammar::Envelope
+impl core::marker::Unpin for purecard::grammar::Envelope
+impl core::marker::UnsafeUnpin for purecard::grammar::Envelope
+impl core::panic::unwind_safe::RefUnwindSafe for purecard::grammar::Envelope
+impl core::panic::unwind_safe::UnwindSafe for purecard::grammar::Envelope
+impl<T, U> core::convert::Into<U> for purecard::grammar::Envelope where U: core::convert::From<T>
+pub fn purecard::grammar::Envelope::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for purecard::grammar::Envelope where U: core::convert::Into<T>
+pub type purecard::grammar::Envelope::Error = never
+pub fn purecard::grammar::Envelope::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for purecard::grammar::Envelope where U: core::convert::TryFrom<T>
+pub type purecard::grammar::Envelope::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn purecard::grammar::Envelope::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for purecard::grammar::Envelope where T: core::clone::Clone
+pub type purecard::grammar::Envelope::Owned = T
+pub fn purecard::grammar::Envelope::clone_into(&self, &mut T)
+pub fn purecard::grammar::Envelope::to_owned(&self) -> T
+impl<T> core::any::Any for purecard::grammar::Envelope where T: 'static + ?core::marker::Sized
+pub fn purecard::grammar::Envelope::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for purecard::grammar::Envelope where T: ?core::marker::Sized
+pub fn purecard::grammar::Envelope::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for purecard::grammar::Envelope where T: ?core::marker::Sized
+pub fn purecard::grammar::Envelope::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for purecard::grammar::Envelope where T: core::clone::Clone
+pub unsafe fn purecard::grammar::Envelope::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for purecard::grammar::Envelope
+pub fn purecard::grammar::Envelope::from(T) -> T
+impl<T> pyo3::marker::Ungil for purecard::grammar::Envelope where T: core::marker::Send
+pub struct purecard::grammar::CompiledGrammar
+impl purecard::grammar::compiled::CompiledGrammar
+pub fn purecard::grammar::compiled::CompiledGrammar::compile(purecard::vocab::Vocab) -> Self
+pub fn purecard::grammar::compiled::CompiledGrammar::from_spec(&str, purecard::vocab::Vocab) -> Self
+pub fn purecard::grammar::compiled::CompiledGrammar::vocab(&self) -> &purecard::vocab::Vocab
+impl core::fmt::Debug for purecard::grammar::compiled::CompiledGrammar
+pub fn purecard::grammar::compiled::CompiledGrammar::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for purecard::grammar::compiled::CompiledGrammar
+impl core::marker::Send for purecard::grammar::compiled::CompiledGrammar
+impl !core::marker::Sync for purecard::grammar::compiled::CompiledGrammar
+impl core::marker::Unpin for purecard::grammar::compiled::CompiledGrammar
+impl core::marker::UnsafeUnpin for purecard::grammar::compiled::CompiledGrammar
+impl !core::panic::unwind_safe::RefUnwindSafe for purecard::grammar::compiled::CompiledGrammar
+impl core::panic::unwind_safe::UnwindSafe for purecard::grammar::compiled::CompiledGrammar
+impl<T, U> core::convert::Into<U> for purecard::grammar::compiled::CompiledGrammar where U: core::convert::From<T>
+pub fn purecard::grammar::compiled::CompiledGrammar::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for purecard::grammar::compiled::CompiledGrammar where U: core::convert::Into<T>
+pub type purecard::grammar::compiled::CompiledGrammar::Error = never
+pub fn purecard::grammar::compiled::CompiledGrammar::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for purecard::grammar::compiled::CompiledGrammar where U: core::convert::TryFrom<T>
+pub type purecard::grammar::compiled::CompiledGrammar::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn purecard::grammar::compiled::CompiledGrammar::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> core::any::Any for purecard::grammar::compiled::CompiledGrammar where T: 'static + ?core::marker::Sized
+pub fn purecard::grammar::compiled::CompiledGrammar::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for purecard::grammar::compiled::CompiledGrammar where T: ?core::marker::Sized
+pub fn purecard::grammar::compiled::CompiledGrammar::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for purecard::grammar::compiled::CompiledGrammar where T: ?core::marker::Sized
+pub fn purecard::grammar::compiled::CompiledGrammar::borrow_mut(&mut self) -> &mut T
+impl<T> core::convert::From<T> for purecard::grammar::compiled::CompiledGrammar
+pub fn purecard::grammar::compiled::CompiledGrammar::from(T) -> T
+impl<T> pyo3::marker::Ungil for purecard::grammar::compiled::CompiledGrammar where T: core::marker::Send
+pub struct purecard::grammar::DeadState
+pub purecard::grammar::DeadState::stack_top: &'static str
+pub purecard::grammar::DeadState::state: &'static str
+impl core::clone::Clone for purecard::grammar::DeadState
+pub fn purecard::grammar::DeadState::clone(&self) -> purecard::grammar::DeadState
+impl core::cmp::Eq for purecard::grammar::DeadState
+impl core::cmp::PartialEq for purecard::grammar::DeadState
+pub fn purecard::grammar::DeadState::eq(&self, &purecard::grammar::DeadState) -> bool
+impl core::fmt::Debug for purecard::grammar::DeadState
+pub fn purecard::grammar::DeadState::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for purecard::grammar::DeadState
+impl core::marker::StructuralPartialEq for purecard::grammar::DeadState
+impl core::marker::Freeze for purecard::grammar::DeadState
+impl core::marker::Send for purecard::grammar::DeadState
+impl core::marker::Sync for purecard::grammar::DeadState
+impl core::marker::Unpin for purecard::grammar::DeadState
+impl core::marker::UnsafeUnpin for purecard::grammar::DeadState
+impl core::panic::unwind_safe::RefUnwindSafe for purecard::grammar::DeadState
+impl core::panic::unwind_safe::UnwindSafe for purecard::grammar::DeadState
+impl<T, U> core::convert::Into<U> for purecard::grammar::DeadState where U: core::convert::From<T>
+pub fn purecard::grammar::DeadState::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for purecard::grammar::DeadState where U: core::convert::Into<T>
+pub type purecard::grammar::DeadState::Error = never
+pub fn purecard::grammar::DeadState::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for purecard::grammar::DeadState where U: core::convert::TryFrom<T>
+pub type purecard::grammar::DeadState::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn purecard::grammar::DeadState::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for purecard::grammar::DeadState where T: core::clone::Clone
+pub type purecard::grammar::DeadState::Owned = T
+pub fn purecard::grammar::DeadState::clone_into(&self, &mut T)
+pub fn purecard::grammar::DeadState::to_owned(&self) -> T
+impl<T> core::any::Any for purecard::grammar::DeadState where T: 'static + ?core::marker::Sized
+pub fn purecard::grammar::DeadState::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for purecard::grammar::DeadState where T: ?core::marker::Sized
+pub fn purecard::grammar::DeadState::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for purecard::grammar::DeadState where T: ?core::marker::Sized
+pub fn purecard::grammar::DeadState::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for purecard::grammar::DeadState where T: core::clone::Clone
+pub unsafe fn purecard::grammar::DeadState::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for purecard::grammar::DeadState
+pub fn purecard::grammar::DeadState::from(T) -> T
+impl<T> pyo3::marker::Ungil for purecard::grammar::DeadState where T: core::marker::Send
+pub mod purecard::mask
+pub struct purecard::mask::BitMask
+impl purecard::mask::BitMask
+pub fn purecard::mask::BitMask::clear(&mut self, u32)
+pub fn purecard::mask::BitMask::clear_all(&mut self)
+pub fn purecard::mask::BitMask::copy_from(&mut self, &purecard::mask::BitMask)
+pub fn purecard::mask::BitMask::intersect(&mut self, &purecard::mask::BitMask)
+pub fn purecard::mask::BitMask::is_empty(&self) -> bool
+pub fn purecard::mask::BitMask::iter_ones(&self) -> impl core::iter::traits::iterator::Iterator<Item = u32> + '_
+pub fn purecard::mask::BitMask::len(&self) -> usize
+pub fn purecard::mask::BitMask::pack_le_bytes_into(&self, &mut alloc::vec::Vec<u8>)
+pub fn purecard::mask::BitMask::set(&mut self, u32)
+pub fn purecard::mask::BitMask::test(&self, u32) -> bool
+pub fn purecard::mask::BitMask::with_len(usize) -> Self
+impl core::clone::Clone for purecard::mask::BitMask
+pub fn purecard::mask::BitMask::clone(&self) -> purecard::mask::BitMask
+impl core::cmp::Eq for purecard::mask::BitMask
+impl core::cmp::PartialEq for purecard::mask::BitMask
+pub fn purecard::mask::BitMask::eq(&self, &purecard::mask::BitMask) -> bool
+impl core::fmt::Debug for purecard::mask::BitMask
+pub fn purecard::mask::BitMask::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for purecard::mask::BitMask
+impl core::marker::Freeze for purecard::mask::BitMask
+impl core::marker::Send for purecard::mask::BitMask
+impl core::marker::Sync for purecard::mask::BitMask
+impl core::marker::Unpin for purecard::mask::BitMask
+impl core::marker::UnsafeUnpin for purecard::mask::BitMask
+impl core::panic::unwind_safe::RefUnwindSafe for purecard::mask::BitMask
+impl core::panic::unwind_safe::UnwindSafe for purecard::mask::BitMask
+impl<T, U> core::convert::Into<U> for purecard::mask::BitMask where U: core::convert::From<T>
+pub fn purecard::mask::BitMask::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for purecard::mask::BitMask where U: core::convert::Into<T>
+pub type purecard::mask::BitMask::Error = never
+pub fn purecard::mask::BitMask::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for purecard::mask::BitMask where U: core::convert::TryFrom<T>
+pub type purecard::mask::BitMask::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn purecard::mask::BitMask::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for purecard::mask::BitMask where T: core::clone::Clone
+pub type purecard::mask::BitMask::Owned = T
+pub fn purecard::mask::BitMask::clone_into(&self, &mut T)
+pub fn purecard::mask::BitMask::to_owned(&self) -> T
+impl<T> core::any::Any for purecard::mask::BitMask where T: 'static + ?core::marker::Sized
+pub fn purecard::mask::BitMask::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for purecard::mask::BitMask where T: ?core::marker::Sized
+pub fn purecard::mask::BitMask::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for purecard::mask::BitMask where T: ?core::marker::Sized
+pub fn purecard::mask::BitMask::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for purecard::mask::BitMask where T: core::clone::Clone
+pub unsafe fn purecard::mask::BitMask::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for purecard::mask::BitMask
+pub fn purecard::mask::BitMask::from(T) -> T
+impl<T> pyo3::marker::Ungil for purecard::mask::BitMask where T: core::marker::Send
+pub mod purecard::recognizer
+pub trait purecard::recognizer::ByteRecognizer
+pub fn purecard::recognizer::ByteRecognizer::accept_byte(&mut self, u8) -> core::result::Result<(), purecard::error::DecodeError>
+pub fn purecard::recognizer::ByteRecognizer::is_complete(&self) -> bool
+pub fn purecard::recognizer::ByteRecognizer::reset(&mut self)
+impl purecard::recognizer::ByteRecognizer for purecard::session::DecoderSession<'_>
+pub fn purecard::session::DecoderSession<'_>::accept_byte(&mut self, u8) -> core::result::Result<(), purecard::error::DecodeError>
+pub fn purecard::session::DecoderSession<'_>::is_complete(&self) -> bool
+pub fn purecard::session::DecoderSession<'_>::reset(&mut self)
+pub mod purecard::schema
+pub enum purecard::schema::SchemaError
+pub purecard::schema::SchemaError::Json(serde_json::error::Error)
+impl core::convert::From<purecard::SchemaError> for pyo3::err::PyErr
+pub fn pyo3::err::PyErr::from(purecard::SchemaError) -> Self
+impl core::convert::From<serde_json::error::Error> for purecard::SchemaError
+pub fn purecard::SchemaError::from(serde_json::error::Error) -> Self
+impl core::error::Error for purecard::SchemaError
+pub fn purecard::SchemaError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
+impl core::fmt::Debug for purecard::SchemaError
+pub fn purecard::SchemaError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for purecard::SchemaError
+pub fn purecard::SchemaError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for purecard::SchemaError
+impl core::marker::Send for purecard::SchemaError
+impl core::marker::Sync for purecard::SchemaError
+impl core::marker::Unpin for purecard::SchemaError
+impl core::marker::UnsafeUnpin for purecard::SchemaError
+impl !core::panic::unwind_safe::RefUnwindSafe for purecard::SchemaError
+impl !core::panic::unwind_safe::UnwindSafe for purecard::SchemaError
+impl<T, U> core::convert::Into<U> for purecard::SchemaError where U: core::convert::From<T>
+pub fn purecard::SchemaError::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for purecard::SchemaError where U: core::convert::Into<T>
+pub type purecard::SchemaError::Error = never
+pub fn purecard::SchemaError::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for purecard::SchemaError where U: core::convert::TryFrom<T>
+pub type purecard::SchemaError::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn purecard::SchemaError::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::string::ToString for purecard::SchemaError where T: core::fmt::Display + ?core::marker::Sized
+pub fn purecard::SchemaError::to_string(&self) -> alloc::string::String
+impl<T> core::any::Any for purecard::SchemaError where T: 'static + ?core::marker::Sized
+pub fn purecard::SchemaError::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for purecard::SchemaError where T: ?core::marker::Sized
+pub fn purecard::SchemaError::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for purecard::SchemaError where T: ?core::marker::Sized
+pub fn purecard::SchemaError::borrow_mut(&mut self) -> &mut T
+impl<T> core::convert::From<T> for purecard::SchemaError
+pub fn purecard::SchemaError::from(T) -> T
+impl<T> pyo3::marker::Ungil for purecard::SchemaError where T: core::marker::Send
+pub struct purecard::schema::Schema
+impl purecard::Schema
+pub fn purecard::Schema::db_id(&self) -> &str
+pub fn purecard::Schema::from_json(&str) -> core::result::Result<Self, purecard::SchemaError>
+impl core::clone::Clone for purecard::Schema
+pub fn purecard::Schema::clone(&self) -> purecard::Schema
+impl core::fmt::Debug for purecard::Schema
+pub fn purecard::Schema::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for purecard::Schema
+impl core::marker::Send for purecard::Schema
+impl core::marker::Sync for purecard::Schema
+impl core::marker::Unpin for purecard::Schema
+impl core::marker::UnsafeUnpin for purecard::Schema
+impl core::panic::unwind_safe::RefUnwindSafe for purecard::Schema
+impl core::panic::unwind_safe::UnwindSafe for purecard::Schema
+impl<T, U> core::convert::Into<U> for purecard::Schema where U: core::convert::From<T>
+pub fn purecard::Schema::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for purecard::Schema where U: core::convert::Into<T>
+pub type purecard::Schema::Error = never
+pub fn purecard::Schema::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for purecard::Schema where U: core::convert::TryFrom<T>
+pub type purecard::Schema::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn purecard::Schema::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for purecard::Schema where T: core::clone::Clone
+pub type purecard::Schema::Owned = T
+pub fn purecard::Schema::clone_into(&self, &mut T)
+pub fn purecard::Schema::to_owned(&self) -> T
+impl<T> core::any::Any for purecard::Schema where T: 'static + ?core::marker::Sized
+pub fn purecard::Schema::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for purecard::Schema where T: ?core::marker::Sized
+pub fn purecard::Schema::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for purecard::Schema where T: ?core::marker::Sized
+pub fn purecard::Schema::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for purecard::Schema where T: core::clone::Clone
+pub unsafe fn purecard::Schema::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for purecard::Schema
+pub fn purecard::Schema::from(T) -> T
+impl<T> pyo3::marker::Ungil for purecard::Schema where T: core::marker::Send
+pub mod purecard::selfcheck
+pub enum purecard::selfcheck::SelfCheckError
+pub purecard::selfcheck::SelfCheckError::DeadEnd
+pub purecard::selfcheck::SelfCheckError::DeadEnd::id: u32
+pub purecard::selfcheck::SelfCheckError::DeadEnd::pos: usize
+pub purecard::selfcheck::SelfCheckError::DeadEnd::query_index: usize
+pub purecard::selfcheck::SelfCheckError::Incomplete
+pub purecard::selfcheck::SelfCheckError::Incomplete::consumed: usize
+pub purecard::selfcheck::SelfCheckError::Incomplete::query_index: usize
+pub purecard::selfcheck::SelfCheckError::Unsegmentable
+pub purecard::selfcheck::SelfCheckError::Unsegmentable::pos: usize
+pub purecard::selfcheck::SelfCheckError::Unsegmentable::query_index: usize
+impl core::clone::Clone for purecard::selfcheck::SelfCheckError
+pub fn purecard::selfcheck::SelfCheckError::clone(&self) -> purecard::selfcheck::SelfCheckError
+impl core::cmp::Eq for purecard::selfcheck::SelfCheckError
+impl core::cmp::PartialEq for purecard::selfcheck::SelfCheckError
+pub fn purecard::selfcheck::SelfCheckError::eq(&self, &purecard::selfcheck::SelfCheckError) -> bool
+impl core::error::Error for purecard::selfcheck::SelfCheckError
+impl core::fmt::Debug for purecard::selfcheck::SelfCheckError
+pub fn purecard::selfcheck::SelfCheckError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for purecard::selfcheck::SelfCheckError
+pub fn purecard::selfcheck::SelfCheckError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for purecard::selfcheck::SelfCheckError
+impl core::marker::StructuralPartialEq for purecard::selfcheck::SelfCheckError
+impl core::marker::Freeze for purecard::selfcheck::SelfCheckError
+impl core::marker::Send for purecard::selfcheck::SelfCheckError
+impl core::marker::Sync for purecard::selfcheck::SelfCheckError
+impl core::marker::Unpin for purecard::selfcheck::SelfCheckError
+impl core::marker::UnsafeUnpin for purecard::selfcheck::SelfCheckError
+impl core::panic::unwind_safe::RefUnwindSafe for purecard::selfcheck::SelfCheckError
+impl core::panic::unwind_safe::UnwindSafe for purecard::selfcheck::SelfCheckError
+impl<T, U> core::convert::Into<U> for purecard::selfcheck::SelfCheckError where U: core::convert::From<T>
+pub fn purecard::selfcheck::SelfCheckError::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for purecard::selfcheck::SelfCheckError where U: core::convert::Into<T>
+pub type purecard::selfcheck::SelfCheckError::Error = never
+pub fn purecard::selfcheck::SelfCheckError::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for purecard::selfcheck::SelfCheckError where U: core::convert::TryFrom<T>
+pub type purecard::selfcheck::SelfCheckError::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn purecard::selfcheck::SelfCheckError::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for purecard::selfcheck::SelfCheckError where T: core::clone::Clone
+pub type purecard::selfcheck::SelfCheckError::Owned = T
+pub fn purecard::selfcheck::SelfCheckError::clone_into(&self, &mut T)
+pub fn purecard::selfcheck::SelfCheckError::to_owned(&self) -> T
+impl<T> alloc::string::ToString for purecard::selfcheck::SelfCheckError where T: core::fmt::Display + ?core::marker::Sized
+pub fn purecard::selfcheck::SelfCheckError::to_string(&self) -> alloc::string::String
+impl<T> core::any::Any for purecard::selfcheck::SelfCheckError where T: 'static + ?core::marker::Sized
+pub fn purecard::selfcheck::SelfCheckError::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for purecard::selfcheck::SelfCheckError where T: ?core::marker::Sized
+pub fn purecard::selfcheck::SelfCheckError::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for purecard::selfcheck::SelfCheckError where T: ?core::marker::Sized
+pub fn purecard::selfcheck::SelfCheckError::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for purecard::selfcheck::SelfCheckError where T: core::clone::Clone
+pub unsafe fn purecard::selfcheck::SelfCheckError::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for purecard::selfcheck::SelfCheckError
+pub fn purecard::selfcheck::SelfCheckError::from(T) -> T
+impl<T> pyo3::marker::Ungil for purecard::selfcheck::SelfCheckError where T: core::marker::Send
+pub const purecard::selfcheck::SMOKE: &[&[u8]]
+pub fn purecard::selfcheck::self_check(&purecard::grammar::compiled::CompiledGrammar, &[&[u8]]) -> core::result::Result<(), purecard::selfcheck::SelfCheckError>
+pub fn purecard::selfcheck::self_check_smoke(&purecard::grammar::compiled::CompiledGrammar) -> core::result::Result<(), purecard::selfcheck::SelfCheckError>
+pub mod purecard::session
+pub struct purecard::session::DecoderSession<'g>
+impl<'g> purecard::session::DecoderSession<'g>
+pub fn purecard::session::DecoderSession<'g>::accept_token(&mut self, u32) -> core::result::Result<(), purecard::error::DecodeError>
+pub fn purecard::session::DecoderSession<'g>::allowed_mask(&mut self) -> &purecard::mask::BitMask
+pub fn purecard::session::DecoderSession<'g>::is_complete(&self) -> bool
+pub fn purecard::session::DecoderSession<'g>::new(&'g purecard::grammar::compiled::CompiledGrammar) -> Self
+pub fn purecard::session::DecoderSession<'g>::offset(&self) -> usize
+pub fn purecard::session::DecoderSession<'g>::pda(&self) -> &purecard::grammar::pda::Pda
+pub fn purecard::session::DecoderSession<'g>::reset(&mut self)
+pub fn purecard::session::DecoderSession<'g>::with_schema(&'g purecard::grammar::compiled::CompiledGrammar, purecard::Schema) -> Self
+impl purecard::recognizer::ByteRecognizer for purecard::session::DecoderSession<'_>
+pub fn purecard::session::DecoderSession<'_>::accept_byte(&mut self, u8) -> core::result::Result<(), purecard::error::DecodeError>
+pub fn purecard::session::DecoderSession<'_>::is_complete(&self) -> bool
+pub fn purecard::session::DecoderSession<'_>::reset(&mut self)
+impl<'g> core::clone::Clone for purecard::session::DecoderSession<'g>
+pub fn purecard::session::DecoderSession<'g>::clone(&self) -> purecard::session::DecoderSession<'g>
+impl<'g> core::fmt::Debug for purecard::session::DecoderSession<'g>
+pub fn purecard::session::DecoderSession<'g>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl<'g> core::marker::Freeze for purecard::session::DecoderSession<'g>
+impl<'g> !core::marker::Send for purecard::session::DecoderSession<'g>
+impl<'g> !core::marker::Sync for purecard::session::DecoderSession<'g>
+impl<'g> core::marker::Unpin for purecard::session::DecoderSession<'g>
+impl<'g> core::marker::UnsafeUnpin for purecard::session::DecoderSession<'g>
+impl<'g> !core::panic::unwind_safe::RefUnwindSafe for purecard::session::DecoderSession<'g>
+impl<'g> !core::panic::unwind_safe::UnwindSafe for purecard::session::DecoderSession<'g>
+impl<T, U> core::convert::Into<U> for purecard::session::DecoderSession<'g> where U: core::convert::From<T>
+pub fn purecard::session::DecoderSession<'g>::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for purecard::session::DecoderSession<'g> where U: core::convert::Into<T>
+pub type purecard::session::DecoderSession<'g>::Error = never
+pub fn purecard::session::DecoderSession<'g>::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for purecard::session::DecoderSession<'g> where U: core::convert::TryFrom<T>
+pub type purecard::session::DecoderSession<'g>::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn purecard::session::DecoderSession<'g>::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for purecard::session::DecoderSession<'g> where T: core::clone::Clone
+pub type purecard::session::DecoderSession<'g>::Owned = T
+pub fn purecard::session::DecoderSession<'g>::clone_into(&self, &mut T)
+pub fn purecard::session::DecoderSession<'g>::to_owned(&self) -> T
+impl<T> core::any::Any for purecard::session::DecoderSession<'g> where T: 'static + ?core::marker::Sized
+pub fn purecard::session::DecoderSession<'g>::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for purecard::session::DecoderSession<'g> where T: ?core::marker::Sized
+pub fn purecard::session::DecoderSession<'g>::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for purecard::session::DecoderSession<'g> where T: ?core::marker::Sized
+pub fn purecard::session::DecoderSession<'g>::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for purecard::session::DecoderSession<'g> where T: core::clone::Clone
+pub unsafe fn purecard::session::DecoderSession<'g>::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for purecard::session::DecoderSession<'g>
+pub fn purecard::session::DecoderSession<'g>::from(T) -> T
+pub mod purecard::vocab
+pub struct purecard::vocab::Vocab
+impl purecard::vocab::Vocab
+pub fn purecard::vocab::Vocab::bytes(&self, u32) -> core::option::Option<&[u8]>
+pub fn purecard::vocab::Vocab::eos(&self) -> u32
+pub fn purecard::vocab::Vocab::from_byte_tokens(alloc::vec::Vec<alloc::vec::Vec<u8>>, u32) -> Self
+pub fn purecard::vocab::Vocab::is_empty(&self) -> bool
+pub fn purecard::vocab::Vocab::len(&self) -> usize
+impl core::clone::Clone for purecard::vocab::Vocab
+pub fn purecard::vocab::Vocab::clone(&self) -> purecard::vocab::Vocab
+impl core::fmt::Debug for purecard::vocab::Vocab
+pub fn purecard::vocab::Vocab::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for purecard::vocab::Vocab
+impl core::marker::Send for purecard::vocab::Vocab
+impl core::marker::Sync for purecard::vocab::Vocab
+impl core::marker::Unpin for purecard::vocab::Vocab
+impl core::marker::UnsafeUnpin for purecard::vocab::Vocab
+impl core::panic::unwind_safe::RefUnwindSafe for purecard::vocab::Vocab
+impl core::panic::unwind_safe::UnwindSafe for purecard::vocab::Vocab
+impl<T, U> core::convert::Into<U> for purecard::vocab::Vocab where U: core::convert::From<T>
+pub fn purecard::vocab::Vocab::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for purecard::vocab::Vocab where U: core::convert::Into<T>
+pub type purecard::vocab::Vocab::Error = never
+pub fn purecard::vocab::Vocab::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for purecard::vocab::Vocab where U: core::convert::TryFrom<T>
+pub type purecard::vocab::Vocab::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn purecard::vocab::Vocab::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for purecard::vocab::Vocab where T: core::clone::Clone
+pub type purecard::vocab::Vocab::Owned = T
+pub fn purecard::vocab::Vocab::clone_into(&self, &mut T)
+pub fn purecard::vocab::Vocab::to_owned(&self) -> T
+impl<T> core::any::Any for purecard::vocab::Vocab where T: 'static + ?core::marker::Sized
+pub fn purecard::vocab::Vocab::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for purecard::vocab::Vocab where T: ?core::marker::Sized
+pub fn purecard::vocab::Vocab::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for purecard::vocab::Vocab where T: ?core::marker::Sized
+pub fn purecard::vocab::Vocab::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for purecard::vocab::Vocab where T: core::clone::Clone
+pub unsafe fn purecard::vocab::Vocab::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for purecard::vocab::Vocab
+pub fn purecard::vocab::Vocab::from(T) -> T
+impl<T> pyo3::marker::Ungil for purecard::vocab::Vocab where T: core::marker::Send
+pub enum purecard::DecodeError
+pub purecard::DecodeError::DeadState
+pub purecard::DecodeError::DeadState::byte: u8
+pub purecard::DecodeError::DeadState::offset: usize
+pub purecard::DecodeError::DeadState::stack_top: &'static str
+pub purecard::DecodeError::DeadState::state: &'static str
+pub purecard::DecodeError::InadmissibleToken
+pub purecard::DecodeError::InadmissibleToken::id: u32
+pub purecard::DecodeError::UnexpectedEos
+pub purecard::DecodeError::UnknownToken
+pub purecard::DecodeError::UnknownToken::id: u32
+impl core::convert::From<purecard::error::DecodeError> for pyo3::err::PyErr
+pub fn pyo3::err::PyErr::from(purecard::error::DecodeError) -> Self
+impl core::error::Error for purecard::error::DecodeError
+impl core::fmt::Debug for purecard::error::DecodeError
+pub fn purecard::error::DecodeError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for purecard::error::DecodeError
+pub fn purecard::error::DecodeError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for purecard::error::DecodeError
+impl core::marker::Send for purecard::error::DecodeError
+impl core::marker::Sync for purecard::error::DecodeError
+impl core::marker::Unpin for purecard::error::DecodeError
+impl core::marker::UnsafeUnpin for purecard::error::DecodeError
+impl core::panic::unwind_safe::RefUnwindSafe for purecard::error::DecodeError
+impl core::panic::unwind_safe::UnwindSafe for purecard::error::DecodeError
+impl<T, U> core::convert::Into<U> for purecard::error::DecodeError where U: core::convert::From<T>
+pub fn purecard::error::DecodeError::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for purecard::error::DecodeError where U: core::convert::Into<T>
+pub type purecard::error::DecodeError::Error = never
+pub fn purecard::error::DecodeError::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for purecard::error::DecodeError where U: core::convert::TryFrom<T>
+pub type purecard::error::DecodeError::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn purecard::error::DecodeError::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::string::ToString for purecard::error::DecodeError where T: core::fmt::Display + ?core::marker::Sized
+pub fn purecard::error::DecodeError::to_string(&self) -> alloc::string::String
+impl<T> core::any::Any for purecard::error::DecodeError where T: 'static + ?core::marker::Sized
+pub fn purecard::error::DecodeError::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for purecard::error::DecodeError where T: ?core::marker::Sized
+pub fn purecard::error::DecodeError::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for purecard::error::DecodeError where T: ?core::marker::Sized
+pub fn purecard::error::DecodeError::borrow_mut(&mut self) -> &mut T
+impl<T> core::convert::From<T> for purecard::error::DecodeError
+pub fn purecard::error::DecodeError::from(T) -> T
+impl<T> pyo3::marker::Ungil for purecard::error::DecodeError where T: core::marker::Send
+pub enum purecard::Envelope
+pub purecard::Envelope::ClassNav
+pub purecard::Envelope::RelationApi
+pub purecard::Envelope::Relational
+impl purecard::grammar::Envelope
+pub fn purecard::grammar::Envelope::classify(&str) -> core::option::Option<purecard::grammar::Envelope>
+impl core::clone::Clone for purecard::grammar::Envelope
+pub fn purecard::grammar::Envelope::clone(&self) -> purecard::grammar::Envelope
+impl core::cmp::Eq for purecard::grammar::Envelope
+impl core::cmp::PartialEq for purecard::grammar::Envelope
+pub fn purecard::grammar::Envelope::eq(&self, &purecard::grammar::Envelope) -> bool
+impl core::fmt::Debug for purecard::grammar::Envelope
+pub fn purecard::grammar::Envelope::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for purecard::grammar::Envelope
+impl core::marker::StructuralPartialEq for purecard::grammar::Envelope
+impl core::marker::Freeze for purecard::grammar::Envelope
+impl core::marker::Send for purecard::grammar::Envelope
+impl core::marker::Sync for purecard::grammar::Envelope
+impl core::marker::Unpin for purecard::grammar::Envelope
+impl core::marker::UnsafeUnpin for purecard::grammar::Envelope
+impl core::panic::unwind_safe::RefUnwindSafe for purecard::grammar::Envelope
+impl core::panic::unwind_safe::UnwindSafe for purecard::grammar::Envelope
+impl<T, U> core::convert::Into<U> for purecard::grammar::Envelope where U: core::convert::From<T>
+pub fn purecard::grammar::Envelope::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for purecard::grammar::Envelope where U: core::convert::Into<T>
+pub type purecard::grammar::Envelope::Error = never
+pub fn purecard::grammar::Envelope::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for purecard::grammar::Envelope where U: core::convert::TryFrom<T>
+pub type purecard::grammar::Envelope::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn purecard::grammar::Envelope::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for purecard::grammar::Envelope where T: core::clone::Clone
+pub type purecard::grammar::Envelope::Owned = T
+pub fn purecard::grammar::Envelope::clone_into(&self, &mut T)
+pub fn purecard::grammar::Envelope::to_owned(&self) -> T
+impl<T> core::any::Any for purecard::grammar::Envelope where T: 'static + ?core::marker::Sized
+pub fn purecard::grammar::Envelope::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for purecard::grammar::Envelope where T: ?core::marker::Sized
+pub fn purecard::grammar::Envelope::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for purecard::grammar::Envelope where T: ?core::marker::Sized
+pub fn purecard::grammar::Envelope::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for purecard::grammar::Envelope where T: core::clone::Clone
+pub unsafe fn purecard::grammar::Envelope::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for purecard::grammar::Envelope
+pub fn purecard::grammar::Envelope::from(T) -> T
+impl<T> pyo3::marker::Ungil for purecard::grammar::Envelope where T: core::marker::Send
+pub enum purecard::GuaranteeLevel
+pub purecard::GuaranteeLevel::Faithful
+pub purecard::GuaranteeLevel::SchemaConsistent
+pub purecard::GuaranteeLevel::Syntactic
+impl purecard::GuaranteeLevel
+pub const purecard::GuaranteeLevel::MAX_ENFORCEABLE: purecard::GuaranteeLevel
+pub fn purecard::GuaranteeLevel::guarantees(self, purecard::GuaranteeLevel) -> bool
+pub fn purecard::GuaranteeLevel::is_enforceable(self) -> bool
+impl core::clone::Clone for purecard::GuaranteeLevel
+pub fn purecard::GuaranteeLevel::clone(&self) -> purecard::GuaranteeLevel
+impl core::cmp::Eq for purecard::GuaranteeLevel
+impl core::cmp::Ord for purecard::GuaranteeLevel
+pub fn purecard::GuaranteeLevel::cmp(&self, &purecard::GuaranteeLevel) -> core::cmp::Ordering
+impl core::cmp::PartialEq for purecard::GuaranteeLevel
+pub fn purecard::GuaranteeLevel::eq(&self, &purecard::GuaranteeLevel) -> bool
+impl core::cmp::PartialOrd for purecard::GuaranteeLevel
+pub fn purecard::GuaranteeLevel::partial_cmp(&self, &purecard::GuaranteeLevel) -> core::option::Option<core::cmp::Ordering>
+impl core::fmt::Debug for purecard::GuaranteeLevel
+pub fn purecard::GuaranteeLevel::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for purecard::GuaranteeLevel
+pub fn purecard::GuaranteeLevel::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::Copy for purecard::GuaranteeLevel
+impl core::marker::StructuralPartialEq for purecard::GuaranteeLevel
+impl core::marker::Freeze for purecard::GuaranteeLevel
+impl core::marker::Send for purecard::GuaranteeLevel
+impl core::marker::Sync for purecard::GuaranteeLevel
+impl core::marker::Unpin for purecard::GuaranteeLevel
+impl core::marker::UnsafeUnpin for purecard::GuaranteeLevel
+impl core::panic::unwind_safe::RefUnwindSafe for purecard::GuaranteeLevel
+impl core::panic::unwind_safe::UnwindSafe for purecard::GuaranteeLevel
+impl<T, U> core::convert::Into<U> for purecard::GuaranteeLevel where U: core::convert::From<T>
+pub fn purecard::GuaranteeLevel::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for purecard::GuaranteeLevel where U: core::convert::Into<T>
+pub type purecard::GuaranteeLevel::Error = never
+pub fn purecard::GuaranteeLevel::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for purecard::GuaranteeLevel where U: core::convert::TryFrom<T>
+pub type purecard::GuaranteeLevel::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn purecard::GuaranteeLevel::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for purecard::GuaranteeLevel where T: core::clone::Clone
+pub type purecard::GuaranteeLevel::Owned = T
+pub fn purecard::GuaranteeLevel::clone_into(&self, &mut T)
+pub fn purecard::GuaranteeLevel::to_owned(&self) -> T
+impl<T> core::any::Any for purecard::GuaranteeLevel where T: 'static + ?core::marker::Sized
+pub fn purecard::GuaranteeLevel::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for purecard::GuaranteeLevel where T: ?core::marker::Sized
+pub fn purecard::GuaranteeLevel::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for purecard::GuaranteeLevel where T: ?core::marker::Sized
+pub fn purecard::GuaranteeLevel::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for purecard::GuaranteeLevel where T: core::clone::Clone
+pub unsafe fn purecard::GuaranteeLevel::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for purecard::GuaranteeLevel
+pub fn purecard::GuaranteeLevel::from(T) -> T
+impl<T> pyo3::marker::Ungil for purecard::GuaranteeLevel where T: core::marker::Send
+pub enum purecard::SchemaError
+pub purecard::SchemaError::Json(serde_json::error::Error)
+impl core::convert::From<purecard::SchemaError> for pyo3::err::PyErr
+pub fn pyo3::err::PyErr::from(purecard::SchemaError) -> Self
+impl core::convert::From<serde_json::error::Error> for purecard::SchemaError
+pub fn purecard::SchemaError::from(serde_json::error::Error) -> Self
+impl core::error::Error for purecard::SchemaError
+pub fn purecard::SchemaError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
+impl core::fmt::Debug for purecard::SchemaError
+pub fn purecard::SchemaError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for purecard::SchemaError
+pub fn purecard::SchemaError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for purecard::SchemaError
+impl core::marker::Send for purecard::SchemaError
+impl core::marker::Sync for purecard::SchemaError
+impl core::marker::Unpin for purecard::SchemaError
+impl core::marker::UnsafeUnpin for purecard::SchemaError
+impl !core::panic::unwind_safe::RefUnwindSafe for purecard::SchemaError
+impl !core::panic::unwind_safe::UnwindSafe for purecard::SchemaError
+impl<T, U> core::convert::Into<U> for purecard::SchemaError where U: core::convert::From<T>
+pub fn purecard::SchemaError::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for purecard::SchemaError where U: core::convert::Into<T>
+pub type purecard::SchemaError::Error = never
+pub fn purecard::SchemaError::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for purecard::SchemaError where U: core::convert::TryFrom<T>
+pub type purecard::SchemaError::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn purecard::SchemaError::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::string::ToString for purecard::SchemaError where T: core::fmt::Display + ?core::marker::Sized
+pub fn purecard::SchemaError::to_string(&self) -> alloc::string::String
+impl<T> core::any::Any for purecard::SchemaError where T: 'static + ?core::marker::Sized
+pub fn purecard::SchemaError::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for purecard::SchemaError where T: ?core::marker::Sized
+pub fn purecard::SchemaError::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for purecard::SchemaError where T: ?core::marker::Sized
+pub fn purecard::SchemaError::borrow_mut(&mut self) -> &mut T
+impl<T> core::convert::From<T> for purecard::SchemaError
+pub fn purecard::SchemaError::from(T) -> T
+impl<T> pyo3::marker::Ungil for purecard::SchemaError where T: core::marker::Send
+pub enum purecard::SelfCheckError
+pub purecard::SelfCheckError::DeadEnd
+pub purecard::SelfCheckError::DeadEnd::id: u32
+pub purecard::SelfCheckError::DeadEnd::pos: usize
+pub purecard::SelfCheckError::DeadEnd::query_index: usize
+pub purecard::SelfCheckError::Incomplete
+pub purecard::SelfCheckError::Incomplete::consumed: usize
+pub purecard::SelfCheckError::Incomplete::query_index: usize
+pub purecard::SelfCheckError::Unsegmentable
+pub purecard::SelfCheckError::Unsegmentable::pos: usize
+pub purecard::SelfCheckError::Unsegmentable::query_index: usize
+impl core::clone::Clone for purecard::selfcheck::SelfCheckError
+pub fn purecard::selfcheck::SelfCheckError::clone(&self) -> purecard::selfcheck::SelfCheckError
+impl core::cmp::Eq for purecard::selfcheck::SelfCheckError
+impl core::cmp::PartialEq for purecard::selfcheck::SelfCheckError
+pub fn purecard::selfcheck::SelfCheckError::eq(&self, &purecard::selfcheck::SelfCheckError) -> bool
+impl core::error::Error for purecard::selfcheck::SelfCheckError
+impl core::fmt::Debug for purecard::selfcheck::SelfCheckError
+pub fn purecard::selfcheck::SelfCheckError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for purecard::selfcheck::SelfCheckError
+pub fn purecard::selfcheck::SelfCheckError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for purecard::selfcheck::SelfCheckError
+impl core::marker::StructuralPartialEq for purecard::selfcheck::SelfCheckError
+impl core::marker::Freeze for purecard::selfcheck::SelfCheckError
+impl core::marker::Send for purecard::selfcheck::SelfCheckError
+impl core::marker::Sync for purecard::selfcheck::SelfCheckError
+impl core::marker::Unpin for purecard::selfcheck::SelfCheckError
+impl core::marker::UnsafeUnpin for purecard::selfcheck::SelfCheckError
+impl core::panic::unwind_safe::RefUnwindSafe for purecard::selfcheck::SelfCheckError
+impl core::panic::unwind_safe::UnwindSafe for purecard::selfcheck::SelfCheckError
+impl<T, U> core::convert::Into<U> for purecard::selfcheck::SelfCheckError where U: core::convert::From<T>
+pub fn purecard::selfcheck::SelfCheckError::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for purecard::selfcheck::SelfCheckError where U: core::convert::Into<T>
+pub type purecard::selfcheck::SelfCheckError::Error = never
+pub fn purecard::selfcheck::SelfCheckError::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for purecard::selfcheck::SelfCheckError where U: core::convert::TryFrom<T>
+pub type purecard::selfcheck::SelfCheckError::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn purecard::selfcheck::SelfCheckError::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for purecard::selfcheck::SelfCheckError where T: core::clone::Clone
+pub type purecard::selfcheck::SelfCheckError::Owned = T
+pub fn purecard::selfcheck::SelfCheckError::clone_into(&self, &mut T)
+pub fn purecard::selfcheck::SelfCheckError::to_owned(&self) -> T
+impl<T> alloc::string::ToString for purecard::selfcheck::SelfCheckError where T: core::fmt::Display + ?core::marker::Sized
+pub fn purecard::selfcheck::SelfCheckError::to_string(&self) -> alloc::string::String
+impl<T> core::any::Any for purecard::selfcheck::SelfCheckError where T: 'static + ?core::marker::Sized
+pub fn purecard::selfcheck::SelfCheckError::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for purecard::selfcheck::SelfCheckError where T: ?core::marker::Sized
+pub fn purecard::selfcheck::SelfCheckError::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for purecard::selfcheck::SelfCheckError where T: ?core::marker::Sized
+pub fn purecard::selfcheck::SelfCheckError::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for purecard::selfcheck::SelfCheckError where T: core::clone::Clone
+pub unsafe fn purecard::selfcheck::SelfCheckError::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for purecard::selfcheck::SelfCheckError
+pub fn purecard::selfcheck::SelfCheckError::from(T) -> T
+impl<T> pyo3::marker::Ungil for purecard::selfcheck::SelfCheckError where T: core::marker::Send
+pub struct purecard::BitMask
+impl purecard::mask::BitMask
+pub fn purecard::mask::BitMask::clear(&mut self, u32)
+pub fn purecard::mask::BitMask::clear_all(&mut self)
+pub fn purecard::mask::BitMask::copy_from(&mut self, &purecard::mask::BitMask)
+pub fn purecard::mask::BitMask::intersect(&mut self, &purecard::mask::BitMask)
+pub fn purecard::mask::BitMask::is_empty(&self) -> bool
+pub fn purecard::mask::BitMask::iter_ones(&self) -> impl core::iter::traits::iterator::Iterator<Item = u32> + '_
+pub fn purecard::mask::BitMask::len(&self) -> usize
+pub fn purecard::mask::BitMask::pack_le_bytes_into(&self, &mut alloc::vec::Vec<u8>)
+pub fn purecard::mask::BitMask::set(&mut self, u32)
+pub fn purecard::mask::BitMask::test(&self, u32) -> bool
+pub fn purecard::mask::BitMask::with_len(usize) -> Self
+impl core::clone::Clone for purecard::mask::BitMask
+pub fn purecard::mask::BitMask::clone(&self) -> purecard::mask::BitMask
+impl core::cmp::Eq for purecard::mask::BitMask
+impl core::cmp::PartialEq for purecard::mask::BitMask
+pub fn purecard::mask::BitMask::eq(&self, &purecard::mask::BitMask) -> bool
+impl core::fmt::Debug for purecard::mask::BitMask
+pub fn purecard::mask::BitMask::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for purecard::mask::BitMask
+impl core::marker::Freeze for purecard::mask::BitMask
+impl core::marker::Send for purecard::mask::BitMask
+impl core::marker::Sync for purecard::mask::BitMask
+impl core::marker::Unpin for purecard::mask::BitMask
+impl core::marker::UnsafeUnpin for purecard::mask::BitMask
+impl core::panic::unwind_safe::RefUnwindSafe for purecard::mask::BitMask
+impl core::panic::unwind_safe::UnwindSafe for purecard::mask::BitMask
+impl<T, U> core::convert::Into<U> for purecard::mask::BitMask where U: core::convert::From<T>
+pub fn purecard::mask::BitMask::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for purecard::mask::BitMask where U: core::convert::Into<T>
+pub type purecard::mask::BitMask::Error = never
+pub fn purecard::mask::BitMask::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for purecard::mask::BitMask where U: core::convert::TryFrom<T>
+pub type purecard::mask::BitMask::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn purecard::mask::BitMask::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for purecard::mask::BitMask where T: core::clone::Clone
+pub type purecard::mask::BitMask::Owned = T
+pub fn purecard::mask::BitMask::clone_into(&self, &mut T)
+pub fn purecard::mask::BitMask::to_owned(&self) -> T
+impl<T> core::any::Any for purecard::mask::BitMask where T: 'static + ?core::marker::Sized
+pub fn purecard::mask::BitMask::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for purecard::mask::BitMask where T: ?core::marker::Sized
+pub fn purecard::mask::BitMask::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for purecard::mask::BitMask where T: ?core::marker::Sized
+pub fn purecard::mask::BitMask::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for purecard::mask::BitMask where T: core::clone::Clone
+pub unsafe fn purecard::mask::BitMask::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for purecard::mask::BitMask
+pub fn purecard::mask::BitMask::from(T) -> T
+impl<T> pyo3::marker::Ungil for purecard::mask::BitMask where T: core::marker::Send
+pub struct purecard::CompiledGrammar
+impl purecard::grammar::compiled::CompiledGrammar
+pub fn purecard::grammar::compiled::CompiledGrammar::compile(purecard::vocab::Vocab) -> Self
+pub fn purecard::grammar::compiled::CompiledGrammar::from_spec(&str, purecard::vocab::Vocab) -> Self
+pub fn purecard::grammar::compiled::CompiledGrammar::vocab(&self) -> &purecard::vocab::Vocab
+impl core::fmt::Debug for purecard::grammar::compiled::CompiledGrammar
+pub fn purecard::grammar::compiled::CompiledGrammar::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for purecard::grammar::compiled::CompiledGrammar
+impl core::marker::Send for purecard::grammar::compiled::CompiledGrammar
+impl !core::marker::Sync for purecard::grammar::compiled::CompiledGrammar
+impl core::marker::Unpin for purecard::grammar::compiled::CompiledGrammar
+impl core::marker::UnsafeUnpin for purecard::grammar::compiled::CompiledGrammar
+impl !core::panic::unwind_safe::RefUnwindSafe for purecard::grammar::compiled::CompiledGrammar
+impl core::panic::unwind_safe::UnwindSafe for purecard::grammar::compiled::CompiledGrammar
+impl<T, U> core::convert::Into<U> for purecard::grammar::compiled::CompiledGrammar where U: core::convert::From<T>
+pub fn purecard::grammar::compiled::CompiledGrammar::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for purecard::grammar::compiled::CompiledGrammar where U: core::convert::Into<T>
+pub type purecard::grammar::compiled::CompiledGrammar::Error = never
+pub fn purecard::grammar::compiled::CompiledGrammar::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for purecard::grammar::compiled::CompiledGrammar where U: core::convert::TryFrom<T>
+pub type purecard::grammar::compiled::CompiledGrammar::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn purecard::grammar::compiled::CompiledGrammar::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> core::any::Any for purecard::grammar::compiled::CompiledGrammar where T: 'static + ?core::marker::Sized
+pub fn purecard::grammar::compiled::CompiledGrammar::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for purecard::grammar::compiled::CompiledGrammar where T: ?core::marker::Sized
+pub fn purecard::grammar::compiled::CompiledGrammar::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for purecard::grammar::compiled::CompiledGrammar where T: ?core::marker::Sized
+pub fn purecard::grammar::compiled::CompiledGrammar::borrow_mut(&mut self) -> &mut T
+impl<T> core::convert::From<T> for purecard::grammar::compiled::CompiledGrammar
+pub fn purecard::grammar::compiled::CompiledGrammar::from(T) -> T
+impl<T> pyo3::marker::Ungil for purecard::grammar::compiled::CompiledGrammar where T: core::marker::Send
+pub struct purecard::DecoderSession<'g>
+impl<'g> purecard::session::DecoderSession<'g>
+pub fn purecard::session::DecoderSession<'g>::accept_token(&mut self, u32) -> core::result::Result<(), purecard::error::DecodeError>
+pub fn purecard::session::DecoderSession<'g>::allowed_mask(&mut self) -> &purecard::mask::BitMask
+pub fn purecard::session::DecoderSession<'g>::is_complete(&self) -> bool
+pub fn purecard::session::DecoderSession<'g>::new(&'g purecard::grammar::compiled::CompiledGrammar) -> Self
+pub fn purecard::session::DecoderSession<'g>::offset(&self) -> usize
+pub fn purecard::session::DecoderSession<'g>::pda(&self) -> &purecard::grammar::pda::Pda
+pub fn purecard::session::DecoderSession<'g>::reset(&mut self)
+pub fn purecard::session::DecoderSession<'g>::with_schema(&'g purecard::grammar::compiled::CompiledGrammar, purecard::Schema) -> Self
+impl purecard::recognizer::ByteRecognizer for purecard::session::DecoderSession<'_>
+pub fn purecard::session::DecoderSession<'_>::accept_byte(&mut self, u8) -> core::result::Result<(), purecard::error::DecodeError>
+pub fn purecard::session::DecoderSession<'_>::is_complete(&self) -> bool
+pub fn purecard::session::DecoderSession<'_>::reset(&mut self)
+impl<'g> core::clone::Clone for purecard::session::DecoderSession<'g>
+pub fn purecard::session::DecoderSession<'g>::clone(&self) -> purecard::session::DecoderSession<'g>
+impl<'g> core::fmt::Debug for purecard::session::DecoderSession<'g>
+pub fn purecard::session::DecoderSession<'g>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl<'g> core::marker::Freeze for purecard::session::DecoderSession<'g>
+impl<'g> !core::marker::Send for purecard::session::DecoderSession<'g>
+impl<'g> !core::marker::Sync for purecard::session::DecoderSession<'g>
+impl<'g> core::marker::Unpin for purecard::session::DecoderSession<'g>
+impl<'g> core::marker::UnsafeUnpin for purecard::session::DecoderSession<'g>
+impl<'g> !core::panic::unwind_safe::RefUnwindSafe for purecard::session::DecoderSession<'g>
+impl<'g> !core::panic::unwind_safe::UnwindSafe for purecard::session::DecoderSession<'g>
+impl<T, U> core::convert::Into<U> for purecard::session::DecoderSession<'g> where U: core::convert::From<T>
+pub fn purecard::session::DecoderSession<'g>::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for purecard::session::DecoderSession<'g> where U: core::convert::Into<T>
+pub type purecard::session::DecoderSession<'g>::Error = never
+pub fn purecard::session::DecoderSession<'g>::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for purecard::session::DecoderSession<'g> where U: core::convert::TryFrom<T>
+pub type purecard::session::DecoderSession<'g>::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn purecard::session::DecoderSession<'g>::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for purecard::session::DecoderSession<'g> where T: core::clone::Clone
+pub type purecard::session::DecoderSession<'g>::Owned = T
+pub fn purecard::session::DecoderSession<'g>::clone_into(&self, &mut T)
+pub fn purecard::session::DecoderSession<'g>::to_owned(&self) -> T
+impl<T> core::any::Any for purecard::session::DecoderSession<'g> where T: 'static + ?core::marker::Sized
+pub fn purecard::session::DecoderSession<'g>::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for purecard::session::DecoderSession<'g> where T: ?core::marker::Sized
+pub fn purecard::session::DecoderSession<'g>::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for purecard::session::DecoderSession<'g> where T: ?core::marker::Sized
+pub fn purecard::session::DecoderSession<'g>::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for purecard::session::DecoderSession<'g> where T: core::clone::Clone
+pub unsafe fn purecard::session::DecoderSession<'g>::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for purecard::session::DecoderSession<'g>
+pub fn purecard::session::DecoderSession<'g>::from(T) -> T
+pub struct purecard::Pda
+impl purecard::grammar::pda::Pda
+pub fn purecard::grammar::pda::Pda::admits(&self, &[u8], &mut alloc::vec::Vec<purecard::grammar::pda::Frame>) -> bool
+pub fn purecard::grammar::pda::Pda::advance(&mut self, u8) -> core::result::Result<(), purecard::grammar::DeadState>
+pub fn purecard::grammar::pda::Pda::at(purecard::grammar::pda::State) -> Self
+pub fn purecard::grammar::pda::Pda::is_accepting(&self) -> bool
+pub fn purecard::grammar::pda::Pda::new() -> Self
+pub fn purecard::grammar::pda::Pda::probe(&self, &[u8], &mut alloc::vec::Vec<purecard::grammar::pda::Frame>) -> purecard::grammar::pda::Probe
+pub fn purecard::grammar::pda::Pda::reset(&mut self)
+pub fn purecard::grammar::pda::Pda::stack_top(&self) -> core::option::Option<purecard::grammar::pda::Frame>
+pub fn purecard::grammar::pda::Pda::state(&self) -> purecard::grammar::pda::State
+impl core::clone::Clone for purecard::grammar::pda::Pda
+pub fn purecard::grammar::pda::Pda::clone(&self) -> purecard::grammar::pda::Pda
+impl core::cmp::Eq for purecard::grammar::pda::Pda
+impl core::cmp::PartialEq for purecard::grammar::pda::Pda
+pub fn purecard::grammar::pda::Pda::eq(&self, &purecard::grammar::pda::Pda) -> bool
+impl core::default::Default for purecard::grammar::pda::Pda
+pub fn purecard::grammar::pda::Pda::default() -> Self
+impl core::fmt::Debug for purecard::grammar::pda::Pda
+pub fn purecard::grammar::pda::Pda::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for purecard::grammar::pda::Pda
+impl core::marker::Freeze for purecard::grammar::pda::Pda
+impl core::marker::Send for purecard::grammar::pda::Pda
+impl core::marker::Sync for purecard::grammar::pda::Pda
+impl core::marker::Unpin for purecard::grammar::pda::Pda
+impl core::marker::UnsafeUnpin for purecard::grammar::pda::Pda
+impl core::panic::unwind_safe::RefUnwindSafe for purecard::grammar::pda::Pda
+impl core::panic::unwind_safe::UnwindSafe for purecard::grammar::pda::Pda
+impl<T, U> core::convert::Into<U> for purecard::grammar::pda::Pda where U: core::convert::From<T>
+pub fn purecard::grammar::pda::Pda::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for purecard::grammar::pda::Pda where U: core::convert::Into<T>
+pub type purecard::grammar::pda::Pda::Error = never
+pub fn purecard::grammar::pda::Pda::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for purecard::grammar::pda::Pda where U: core::convert::TryFrom<T>
+pub type purecard::grammar::pda::Pda::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn purecard::grammar::pda::Pda::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for purecard::grammar::pda::Pda where T: core::clone::Clone
+pub type purecard::grammar::pda::Pda::Owned = T
+pub fn purecard::grammar::pda::Pda::clone_into(&self, &mut T)
+pub fn purecard::grammar::pda::Pda::to_owned(&self) -> T
+impl<T> core::any::Any for purecard::grammar::pda::Pda where T: 'static + ?core::marker::Sized
+pub fn purecard::grammar::pda::Pda::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for purecard::grammar::pda::Pda where T: ?core::marker::Sized
+pub fn purecard::grammar::pda::Pda::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for purecard::grammar::pda::Pda where T: ?core::marker::Sized
+pub fn purecard::grammar::pda::Pda::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for purecard::grammar::pda::Pda where T: core::clone::Clone
+pub unsafe fn purecard::grammar::pda::Pda::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for purecard::grammar::pda::Pda
+pub fn purecard::grammar::pda::Pda::from(T) -> T
+impl<T> pyo3::marker::Ungil for purecard::grammar::pda::Pda where T: core::marker::Send
+pub struct purecard::Schema
+impl purecard::Schema
+pub fn purecard::Schema::db_id(&self) -> &str
+pub fn purecard::Schema::from_json(&str) -> core::result::Result<Self, purecard::SchemaError>
+impl core::clone::Clone for purecard::Schema
+pub fn purecard::Schema::clone(&self) -> purecard::Schema
+impl core::fmt::Debug for purecard::Schema
+pub fn purecard::Schema::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for purecard::Schema
+impl core::marker::Send for purecard::Schema
+impl core::marker::Sync for purecard::Schema
+impl core::marker::Unpin for purecard::Schema
+impl core::marker::UnsafeUnpin for purecard::Schema
+impl core::panic::unwind_safe::RefUnwindSafe for purecard::Schema
+impl core::panic::unwind_safe::UnwindSafe for purecard::Schema
+impl<T, U> core::convert::Into<U> for purecard::Schema where U: core::convert::From<T>
+pub fn purecard::Schema::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for purecard::Schema where U: core::convert::Into<T>
+pub type purecard::Schema::Error = never
+pub fn purecard::Schema::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for purecard::Schema where U: core::convert::TryFrom<T>
+pub type purecard::Schema::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn purecard::Schema::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for purecard::Schema where T: core::clone::Clone
+pub type purecard::Schema::Owned = T
+pub fn purecard::Schema::clone_into(&self, &mut T)
+pub fn purecard::Schema::to_owned(&self) -> T
+impl<T> core::any::Any for purecard::Schema where T: 'static + ?core::marker::Sized
+pub fn purecard::Schema::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for purecard::Schema where T: ?core::marker::Sized
+pub fn purecard::Schema::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for purecard::Schema where T: ?core::marker::Sized
+pub fn purecard::Schema::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for purecard::Schema where T: core::clone::Clone
+pub unsafe fn purecard::Schema::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for purecard::Schema
+pub fn purecard::Schema::from(T) -> T
+impl<T> pyo3::marker::Ungil for purecard::Schema where T: core::marker::Send
+pub struct purecard::Vocab
+impl purecard::vocab::Vocab
+pub fn purecard::vocab::Vocab::bytes(&self, u32) -> core::option::Option<&[u8]>
+pub fn purecard::vocab::Vocab::eos(&self) -> u32
+pub fn purecard::vocab::Vocab::from_byte_tokens(alloc::vec::Vec<alloc::vec::Vec<u8>>, u32) -> Self
+pub fn purecard::vocab::Vocab::is_empty(&self) -> bool
+pub fn purecard::vocab::Vocab::len(&self) -> usize
+impl core::clone::Clone for purecard::vocab::Vocab
+pub fn purecard::vocab::Vocab::clone(&self) -> purecard::vocab::Vocab
+impl core::fmt::Debug for purecard::vocab::Vocab
+pub fn purecard::vocab::Vocab::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for purecard::vocab::Vocab
+impl core::marker::Send for purecard::vocab::Vocab
+impl core::marker::Sync for purecard::vocab::Vocab
+impl core::marker::Unpin for purecard::vocab::Vocab
+impl core::marker::UnsafeUnpin for purecard::vocab::Vocab
+impl core::panic::unwind_safe::RefUnwindSafe for purecard::vocab::Vocab
+impl core::panic::unwind_safe::UnwindSafe for purecard::vocab::Vocab
+impl<T, U> core::convert::Into<U> for purecard::vocab::Vocab where U: core::convert::From<T>
+pub fn purecard::vocab::Vocab::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for purecard::vocab::Vocab where U: core::convert::Into<T>
+pub type purecard::vocab::Vocab::Error = never
+pub fn purecard::vocab::Vocab::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for purecard::vocab::Vocab where U: core::convert::TryFrom<T>
+pub type purecard::vocab::Vocab::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn purecard::vocab::Vocab::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for purecard::vocab::Vocab where T: core::clone::Clone
+pub type purecard::vocab::Vocab::Owned = T
+pub fn purecard::vocab::Vocab::clone_into(&self, &mut T)
+pub fn purecard::vocab::Vocab::to_owned(&self) -> T
+impl<T> core::any::Any for purecard::vocab::Vocab where T: 'static + ?core::marker::Sized
+pub fn purecard::vocab::Vocab::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for purecard::vocab::Vocab where T: ?core::marker::Sized
+pub fn purecard::vocab::Vocab::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for purecard::vocab::Vocab where T: ?core::marker::Sized
+pub fn purecard::vocab::Vocab::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for purecard::vocab::Vocab where T: core::clone::Clone
+pub unsafe fn purecard::vocab::Vocab::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for purecard::vocab::Vocab
+pub fn purecard::vocab::Vocab::from(T) -> T
+impl<T> pyo3::marker::Ungil for purecard::vocab::Vocab where T: core::marker::Send
+pub trait purecard::ByteRecognizer
+pub fn purecard::ByteRecognizer::accept_byte(&mut self, u8) -> core::result::Result<(), purecard::error::DecodeError>
+pub fn purecard::ByteRecognizer::is_complete(&self) -> bool
+pub fn purecard::ByteRecognizer::reset(&mut self)
+impl purecard::recognizer::ByteRecognizer for purecard::session::DecoderSession<'_>
+pub fn purecard::session::DecoderSession<'_>::accept_byte(&mut self, u8) -> core::result::Result<(), purecard::error::DecodeError>
+pub fn purecard::session::DecoderSession<'_>::is_complete(&self) -> bool
+pub fn purecard::session::DecoderSession<'_>::reset(&mut self)
+pub fn purecard::self_check(&purecard::grammar::compiled::CompiledGrammar, &[&[u8]]) -> core::result::Result<(), purecard::selfcheck::SelfCheckError>
+pub fn purecard::self_check_smoke(&purecard::grammar::compiled::CompiledGrammar) -> core::result::Result<(), purecard::selfcheck::SelfCheckError>

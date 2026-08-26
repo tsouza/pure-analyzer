@@ -79,15 +79,13 @@ Testing isn't only "does it pass." Several gates run alongside:
   default:** the CodSpeed job is gated on the repo variable `CODSPEED_ENABLED`, so
   until a repository maintainer installs the CodSpeed app and sets it,
   performance regressions ship
-  **unprotected** — see the [optional-gates checklist](../../README.md#optional-gates-off-by-default).
+  **unprotected** — see the [optional performance gate](../../README.md#optional-performance-gate-off-by-default).
 - **API stability** — [`cargo-semver-checks`](https://github.com/obi1kenobi/cargo-semver-checks)
   runs on every PR; [`cargo-public-api`](https://github.com/enselic/cargo-public-api)
-  snapshots the exact public surface and [`insta`](https://insta.rs/) pins
-  serialized outputs so changes to them are deliberate and reviewed. **Off by
-  default:** the `cargo-public-api` snapshot is gated on the repo variable
-  `PUBLIC_API_ENABLED` (it needs a nightly toolchain and committed baselines from
-  `just public-api-bless`), so until a maintainer enables it the public API surface
-  ships **unprotected** — see the [optional-gates checklist](../../README.md#optional-gates-off-by-default).
+  snapshots every public Rust crate's all-features surface. The committed
+  baseline inventory is exact: a missing or stale file fails the PR. Intended
+  changes use `just public-api-bless`; the resulting diff is reviewed and
+  committed with the implementation change.
 - **Diagnostic-code stability** — a `PUR<nnnn>` code, once shipped, is a contract
   with editor/CI integrations that key off it; retiring or repurposing one is a
   breaking change and belongs in a linked issue, not a drive-by rename.

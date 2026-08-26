@@ -1,0 +1,777 @@
+pub mod pure_analyzer_diagnostics
+pub use pure_analyzer_diagnostics::TextRange
+pub use pure_analyzer_diagnostics::TextSize
+pub enum pure_analyzer_diagnostics::Applicability
+pub pure_analyzer_diagnostics::Applicability::MachineApplicable
+pub pure_analyzer_diagnostics::Applicability::Suggested
+pub pure_analyzer_diagnostics::Applicability::Unsafe
+impl core::clone::Clone for pure_analyzer_diagnostics::Applicability
+pub fn pure_analyzer_diagnostics::Applicability::clone(&self) -> pure_analyzer_diagnostics::Applicability
+impl core::cmp::Eq for pure_analyzer_diagnostics::Applicability
+impl core::cmp::PartialEq for pure_analyzer_diagnostics::Applicability
+pub fn pure_analyzer_diagnostics::Applicability::eq(&self, &pure_analyzer_diagnostics::Applicability) -> bool
+impl core::fmt::Debug for pure_analyzer_diagnostics::Applicability
+pub fn pure_analyzer_diagnostics::Applicability::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for pure_analyzer_diagnostics::Applicability
+impl core::marker::StructuralPartialEq for pure_analyzer_diagnostics::Applicability
+impl serde_core::ser::Serialize for pure_analyzer_diagnostics::Applicability
+pub fn pure_analyzer_diagnostics::Applicability::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for pure_analyzer_diagnostics::Applicability
+pub fn pure_analyzer_diagnostics::Applicability::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for pure_analyzer_diagnostics::Applicability
+impl core::marker::Send for pure_analyzer_diagnostics::Applicability
+impl core::marker::Sync for pure_analyzer_diagnostics::Applicability
+impl core::marker::Unpin for pure_analyzer_diagnostics::Applicability
+impl core::marker::UnsafeUnpin for pure_analyzer_diagnostics::Applicability
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_diagnostics::Applicability
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_diagnostics::Applicability
+impl<T, U> core::convert::Into<U> for pure_analyzer_diagnostics::Applicability where U: core::convert::From<T>
+pub fn pure_analyzer_diagnostics::Applicability::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_diagnostics::Applicability where U: core::convert::Into<T>
+pub type pure_analyzer_diagnostics::Applicability::Error = never
+pub fn pure_analyzer_diagnostics::Applicability::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_diagnostics::Applicability where U: core::convert::TryFrom<T>
+pub type pure_analyzer_diagnostics::Applicability::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_diagnostics::Applicability::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_diagnostics::Applicability where T: core::clone::Clone
+pub type pure_analyzer_diagnostics::Applicability::Owned = T
+pub fn pure_analyzer_diagnostics::Applicability::clone_into(&self, &mut T)
+pub fn pure_analyzer_diagnostics::Applicability::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_diagnostics::Applicability where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::Applicability::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_diagnostics::Applicability where T: ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::Applicability::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_diagnostics::Applicability where T: ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::Applicability::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_diagnostics::Applicability where T: core::clone::Clone
+pub unsafe fn pure_analyzer_diagnostics::Applicability::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_diagnostics::Applicability
+pub fn pure_analyzer_diagnostics::Applicability::from(T) -> T
+impl<T> serde_core::de::DeserializeOwned for pure_analyzer_diagnostics::Applicability where T: for<'de> serde_core::de::Deserialize<'de>
+pub enum pure_analyzer_diagnostics::DiagCode
+pub pure_analyzer_diagnostics::DiagCode::BadToken
+pub pure_analyzer_diagnostics::DiagCode::CardinalityMisuse
+pub pure_analyzer_diagnostics::DiagCode::DerivedQualifiedProperty
+pub pure_analyzer_diagnostics::DiagCode::EquivalenceVerdict
+pub pure_analyzer_diagnostics::DiagCode::IllegalBracketIndex
+pub pure_analyzer_diagnostics::DiagCode::MalformedMilestoningArguments
+pub pure_analyzer_diagnostics::DiagCode::ModelMergeConflict
+pub pure_analyzer_diagnostics::DiagCode::ModelRequired
+pub pure_analyzer_diagnostics::DiagCode::ParenthesizedTuple
+pub pure_analyzer_diagnostics::DiagCode::UnknownJoinKind
+pub pure_analyzer_diagnostics::DiagCode::UnknownProperty
+pub pure_analyzer_diagnostics::DiagCode::UnknownSource
+pub pure_analyzer_diagnostics::DiagCode::UnterminatedIsland
+pub pure_analyzer_diagnostics::DiagCode::WrongMilestoningArity
+impl pure_analyzer_diagnostics::DiagCode
+pub const fn pure_analyzer_diagnostics::DiagCode::as_str(self) -> &'static str
+pub const fn pure_analyzer_diagnostics::DiagCode::family(self) -> pure_analyzer_diagnostics::DiagFamily
+impl core::clone::Clone for pure_analyzer_diagnostics::DiagCode
+pub fn pure_analyzer_diagnostics::DiagCode::clone(&self) -> pure_analyzer_diagnostics::DiagCode
+impl core::cmp::Eq for pure_analyzer_diagnostics::DiagCode
+impl core::cmp::Ord for pure_analyzer_diagnostics::DiagCode
+pub fn pure_analyzer_diagnostics::DiagCode::cmp(&self, &pure_analyzer_diagnostics::DiagCode) -> core::cmp::Ordering
+impl core::cmp::PartialEq for pure_analyzer_diagnostics::DiagCode
+pub fn pure_analyzer_diagnostics::DiagCode::eq(&self, &pure_analyzer_diagnostics::DiagCode) -> bool
+impl core::cmp::PartialOrd for pure_analyzer_diagnostics::DiagCode
+pub fn pure_analyzer_diagnostics::DiagCode::partial_cmp(&self, &pure_analyzer_diagnostics::DiagCode) -> core::option::Option<core::cmp::Ordering>
+impl core::fmt::Debug for pure_analyzer_diagnostics::DiagCode
+pub fn pure_analyzer_diagnostics::DiagCode::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for pure_analyzer_diagnostics::DiagCode
+pub fn pure_analyzer_diagnostics::DiagCode::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for pure_analyzer_diagnostics::DiagCode
+pub fn pure_analyzer_diagnostics::DiagCode::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::Copy for pure_analyzer_diagnostics::DiagCode
+impl core::marker::StructuralPartialEq for pure_analyzer_diagnostics::DiagCode
+impl core::str::traits::FromStr for pure_analyzer_diagnostics::DiagCode
+pub type pure_analyzer_diagnostics::DiagCode::Err = pure_analyzer_diagnostics::UnknownDiagCode
+pub fn pure_analyzer_diagnostics::DiagCode::from_str(&str) -> core::result::Result<Self, Self::Err>
+impl serde_core::ser::Serialize for pure_analyzer_diagnostics::DiagCode
+pub fn pure_analyzer_diagnostics::DiagCode::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for pure_analyzer_diagnostics::DiagCode
+pub fn pure_analyzer_diagnostics::DiagCode::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for pure_analyzer_diagnostics::DiagCode
+impl core::marker::Send for pure_analyzer_diagnostics::DiagCode
+impl core::marker::Sync for pure_analyzer_diagnostics::DiagCode
+impl core::marker::Unpin for pure_analyzer_diagnostics::DiagCode
+impl core::marker::UnsafeUnpin for pure_analyzer_diagnostics::DiagCode
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_diagnostics::DiagCode
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_diagnostics::DiagCode
+impl<T, U> core::convert::Into<U> for pure_analyzer_diagnostics::DiagCode where U: core::convert::From<T>
+pub fn pure_analyzer_diagnostics::DiagCode::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_diagnostics::DiagCode where U: core::convert::Into<T>
+pub type pure_analyzer_diagnostics::DiagCode::Error = never
+pub fn pure_analyzer_diagnostics::DiagCode::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_diagnostics::DiagCode where U: core::convert::TryFrom<T>
+pub type pure_analyzer_diagnostics::DiagCode::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_diagnostics::DiagCode::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_diagnostics::DiagCode where T: core::clone::Clone
+pub type pure_analyzer_diagnostics::DiagCode::Owned = T
+pub fn pure_analyzer_diagnostics::DiagCode::clone_into(&self, &mut T)
+pub fn pure_analyzer_diagnostics::DiagCode::to_owned(&self) -> T
+impl<T> alloc::string::ToString for pure_analyzer_diagnostics::DiagCode where T: core::fmt::Display + ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::DiagCode::to_string(&self) -> alloc::string::String
+impl<T> core::any::Any for pure_analyzer_diagnostics::DiagCode where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::DiagCode::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_diagnostics::DiagCode where T: ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::DiagCode::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_diagnostics::DiagCode where T: ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::DiagCode::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_diagnostics::DiagCode where T: core::clone::Clone
+pub unsafe fn pure_analyzer_diagnostics::DiagCode::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_diagnostics::DiagCode
+pub fn pure_analyzer_diagnostics::DiagCode::from(T) -> T
+impl<T> serde_core::de::DeserializeOwned for pure_analyzer_diagnostics::DiagCode where T: for<'de> serde_core::de::Deserialize<'de>
+pub enum pure_analyzer_diagnostics::DiagFamily
+pub pure_analyzer_diagnostics::DiagFamily::Equivalence
+pub pure_analyzer_diagnostics::DiagFamily::Lexer
+pub pure_analyzer_diagnostics::DiagFamily::Lint
+pub pure_analyzer_diagnostics::DiagFamily::Parser
+pub pure_analyzer_diagnostics::DiagFamily::Tool
+impl core::clone::Clone for pure_analyzer_diagnostics::DiagFamily
+pub fn pure_analyzer_diagnostics::DiagFamily::clone(&self) -> pure_analyzer_diagnostics::DiagFamily
+impl core::cmp::Eq for pure_analyzer_diagnostics::DiagFamily
+impl core::cmp::Ord for pure_analyzer_diagnostics::DiagFamily
+pub fn pure_analyzer_diagnostics::DiagFamily::cmp(&self, &pure_analyzer_diagnostics::DiagFamily) -> core::cmp::Ordering
+impl core::cmp::PartialEq for pure_analyzer_diagnostics::DiagFamily
+pub fn pure_analyzer_diagnostics::DiagFamily::eq(&self, &pure_analyzer_diagnostics::DiagFamily) -> bool
+impl core::cmp::PartialOrd for pure_analyzer_diagnostics::DiagFamily
+pub fn pure_analyzer_diagnostics::DiagFamily::partial_cmp(&self, &pure_analyzer_diagnostics::DiagFamily) -> core::option::Option<core::cmp::Ordering>
+impl core::fmt::Debug for pure_analyzer_diagnostics::DiagFamily
+pub fn pure_analyzer_diagnostics::DiagFamily::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for pure_analyzer_diagnostics::DiagFamily
+pub fn pure_analyzer_diagnostics::DiagFamily::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::Copy for pure_analyzer_diagnostics::DiagFamily
+impl core::marker::StructuralPartialEq for pure_analyzer_diagnostics::DiagFamily
+impl core::marker::Freeze for pure_analyzer_diagnostics::DiagFamily
+impl core::marker::Send for pure_analyzer_diagnostics::DiagFamily
+impl core::marker::Sync for pure_analyzer_diagnostics::DiagFamily
+impl core::marker::Unpin for pure_analyzer_diagnostics::DiagFamily
+impl core::marker::UnsafeUnpin for pure_analyzer_diagnostics::DiagFamily
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_diagnostics::DiagFamily
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_diagnostics::DiagFamily
+impl<T, U> core::convert::Into<U> for pure_analyzer_diagnostics::DiagFamily where U: core::convert::From<T>
+pub fn pure_analyzer_diagnostics::DiagFamily::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_diagnostics::DiagFamily where U: core::convert::Into<T>
+pub type pure_analyzer_diagnostics::DiagFamily::Error = never
+pub fn pure_analyzer_diagnostics::DiagFamily::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_diagnostics::DiagFamily where U: core::convert::TryFrom<T>
+pub type pure_analyzer_diagnostics::DiagFamily::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_diagnostics::DiagFamily::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_diagnostics::DiagFamily where T: core::clone::Clone
+pub type pure_analyzer_diagnostics::DiagFamily::Owned = T
+pub fn pure_analyzer_diagnostics::DiagFamily::clone_into(&self, &mut T)
+pub fn pure_analyzer_diagnostics::DiagFamily::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_diagnostics::DiagFamily where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::DiagFamily::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_diagnostics::DiagFamily where T: ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::DiagFamily::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_diagnostics::DiagFamily where T: ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::DiagFamily::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_diagnostics::DiagFamily where T: core::clone::Clone
+pub unsafe fn pure_analyzer_diagnostics::DiagFamily::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_diagnostics::DiagFamily
+pub fn pure_analyzer_diagnostics::DiagFamily::from(T) -> T
+pub enum pure_analyzer_diagnostics::ReasonBucket
+pub pure_analyzer_diagnostics::ReasonBucket::Fundamental
+pub pure_analyzer_diagnostics::ReasonBucket::Recoverable
+impl core::clone::Clone for pure_analyzer_diagnostics::ReasonBucket
+pub fn pure_analyzer_diagnostics::ReasonBucket::clone(&self) -> pure_analyzer_diagnostics::ReasonBucket
+impl core::cmp::Eq for pure_analyzer_diagnostics::ReasonBucket
+impl core::cmp::PartialEq for pure_analyzer_diagnostics::ReasonBucket
+pub fn pure_analyzer_diagnostics::ReasonBucket::eq(&self, &pure_analyzer_diagnostics::ReasonBucket) -> bool
+impl core::fmt::Debug for pure_analyzer_diagnostics::ReasonBucket
+pub fn pure_analyzer_diagnostics::ReasonBucket::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for pure_analyzer_diagnostics::ReasonBucket
+impl core::marker::StructuralPartialEq for pure_analyzer_diagnostics::ReasonBucket
+impl serde_core::ser::Serialize for pure_analyzer_diagnostics::ReasonBucket
+pub fn pure_analyzer_diagnostics::ReasonBucket::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for pure_analyzer_diagnostics::ReasonBucket
+pub fn pure_analyzer_diagnostics::ReasonBucket::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for pure_analyzer_diagnostics::ReasonBucket
+impl core::marker::Send for pure_analyzer_diagnostics::ReasonBucket
+impl core::marker::Sync for pure_analyzer_diagnostics::ReasonBucket
+impl core::marker::Unpin for pure_analyzer_diagnostics::ReasonBucket
+impl core::marker::UnsafeUnpin for pure_analyzer_diagnostics::ReasonBucket
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_diagnostics::ReasonBucket
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_diagnostics::ReasonBucket
+impl<T, U> core::convert::Into<U> for pure_analyzer_diagnostics::ReasonBucket where U: core::convert::From<T>
+pub fn pure_analyzer_diagnostics::ReasonBucket::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_diagnostics::ReasonBucket where U: core::convert::Into<T>
+pub type pure_analyzer_diagnostics::ReasonBucket::Error = never
+pub fn pure_analyzer_diagnostics::ReasonBucket::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_diagnostics::ReasonBucket where U: core::convert::TryFrom<T>
+pub type pure_analyzer_diagnostics::ReasonBucket::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_diagnostics::ReasonBucket::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_diagnostics::ReasonBucket where T: core::clone::Clone
+pub type pure_analyzer_diagnostics::ReasonBucket::Owned = T
+pub fn pure_analyzer_diagnostics::ReasonBucket::clone_into(&self, &mut T)
+pub fn pure_analyzer_diagnostics::ReasonBucket::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_diagnostics::ReasonBucket where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::ReasonBucket::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_diagnostics::ReasonBucket where T: ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::ReasonBucket::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_diagnostics::ReasonBucket where T: ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::ReasonBucket::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_diagnostics::ReasonBucket where T: core::clone::Clone
+pub unsafe fn pure_analyzer_diagnostics::ReasonBucket::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_diagnostics::ReasonBucket
+pub fn pure_analyzer_diagnostics::ReasonBucket::from(T) -> T
+impl<T> serde_core::de::DeserializeOwned for pure_analyzer_diagnostics::ReasonBucket where T: for<'de> serde_core::de::Deserialize<'de>
+pub enum pure_analyzer_diagnostics::ReasonCode
+pub pure_analyzer_diagnostics::ReasonCode::IndDifferentSources
+pub pure_analyzer_diagnostics::ReasonCode::IndDivisionRatio
+pub pure_analyzer_diagnostics::ReasonCode::IndMilestoningAsof
+pub pure_analyzer_diagnostics::ReasonCode::IndMissingRewrite
+pub pure_analyzer_diagnostics::ReasonCode::IndMultistepFiscal
+pub pure_analyzer_diagnostics::ReasonCode::IndOpaqueFunctionInWitness
+pub pure_analyzer_diagnostics::ReasonCode::IndOpaquePredicate
+pub pure_analyzer_diagnostics::ReasonCode::IndOrderUnderdetermined
+pub pure_analyzer_diagnostics::ReasonCode::IndPareto
+pub pure_analyzer_diagnostics::ReasonCode::IndPredicateNormalFormGap
+pub pure_analyzer_diagnostics::ReasonCode::IndUnmodeledOp
+pub pure_analyzer_diagnostics::ReasonCode::IndUnparseable
+pub pure_analyzer_diagnostics::ReasonCode::IndUnresolvedSchema
+pub pure_analyzer_diagnostics::ReasonCode::IndWindow
+pub pure_analyzer_diagnostics::ReasonCode::IndWitnessBudgetExhausted
+pub pure_analyzer_diagnostics::ReasonCode::ModelIncomplete
+pub pure_analyzer_diagnostics::ReasonCode::RelationRowTypeUnknown
+impl pure_analyzer_diagnostics::ReasonCode
+pub const fn pure_analyzer_diagnostics::ReasonCode::blurb(self) -> &'static str
+pub const fn pure_analyzer_diagnostics::ReasonCode::bucket(self) -> pure_analyzer_diagnostics::ReasonBucket
+pub const fn pure_analyzer_diagnostics::ReasonCode::id(self) -> &'static str
+impl core::clone::Clone for pure_analyzer_diagnostics::ReasonCode
+pub fn pure_analyzer_diagnostics::ReasonCode::clone(&self) -> pure_analyzer_diagnostics::ReasonCode
+impl core::cmp::Eq for pure_analyzer_diagnostics::ReasonCode
+impl core::cmp::Ord for pure_analyzer_diagnostics::ReasonCode
+pub fn pure_analyzer_diagnostics::ReasonCode::cmp(&self, &pure_analyzer_diagnostics::ReasonCode) -> core::cmp::Ordering
+impl core::cmp::PartialEq for pure_analyzer_diagnostics::ReasonCode
+pub fn pure_analyzer_diagnostics::ReasonCode::eq(&self, &pure_analyzer_diagnostics::ReasonCode) -> bool
+impl core::cmp::PartialOrd for pure_analyzer_diagnostics::ReasonCode
+pub fn pure_analyzer_diagnostics::ReasonCode::partial_cmp(&self, &pure_analyzer_diagnostics::ReasonCode) -> core::option::Option<core::cmp::Ordering>
+impl core::fmt::Debug for pure_analyzer_diagnostics::ReasonCode
+pub fn pure_analyzer_diagnostics::ReasonCode::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for pure_analyzer_diagnostics::ReasonCode
+pub fn pure_analyzer_diagnostics::ReasonCode::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for pure_analyzer_diagnostics::ReasonCode
+pub fn pure_analyzer_diagnostics::ReasonCode::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::Copy for pure_analyzer_diagnostics::ReasonCode
+impl core::marker::StructuralPartialEq for pure_analyzer_diagnostics::ReasonCode
+impl core::str::traits::FromStr for pure_analyzer_diagnostics::ReasonCode
+pub type pure_analyzer_diagnostics::ReasonCode::Err = pure_analyzer_diagnostics::UnknownReasonCode
+pub fn pure_analyzer_diagnostics::ReasonCode::from_str(&str) -> core::result::Result<Self, Self::Err>
+impl serde_core::ser::Serialize for pure_analyzer_diagnostics::ReasonCode
+pub fn pure_analyzer_diagnostics::ReasonCode::serialize<S>(&self, S) -> core::result::Result<<S as serde_core::ser::Serializer>::Ok, <S as serde_core::ser::Serializer>::Error> where S: serde_core::ser::Serializer
+impl core::marker::Freeze for pure_analyzer_diagnostics::ReasonCode
+impl core::marker::Send for pure_analyzer_diagnostics::ReasonCode
+impl core::marker::Sync for pure_analyzer_diagnostics::ReasonCode
+impl core::marker::Unpin for pure_analyzer_diagnostics::ReasonCode
+impl core::marker::UnsafeUnpin for pure_analyzer_diagnostics::ReasonCode
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_diagnostics::ReasonCode
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_diagnostics::ReasonCode
+impl<T, U> core::convert::Into<U> for pure_analyzer_diagnostics::ReasonCode where U: core::convert::From<T>
+pub fn pure_analyzer_diagnostics::ReasonCode::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_diagnostics::ReasonCode where U: core::convert::Into<T>
+pub type pure_analyzer_diagnostics::ReasonCode::Error = never
+pub fn pure_analyzer_diagnostics::ReasonCode::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_diagnostics::ReasonCode where U: core::convert::TryFrom<T>
+pub type pure_analyzer_diagnostics::ReasonCode::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_diagnostics::ReasonCode::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_diagnostics::ReasonCode where T: core::clone::Clone
+pub type pure_analyzer_diagnostics::ReasonCode::Owned = T
+pub fn pure_analyzer_diagnostics::ReasonCode::clone_into(&self, &mut T)
+pub fn pure_analyzer_diagnostics::ReasonCode::to_owned(&self) -> T
+impl<T> alloc::string::ToString for pure_analyzer_diagnostics::ReasonCode where T: core::fmt::Display + ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::ReasonCode::to_string(&self) -> alloc::string::String
+impl<T> core::any::Any for pure_analyzer_diagnostics::ReasonCode where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::ReasonCode::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_diagnostics::ReasonCode where T: ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::ReasonCode::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_diagnostics::ReasonCode where T: ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::ReasonCode::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_diagnostics::ReasonCode where T: core::clone::Clone
+pub unsafe fn pure_analyzer_diagnostics::ReasonCode::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_diagnostics::ReasonCode
+pub fn pure_analyzer_diagnostics::ReasonCode::from(T) -> T
+pub enum pure_analyzer_diagnostics::Severity
+pub pure_analyzer_diagnostics::Severity::Error
+pub pure_analyzer_diagnostics::Severity::Hint
+pub pure_analyzer_diagnostics::Severity::Info
+pub pure_analyzer_diagnostics::Severity::Warning
+impl core::clone::Clone for pure_analyzer_diagnostics::Severity
+pub fn pure_analyzer_diagnostics::Severity::clone(&self) -> pure_analyzer_diagnostics::Severity
+impl core::cmp::Eq for pure_analyzer_diagnostics::Severity
+impl core::cmp::Ord for pure_analyzer_diagnostics::Severity
+pub fn pure_analyzer_diagnostics::Severity::cmp(&self, &pure_analyzer_diagnostics::Severity) -> core::cmp::Ordering
+impl core::cmp::PartialEq for pure_analyzer_diagnostics::Severity
+pub fn pure_analyzer_diagnostics::Severity::eq(&self, &pure_analyzer_diagnostics::Severity) -> bool
+impl core::cmp::PartialOrd for pure_analyzer_diagnostics::Severity
+pub fn pure_analyzer_diagnostics::Severity::partial_cmp(&self, &pure_analyzer_diagnostics::Severity) -> core::option::Option<core::cmp::Ordering>
+impl core::fmt::Debug for pure_analyzer_diagnostics::Severity
+pub fn pure_analyzer_diagnostics::Severity::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for pure_analyzer_diagnostics::Severity
+pub fn pure_analyzer_diagnostics::Severity::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::Copy for pure_analyzer_diagnostics::Severity
+impl core::marker::StructuralPartialEq for pure_analyzer_diagnostics::Severity
+impl serde_core::ser::Serialize for pure_analyzer_diagnostics::Severity
+pub fn pure_analyzer_diagnostics::Severity::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for pure_analyzer_diagnostics::Severity
+pub fn pure_analyzer_diagnostics::Severity::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for pure_analyzer_diagnostics::Severity
+impl core::marker::Send for pure_analyzer_diagnostics::Severity
+impl core::marker::Sync for pure_analyzer_diagnostics::Severity
+impl core::marker::Unpin for pure_analyzer_diagnostics::Severity
+impl core::marker::UnsafeUnpin for pure_analyzer_diagnostics::Severity
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_diagnostics::Severity
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_diagnostics::Severity
+impl<T, U> core::convert::Into<U> for pure_analyzer_diagnostics::Severity where U: core::convert::From<T>
+pub fn pure_analyzer_diagnostics::Severity::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_diagnostics::Severity where U: core::convert::Into<T>
+pub type pure_analyzer_diagnostics::Severity::Error = never
+pub fn pure_analyzer_diagnostics::Severity::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_diagnostics::Severity where U: core::convert::TryFrom<T>
+pub type pure_analyzer_diagnostics::Severity::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_diagnostics::Severity::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_diagnostics::Severity where T: core::clone::Clone
+pub type pure_analyzer_diagnostics::Severity::Owned = T
+pub fn pure_analyzer_diagnostics::Severity::clone_into(&self, &mut T)
+pub fn pure_analyzer_diagnostics::Severity::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_diagnostics::Severity where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::Severity::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_diagnostics::Severity where T: ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::Severity::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_diagnostics::Severity where T: ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::Severity::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_diagnostics::Severity where T: core::clone::Clone
+pub unsafe fn pure_analyzer_diagnostics::Severity::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_diagnostics::Severity
+pub fn pure_analyzer_diagnostics::Severity::from(T) -> T
+impl<T> serde_core::de::DeserializeOwned for pure_analyzer_diagnostics::Severity where T: for<'de> serde_core::de::Deserialize<'de>
+pub enum pure_analyzer_diagnostics::Verdict
+pub pure_analyzer_diagnostics::Verdict::Equivalent
+pub pure_analyzer_diagnostics::Verdict::Indecisive
+pub pure_analyzer_diagnostics::Verdict::NotEquivalent
+pub pure_analyzer_diagnostics::Verdict::NotEquivalent::witness: alloc::string::String
+impl core::clone::Clone for pure_analyzer_diagnostics::Verdict
+pub fn pure_analyzer_diagnostics::Verdict::clone(&self) -> pure_analyzer_diagnostics::Verdict
+impl core::cmp::Eq for pure_analyzer_diagnostics::Verdict
+impl core::cmp::PartialEq for pure_analyzer_diagnostics::Verdict
+pub fn pure_analyzer_diagnostics::Verdict::eq(&self, &pure_analyzer_diagnostics::Verdict) -> bool
+impl core::fmt::Debug for pure_analyzer_diagnostics::Verdict
+pub fn pure_analyzer_diagnostics::Verdict::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_diagnostics::Verdict
+impl serde_core::ser::Serialize for pure_analyzer_diagnostics::Verdict
+pub fn pure_analyzer_diagnostics::Verdict::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for pure_analyzer_diagnostics::Verdict
+pub fn pure_analyzer_diagnostics::Verdict::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for pure_analyzer_diagnostics::Verdict
+impl core::marker::Send for pure_analyzer_diagnostics::Verdict
+impl core::marker::Sync for pure_analyzer_diagnostics::Verdict
+impl core::marker::Unpin for pure_analyzer_diagnostics::Verdict
+impl core::marker::UnsafeUnpin for pure_analyzer_diagnostics::Verdict
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_diagnostics::Verdict
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_diagnostics::Verdict
+impl<T, U> core::convert::Into<U> for pure_analyzer_diagnostics::Verdict where U: core::convert::From<T>
+pub fn pure_analyzer_diagnostics::Verdict::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_diagnostics::Verdict where U: core::convert::Into<T>
+pub type pure_analyzer_diagnostics::Verdict::Error = never
+pub fn pure_analyzer_diagnostics::Verdict::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_diagnostics::Verdict where U: core::convert::TryFrom<T>
+pub type pure_analyzer_diagnostics::Verdict::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_diagnostics::Verdict::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_diagnostics::Verdict where T: core::clone::Clone
+pub type pure_analyzer_diagnostics::Verdict::Owned = T
+pub fn pure_analyzer_diagnostics::Verdict::clone_into(&self, &mut T)
+pub fn pure_analyzer_diagnostics::Verdict::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_diagnostics::Verdict where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::Verdict::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_diagnostics::Verdict where T: ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::Verdict::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_diagnostics::Verdict where T: ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::Verdict::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_diagnostics::Verdict where T: core::clone::Clone
+pub unsafe fn pure_analyzer_diagnostics::Verdict::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_diagnostics::Verdict
+pub fn pure_analyzer_diagnostics::Verdict::from(T) -> T
+impl<T> serde_core::de::DeserializeOwned for pure_analyzer_diagnostics::Verdict where T: for<'de> serde_core::de::Deserialize<'de>
+pub struct pure_analyzer_diagnostics::Diagnostic
+pub pure_analyzer_diagnostics::Diagnostic::code: pure_analyzer_diagnostics::DiagCode
+pub pure_analyzer_diagnostics::Diagnostic::fix: core::option::Option<pure_analyzer_diagnostics::Fix>
+pub pure_analyzer_diagnostics::Diagnostic::message: alloc::string::String
+pub pure_analyzer_diagnostics::Diagnostic::primary: pure_analyzer_diagnostics::Label
+pub pure_analyzer_diagnostics::Diagnostic::reason: core::option::Option<pure_analyzer_diagnostics::ReasonCode>
+pub pure_analyzer_diagnostics::Diagnostic::secondary: alloc::vec::Vec<pure_analyzer_diagnostics::Label>
+pub pure_analyzer_diagnostics::Diagnostic::severity: pure_analyzer_diagnostics::Severity
+pub pure_analyzer_diagnostics::Diagnostic::url: core::option::Option<alloc::string::String>
+pub pure_analyzer_diagnostics::Diagnostic::verdict: core::option::Option<pure_analyzer_diagnostics::Verdict>
+impl pure_analyzer_diagnostics::Diagnostic
+pub fn pure_analyzer_diagnostics::Diagnostic::builder(pure_analyzer_diagnostics::DiagCode, pure_analyzer_diagnostics::Severity, impl core::convert::Into<alloc::string::String>, pure_analyzer_diagnostics::Label) -> pure_analyzer_diagnostics::DiagnosticBuilder
+impl core::clone::Clone for pure_analyzer_diagnostics::Diagnostic
+pub fn pure_analyzer_diagnostics::Diagnostic::clone(&self) -> pure_analyzer_diagnostics::Diagnostic
+impl core::cmp::Eq for pure_analyzer_diagnostics::Diagnostic
+impl core::cmp::PartialEq for pure_analyzer_diagnostics::Diagnostic
+pub fn pure_analyzer_diagnostics::Diagnostic::eq(&self, &pure_analyzer_diagnostics::Diagnostic) -> bool
+impl core::fmt::Debug for pure_analyzer_diagnostics::Diagnostic
+pub fn pure_analyzer_diagnostics::Diagnostic::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_diagnostics::Diagnostic
+impl serde_core::ser::Serialize for pure_analyzer_diagnostics::Diagnostic
+pub fn pure_analyzer_diagnostics::Diagnostic::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl core::marker::Freeze for pure_analyzer_diagnostics::Diagnostic
+impl core::marker::Send for pure_analyzer_diagnostics::Diagnostic
+impl core::marker::Sync for pure_analyzer_diagnostics::Diagnostic
+impl core::marker::Unpin for pure_analyzer_diagnostics::Diagnostic
+impl core::marker::UnsafeUnpin for pure_analyzer_diagnostics::Diagnostic
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_diagnostics::Diagnostic
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_diagnostics::Diagnostic
+impl<T, U> core::convert::Into<U> for pure_analyzer_diagnostics::Diagnostic where U: core::convert::From<T>
+pub fn pure_analyzer_diagnostics::Diagnostic::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_diagnostics::Diagnostic where U: core::convert::Into<T>
+pub type pure_analyzer_diagnostics::Diagnostic::Error = never
+pub fn pure_analyzer_diagnostics::Diagnostic::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_diagnostics::Diagnostic where U: core::convert::TryFrom<T>
+pub type pure_analyzer_diagnostics::Diagnostic::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_diagnostics::Diagnostic::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_diagnostics::Diagnostic where T: core::clone::Clone
+pub type pure_analyzer_diagnostics::Diagnostic::Owned = T
+pub fn pure_analyzer_diagnostics::Diagnostic::clone_into(&self, &mut T)
+pub fn pure_analyzer_diagnostics::Diagnostic::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_diagnostics::Diagnostic where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::Diagnostic::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_diagnostics::Diagnostic where T: ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::Diagnostic::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_diagnostics::Diagnostic where T: ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::Diagnostic::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_diagnostics::Diagnostic where T: core::clone::Clone
+pub unsafe fn pure_analyzer_diagnostics::Diagnostic::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_diagnostics::Diagnostic
+pub fn pure_analyzer_diagnostics::Diagnostic::from(T) -> T
+pub struct pure_analyzer_diagnostics::DiagnosticBuilder
+impl pure_analyzer_diagnostics::DiagnosticBuilder
+pub fn pure_analyzer_diagnostics::DiagnosticBuilder::build(self) -> pure_analyzer_diagnostics::Diagnostic
+pub fn pure_analyzer_diagnostics::DiagnosticBuilder::fix(self, pure_analyzer_diagnostics::Fix) -> Self
+pub fn pure_analyzer_diagnostics::DiagnosticBuilder::reason(self, pure_analyzer_diagnostics::ReasonCode) -> Self
+pub fn pure_analyzer_diagnostics::DiagnosticBuilder::secondary(self, pure_analyzer_diagnostics::Label) -> Self
+pub fn pure_analyzer_diagnostics::DiagnosticBuilder::url(self, impl core::convert::Into<alloc::string::String>) -> Self
+pub fn pure_analyzer_diagnostics::DiagnosticBuilder::verdict(self, pure_analyzer_diagnostics::Verdict) -> Self
+impl core::clone::Clone for pure_analyzer_diagnostics::DiagnosticBuilder
+pub fn pure_analyzer_diagnostics::DiagnosticBuilder::clone(&self) -> pure_analyzer_diagnostics::DiagnosticBuilder
+impl core::fmt::Debug for pure_analyzer_diagnostics::DiagnosticBuilder
+pub fn pure_analyzer_diagnostics::DiagnosticBuilder::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for pure_analyzer_diagnostics::DiagnosticBuilder
+impl core::marker::Send for pure_analyzer_diagnostics::DiagnosticBuilder
+impl core::marker::Sync for pure_analyzer_diagnostics::DiagnosticBuilder
+impl core::marker::Unpin for pure_analyzer_diagnostics::DiagnosticBuilder
+impl core::marker::UnsafeUnpin for pure_analyzer_diagnostics::DiagnosticBuilder
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_diagnostics::DiagnosticBuilder
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_diagnostics::DiagnosticBuilder
+impl<T, U> core::convert::Into<U> for pure_analyzer_diagnostics::DiagnosticBuilder where U: core::convert::From<T>
+pub fn pure_analyzer_diagnostics::DiagnosticBuilder::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_diagnostics::DiagnosticBuilder where U: core::convert::Into<T>
+pub type pure_analyzer_diagnostics::DiagnosticBuilder::Error = never
+pub fn pure_analyzer_diagnostics::DiagnosticBuilder::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_diagnostics::DiagnosticBuilder where U: core::convert::TryFrom<T>
+pub type pure_analyzer_diagnostics::DiagnosticBuilder::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_diagnostics::DiagnosticBuilder::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_diagnostics::DiagnosticBuilder where T: core::clone::Clone
+pub type pure_analyzer_diagnostics::DiagnosticBuilder::Owned = T
+pub fn pure_analyzer_diagnostics::DiagnosticBuilder::clone_into(&self, &mut T)
+pub fn pure_analyzer_diagnostics::DiagnosticBuilder::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_diagnostics::DiagnosticBuilder where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::DiagnosticBuilder::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_diagnostics::DiagnosticBuilder where T: ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::DiagnosticBuilder::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_diagnostics::DiagnosticBuilder where T: ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::DiagnosticBuilder::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_diagnostics::DiagnosticBuilder where T: core::clone::Clone
+pub unsafe fn pure_analyzer_diagnostics::DiagnosticBuilder::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_diagnostics::DiagnosticBuilder
+pub fn pure_analyzer_diagnostics::DiagnosticBuilder::from(T) -> T
+pub struct pure_analyzer_diagnostics::FileId(_)
+impl pure_analyzer_diagnostics::FileId
+pub fn pure_analyzer_diagnostics::FileId::index(self) -> u32
+pub fn pure_analyzer_diagnostics::FileId::new(u32) -> Self
+impl core::clone::Clone for pure_analyzer_diagnostics::FileId
+pub fn pure_analyzer_diagnostics::FileId::clone(&self) -> pure_analyzer_diagnostics::FileId
+impl core::cmp::Eq for pure_analyzer_diagnostics::FileId
+impl core::cmp::Ord for pure_analyzer_diagnostics::FileId
+pub fn pure_analyzer_diagnostics::FileId::cmp(&self, &pure_analyzer_diagnostics::FileId) -> core::cmp::Ordering
+impl core::cmp::PartialEq for pure_analyzer_diagnostics::FileId
+pub fn pure_analyzer_diagnostics::FileId::eq(&self, &pure_analyzer_diagnostics::FileId) -> bool
+impl core::cmp::PartialOrd for pure_analyzer_diagnostics::FileId
+pub fn pure_analyzer_diagnostics::FileId::partial_cmp(&self, &pure_analyzer_diagnostics::FileId) -> core::option::Option<core::cmp::Ordering>
+impl core::fmt::Debug for pure_analyzer_diagnostics::FileId
+pub fn pure_analyzer_diagnostics::FileId::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for pure_analyzer_diagnostics::FileId
+pub fn pure_analyzer_diagnostics::FileId::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for pure_analyzer_diagnostics::FileId
+pub fn pure_analyzer_diagnostics::FileId::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::Copy for pure_analyzer_diagnostics::FileId
+impl core::marker::StructuralPartialEq for pure_analyzer_diagnostics::FileId
+impl serde_core::ser::Serialize for pure_analyzer_diagnostics::FileId
+pub fn pure_analyzer_diagnostics::FileId::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for pure_analyzer_diagnostics::FileId
+pub fn pure_analyzer_diagnostics::FileId::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for pure_analyzer_diagnostics::FileId
+impl core::marker::Send for pure_analyzer_diagnostics::FileId
+impl core::marker::Sync for pure_analyzer_diagnostics::FileId
+impl core::marker::Unpin for pure_analyzer_diagnostics::FileId
+impl core::marker::UnsafeUnpin for pure_analyzer_diagnostics::FileId
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_diagnostics::FileId
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_diagnostics::FileId
+impl<T, U> core::convert::Into<U> for pure_analyzer_diagnostics::FileId where U: core::convert::From<T>
+pub fn pure_analyzer_diagnostics::FileId::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_diagnostics::FileId where U: core::convert::Into<T>
+pub type pure_analyzer_diagnostics::FileId::Error = never
+pub fn pure_analyzer_diagnostics::FileId::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_diagnostics::FileId where U: core::convert::TryFrom<T>
+pub type pure_analyzer_diagnostics::FileId::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_diagnostics::FileId::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_diagnostics::FileId where T: core::clone::Clone
+pub type pure_analyzer_diagnostics::FileId::Owned = T
+pub fn pure_analyzer_diagnostics::FileId::clone_into(&self, &mut T)
+pub fn pure_analyzer_diagnostics::FileId::to_owned(&self) -> T
+impl<T> alloc::string::ToString for pure_analyzer_diagnostics::FileId where T: core::fmt::Display + ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::FileId::to_string(&self) -> alloc::string::String
+impl<T> core::any::Any for pure_analyzer_diagnostics::FileId where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::FileId::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_diagnostics::FileId where T: ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::FileId::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_diagnostics::FileId where T: ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::FileId::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_diagnostics::FileId where T: core::clone::Clone
+pub unsafe fn pure_analyzer_diagnostics::FileId::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_diagnostics::FileId
+pub fn pure_analyzer_diagnostics::FileId::from(T) -> T
+impl<T> serde_core::de::DeserializeOwned for pure_analyzer_diagnostics::FileId where T: for<'de> serde_core::de::Deserialize<'de>
+pub struct pure_analyzer_diagnostics::Fix
+pub pure_analyzer_diagnostics::Fix::applicability: pure_analyzer_diagnostics::Applicability
+pub pure_analyzer_diagnostics::Fix::edits: alloc::vec::Vec<pure_analyzer_diagnostics::TextEdit>
+pub pure_analyzer_diagnostics::Fix::title: alloc::string::String
+impl core::clone::Clone for pure_analyzer_diagnostics::Fix
+pub fn pure_analyzer_diagnostics::Fix::clone(&self) -> pure_analyzer_diagnostics::Fix
+impl core::cmp::Eq for pure_analyzer_diagnostics::Fix
+impl core::cmp::PartialEq for pure_analyzer_diagnostics::Fix
+pub fn pure_analyzer_diagnostics::Fix::eq(&self, &pure_analyzer_diagnostics::Fix) -> bool
+impl core::fmt::Debug for pure_analyzer_diagnostics::Fix
+pub fn pure_analyzer_diagnostics::Fix::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_diagnostics::Fix
+impl serde_core::ser::Serialize for pure_analyzer_diagnostics::Fix
+pub fn pure_analyzer_diagnostics::Fix::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for pure_analyzer_diagnostics::Fix
+pub fn pure_analyzer_diagnostics::Fix::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for pure_analyzer_diagnostics::Fix
+impl core::marker::Send for pure_analyzer_diagnostics::Fix
+impl core::marker::Sync for pure_analyzer_diagnostics::Fix
+impl core::marker::Unpin for pure_analyzer_diagnostics::Fix
+impl core::marker::UnsafeUnpin for pure_analyzer_diagnostics::Fix
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_diagnostics::Fix
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_diagnostics::Fix
+impl<T, U> core::convert::Into<U> for pure_analyzer_diagnostics::Fix where U: core::convert::From<T>
+pub fn pure_analyzer_diagnostics::Fix::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_diagnostics::Fix where U: core::convert::Into<T>
+pub type pure_analyzer_diagnostics::Fix::Error = never
+pub fn pure_analyzer_diagnostics::Fix::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_diagnostics::Fix where U: core::convert::TryFrom<T>
+pub type pure_analyzer_diagnostics::Fix::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_diagnostics::Fix::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_diagnostics::Fix where T: core::clone::Clone
+pub type pure_analyzer_diagnostics::Fix::Owned = T
+pub fn pure_analyzer_diagnostics::Fix::clone_into(&self, &mut T)
+pub fn pure_analyzer_diagnostics::Fix::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_diagnostics::Fix where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::Fix::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_diagnostics::Fix where T: ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::Fix::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_diagnostics::Fix where T: ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::Fix::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_diagnostics::Fix where T: core::clone::Clone
+pub unsafe fn pure_analyzer_diagnostics::Fix::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_diagnostics::Fix
+pub fn pure_analyzer_diagnostics::Fix::from(T) -> T
+impl<T> serde_core::de::DeserializeOwned for pure_analyzer_diagnostics::Fix where T: for<'de> serde_core::de::Deserialize<'de>
+pub struct pure_analyzer_diagnostics::Label
+pub pure_analyzer_diagnostics::Label::file: pure_analyzer_diagnostics::FileId
+pub pure_analyzer_diagnostics::Label::note: alloc::string::String
+pub pure_analyzer_diagnostics::Label::span: text_size::range::TextRange
+impl pure_analyzer_diagnostics::Label
+pub fn pure_analyzer_diagnostics::Label::new(pure_analyzer_diagnostics::FileId, text_size::range::TextRange) -> Self
+pub fn pure_analyzer_diagnostics::Label::with_note(pure_analyzer_diagnostics::FileId, text_size::range::TextRange, impl core::convert::Into<alloc::string::String>) -> Self
+impl core::clone::Clone for pure_analyzer_diagnostics::Label
+pub fn pure_analyzer_diagnostics::Label::clone(&self) -> pure_analyzer_diagnostics::Label
+impl core::cmp::Eq for pure_analyzer_diagnostics::Label
+impl core::cmp::PartialEq for pure_analyzer_diagnostics::Label
+pub fn pure_analyzer_diagnostics::Label::eq(&self, &pure_analyzer_diagnostics::Label) -> bool
+impl core::fmt::Debug for pure_analyzer_diagnostics::Label
+pub fn pure_analyzer_diagnostics::Label::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_diagnostics::Label
+impl serde_core::ser::Serialize for pure_analyzer_diagnostics::Label
+pub fn pure_analyzer_diagnostics::Label::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for pure_analyzer_diagnostics::Label
+pub fn pure_analyzer_diagnostics::Label::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for pure_analyzer_diagnostics::Label
+impl core::marker::Send for pure_analyzer_diagnostics::Label
+impl core::marker::Sync for pure_analyzer_diagnostics::Label
+impl core::marker::Unpin for pure_analyzer_diagnostics::Label
+impl core::marker::UnsafeUnpin for pure_analyzer_diagnostics::Label
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_diagnostics::Label
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_diagnostics::Label
+impl<T, U> core::convert::Into<U> for pure_analyzer_diagnostics::Label where U: core::convert::From<T>
+pub fn pure_analyzer_diagnostics::Label::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_diagnostics::Label where U: core::convert::Into<T>
+pub type pure_analyzer_diagnostics::Label::Error = never
+pub fn pure_analyzer_diagnostics::Label::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_diagnostics::Label where U: core::convert::TryFrom<T>
+pub type pure_analyzer_diagnostics::Label::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_diagnostics::Label::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_diagnostics::Label where T: core::clone::Clone
+pub type pure_analyzer_diagnostics::Label::Owned = T
+pub fn pure_analyzer_diagnostics::Label::clone_into(&self, &mut T)
+pub fn pure_analyzer_diagnostics::Label::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_diagnostics::Label where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::Label::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_diagnostics::Label where T: ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::Label::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_diagnostics::Label where T: ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::Label::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_diagnostics::Label where T: core::clone::Clone
+pub unsafe fn pure_analyzer_diagnostics::Label::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_diagnostics::Label
+pub fn pure_analyzer_diagnostics::Label::from(T) -> T
+impl<T> serde_core::de::DeserializeOwned for pure_analyzer_diagnostics::Label where T: for<'de> serde_core::de::Deserialize<'de>
+pub struct pure_analyzer_diagnostics::TextEdit
+pub pure_analyzer_diagnostics::TextEdit::new_text: alloc::string::String
+pub pure_analyzer_diagnostics::TextEdit::span: text_size::range::TextRange
+impl core::clone::Clone for pure_analyzer_diagnostics::TextEdit
+pub fn pure_analyzer_diagnostics::TextEdit::clone(&self) -> pure_analyzer_diagnostics::TextEdit
+impl core::cmp::Eq for pure_analyzer_diagnostics::TextEdit
+impl core::cmp::PartialEq for pure_analyzer_diagnostics::TextEdit
+pub fn pure_analyzer_diagnostics::TextEdit::eq(&self, &pure_analyzer_diagnostics::TextEdit) -> bool
+impl core::fmt::Debug for pure_analyzer_diagnostics::TextEdit
+pub fn pure_analyzer_diagnostics::TextEdit::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_diagnostics::TextEdit
+impl serde_core::ser::Serialize for pure_analyzer_diagnostics::TextEdit
+pub fn pure_analyzer_diagnostics::TextEdit::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for pure_analyzer_diagnostics::TextEdit
+pub fn pure_analyzer_diagnostics::TextEdit::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for pure_analyzer_diagnostics::TextEdit
+impl core::marker::Send for pure_analyzer_diagnostics::TextEdit
+impl core::marker::Sync for pure_analyzer_diagnostics::TextEdit
+impl core::marker::Unpin for pure_analyzer_diagnostics::TextEdit
+impl core::marker::UnsafeUnpin for pure_analyzer_diagnostics::TextEdit
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_diagnostics::TextEdit
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_diagnostics::TextEdit
+impl<T, U> core::convert::Into<U> for pure_analyzer_diagnostics::TextEdit where U: core::convert::From<T>
+pub fn pure_analyzer_diagnostics::TextEdit::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_diagnostics::TextEdit where U: core::convert::Into<T>
+pub type pure_analyzer_diagnostics::TextEdit::Error = never
+pub fn pure_analyzer_diagnostics::TextEdit::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_diagnostics::TextEdit where U: core::convert::TryFrom<T>
+pub type pure_analyzer_diagnostics::TextEdit::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_diagnostics::TextEdit::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_diagnostics::TextEdit where T: core::clone::Clone
+pub type pure_analyzer_diagnostics::TextEdit::Owned = T
+pub fn pure_analyzer_diagnostics::TextEdit::clone_into(&self, &mut T)
+pub fn pure_analyzer_diagnostics::TextEdit::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_diagnostics::TextEdit where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::TextEdit::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_diagnostics::TextEdit where T: ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::TextEdit::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_diagnostics::TextEdit where T: ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::TextEdit::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_diagnostics::TextEdit where T: core::clone::Clone
+pub unsafe fn pure_analyzer_diagnostics::TextEdit::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_diagnostics::TextEdit
+pub fn pure_analyzer_diagnostics::TextEdit::from(T) -> T
+impl<T> serde_core::de::DeserializeOwned for pure_analyzer_diagnostics::TextEdit where T: for<'de> serde_core::de::Deserialize<'de>
+pub struct pure_analyzer_diagnostics::UnknownDiagCode
+impl pure_analyzer_diagnostics::UnknownDiagCode
+pub fn pure_analyzer_diagnostics::UnknownDiagCode::value(&self) -> &str
+impl core::clone::Clone for pure_analyzer_diagnostics::UnknownDiagCode
+pub fn pure_analyzer_diagnostics::UnknownDiagCode::clone(&self) -> pure_analyzer_diagnostics::UnknownDiagCode
+impl core::cmp::Eq for pure_analyzer_diagnostics::UnknownDiagCode
+impl core::cmp::PartialEq for pure_analyzer_diagnostics::UnknownDiagCode
+pub fn pure_analyzer_diagnostics::UnknownDiagCode::eq(&self, &pure_analyzer_diagnostics::UnknownDiagCode) -> bool
+impl core::error::Error for pure_analyzer_diagnostics::UnknownDiagCode
+impl core::fmt::Debug for pure_analyzer_diagnostics::UnknownDiagCode
+pub fn pure_analyzer_diagnostics::UnknownDiagCode::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for pure_analyzer_diagnostics::UnknownDiagCode
+pub fn pure_analyzer_diagnostics::UnknownDiagCode::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_diagnostics::UnknownDiagCode
+impl core::marker::Freeze for pure_analyzer_diagnostics::UnknownDiagCode
+impl core::marker::Send for pure_analyzer_diagnostics::UnknownDiagCode
+impl core::marker::Sync for pure_analyzer_diagnostics::UnknownDiagCode
+impl core::marker::Unpin for pure_analyzer_diagnostics::UnknownDiagCode
+impl core::marker::UnsafeUnpin for pure_analyzer_diagnostics::UnknownDiagCode
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_diagnostics::UnknownDiagCode
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_diagnostics::UnknownDiagCode
+impl<T, U> core::convert::Into<U> for pure_analyzer_diagnostics::UnknownDiagCode where U: core::convert::From<T>
+pub fn pure_analyzer_diagnostics::UnknownDiagCode::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_diagnostics::UnknownDiagCode where U: core::convert::Into<T>
+pub type pure_analyzer_diagnostics::UnknownDiagCode::Error = never
+pub fn pure_analyzer_diagnostics::UnknownDiagCode::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_diagnostics::UnknownDiagCode where U: core::convert::TryFrom<T>
+pub type pure_analyzer_diagnostics::UnknownDiagCode::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_diagnostics::UnknownDiagCode::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_diagnostics::UnknownDiagCode where T: core::clone::Clone
+pub type pure_analyzer_diagnostics::UnknownDiagCode::Owned = T
+pub fn pure_analyzer_diagnostics::UnknownDiagCode::clone_into(&self, &mut T)
+pub fn pure_analyzer_diagnostics::UnknownDiagCode::to_owned(&self) -> T
+impl<T> alloc::string::ToString for pure_analyzer_diagnostics::UnknownDiagCode where T: core::fmt::Display + ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::UnknownDiagCode::to_string(&self) -> alloc::string::String
+impl<T> core::any::Any for pure_analyzer_diagnostics::UnknownDiagCode where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::UnknownDiagCode::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_diagnostics::UnknownDiagCode where T: ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::UnknownDiagCode::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_diagnostics::UnknownDiagCode where T: ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::UnknownDiagCode::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_diagnostics::UnknownDiagCode where T: core::clone::Clone
+pub unsafe fn pure_analyzer_diagnostics::UnknownDiagCode::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_diagnostics::UnknownDiagCode
+pub fn pure_analyzer_diagnostics::UnknownDiagCode::from(T) -> T
+pub struct pure_analyzer_diagnostics::UnknownReasonCode
+impl pure_analyzer_diagnostics::UnknownReasonCode
+pub fn pure_analyzer_diagnostics::UnknownReasonCode::value(&self) -> &str
+impl core::clone::Clone for pure_analyzer_diagnostics::UnknownReasonCode
+pub fn pure_analyzer_diagnostics::UnknownReasonCode::clone(&self) -> pure_analyzer_diagnostics::UnknownReasonCode
+impl core::cmp::Eq for pure_analyzer_diagnostics::UnknownReasonCode
+impl core::cmp::PartialEq for pure_analyzer_diagnostics::UnknownReasonCode
+pub fn pure_analyzer_diagnostics::UnknownReasonCode::eq(&self, &pure_analyzer_diagnostics::UnknownReasonCode) -> bool
+impl core::error::Error for pure_analyzer_diagnostics::UnknownReasonCode
+impl core::fmt::Debug for pure_analyzer_diagnostics::UnknownReasonCode
+pub fn pure_analyzer_diagnostics::UnknownReasonCode::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for pure_analyzer_diagnostics::UnknownReasonCode
+pub fn pure_analyzer_diagnostics::UnknownReasonCode::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_diagnostics::UnknownReasonCode
+impl core::marker::Freeze for pure_analyzer_diagnostics::UnknownReasonCode
+impl core::marker::Send for pure_analyzer_diagnostics::UnknownReasonCode
+impl core::marker::Sync for pure_analyzer_diagnostics::UnknownReasonCode
+impl core::marker::Unpin for pure_analyzer_diagnostics::UnknownReasonCode
+impl core::marker::UnsafeUnpin for pure_analyzer_diagnostics::UnknownReasonCode
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_diagnostics::UnknownReasonCode
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_diagnostics::UnknownReasonCode
+impl<T, U> core::convert::Into<U> for pure_analyzer_diagnostics::UnknownReasonCode where U: core::convert::From<T>
+pub fn pure_analyzer_diagnostics::UnknownReasonCode::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_diagnostics::UnknownReasonCode where U: core::convert::Into<T>
+pub type pure_analyzer_diagnostics::UnknownReasonCode::Error = never
+pub fn pure_analyzer_diagnostics::UnknownReasonCode::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_diagnostics::UnknownReasonCode where U: core::convert::TryFrom<T>
+pub type pure_analyzer_diagnostics::UnknownReasonCode::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_diagnostics::UnknownReasonCode::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_diagnostics::UnknownReasonCode where T: core::clone::Clone
+pub type pure_analyzer_diagnostics::UnknownReasonCode::Owned = T
+pub fn pure_analyzer_diagnostics::UnknownReasonCode::clone_into(&self, &mut T)
+pub fn pure_analyzer_diagnostics::UnknownReasonCode::to_owned(&self) -> T
+impl<T> alloc::string::ToString for pure_analyzer_diagnostics::UnknownReasonCode where T: core::fmt::Display + ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::UnknownReasonCode::to_string(&self) -> alloc::string::String
+impl<T> core::any::Any for pure_analyzer_diagnostics::UnknownReasonCode where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::UnknownReasonCode::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_diagnostics::UnknownReasonCode where T: ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::UnknownReasonCode::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_diagnostics::UnknownReasonCode where T: ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::UnknownReasonCode::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_diagnostics::UnknownReasonCode where T: core::clone::Clone
+pub unsafe fn pure_analyzer_diagnostics::UnknownReasonCode::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_diagnostics::UnknownReasonCode
+pub fn pure_analyzer_diagnostics::UnknownReasonCode::from(T) -> T
+pub const pure_analyzer_diagnostics::ALL_DIAG_CODES: &[pure_analyzer_diagnostics::DiagCode]
+pub const pure_analyzer_diagnostics::ALL_REASON_CODES: &[pure_analyzer_diagnostics::ReasonCode]
