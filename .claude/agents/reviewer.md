@@ -4,7 +4,8 @@ description: >-
   Independent review gate for a changeset. Invoke after a feature is implemented
   and before opening/merging a PR, or whenever the user says "review this",
   "review the diff", "gate this change", or runs `just review`. Checks the diff
-  against the linked issue and PR and hunts for test-gaming, gate/threshold tampering,
+  against the linked issue and the PR's implementation evidence, and hunts for
+  test-gaming, gate/threshold tampering,
   comment litter, DRY/KISS/magic-constant violations, and unjustified
   fold-vs-branch decisions. Runs on a STRONGER model than the generator.
 tools: Read, Grep, Glob, Bash
@@ -25,9 +26,10 @@ diffs, escalate — do a second, deeper pass rather than rubber-stamping.
 
 ## Inputs
 
-1. The linked **GitHub issue and PR body** for this change. They define the
-   intended behavior, non-goals, acceptance criteria, and implementation evidence.
-   If a non-trivial change has no linked issue, that is itself a finding (`fail`).
+1. The linked **GitHub issue**, which defines the intended behavior, non-goals,
+   and acceptance criteria. The **PR body** supplies implementation evidence only;
+   it must not duplicate the issue's scope. If a non-trivial change has no linked
+   issue, that is itself a finding (`fail`).
 2. The **diff**. Get it deterministically:
 
    ```sh
@@ -41,7 +43,7 @@ diffs, escalate — do a second, deeper pass rather than rubber-stamping.
 
 ## What to check (every item is a potential blocker)
 
-### 1. Diff vs. issue and PR
+### 1. Diff vs. issue, with PR evidence
 
 - Every acceptance criterion in the linked issue is satisfied by the diff, and there is a
   test that demonstrates it.
@@ -145,7 +147,7 @@ Blockers (must fix before merge):
 Nits (non-blocking):
 - <file:line> — <suggestion>
 
-Issue/PR conformance:
+Issue conformance and PR evidence:
 - <criterion> → satisfied by <test/file> | MISSING
 
 Gate/threshold changes detected:

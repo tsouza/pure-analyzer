@@ -10,11 +10,13 @@ diff.
 Context to hand it:
 
 - Diff: `git diff --merge-base origin/main` (fall back to `git diff main...HEAD`).
-- Scope: `$ARGUMENTS` if given, else use the linked GitHub issue and PR body.
+- Scope: `$ARGUMENTS` if given, else use the linked GitHub issue. Use the PR body
+  only as implementation evidence; it must not restate the issue.
 
 Ask the reviewer to check, per its charter:
 
-- diff vs. linked issue/PR (acceptance criteria met, no non-goals implemented),
+- diff vs. linked issue (acceptance criteria met, no non-goals implemented), with
+  the PR's implementation evidence,
 - test-gaming (skips, `#[ignore]`, weakened assertions, over-mocking, hardcoded
   seeds),
 - config/threshold/gate tampering (only tightening allowed; flag any loosening

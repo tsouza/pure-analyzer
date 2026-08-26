@@ -38,8 +38,9 @@ issue  →  worktree  →  implement  →  just ci  →  review  →  merge  →
    structural sweep, and the supply-chain audits run as their own `just` targets
    and as separate CI jobs, not from `just ci`. Nothing proceeds red. See
    [testing.md](testing.md).
-5. **Review.** A reviewer subagent checks the diff against the issue and PR,
-   hunts for gaming and gate-tampering, and enforces craft (DRY/KISS, comment economy).
+5. **Review.** A reviewer subagent checks the diff against the issue and uses the
+   PR's evidence to validate it, hunts for gaming and gate-tampering, and enforces
+   craft (DRY/KISS, comment economy).
    Risky changes receive a separate reviewer pass; deterministic aggregate
    checks remain independent required gates.
 6. **Merge.** One change, one PR, Conventional Commits, green.

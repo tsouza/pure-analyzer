@@ -43,7 +43,8 @@ just ci                    # must pass before you open a PR
 
 Start with a GitHub issue for the change, then open a PR. In the description:
 
-- link the issue and state the acceptance evidence,
+- link the issue and give implementation/test evidence without restating its
+  scope or acceptance criteria,
 - identify whether the diff belongs to analyzer, PureCARD, or shared
   infrastructure,
 - note any durable product or architecture documentation you updated,
