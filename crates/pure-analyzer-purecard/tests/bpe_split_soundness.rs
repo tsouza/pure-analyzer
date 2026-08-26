@@ -229,7 +229,8 @@ fn l1_l2_lane_streams_every_split_gold_soundly() {
         let eos = vocab.len() as u32;
         let grammar = CompiledGrammar::compile(vocab);
         for query in &refs {
-            let mut session = DecoderSession::with_schema(&grammar, schema.clone());
+            let mut session = DecoderSession::with_schema(&grammar, schema.clone())
+                .expect("grammar is fixed-engine");
             if let Err(reason) = replay_tokens(&mut session, &split_ids(query, &ids), eos) {
                 failures.push(format!("[{db_id}] {reason}\n  {query}"));
             }
@@ -460,7 +461,8 @@ fn l1_l2_merged_lane_streams_every_straddling_gold_soundly() {
         let eos = vocab.len() as u32;
         let grammar = CompiledGrammar::compile(vocab);
         for query in &refs {
-            let mut session = DecoderSession::with_schema(&grammar, schema.clone());
+            let mut session = DecoderSession::with_schema(&grammar, schema.clone())
+                .expect("grammar is fixed-engine");
             if let Err(reason) = replay_tokens(
                 &mut session,
                 &merged_id_stream(query, ALL_MERGES, &ids),
@@ -515,7 +517,8 @@ fn count_constraining(
     bytes_of: impl Fn(u32) -> Vec<u8>,
 ) -> (usize, usize) {
     let mut l1 = DecoderSession::new(grammar);
-    let mut l2 = DecoderSession::with_schema(grammar, schema.clone());
+    let mut l2 =
+        DecoderSession::with_schema(grammar, schema.clone()).expect("grammar is fixed-engine");
     let mut in_str = false;
     let (mut column, mut ident) = (0usize, 0usize);
     for &id in stream {

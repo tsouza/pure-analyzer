@@ -114,7 +114,8 @@ fn drive_to_fused<'g>(
     fused_index: usize,
     note: &str,
 ) -> DecoderSession<'g> {
-    let mut session = DecoderSession::with_schema(grammar, schema);
+    let mut session =
+        DecoderSession::with_schema(grammar, schema).expect("grammar is fixed-engine");
     for (step, _tok) in tokens.iter().take(fused_index).enumerate() {
         let id = step as u32;
         assert!(

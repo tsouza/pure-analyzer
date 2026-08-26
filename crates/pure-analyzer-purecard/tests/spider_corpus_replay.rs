@@ -190,7 +190,8 @@ fn run_all() -> Vec<Outcome> {
         let vocab = CaseVocab::build(&queries, &extras);
         let grammar = CompiledGrammar::compile(vocab.vocab.clone());
         let schema = Schema::from_json(&schema_json(db)).expect("delivered schema parses");
-        let mut session = DecoderSession::with_schema(&grammar, schema);
+        let mut session =
+            DecoderSession::with_schema(&grammar, schema).expect("grammar is fixed-engine");
         for case in cases {
             session.reset();
             let result = holds(&mut session, &vocab, case);

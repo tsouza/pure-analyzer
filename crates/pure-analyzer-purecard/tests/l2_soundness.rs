@@ -57,7 +57,8 @@ fn replay_under_l2(
     vocab: &TokenVocab,
     query: &str,
 ) {
-    let mut session = DecoderSession::with_schema(grammar, schema.clone());
+    let mut session =
+        DecoderSession::with_schema(grammar, schema.clone()).expect("grammar is fixed-engine");
     for (step, token) in lex(query).into_iter().enumerate() {
         let id = vocab
             .id_of(&token)

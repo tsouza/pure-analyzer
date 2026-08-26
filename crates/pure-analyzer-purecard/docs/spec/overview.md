@@ -124,9 +124,11 @@ over a thin PyO3 boundary — plus the oracle-driven test harness that measures 
 
 PureCARD exposes a fixed hand-written emitted-subset PDA, an optional L2 schema
 overlay at its covered positions, and a PyO3 masking boundary. Those are not a
-full Pure compiler, a full type checker, or a model-inference runner. In
-particular, `CompiledGrammar::from_spec` selects the fixed PDA rather than
-lowering a supplied grammar, and accepting-walk generation is schema-agnostic.
+full Pure compiler, a full type checker, or a model-inference runner. A host may
+instead supply its own grammar through `CompiledGrammar::from_spec`, which
+validates and lowers it (ADR-0010) into a bounded, data-driven automaton with
+L1 syntactic recognition only — the L2 schema overlay stays fixed-PDA-specific,
+and accepting-walk generation is schema-agnostic.
 The frozen corpus includes `map` (6 gold records), so the fixed grammar includes
 that emitted pipeline step.
 

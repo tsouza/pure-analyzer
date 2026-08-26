@@ -107,7 +107,7 @@ fn l1_streams_every_real_qwen_gold_soundly() {
     let tok = load_tokenizer();
     let vocab = build_qwen_vocab(&tok);
     let eos = vocab.eos();
-    let grammar = CompiledGrammar::from_spec("", vocab);
+    let grammar = CompiledGrammar::compile(vocab);
 
     let mut total = 0usize;
     let mut failures = Vec::new();
@@ -144,7 +144,7 @@ fn l1_streams_every_real_qwen_gold_soundly() {
 fn l1_l2_streams_every_in_scope_real_qwen_gold_soundly() {
     let tok = load_tokenizer();
     let vocab = build_qwen_vocab(&tok);
-    let grammar = CompiledGrammar::from_spec("", vocab);
+    let grammar = CompiledGrammar::compile(vocab);
 
     let mut total = 0usize;
     let mut narrowed = 0usize; // coarse H2 coverage: L2 cleared >=1 bit at some step
@@ -157,7 +157,8 @@ fn l1_l2_streams_every_in_scope_real_qwen_gold_soundly() {
         let ids = encode(&tok, &record.pure_text);
         let schema = load_schema(&record.db_id);
         let mut l1 = DecoderSession::new(&grammar);
-        let mut l2 = DecoderSession::with_schema(&grammar, schema);
+        let mut l2 =
+            DecoderSession::with_schema(&grammar, schema).expect("grammar is fixed-engine");
         let mut did_narrow = false;
         let mut failed = None;
         for (step, &id) in ids.iter().enumerate() {
@@ -224,7 +225,7 @@ fn qwen_specials_are_never_admissible_mid_query() {
     let tok = load_tokenizer();
     let vocab = build_qwen_vocab(&tok);
     let eos = vocab.eos();
-    let grammar = CompiledGrammar::from_spec("", vocab);
+    let grammar = CompiledGrammar::compile(vocab);
 
     // Drive a real gold query a couple of steps in, then probe.
     let sample = load_gold(&corpus_path())

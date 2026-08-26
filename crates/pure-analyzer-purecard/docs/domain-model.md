@@ -83,8 +83,10 @@ per-state context-independent mask caches.
 **Invariants.** The grammar is derived from, and testable against, the gold
 corpus: any production a gold query violates is wrong and must be relaxed; any
 construct the corpus lacks stays out until a gold query adds it (oracle-driven,
-never speculative). The machine is hand-written. `from_spec` selects that fixed
-PDA.
+never speculative). The shipped machine is hand-written; a host may instead
+supply its own grammar (a versioned `GrammarSpec`) through `from_spec`, which
+validates and lowers it into a bounded, data-driven automaton (ADR-0010) rather
+than reusing the fixed PDA.
 
 **Introduced by.** [`spec/architecture.md`](spec/architecture.md) §3, §4 and [`spec/grammar.md`](spec/grammar.md) §5.
 
@@ -161,11 +163,12 @@ zero core dependencies.
 
 ### Compile a grammar (once per model + grammar)
 
-`CompiledGrammar::compile(vocab)` (or the compatibility surface
-`from_spec(spec, vocab)`) binds the vocab and **sizes** the lazy per-state mask
-cache — it probes no token up front; each state's partition is built on first
-visit (`cached(state)`). `from_spec` selects the fixed emitted-subset PDA; it
-does not lower its argument.
+`CompiledGrammar::compile(vocab)` binds the vocab against the fixed
+emitted-subset PDA and **sizes** the lazy per-state mask cache — it probes no
+token up front; each state's partition is built on first visit (`cached(state)`).
+`from_spec(spec, vocab)` instead validates and lowers a host-supplied
+`GrammarSpec`, sizing its own cache from the resulting automaton's state count
+(L1-only — ADR-0010).
 [`spec/architecture.md`](spec/architecture.md) §4.5, §9.1.
 
 ### Constrain one generation (per decode step)

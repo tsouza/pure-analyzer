@@ -20,23 +20,43 @@
 
 use std::cell::OnceCell;
 
+use crate::grammar::compile::{CompiledAutomaton, RtnPda};
 use crate::grammar::pda::{Pda, State};
+use crate::grammar::spec::{GrammarSpec, SpecError};
 use crate::mask::BitMask;
 use crate::vocab::Vocab;
 
-/// A grammar compiled against a specific model vocabulary: the vocab itself plus
-/// the lazy per-[`State`] mask cache (§4).
+/// Which automaton a [`CompiledGrammar`] wraps: the hand-written, fixed §5 PDA,
+/// or a [`CompiledAutomaton`] lowered from a supplied [`GrammarSpec`].
 ///
-/// Wraps the single fixed byte-PDA: the emitted-Pure grammar (§5) is fixed, so
-/// [`from_spec`](CompiledGrammar::from_spec) ignores its `spec` argument and
-/// compiles that one PDA against the vocab. Build one per `(model, grammar)`
+/// The L2 schema overlay (`schema::scope::ScopeTracker`) is implemented
+/// against the fixed PDA's named [`State`] positions and is not available for
+/// a [`Spec`](Engine::Spec)-backed grammar — a supplied grammar gets L1
+/// syntactic recognition only (see
+/// `docs/decisions/0010-declarative-transition-table-spec.md`, Consequences).
+#[derive(Debug)]
+pub(crate) enum Engine {
+    /// The hand-written `grammar::pda` automaton.
+    Fixed,
+    /// An automaton lowered from a supplied [`GrammarSpec`].
+    Spec(CompiledAutomaton),
+}
+
+/// A grammar compiled against a specific model vocabulary: the vocab itself plus
+/// the lazy per-state mask cache (§4).
+///
+/// Wraps either the fixed hand-written byte-PDA ([`compile`](CompiledGrammar::compile))
+/// or an automaton lowered from a supplied grammar spec
+/// ([`from_spec`](CompiledGrammar::from_spec)). Build one per `(model, grammar)`
 /// pair and share it across sessions.
 #[derive(Debug)]
 pub struct CompiledGrammar {
     vocab: Vocab,
+    pub(crate) engine: Engine,
     /// One lazily-filled partition per automaton state, indexed by
-    /// [`State::index`]. `OnceCell` gives the interior mutability that lets a
-    /// shared `&self` fill a state's entry on first visit.
+    /// [`State::index`] for [`Engine::Fixed`] or the dense automaton state id
+    /// for [`Engine::Spec`]. `OnceCell` gives the interior mutability that lets
+    /// a shared `&self` fill a state's entry on first visit.
     cache: Vec<OnceCell<Cached>>,
 }
 
@@ -59,24 +79,52 @@ impl CompiledGrammar {
     #[must_use]
     pub fn compile(vocab: Vocab) -> Self {
         let cache = (0..State::COUNT).map(|_| OnceCell::new()).collect();
-        Self { vocab, cache }
+        Self {
+            vocab,
+            engine: Engine::Fixed,
+            cache,
+        }
     }
 
-    /// Compile a grammar for `vocab` from an EBNF `spec`. The emitted-Pure grammar
-    /// (§5) is fixed, so `spec` is ignored and this returns the single fixed
-    /// PDA-backed grammar compiled against `vocab` — identical to
-    /// [`compile`](CompiledGrammar::compile), preserving the declarative-input
-    /// API shape
-    /// the host calls through.
-    #[must_use]
-    pub fn from_spec(_spec: &str, vocab: Vocab) -> Self {
-        Self::compile(vocab)
+    /// Compile a grammar for `vocab` by lowering `spec` (JSON, see
+    /// [`GrammarSpec`]) into a runtime automaton.
+    ///
+    /// The compiled grammar supports L1 syntactic recognition
+    /// ([`DecoderSession::new`](crate::DecoderSession::new)); the L2 schema
+    /// overlay ([`DecoderSession::with_schema`](crate::DecoderSession::with_schema))
+    /// remains available only for a grammar built with
+    /// [`compile`](CompiledGrammar::compile) — see
+    /// `docs/decisions/0010-declarative-transition-table-spec.md`.
+    ///
+    /// # Errors
+    /// Returns [`SpecError`] if `spec` is not valid JSON, does not match the
+    /// versioned schema, or fails validation (unknown state/frame reference,
+    /// ambiguous or unreachable rule, unguarded pop, a `Goto` cycle, no
+    /// reachable accepting state, or an explosive state/rule count). No
+    /// [`DecoderSession`](crate::DecoderSession) can be built from a spec this
+    /// rejects.
+    pub fn from_spec(spec: &str, vocab: Vocab) -> Result<Self, SpecError> {
+        let parsed = GrammarSpec::parse(spec)?;
+        let automaton = CompiledAutomaton::compile(&parsed)?;
+        let cache = (0..automaton.state_count())
+            .map(|_| OnceCell::new())
+            .collect();
+        Ok(Self {
+            vocab,
+            engine: Engine::Spec(automaton),
+            cache,
+        })
     }
 
     /// The vocabulary this grammar was compiled against.
     #[must_use]
     pub fn vocab(&self) -> &Vocab {
         &self.vocab
+    }
+
+    /// Which automaton this grammar wraps.
+    pub(crate) fn engine(&self) -> &Engine {
+        &self.engine
     }
 
     /// The reserved EOS bit position: the id one past the last real token
@@ -95,8 +143,30 @@ impl CompiledGrammar {
     }
 
     /// The memoized partition for `state`, built on first access (§4.5).
+    ///
+    /// # Panics
+    /// Panics if `self.engine` is [`Engine::Spec`] — the fixed [`State`]
+    /// alphabet only ever pairs with [`Engine::Fixed`], and every caller
+    /// (`DecoderSession`'s `Fixed` cursor) already only reaches this method
+    /// on that engine.
     pub(crate) fn cached(&self, state: State) -> &Cached {
-        self.cache[state.index()].get_or_init(|| build(state, &self.vocab, self.mask_len()))
+        let Engine::Fixed = &self.engine else {
+            unreachable!("cached is only ever called on a Fixed-backed grammar");
+        };
+        self.cache[state.index()].get_or_init(|| build_fixed(state, &self.vocab, self.mask_len()))
+    }
+
+    /// The memoized partition for the spec-compiled automaton's state `id`,
+    /// built on first access (§4.5).
+    ///
+    /// # Panics
+    /// Panics if `self.engine` is [`Engine::Fixed`].
+    pub(crate) fn cached_spec(&self, id: u32) -> &Cached {
+        let Engine::Spec(automaton) = &self.engine else {
+            unreachable!("cached_spec is only ever called on a Spec-backed grammar");
+        };
+        self.cache[id as usize]
+            .get_or_init(|| build_spec(automaton, id, &self.vocab, self.mask_len()))
     }
 }
 
@@ -104,7 +174,7 @@ impl CompiledGrammar {
 /// over an **empty** stack (§4.2). A token that stays alive is a
 /// context-independent survivor; one that dies consulting the ambient stack is
 /// deferred; one that dies outright is admissible from no stack and is dropped.
-fn build(state: State, vocab: &Vocab, mask_len: usize) -> Cached {
+fn build_fixed(state: State, vocab: &Vocab, mask_len: usize) -> Cached {
     let base = Pda::at(state);
     let mut indep = BitMask::with_len(mask_len);
     let mut deferred = Vec::new();
@@ -116,6 +186,28 @@ fn build(state: State, vocab: &Vocab, mask_len: usize) -> Cached {
             deferred.push(id);
         } else if probe.alive {
             indep.set(id);
+        }
+    }
+    Cached {
+        indep,
+        deferred: deferred.into_boxed_slice(),
+    }
+}
+
+/// The [`Engine::Spec`] analogue of [`build_fixed`], probing via
+/// [`RtnPda::at`]/[`RtnPda::probe`] instead of the fixed PDA.
+fn build_spec(automaton: &CompiledAutomaton, id: u32, vocab: &Vocab, mask_len: usize) -> Cached {
+    let base = RtnPda::at(automaton, id);
+    let mut indep = BitMask::with_len(mask_len);
+    let mut deferred = Vec::new();
+    let mut scratch = Vec::new();
+    for token_id in 0..vocab.len() as u32 {
+        let bytes = vocab.bytes(token_id).unwrap_or(&[]);
+        let probe = base.probe(bytes, &mut scratch);
+        if probe.consulted_ambient {
+            deferred.push(token_id);
+        } else if probe.alive {
+            indep.set(token_id);
         }
     }
     Cached {
@@ -159,15 +251,40 @@ mod tests {
         assert_eq!(cached.indep.len(), grammar.mask_len());
     }
 
+    /// Accepts exactly the literal "ok".
+    const LITERAL_OK_SPEC: &str = r#"{
+        "version": "1",
+        "start": "start",
+        "frames": [],
+        "states": {
+            "start": { "rules": [
+                { "match": { "kind": "exact", "byte": 111 }, "action": { "kind": "next", "state": "saw_o" } }
+            ] },
+            "saw_o": { "rules": [
+                { "match": { "kind": "exact", "byte": 107 }, "action": { "kind": "next", "state": "done" } }
+            ] },
+            "done": { "accepting": true, "rules": [] }
+        }
+    }"#;
+
     #[test]
-    fn from_spec_ignores_the_spec_and_wraps_the_fixed_pda() {
-        let grammar = CompiledGrammar::from_spec("ignored ebnf", vocab());
-        // Same partition as `compile` — the spec argument is a no-op stub today.
-        let cached = grammar.cached(State::ExpectValue);
-        assert!(
-            cached.indep.test(1),
-            "an identifier survives a value position"
-        );
+    fn from_spec_rejects_malformed_json_before_compiling_anything() {
+        let error = CompiledGrammar::from_spec("not json", vocab())
+            .expect_err("malformed spec must not silently fall back to a fixed grammar");
+        assert!(matches!(
+            error,
+            crate::grammar::spec::SpecError::Malformed { .. }
+        ));
+    }
+
+    #[test]
+    fn from_spec_lowers_a_real_spec_into_a_working_cache() {
+        let grammar =
+            CompiledGrammar::from_spec(LITERAL_OK_SPEC, vocab()).expect("valid spec compiles");
+        // `id`s are dense automaton state ids here, not `pda::State` — probe
+        // the start state (id 0, the first key in the spec's sorted map).
+        let cached = grammar.cached_spec(0);
+        assert_eq!(cached.indep.len(), grammar.mask_len());
     }
 
     #[test]

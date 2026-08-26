@@ -41,15 +41,17 @@ use pyo3::wrap_pyfunction;
 
 use crate::error::DecodeError;
 use crate::grammar::compiled::CompiledGrammar;
+use crate::grammar::spec::SpecError;
 use crate::schema::{Schema, SchemaError};
 use crate::session::DecoderSession;
 use crate::vocab::Vocab;
 
 create_exception!(purecard, PureCARDError, PyValueError);
 
-/// A rejected token or malformed schema surfaces to Python as [`PureCARDError`],
-/// carrying the core error's `Display` text. `PyErr` and `DecodeError`/`SchemaError`
-/// map one-to-one, so `?` in a `#[pymethods]` body does the conversion.
+/// A rejected token, malformed schema, or malformed grammar spec surfaces to
+/// Python as [`PureCARDError`], carrying the core error's `Display` text.
+/// `PyErr` and `DecodeError`/`SchemaError`/`SpecError` map one-to-one, so `?`
+/// in a `#[pymethods]` body does the conversion.
 impl From<DecodeError> for PyErr {
     fn from(err: DecodeError) -> Self {
         PureCARDError::new_err(err.to_string())
@@ -58,6 +60,12 @@ impl From<DecodeError> for PyErr {
 
 impl From<SchemaError> for PyErr {
     fn from(err: SchemaError) -> Self {
+        PureCARDError::new_err(err.to_string())
+    }
+}
+
+impl From<SpecError> for PyErr {
+    fn from(err: SpecError) -> Self {
         PureCARDError::new_err(err.to_string())
     }
 }
@@ -83,15 +91,18 @@ pub(crate) struct Grammar {
 /// Compile `spec` against the byte-token vocabulary `vocab_bytes` (token id =
 /// list index) with reserved EOS id `eos_id`, returning a shareable [`Grammar`].
 ///
-/// Infallible: [`Vocab::from_byte_tokens`] and [`CompiledGrammar::from_spec`] do
-/// not fail (the latter currently ignores `spec` and compiles the fixed byte-PDA;
-/// §5 EBNF compilation lands later).
+/// Raises [`PureCARDError`] if `spec` is not a well-formed, valid grammar spec
+/// (see [`CompiledGrammar::from_spec`]).
 #[pyfunction]
-pub(crate) fn compile_grammar(spec: &str, vocab_bytes: Vec<Vec<u8>>, eos_id: u32) -> Grammar {
+pub(crate) fn compile_grammar(
+    spec: &str,
+    vocab_bytes: Vec<Vec<u8>>,
+    eos_id: u32,
+) -> PyResult<Grammar> {
     let vocab = Vocab::from_byte_tokens(vocab_bytes, eos_id);
-    Grammar {
-        inner: Rc::new(CompiledGrammar::from_spec(spec, vocab)),
-    }
+    Ok(Grammar {
+        inner: Rc::new(CompiledGrammar::from_spec(spec, vocab)?),
+    })
 }
 
 type BorrowedSession<'g> = DecoderSession<'g>;
@@ -153,7 +164,9 @@ impl Session {
         };
         let owner = Rc::clone(&grammar.inner);
         let cell = match schema {
-            Some(schema) => SessionCell::new(owner, |g| DecoderSession::with_schema(g, schema)),
+            Some(schema) => {
+                SessionCell::try_new(owner, |g| DecoderSession::with_schema(g, schema))?
+            }
             None => SessionCell::new(owner, |g| DecoderSession::new(g)),
         };
         Ok(Self {
@@ -235,9 +248,30 @@ mod tests {
     const OUT_OF_RANGE_TOKEN_ID: u32 = EOS_ID + 1;
     const GOLD_QUERY: [u32; 4] = [0, 1, 2, 3];
 
+    /// A grammar spec accepting exactly the literal byte string `text` — a
+    /// linear chain of exact-byte states, one per byte, ending accepting.
+    /// This module only exercises the FFI marshaling surface (mask packing,
+    /// error mapping, module registration), not grammar semantics, so a
+    /// literal-only spec is enough.
+    fn literal_spec(text: &[u8]) -> String {
+        let mut states = String::new();
+        for (index, &byte) in text.iter().enumerate() {
+            let target = if index + 1 == text.len() {
+                "done".to_string()
+            } else {
+                format!("s{}", index + 1)
+            };
+            states.push_str(&format!(
+                r#""s{index}": {{"rules": [{{"match": {{"kind": "exact", "byte": {byte}}}, "action": {{"kind": "next", "state": "{target}"}}}}]}},"#
+            ));
+        }
+        states.push_str(r#""done": {"accepting": true, "rules": []}"#);
+        format!(r#"{{"version": "1", "start": "s0", "frames": [], "states": {{{states}}}}}"#)
+    }
+
     fn grammar() -> super::Grammar {
         compile_grammar(
-            "",
+            &literal_spec(b"|X.all()->take(1)"),
             vec![
                 b"|X.all()".to_vec(),
                 b"->take(".to_vec(),
@@ -247,6 +281,7 @@ mod tests {
             ],
             EOS_ID,
         )
+        .expect("literal spec compiles")
     }
 
     #[test]

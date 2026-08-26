@@ -82,6 +82,8 @@ pub struct CompiledAutomaton {
     start: u32,
     frame_count: u32,
     boundary_byte: u8,
+    state_names: Vec<String>,
+    frame_names: Vec<String>,
 }
 
 impl CompiledAutomaton {
@@ -89,6 +91,30 @@ impl CompiledAutomaton {
     #[must_use]
     pub fn start(&self) -> u32 {
         self.start
+    }
+
+    /// The declared name of state `id`, or `"unknown"` if out of range —
+    /// used only for [`crate::error::DecodeError::DeadState`] reporting, off
+    /// the per-step hot path.
+    #[must_use]
+    pub fn state_name(&self, id: u32) -> &str {
+        self.state_names
+            .get(id as usize)
+            .map_or("unknown", String::as_str)
+    }
+
+    /// The declared name of frame `id`, or `"none"` for no frame / `"unknown"`
+    /// if out of range — used only for
+    /// [`crate::error::DecodeError::DeadState`] reporting.
+    #[must_use]
+    pub fn frame_name(&self, id: Option<u32>) -> &str {
+        match id {
+            None => "none",
+            Some(id) => self
+                .frame_names
+                .get(id as usize)
+                .map_or("unknown", String::as_str),
+        }
     }
 
     /// The number of states this automaton declares — the bound a
@@ -259,6 +285,10 @@ impl CompiledAutomaton {
             start,
             frame_count: frame_ids.len() as u32,
             boundary_byte: v1.boundary_byte,
+            // `state_ids` assigns ids by enumerating this same sorted-key
+            // iteration order, so index `i` here is exactly state id `i`.
+            state_names: v1.states.keys().cloned().collect(),
+            frame_names: v1.frames.clone(),
         };
 
         check_goto_acyclic(v1, &state_ids)?;
@@ -535,6 +565,18 @@ impl<'g> RtnPda<'g> {
     #[must_use]
     pub fn state(&self) -> u32 {
         self.state
+    }
+
+    /// The frame id on top of the stack, or `None` for an empty stack.
+    #[must_use]
+    pub fn stack_top(&self) -> Option<u32> {
+        self.stack.last().copied()
+    }
+
+    /// The automaton this instance is driven by.
+    #[must_use]
+    pub fn automaton(&self) -> &'g CompiledAutomaton {
+        self.automaton
     }
 
     /// Feed one `byte`, advancing the state and stack. Returns `false` — and
