@@ -1,15 +1,19 @@
 <!--
 Keep changes small and focused: one worktree, one branch, one PR per change.
-The reviewer subagent and CI both read this template — fill it out honestly.
+The linked GitHub Issue owns scope, non-goals, and acceptance criteria. Record
+only completed implementation and verification evidence here.
 -->
 
-## What & why
+## Implementation evidence
 
-What does this change do, and what problem does it solve? Link the spec/issue.
+Link the authoritative Issue without restating its scope or acceptance criteria.
 
 Closes #
 
-## Crate(s) touched
+- Implemented:
+- Verified:
+
+## Surface touched
 
 - [ ] pure-analyzer-lexer
 - [ ] pure-analyzer-syntax
@@ -24,12 +28,6 @@ Closes #
 - [ ] PureCARD corpus / oracle fixtures
 - [ ] PureCARD Python wheel / FFI
 - [ ] tooling / CI
-
-## Testing
-
-How is this verified? Note the layers exercised (unit / integration / chaos /
-mutation / fuzz), any PureCARD hermetic/live oracle boundary, and any Python
-boundary coverage. Flaky tests are not acceptable.
 
 ## Pre-existing issues
 
