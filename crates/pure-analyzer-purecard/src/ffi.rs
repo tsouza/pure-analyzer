@@ -91,8 +91,16 @@ pub(crate) struct Grammar {
 /// Compile `spec` against the byte-token vocabulary `vocab_bytes` (token id =
 /// list index) with reserved EOS id `eos_id`, returning a shareable [`Grammar`].
 ///
-/// Raises [`PureCARDError`] if `spec` is not a well-formed, valid grammar spec
-/// (see [`CompiledGrammar::from_spec`]).
+/// An empty `spec` is a convenience alias for the shipped emitted-subset
+/// grammar, compiled through the fast, hand-optimized path
+/// ([`CompiledGrammar::compile`]) rather than the generic spec-compiled one —
+/// the historical Python-facing contract, preserved even though
+/// [`CompiledGrammar::from_spec`] itself no longer treats an empty string as
+/// special (an empty string is not valid JSON, so it would otherwise be a
+/// [`SpecError::Malformed`]).
+///
+/// Raises [`PureCARDError`] if a non-empty `spec` is not a well-formed, valid
+/// grammar spec (see [`CompiledGrammar::from_spec`]).
 #[pyfunction]
 pub(crate) fn compile_grammar(
     spec: &str,
@@ -100,8 +108,13 @@ pub(crate) fn compile_grammar(
     eos_id: u32,
 ) -> PyResult<Grammar> {
     let vocab = Vocab::from_byte_tokens(vocab_bytes, eos_id);
+    let inner = if spec.is_empty() {
+        CompiledGrammar::compile(vocab)
+    } else {
+        CompiledGrammar::from_spec(spec, vocab)?
+    };
     Ok(Grammar {
-        inner: Rc::new(CompiledGrammar::from_spec(spec, vocab)?),
+        inner: Rc::new(inner),
     })
 }
 
