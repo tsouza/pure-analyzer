@@ -1,7 +1,8 @@
 # Contributing
 
-Contributions are welcome — human or agent. Everyone runs through the same gates,
-so the bar is the same for all.
+Proposals are welcome — human or agent. Maintainer-authored repository changes
+use the singular project identity described below, and everyone runs through the
+same quality gates.
 
 This is an umbrella repository with two independent products: the
 `pure-analyzer` scaffold and the PureCARD constrained decoder. PureCARD's M0–M5
@@ -20,6 +21,9 @@ The authoritative rules live in [`constitution.md`](constitution.md). Read it
 before your first change. The short version:
 
 - **One change → one branch → one PR.** Use a git worktree per branch.
+- **One project identity.** Human commits and GitHub writes use `tsouza`, never
+  `tsouza-squid`; `just project-identity` checks the exact Git identity and
+  account-specific origin. GitHub CLI operations use `just github <arguments>`.
 - **Conventional Commits** for every commit message
   (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:` …).
 - **`just` is the frontend.** Don't hand-roll `cargo` invocations in CI or docs —
@@ -37,6 +41,7 @@ before your first change. The short version:
 ```sh
 mise install && mise run install-cargo-tools   # provision toolchain + dev tools
 just hooks-install                             # wire the git hooks
+just project-identity                          # verify Git author + origin
 just new-feature <name>    # worktree + branch
 just spec <name>           # scaffold a spec, then plan → implement → verify
 # ... make your change ...

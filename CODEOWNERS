@@ -9,6 +9,7 @@
 
 # The non-negotiables and the agent's operating manual.
 /constitution.md            @tsouza
+/AGENTS.md                  @tsouza
 /CLAUDE.md                  @tsouza
 
 # Guardrail configuration — thresholds, bans, and gate wiring. Changes to these
@@ -26,3 +27,7 @@
 
 # Agent tooling: skills, subagents, hooks.
 /.claude/                   @tsouza
+/scripts/checks/project-identity.mjs @tsouza
+/scripts/github.mjs        @tsouza
+/scripts/hooks/            @tsouza
+/scripts/lib/project-identity.mjs @tsouza

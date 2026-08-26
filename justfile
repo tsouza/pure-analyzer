@@ -284,6 +284,19 @@ test-python:
 # Structural / hygiene checks
 # ---------------------------------------------------------------------------
 
+# Verify the exact effective Git author/committer and account-specific origin.
+project-identity:
+    bun scripts/checks/project-identity.mjs git
+
+# Validate the GitHub Actions actor/PR-author context without a network call.
+project-identity-ci:
+    bun scripts/checks/project-identity.mjs ci
+
+# Pin the stored `tsouza` token through verification and GitHub CLI execution.
+[positional-arguments]
+github *args:
+    bun scripts/github.mjs "$@"
+
 # ast-grep structural rules (banned constructs, architecture guardrails).
 sweep:
     cargo xtask sweep

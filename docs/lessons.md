@@ -63,6 +63,7 @@ made obsolete by a design change. Never silently delete — provenance is the po
 Drained into their enforcing home; kept only as one-line pointers so the flywheel
 stays auditable. Full context lives in the linked home and this file's git history.
 
+- **A remembered account choice is not an identity boundary** (multiple valid GitHub CLI sessions and Git config/environment precedence can silently select the wrong human identity) → exact author/committer/SSH-remote hooks, a token-pinned GitHub wrapper, an agent PreToolUse guard, and event-author/commit-range CI back [constitution.md](../constitution.md) §2 (Project identity). (2026-08-26, maintainer hard rule)
 - **A one-tool recipe stays a plain `just` line; only real control flow moves to `cargo xtask`** (a nested `cargo xtask` → `cargo <plugin>` call can mangle the plugin's argv) → [constitution.md](../constitution.md) §2. (2026-07-05)
 - **Verify a pin's current version at write time (`cargo add`), don't trust memory or lean on Dependabot as the currency mechanism** → [constitution.md](../constitution.md) §2 (Latest stable, verified). (2026-07-05)
 - **The toolchain is declared once in `rust-toolchain.toml`; CI doesn't re-declare it with a `dtolnay/rust-toolchain` step** → [constitution.md](../constitution.md) §1. (2026-07-05)

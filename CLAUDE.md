@@ -26,6 +26,11 @@ Read it. The essentials:
 - **No `unwrap`/`expect`/`panic!`/`todo!`/`unimplemented!`/`dbg!` outside tests.**
   `thiserror` in libs, `anyhow` at boundaries. `tracing`, never `println!`.
 - **One change → one worktree → one PR.** Conventional Commits. Nothing merges red.
+- **Only GitHub account `tsouza`, never `tsouza-squid`.** Git author/committer
+  must be `Thiago Souza <122435+tsouza@users.noreply.github.com>` and `origin`
+  must be `git@github.com-tsouza:tsouza/pure-analyzer.git`. Run
+  `just project-identity`; route GitHub CLI through `just github`. The Bun
+  PreToolUse hook is an early warning; lefthook and CI are authoritative gates.
 - **`just` is the frontend.** Need a target that doesn't exist? Build it. Don't
   hand-roll `cargo` in CI or docs.
 - **No shell scripts.** Zero `.sh` files, no non-trivial inline shell. Automation
@@ -55,6 +60,7 @@ Read it. The essentials:
 
 ```bash
 mise install && mise run install-cargo-tools  # provision toolchain + git hooks (once)
+just project-identity    # verify author + account-specific origin
 just new-feature <name> # spin up a worktree + branch
 just spec <name>        # scaffold a feature spec, then /spec plan→implement→verify
 just ci                 # fast inner-loop gate (necessary, not sufficient)
@@ -89,7 +95,9 @@ The generator writes; the **reviewer subagent is the gate**. See
 1. `just ci` is green (the fast gate). For anything beyond a trivial change, run
    `just ci-full` (the full CI mirror) too — a green `just ci` alone is not
    sufficient. No skips, no weakened gates.
-2. The diff matches its spec; the domain-model/lessons/ADRs are updated if the
+2. `just project-identity` is green, and every GitHub CLI write is sent through
+   `just github` under its pinned and verified `tsouza` credential.
+3. The diff matches its spec; the domain-model/lessons/ADRs are updated if the
    change taught us something.
-3. Any pre-existing issue you touched is accounted for in the PR description.
-4. You added the rule/test/lint that prevents this change's bugs from recurring.
+4. Any pre-existing issue you touched is accounted for in the PR description.
+5. You added the rule/test/lint that prevents this change's bugs from recurring.

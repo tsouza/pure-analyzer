@@ -4,6 +4,8 @@
 pre-commit:
   parallel: true
   commands:
+    project-identity:
+      run: bun scripts/checks/project-identity.mjs git
     fmt:
       glob: "*.rs"
       stage_fixed: true
@@ -30,3 +32,8 @@ commit-msg:
   commands:
     commitlint:
       run: bunx commitlint --edit {1}
+
+pre-push:
+  commands:
+    project-identity:
+      run: bun scripts/checks/project-identity.mjs git --remote-name {1} --remote-url {2}

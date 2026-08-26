@@ -1,4 +1,18 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
-  "//": "Project settings for pure-analyzer. Git hooks are declared in lefthook.yml (installed by 'just hooks-install'); there are intentionally no Claude Code shell hooks (constitution §2 forbids shell scripts)."
+  "//": "Project settings for pure-analyzer. Git hooks remain declarative in lefthook.yml; this Bun PreToolUse hook is an agent-side early identity check, not a shell script or a replacement for Git/CI enforcement.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun \"$CLAUDE_PROJECT_DIR/scripts/hooks/claude-project-identity.mjs\"",
+            "timeout": 20
+          }
+        ]
+      }
+    ]
+  }
 }

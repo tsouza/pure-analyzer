@@ -59,6 +59,21 @@ Every rule is tagged. If a rule is untagged, treat it as PROTECTED.
 
 ## 2. Change discipline — PROTECTED
 
+- **Project identity is singular — PROTECTED.** Every human-authored commit and
+  every GitHub write for this repository (branches, issues, pull requests,
+  reviews, merges, releases, and settings) uses account **`tsouza`**; account
+  **`tsouza-squid` is forbidden**. Effective Git author and committer are
+  exactly `Thiago Souza <122435+tsouza@users.noreply.github.com>`, and `origin`
+  fetch/push URLs are exactly the account-specific SSH remote
+  `git@github.com-tsouza:tsouza/pure-analyzer.git`. GitHub CLI writes go through
+  `just github`, whose Bun wrapper obtains the stored `tsouza` token from the
+  canonical OS-user config, pins it to `github.com`, verifies that same token
+  with `gh api user`, and executes the requested command with the same
+  credential. Declarative Git hooks and the required CI aggregate enforce the
+  locally and event-observable parts; genuine GitHub `Bot` PRs such as
+  Dependabot remain allowed. No agent may switch to any other account; the only
+  permitted auth repair is
+  `just github auth switch --user tsouza`.
 - One change, one branch, one PR. Every branch gets its own git worktree.
 - Before opening a PR, the branch must descend from current `origin/main` (check
   `git merge-base`); rebase onto it. If the branch diverged far back and

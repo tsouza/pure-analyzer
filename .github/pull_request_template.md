@@ -38,6 +38,7 @@ fix into this PR or BRANCHED it out, and justify the choice.
 
 ## Checklist
 
+- [ ] Human PR author is `tsouza`, `just project-identity` passes, and GitHub CLI writes used `just github`.
 - [ ] `just ci` passes locally.
 - [ ] `just ci-full` passes for changes that touch slow or specialized gates.
 - [ ] `just review` (structural rules, unused deps, secret scan) is clean.
