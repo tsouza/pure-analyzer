@@ -11,10 +11,13 @@
 //! and [`CompiledGrammar::from_spec`] ignores its `spec` argument, compiling the
 //! single fixed PDA against the vocab.
 
+pub mod compile;
 pub mod compiled;
 pub mod pda;
+pub mod spec;
 
 pub use compiled::CompiledGrammar;
+pub use spec::{GrammarSpec, SpecError};
 
 /// The automaton configuration at the point a byte was rejected: the names of the
 /// current [`State`](pda::State) and the top [`Frame`](pda::Frame).
