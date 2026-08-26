@@ -1614,9 +1614,7 @@ fn excluded_manifest_packages(workspace_root: &Path) -> Result<Vec<serde_json::V
 }
 
 /// Match `workspace.exclude` exactly against the classified package paths.
-fn classified_excluded_paths<'a>(
-    exclusions: &'a [toml::Value],
-) -> Result<Vec<(&'a str, &'static str)>> {
+fn classified_excluded_paths(exclusions: &[toml::Value]) -> Result<Vec<(&str, &'static str)>> {
     let mut relative_paths: Vec<&str> = exclusions
         .iter()
         .map(|value| {
