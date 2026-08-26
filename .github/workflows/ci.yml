@@ -137,11 +137,15 @@ jobs:
           tool: cargo-mutants,cargo-nextest,just
       - name: cargo mutants
         run: just test-mutation
-      - uses: actions/upload-artifact@v7
+      - name: Upload mutation reports
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: mutants-out
-          path: mutants.out
+          path: |
+            target/mutants-default
+            target/mutants-ffi
+          if-no-files-found: error
 
   # --- Supply chain: deny + audit + unused deps ----------------------------
   supply-chain:

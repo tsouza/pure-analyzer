@@ -50,20 +50,20 @@ No fast standalone static-analysis toolchain for Pure exists today; current tool
 
 ### 1.4 What is IN v1 vs future
 
-| Capability                                                                                             | v0.1                          | v0.2 | v0.3 | v2+ |
-| ------------------------------------------------------------------------------------------------------ | ----------------------------- | ---- | ---- | --- |
+| Capability                                                                                             | v0.1                           | v0.2 | v0.3 | v2+ |
+| ------------------------------------------------------------------------------------------------------ | ------------------------------ | ---- | ---- | --- |
 | lexer + resilient parser + lossless CST + spans                                                        | ✅                             |      |      |     |
 | `validate` (grammar fidelity + over-admission guards)                                                  | ✅                             |      |      |     |
 | model loader (Pure-file **and** PMCD) + resolver                                                       | ✅                             |      |      |     |
 | `lint` (milestoning arity core + unknown-property + cardinality)                                       | ✅                             |      |      |     |
 | `fmt` **default layout mode** (lossless-CST re-emit)                                                   | ✅                             |      |      |     |
-| `eq`/`diff` structural NF + schema/structural refutation (**M4a**)                                     |                               | ✅    |      |     |
-| `eq` bounded bag-interpreter witness search (**M4b**)                                                  |                               | ✅¹   |      |     |
-| `fmt --canonical` (serialize eq NF)                                                                    |                               | ✅    |      |     |
-| reason-code taxonomy + `explain` + doc pages                                                           |                               | ✅    |      |     |
-| **`pure-analyzer-lsp` — diagnostics-on-change + code-actions (`Fix`) + hover (`explain`) + go-to-def** |                               | ✅    |      |     |
-| LSP `salsa` incremental recompute (only if profiling demands)                                          |                               |      | ✅    |     |
-| SMT symbolic eq arm (feature-gated)                                                                    |                               |      |      | ✅   |
+| `eq`/`diff` structural NF + schema/structural refutation (**M4a**)                                     |                                | ✅   |      |     |
+| `eq` bounded bag-interpreter witness search (**M4b**)                                                  |                                | ✅¹  |      |     |
+| `fmt --canonical` (serialize eq NF)                                                                    |                                | ✅   |      |     |
+| reason-code taxonomy + `explain` + doc pages                                                           |                                | ✅   |      |     |
+| **`pure-analyzer-lsp` — diagnostics-on-change + code-actions (`Fix`) + hover (`explain`) + go-to-def** |                                | ✅   |      |     |
+| LSP `salsa` incremental recompute (only if profiling demands)                                          |                                |      | ✅   |     |
+| SMT symbolic eq arm (feature-gated)                                                                    |                                |      |      | ✅  |
 | Research-grade milestoning-equivalence THEORY                                                          | ❌ never in this project scope |      |      |     |
 
 ¹ M4b ships only after its null/constraint/partiality semantics are pinned by the engine differential corpus (§8). If not ready, v0.2 ships M4a only; the general witness refuter waits.
