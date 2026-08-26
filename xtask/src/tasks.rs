@@ -1596,6 +1596,27 @@ fn excluded_manifest_packages(workspace_root: &Path) -> Result<Vec<serde_json::V
         .and_then(toml::Value::as_array)
         .context("root Cargo.toml workspace.exclude must be an array")?;
 
+    let classified_paths = classified_excluded_paths(exclusions)?;
+
+    let mut packages = Vec::with_capacity(classified_paths.len());
+    for (relative, expected_name) in classified_paths {
+        let manifest_path = workspace_root.join(relative).join("Cargo.toml");
+        let source = std::fs::read_to_string(&manifest_path)
+            .with_context(|| format!("reading excluded manifest {}", manifest_path.display()))?;
+        let package = manifest_package_value(&source, &manifest_path.display().to_string())?;
+        let actual_name = package["name"]
+            .as_str()
+            .context("parsed excluded package has no name")?;
+        validate_excluded_package_name(relative, expected_name, actual_name)?;
+        packages.push(package);
+    }
+    Ok(packages)
+}
+
+/// Match `workspace.exclude` exactly against the classified package paths.
+fn classified_excluded_paths<'a>(
+    exclusions: &'a [toml::Value],
+) -> Result<Vec<(&'a str, &'static str)>> {
     let mut relative_paths: Vec<&str> = exclusions
         .iter()
         .map(|value| {
@@ -1606,7 +1627,7 @@ fn excluded_manifest_packages(workspace_root: &Path) -> Result<Vec<serde_json::V
         .collect::<Result<_>>()?;
     relative_paths.sort_unstable();
 
-    let mut packages = Vec::with_capacity(relative_paths.len());
+    let mut classified_paths = Vec::with_capacity(relative_paths.len());
     for relative in relative_paths {
         if relative.contains(['*', '?', '[', ']']) {
             anyhow::bail!(
@@ -1623,21 +1644,45 @@ fn excluded_manifest_packages(workspace_root: &Path) -> Result<Vec<serde_json::V
                     "workspace.exclude path `{relative}` has no product-boundary classification"
                 )
             })?;
-        let manifest_path = workspace_root.join(relative).join("Cargo.toml");
-        let source = std::fs::read_to_string(&manifest_path)
-            .with_context(|| format!("reading excluded manifest {}", manifest_path.display()))?;
-        let package = manifest_package_value(&source, &manifest_path.display().to_string())?;
-        let actual_name = package["name"]
-            .as_str()
-            .context("parsed excluded package has no name")?;
-        if actual_name != expected_name {
-            anyhow::bail!(
-                "workspace.exclude path `{relative}` is classified as package `{expected_name}` +                 but its manifest declares `{actual_name}`"
-            );
-        }
-        packages.push(package);
+        classified_paths.push((relative, expected_name));
     }
-    Ok(packages)
+
+    let present_paths: BTreeSet<&str> = classified_paths
+        .iter()
+        .map(|(relative, _)| *relative)
+        .collect();
+    let missing_paths: Vec<&str> = EXCLUDED_PACKAGE_BOUNDARIES
+        .iter()
+        .map(|(relative, _, _)| *relative)
+        .filter(|relative| !present_paths.contains(relative))
+        .collect();
+    if !missing_paths.is_empty() {
+        anyhow::bail!(
+            "root Cargo.toml workspace.exclude is missing expected product-boundary path(s): {}",
+            missing_paths
+                .iter()
+                .map(|relative| format!("`{relative}`"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+    }
+
+    Ok(classified_paths)
+}
+
+/// Ensure a classified exclusion still declares the package name we inspect.
+fn validate_excluded_package_name(
+    relative: &str,
+    expected_name: &str,
+    actual_name: &str,
+) -> Result<()> {
+    if actual_name != expected_name {
+        anyhow::bail!(
+            "workspace.exclude path `{relative}` is classified as package `{expected_name}` \
+             but its manifest declares `{actual_name}`"
+        );
+    }
+    Ok(())
 }
 
 /// Convert a standalone Cargo manifest into the metadata subset used by gates.
@@ -2580,6 +2625,58 @@ missing_docs = \"warn\"
         let mut reversed = packages.clone();
         reversed.reverse();
         assert_eq!(cross_product_violations(&reversed), expected);
+    }
+
+    #[test]
+    fn excluded_paths_require_every_classified_boundary() -> Result<()> {
+        let exclusions: Vec<toml::Value> = EXCLUDED_PACKAGE_BOUNDARIES
+            .iter()
+            .map(|(relative, _, _)| toml::Value::String((*relative).to_string()))
+            .collect();
+        let classified = classified_excluded_paths(&exclusions)?;
+        let paths: Vec<&str> = classified.iter().map(|(relative, _)| *relative).collect();
+        assert_eq!(
+            paths,
+            [
+                "crates/pure-analyzer-purecard/fuzz",
+                "crates/pure-analyzer-purecard/lints",
+                "fuzz",
+            ]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn excluded_paths_fail_closed_when_an_expected_boundary_is_missing() -> Result<()> {
+        let exclusions: Vec<toml::Value> = EXCLUDED_PACKAGE_BOUNDARIES
+            .iter()
+            .filter(|(relative, _, _)| *relative != "crates/pure-analyzer-purecard/lints")
+            .map(|(relative, _, _)| toml::Value::String((*relative).to_string()))
+            .collect();
+        let error = match classified_excluded_paths(&exclusions) {
+            Ok(_) => anyhow::bail!("expected a missing workspace.exclude path to fail"),
+            Err(error) => error,
+        };
+        assert_eq!(
+            error.to_string(),
+            "root Cargo.toml workspace.exclude is missing expected product-boundary path(s): \
+             `crates/pure-analyzer-purecard/lints`"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn excluded_manifest_name_mismatch_diagnostic_is_stable() -> Result<()> {
+        let error = match validate_excluded_package_name("fuzz", "fuzz", "renamed-fuzz") {
+            Ok(()) => anyhow::bail!("expected a mismatched excluded package name to fail"),
+            Err(error) => error,
+        };
+        assert_eq!(
+            error.to_string(),
+            "workspace.exclude path `fuzz` is classified as package `fuzz` \
+             but its manifest declares `renamed-fuzz`"
+        );
+        Ok(())
     }
 
     #[test]

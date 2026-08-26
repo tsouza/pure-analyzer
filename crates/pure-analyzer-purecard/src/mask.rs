@@ -3,7 +3,7 @@
 //! [`BitMask`] is a bespoke `Vec<u64>` bitset: `ceil(len / 64)` words, bit `id`
 //! living in word `id / 64` at position `id % 64`. It is deliberately *not* a
 //! `bitvec`/`roaring` dependency — a word-wise newtype is a few dozen lines, needs
-//! no vetting rubric, and keeps the published core's `[dependencies]` at
+//! no vetting rubric, and keeps the unpublished migrated core's `[dependencies]` at
 //! `⊆ { thiserror, serde, serde_json }` (constitution §1, `check-core-deplight`).
 //!
 //! The mask spans `V + 1` bits over a `V`-token vocabulary: bit `V` is the
@@ -151,9 +151,7 @@ impl BitMask {
     pub fn iter_ones(&self) -> impl Iterator<Item = u32> + '_ {
         self.words.iter().enumerate().flat_map(|(word, &bits)| {
             let base = (word as u32) * WORD_BITS;
-            (0..WORD_BITS).filter_map(move |bit| {
-                (bits & (1u64 << bit) != 0).then_some(base - /* ~ changed by cargo-mutants ~ */ bit)
-            })
+            (0..WORD_BITS).filter_map(move |bit| (bits & (1u64 << bit) != 0).then_some(base + bit))
         })
     }
 }

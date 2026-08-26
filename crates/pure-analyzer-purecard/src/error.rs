@@ -1,8 +1,9 @@
-//! Error types for the shipped decoder core.
+//! Error types for the migrated PureCARD decoder core.
 //!
 //! [`DecodeError`] is the single channel by which the byte recognizer reports
-//! that a stream has no valid continuation. It ships in the published `purecard`
-//! crate (M1) so a consumer driving the recognizer can match on it; the
+//! that a stream has no continuation in its fixed PDA. It remains public in the
+//! unpublished `pure-analyzer-purecard` package so a consumer driving the
+//! recognizer can match on it; the
 //! corpus-loader's `CorpusError` stays in the oracle harness (`tests/support/`),
 //! since loading the gold corpus is not decoder API.
 
