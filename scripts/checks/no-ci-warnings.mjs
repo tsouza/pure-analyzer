@@ -126,8 +126,11 @@ if (import.meta.main) {
   // A dropped log means its warnings go unscanned, so a fetch failure must fail
   // the gate — never vanish silently. Retry first so a transient gh/API blip
   // doesn't flake the gate (constitution §3), then die if a log stays unreadable.
-  const FETCH_ATTEMPTS = 3;
-  const RETRY_BACKOFF_MS = 1000;
+  // GitHub can acknowledge a completed job several seconds before its per-job
+  // log archive is readable. Allow up to roughly one minute of linear backoff;
+  // three near-immediate attempts proved too short on clean hosted runs.
+  const FETCH_ATTEMPTS = 8;
+  const RETRY_BACKOFF_MS = 2000;
 
   async function fetchJobLog(job) {
     for (let attempt = 1; attempt <= FETCH_ATTEMPTS; attempt++) {

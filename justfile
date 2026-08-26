@@ -101,6 +101,7 @@ test-scripts:
 # Runs in-place (mutates the checked-out tree directly, reverting after each
 # trial) for speed on both CI's disposable checkout and a developer's own tree.
 test-mutation:
+    mkdir -p target
     cargo mutants --workspace --exclude 'crates/pure-analyzer-purecard/src/ffi.rs' --in-place --output target/mutants-default
     cargo mutants --package pure-analyzer-purecard --features python-test --file 'crates/pure-analyzer-purecard/src/ffi.rs' --in-place --output target/mutants-ffi -- --lib
 
