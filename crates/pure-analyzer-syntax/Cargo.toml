@@ -1,6 +1,6 @@
 [package]
 name = "pure-analyzer-syntax"
-description = "Syntax component of the pure-analyzer workspace."
+description = "Checked syntax kinds, validated parser events, and immutable typed views over a lossless concrete syntax tree."
 edition.workspace = true
 version.workspace = true
 license.workspace = true
@@ -12,5 +12,10 @@ publish = false
 [lints]
 workspace = true
 
-# Scaffold only — no dependencies until the first parser-layer feature lands.
 [dependencies]
+pure-analyzer-lexer.workspace = true
+text-size.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true

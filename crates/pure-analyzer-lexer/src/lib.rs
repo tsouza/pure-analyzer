@@ -9,7 +9,7 @@
 //! drives it.
 //!
 //! `SyntaxKind` here covers **terminal (token) kinds only**. It is not the
-//! richer, rowan-compatible kind enum `pure-analyzer-syntax` builds for the
+//! richer, checked kind enum `pure-analyzer-syntax` builds for the
 //! CST (terminals *and* nonterminal node kinds) — this crate has zero
 //! internal dependencies (`xtask`'s `ALLOWED_INTERNAL_DEPS`), so it cannot
 //! depend on that crate's design, only be depended upon by it.

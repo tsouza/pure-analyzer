@@ -14,7 +14,7 @@ workspace = true
 
 # Leaf crate: no internal workspace dependencies. `text-size` is the same
 # byte-offset span type the lexer/syntax/parser layers use, so a `Label`'s
-# span is directly comparable to a `rowan` node's range with no conversion.
+# span is directly comparable to a syntax node's range with no conversion.
 [dependencies]
 text-size.workspace = true
 serde.workspace = true

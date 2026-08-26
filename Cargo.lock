@@ -1188,6 +1188,12 @@ version = "0.1.0"
 [[package]]
 name = "pure-analyzer-syntax"
 version = "0.1.0"
+dependencies = [
+ "proptest",
+ "pure-analyzer-lexer",
+ "text-size",
+ "thiserror",
+]
 
 [[package]]
 name = "pyo3"

@@ -1,2 +1,670 @@
 pub mod pure_analyzer_syntax
+pub use pure_analyzer_syntax::TextRange
+pub use pure_analyzer_syntax::TextSize
+pub enum pure_analyzer_syntax::BuildError
+pub pure_analyzer_syntax::BuildError::AdvanceOutsideNode
+pub pure_analyzer_syntax::BuildError::AdvanceOutsideNode::event_index: usize
+pub pure_analyzer_syntax::BuildError::AdvancePastTokens
+pub pure_analyzer_syntax::BuildError::AdvancePastTokens::event_index: usize
+pub pure_analyzer_syntax::BuildError::AdvancePastTokens::token_count: usize
+pub pure_analyzer_syntax::BuildError::CloseWithoutOpen
+pub pure_analyzer_syntax::BuildError::CloseWithoutOpen::event_index: usize
+pub pure_analyzer_syntax::BuildError::EmptyTokenRange
+pub pure_analyzer_syntax::BuildError::EmptyTokenRange::offset: text_size::size::TextSize
+pub pure_analyzer_syntax::BuildError::EmptyTokenRange::token_index: usize
+pub pure_analyzer_syntax::BuildError::ExpectedNodeKind
+pub pure_analyzer_syntax::BuildError::ExpectedNodeKind::event_index: usize
+pub pure_analyzer_syntax::BuildError::ExpectedNodeKind::kind: pure_analyzer_syntax::SyntaxKind
+pub pure_analyzer_syntax::BuildError::ExpectedRootKind
+pub pure_analyzer_syntax::BuildError::ExpectedRootKind::actual: pure_analyzer_syntax::SyntaxKind
+pub pure_analyzer_syntax::BuildError::ForeignCheckpoint
+pub pure_analyzer_syntax::BuildError::IncompleteTokenCoverage
+pub pure_analyzer_syntax::BuildError::IncompleteTokenCoverage::actual: text_size::size::TextSize
+pub pure_analyzer_syntax::BuildError::IncompleteTokenCoverage::expected: text_size::size::TextSize
+pub pure_analyzer_syntax::BuildError::InvalidCheckpoint
+pub pure_analyzer_syntax::BuildError::InvalidSourceSlice
+pub pure_analyzer_syntax::BuildError::InvalidSourceSlice::range: text_size::range::TextRange
+pub pure_analyzer_syntax::BuildError::InvalidSourceSlice::token_index: usize
+pub pure_analyzer_syntax::BuildError::InvalidUtf8Boundary
+pub pure_analyzer_syntax::BuildError::InvalidUtf8Boundary::offset: text_size::size::TextSize
+pub pure_analyzer_syntax::BuildError::InvalidUtf8Boundary::token_index: usize
+pub pure_analyzer_syntax::BuildError::MissingRoot
+pub pure_analyzer_syntax::BuildError::MultipleRoots
+pub pure_analyzer_syntax::BuildError::MultipleRoots::count: usize
+pub pure_analyzer_syntax::BuildError::NestedRoot
+pub pure_analyzer_syntax::BuildError::NestedRoot::event_index: usize
+pub pure_analyzer_syntax::BuildError::NonContiguousTokenRange
+pub pure_analyzer_syntax::BuildError::NonContiguousTokenRange::actual: text_size::size::TextSize
+pub pure_analyzer_syntax::BuildError::NonContiguousTokenRange::expected: text_size::size::TextSize
+pub pure_analyzer_syntax::BuildError::NonContiguousTokenRange::token_index: usize
+pub pure_analyzer_syntax::BuildError::SourceTooLong
+pub pure_analyzer_syntax::BuildError::SourceTooLong::length: usize
+pub pure_analyzer_syntax::BuildError::TokenRangeOutsideSource
+pub pure_analyzer_syntax::BuildError::TokenRangeOutsideSource::range: text_size::range::TextRange
+pub pure_analyzer_syntax::BuildError::TokenRangeOutsideSource::source_end: text_size::size::TextSize
+pub pure_analyzer_syntax::BuildError::TokenRangeOutsideSource::token_index: usize
+pub pure_analyzer_syntax::BuildError::UnclosedNodes
+pub pure_analyzer_syntax::BuildError::UnclosedNodes::count: usize
+pub pure_analyzer_syntax::BuildError::UnconsumedTokens
+pub pure_analyzer_syntax::BuildError::UnconsumedTokens::consumed: usize
+pub pure_analyzer_syntax::BuildError::UnconsumedTokens::total: usize
+impl core::clone::Clone for pure_analyzer_syntax::BuildError
+pub fn pure_analyzer_syntax::BuildError::clone(&self) -> pure_analyzer_syntax::BuildError
+impl core::cmp::Eq for pure_analyzer_syntax::BuildError
+impl core::cmp::PartialEq for pure_analyzer_syntax::BuildError
+pub fn pure_analyzer_syntax::BuildError::eq(&self, &pure_analyzer_syntax::BuildError) -> bool
+impl core::error::Error for pure_analyzer_syntax::BuildError
+impl core::fmt::Debug for pure_analyzer_syntax::BuildError
+pub fn pure_analyzer_syntax::BuildError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for pure_analyzer_syntax::BuildError
+pub fn pure_analyzer_syntax::BuildError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::BuildError
+impl core::marker::Freeze for pure_analyzer_syntax::BuildError
+impl core::marker::Send for pure_analyzer_syntax::BuildError
+impl core::marker::Sync for pure_analyzer_syntax::BuildError
+impl core::marker::Unpin for pure_analyzer_syntax::BuildError
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::BuildError
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::BuildError
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::BuildError
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::BuildError where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::BuildError::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::BuildError where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::BuildError::Error = never
+pub fn pure_analyzer_syntax::BuildError::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::BuildError where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::BuildError::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::BuildError::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::BuildError where T: core::clone::Clone
+pub type pure_analyzer_syntax::BuildError::Owned = T
+pub fn pure_analyzer_syntax::BuildError::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::BuildError::to_owned(&self) -> T
+impl<T> alloc::string::ToString for pure_analyzer_syntax::BuildError where T: core::fmt::Display + ?core::marker::Sized
+pub fn pure_analyzer_syntax::BuildError::to_string(&self) -> alloc::string::String
+impl<T> core::any::Any for pure_analyzer_syntax::BuildError where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::BuildError::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::BuildError where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::BuildError::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::BuildError where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::BuildError::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::BuildError where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::BuildError::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::BuildError
+pub fn pure_analyzer_syntax::BuildError::from(T) -> T
+pub enum pure_analyzer_syntax::Event
+pub pure_analyzer_syntax::Event::Advance
+pub pure_analyzer_syntax::Event::Close
+pub pure_analyzer_syntax::Event::Open(pure_analyzer_syntax::SyntaxKind)
+impl core::clone::Clone for pure_analyzer_syntax::Event
+pub fn pure_analyzer_syntax::Event::clone(&self) -> pure_analyzer_syntax::Event
+impl core::cmp::Eq for pure_analyzer_syntax::Event
+impl core::cmp::PartialEq for pure_analyzer_syntax::Event
+pub fn pure_analyzer_syntax::Event::eq(&self, &pure_analyzer_syntax::Event) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::Event
+pub fn pure_analyzer_syntax::Event::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for pure_analyzer_syntax::Event
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::Event
+impl core::marker::Freeze for pure_analyzer_syntax::Event
+impl core::marker::Send for pure_analyzer_syntax::Event
+impl core::marker::Sync for pure_analyzer_syntax::Event
+impl core::marker::Unpin for pure_analyzer_syntax::Event
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::Event
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::Event
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::Event
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::Event where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::Event::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::Event where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::Event::Error = never
+pub fn pure_analyzer_syntax::Event::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::Event where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::Event::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::Event::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::Event where T: core::clone::Clone
+pub type pure_analyzer_syntax::Event::Owned = T
+pub fn pure_analyzer_syntax::Event::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::Event::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::Event where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::Event::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::Event where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::Event::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::Event where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::Event::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::Event where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::Event::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::Event
+pub fn pure_analyzer_syntax::Event::from(T) -> T
+pub enum pure_analyzer_syntax::GreenElement
+pub pure_analyzer_syntax::GreenElement::Node(pure_analyzer_syntax::GreenNode)
+pub pure_analyzer_syntax::GreenElement::Token(pure_analyzer_syntax::GreenToken)
+impl pure_analyzer_syntax::GreenElement
+pub const fn pure_analyzer_syntax::GreenElement::as_node(&self) -> core::option::Option<&pure_analyzer_syntax::GreenNode>
+pub const fn pure_analyzer_syntax::GreenElement::as_token(&self) -> core::option::Option<&pure_analyzer_syntax::GreenToken>
+pub fn pure_analyzer_syntax::GreenElement::kind(&self) -> pure_analyzer_syntax::SyntaxKind
+pub fn pure_analyzer_syntax::GreenElement::text_range(&self) -> text_size::range::TextRange
+impl core::clone::Clone for pure_analyzer_syntax::GreenElement
+pub fn pure_analyzer_syntax::GreenElement::clone(&self) -> pure_analyzer_syntax::GreenElement
+impl core::cmp::Eq for pure_analyzer_syntax::GreenElement
+impl core::cmp::PartialEq for pure_analyzer_syntax::GreenElement
+pub fn pure_analyzer_syntax::GreenElement::eq(&self, &pure_analyzer_syntax::GreenElement) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::GreenElement
+pub fn pure_analyzer_syntax::GreenElement::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::GreenElement
+impl core::marker::Freeze for pure_analyzer_syntax::GreenElement
+impl core::marker::Send for pure_analyzer_syntax::GreenElement
+impl core::marker::Sync for pure_analyzer_syntax::GreenElement
+impl core::marker::Unpin for pure_analyzer_syntax::GreenElement
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::GreenElement
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::GreenElement
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::GreenElement
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::GreenElement where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::GreenElement::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::GreenElement where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::GreenElement::Error = never
+pub fn pure_analyzer_syntax::GreenElement::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::GreenElement where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::GreenElement::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::GreenElement::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::GreenElement where T: core::clone::Clone
+pub type pure_analyzer_syntax::GreenElement::Owned = T
+pub fn pure_analyzer_syntax::GreenElement::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::GreenElement::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::GreenElement where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::GreenElement::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::GreenElement where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::GreenElement::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::GreenElement where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::GreenElement::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::GreenElement where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::GreenElement::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::GreenElement
+pub fn pure_analyzer_syntax::GreenElement::from(T) -> T
+#[repr(u16)] pub enum pure_analyzer_syntax::SyntaxKind
+pub pure_analyzer_syntax::SyntaxKind::ALL_KW = 31
+pub pure_analyzer_syntax::SyntaxKind::ALL_VERSIONS_IN_RANGE_KW = 34
+pub pure_analyzer_syntax::SyntaxKind::ALL_VERSIONS_KW = 33
+pub pure_analyzer_syntax::SyntaxKind::ARROW = 6
+pub pure_analyzer_syntax::SyntaxKind::ASSIGN = 49
+pub pure_analyzer_syntax::SyntaxKind::AT = 8
+pub pure_analyzer_syntax::SyntaxKind::BINARY_EXPR = 32770
+pub pure_analyzer_syntax::SyntaxKind::BLOCK_COMMENT = 47
+pub pure_analyzer_syntax::SyntaxKind::BOOLEAN = 38
+pub pure_analyzer_syntax::SyntaxKind::BRACE_CLOSE = 30
+pub pure_analyzer_syntax::SyntaxKind::BRACE_OPEN = 29
+pub pure_analyzer_syntax::SyntaxKind::BRACKET_CLOSE = 17
+pub pure_analyzer_syntax::SyntaxKind::BRACKET_OPEN = 16
+pub pure_analyzer_syntax::SyntaxKind::COLON = 13
+pub pure_analyzer_syntax::SyntaxKind::COMMA = 11
+pub pure_analyzer_syntax::SyntaxKind::DATE_TIME = 0
+pub pure_analyzer_syntax::SyntaxKind::DOLLAR = 5
+pub pure_analyzer_syntax::SyntaxKind::DOT = 10
+pub pure_analyzer_syntax::SyntaxKind::EQ = 18
+pub pure_analyzer_syntax::SyntaxKind::ERROR = 48
+pub pure_analyzer_syntax::SyntaxKind::ERROR_NODE = 32769
+pub pure_analyzer_syntax::SyntaxKind::GE = 26
+pub pure_analyzer_syntax::SyntaxKind::GT = 27
+pub pure_analyzer_syntax::SyntaxKind::HASH = 44
+pub pure_analyzer_syntax::SyntaxKind::HASH_ISLAND_OPEN = 41
+pub pure_analyzer_syntax::SyntaxKind::HASH_STORE_OPEN = 40
+pub pure_analyzer_syntax::SyntaxKind::IDENT = 36
+pub pure_analyzer_syntax::SyntaxKind::INTEGER = 37
+pub pure_analyzer_syntax::SyntaxKind::ISLAND_END = 43
+pub pure_analyzer_syntax::SyntaxKind::LATEST_DATE = 2
+pub pure_analyzer_syntax::SyntaxKind::LE = 24
+pub pure_analyzer_syntax::SyntaxKind::LET_KW = 32
+pub pure_analyzer_syntax::SyntaxKind::LINE_COMMENT = 46
+pub pure_analyzer_syntax::SyntaxKind::LT = 25
+pub pure_analyzer_syntax::SyntaxKind::MINUS = 21
+pub pure_analyzer_syntax::SyntaxKind::NAV_PATH_BLOCK = 42
+pub pure_analyzer_syntax::SyntaxKind::NEQ = 19
+pub pure_analyzer_syntax::SyntaxKind::NEW_SYMBOL = 9
+pub pure_analyzer_syntax::SyntaxKind::PAREN_CLOSE = 15
+pub pure_analyzer_syntax::SyntaxKind::PAREN_OPEN = 14
+pub pure_analyzer_syntax::SyntaxKind::PATH_SEPARATOR = 12
+pub pure_analyzer_syntax::SyntaxKind::PERCENT = 3
+pub pure_analyzer_syntax::SyntaxKind::PIPE = 7
+pub pure_analyzer_syntax::SyntaxKind::PLUS = 20
+pub pure_analyzer_syntax::SyntaxKind::ROOT = 32768
+pub pure_analyzer_syntax::SyntaxKind::SEMICOLON = 28
+pub pure_analyzer_syntax::SyntaxKind::SLASH = 23
+pub pure_analyzer_syntax::SyntaxKind::STAR = 22
+pub pure_analyzer_syntax::SyntaxKind::STRICT_DATE = 1
+pub pure_analyzer_syntax::SyntaxKind::STRING = 39
+pub pure_analyzer_syntax::SyntaxKind::TILDE = 4
+pub pure_analyzer_syntax::SyntaxKind::TO_BYTES_KW = 35
+pub pure_analyzer_syntax::SyntaxKind::WHITESPACE = 45
+impl pure_analyzer_syntax::SyntaxKind
+pub const fn pure_analyzer_syntax::SyntaxKind::all() -> &'static [Self]
+pub const fn pure_analyzer_syntax::SyntaxKind::is_node(self) -> bool
+pub const fn pure_analyzer_syntax::SyntaxKind::is_token(self) -> bool
+impl core::clone::Clone for pure_analyzer_syntax::SyntaxKind
+pub fn pure_analyzer_syntax::SyntaxKind::clone(&self) -> pure_analyzer_syntax::SyntaxKind
+impl core::cmp::Eq for pure_analyzer_syntax::SyntaxKind
+impl core::cmp::PartialEq for pure_analyzer_syntax::SyntaxKind
+pub fn pure_analyzer_syntax::SyntaxKind::eq(&self, &pure_analyzer_syntax::SyntaxKind) -> bool
+impl core::convert::From<pure_analyzer_lexer::SyntaxKind> for pure_analyzer_syntax::SyntaxKind
+pub fn pure_analyzer_syntax::SyntaxKind::from(pure_analyzer_lexer::SyntaxKind) -> Self
+impl core::convert::From<pure_analyzer_syntax::SyntaxKind> for pure_analyzer_syntax::RawSyntaxKind
+pub fn pure_analyzer_syntax::RawSyntaxKind::from(pure_analyzer_syntax::SyntaxKind) -> Self
+impl core::convert::TryFrom<pure_analyzer_syntax::RawSyntaxKind> for pure_analyzer_syntax::SyntaxKind
+pub type pure_analyzer_syntax::SyntaxKind::Error = pure_analyzer_syntax::InvalidRawSyntaxKind
+pub fn pure_analyzer_syntax::SyntaxKind::try_from(pure_analyzer_syntax::RawSyntaxKind) -> core::result::Result<Self, Self::Error>
+impl core::fmt::Debug for pure_analyzer_syntax::SyntaxKind
+pub fn pure_analyzer_syntax::SyntaxKind::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for pure_analyzer_syntax::SyntaxKind
+pub fn pure_analyzer_syntax::SyntaxKind::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::Copy for pure_analyzer_syntax::SyntaxKind
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::SyntaxKind
+impl core::marker::Freeze for pure_analyzer_syntax::SyntaxKind
+impl core::marker::Send for pure_analyzer_syntax::SyntaxKind
+impl core::marker::Sync for pure_analyzer_syntax::SyntaxKind
+impl core::marker::Unpin for pure_analyzer_syntax::SyntaxKind
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::SyntaxKind
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::SyntaxKind
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::SyntaxKind
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::SyntaxKind where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::SyntaxKind::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::SyntaxKind where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::SyntaxKind::Error = never
+pub fn pure_analyzer_syntax::SyntaxKind::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::SyntaxKind where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::SyntaxKind::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::SyntaxKind::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::SyntaxKind where T: core::clone::Clone
+pub type pure_analyzer_syntax::SyntaxKind::Owned = T
+pub fn pure_analyzer_syntax::SyntaxKind::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::SyntaxKind::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::SyntaxKind where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::SyntaxKind::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::SyntaxKind where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::SyntaxKind::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::SyntaxKind where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::SyntaxKind::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::SyntaxKind where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::SyntaxKind::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::SyntaxKind
+pub fn pure_analyzer_syntax::SyntaxKind::from(T) -> T
+pub struct pure_analyzer_syntax::BinaryExpression(_)
+impl core::clone::Clone for pure_analyzer_syntax::BinaryExpression
+pub fn pure_analyzer_syntax::BinaryExpression::clone(&self) -> pure_analyzer_syntax::BinaryExpression
+impl core::cmp::Eq for pure_analyzer_syntax::BinaryExpression
+impl core::cmp::PartialEq for pure_analyzer_syntax::BinaryExpression
+pub fn pure_analyzer_syntax::BinaryExpression::eq(&self, &pure_analyzer_syntax::BinaryExpression) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::BinaryExpression
+pub fn pure_analyzer_syntax::BinaryExpression::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::BinaryExpression
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::BinaryExpression
+pub fn pure_analyzer_syntax::BinaryExpression::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::BinaryExpression::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::BinaryExpression::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+impl core::marker::Freeze for pure_analyzer_syntax::BinaryExpression
+impl core::marker::Send for pure_analyzer_syntax::BinaryExpression
+impl core::marker::Sync for pure_analyzer_syntax::BinaryExpression
+impl core::marker::Unpin for pure_analyzer_syntax::BinaryExpression
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::BinaryExpression
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::BinaryExpression
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::BinaryExpression
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::BinaryExpression where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::BinaryExpression::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::BinaryExpression where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::BinaryExpression::Error = never
+pub fn pure_analyzer_syntax::BinaryExpression::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::BinaryExpression where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::BinaryExpression::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::BinaryExpression::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::BinaryExpression where T: core::clone::Clone
+pub type pure_analyzer_syntax::BinaryExpression::Owned = T
+pub fn pure_analyzer_syntax::BinaryExpression::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::BinaryExpression::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::BinaryExpression where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::BinaryExpression::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::BinaryExpression where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::BinaryExpression::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::BinaryExpression where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::BinaryExpression::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::BinaryExpression where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::BinaryExpression::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::BinaryExpression
+pub fn pure_analyzer_syntax::BinaryExpression::from(T) -> T
+pub struct pure_analyzer_syntax::Checkpoint
+impl core::clone::Clone for pure_analyzer_syntax::Checkpoint
+pub fn pure_analyzer_syntax::Checkpoint::clone(&self) -> pure_analyzer_syntax::Checkpoint
+impl core::fmt::Debug for pure_analyzer_syntax::Checkpoint
+pub fn pure_analyzer_syntax::Checkpoint::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for pure_analyzer_syntax::Checkpoint
+impl core::marker::Send for pure_analyzer_syntax::Checkpoint
+impl core::marker::Sync for pure_analyzer_syntax::Checkpoint
+impl core::marker::Unpin for pure_analyzer_syntax::Checkpoint
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::Checkpoint
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::Checkpoint
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::Checkpoint
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::Checkpoint where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::Checkpoint::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::Checkpoint where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::Checkpoint::Error = never
+pub fn pure_analyzer_syntax::Checkpoint::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::Checkpoint where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::Checkpoint::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::Checkpoint::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::Checkpoint where T: core::clone::Clone
+pub type pure_analyzer_syntax::Checkpoint::Owned = T
+pub fn pure_analyzer_syntax::Checkpoint::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::Checkpoint::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::Checkpoint where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::Checkpoint::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::Checkpoint where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::Checkpoint::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::Checkpoint where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::Checkpoint::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::Checkpoint where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::Checkpoint::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::Checkpoint
+pub fn pure_analyzer_syntax::Checkpoint::from(T) -> T
+pub struct pure_analyzer_syntax::GreenNode(_)
+impl pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::GreenNode::children(&self) -> &[pure_analyzer_syntax::GreenElement]
+pub fn pure_analyzer_syntax::GreenNode::kind(&self) -> pure_analyzer_syntax::SyntaxKind
+pub fn pure_analyzer_syntax::GreenNode::text(&self) -> alloc::string::String
+pub fn pure_analyzer_syntax::GreenNode::text_range(&self) -> text_size::range::TextRange
+pub fn pure_analyzer_syntax::GreenNode::tokens(&self) -> pure_analyzer_syntax::TokenIter<'_>
+impl core::clone::Clone for pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::GreenNode::clone(&self) -> pure_analyzer_syntax::GreenNode
+impl core::cmp::Eq for pure_analyzer_syntax::GreenNode
+impl core::cmp::PartialEq for pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::GreenNode::eq(&self, &pure_analyzer_syntax::GreenNode) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::GreenNode::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::GreenNode::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::GreenNode
+impl core::marker::Freeze for pure_analyzer_syntax::GreenNode
+impl core::marker::Send for pure_analyzer_syntax::GreenNode
+impl core::marker::Sync for pure_analyzer_syntax::GreenNode
+impl core::marker::Unpin for pure_analyzer_syntax::GreenNode
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::GreenNode
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::GreenNode
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::GreenNode
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::GreenNode where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::GreenNode::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::GreenNode where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::GreenNode::Error = never
+pub fn pure_analyzer_syntax::GreenNode::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::GreenNode where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::GreenNode::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::GreenNode::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::GreenNode where T: core::clone::Clone
+pub type pure_analyzer_syntax::GreenNode::Owned = T
+pub fn pure_analyzer_syntax::GreenNode::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::GreenNode::to_owned(&self) -> T
+impl<T> alloc::string::ToString for pure_analyzer_syntax::GreenNode where T: core::fmt::Display + ?core::marker::Sized
+pub fn pure_analyzer_syntax::GreenNode::to_string(&self) -> alloc::string::String
+impl<T> core::any::Any for pure_analyzer_syntax::GreenNode where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::GreenNode::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::GreenNode where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::GreenNode::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::GreenNode where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::GreenNode::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::GreenNode where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::GreenNode::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::GreenNode::from(T) -> T
+pub struct pure_analyzer_syntax::GreenNodeBuilder<'source>
+impl<'source> pure_analyzer_syntax::GreenNodeBuilder<'source>
+pub fn pure_analyzer_syntax::GreenNodeBuilder<'source>::advance(&mut self)
+pub fn pure_analyzer_syntax::GreenNodeBuilder<'source>::checkpoint(&mut self) -> pure_analyzer_syntax::Checkpoint
+pub fn pure_analyzer_syntax::GreenNodeBuilder<'source>::close(&mut self)
+pub fn pure_analyzer_syntax::GreenNodeBuilder<'source>::finish(self) -> core::result::Result<pure_analyzer_syntax::GreenNode, pure_analyzer_syntax::BuildError>
+pub fn pure_analyzer_syntax::GreenNodeBuilder<'source>::new(&'source str, &'source [(pure_analyzer_lexer::SyntaxKind, text_size::range::TextRange)]) -> Self
+pub fn pure_analyzer_syntax::GreenNodeBuilder<'source>::open(&mut self, pure_analyzer_syntax::SyntaxKind)
+pub fn pure_analyzer_syntax::GreenNodeBuilder<'source>::open_at(&mut self, &pure_analyzer_syntax::Checkpoint, pure_analyzer_syntax::SyntaxKind) -> core::result::Result<(), pure_analyzer_syntax::BuildError>
+pub fn pure_analyzer_syntax::GreenNodeBuilder<'source>::push(&mut self, pure_analyzer_syntax::Event)
+impl<'source> core::fmt::Debug for pure_analyzer_syntax::GreenNodeBuilder<'source>
+pub fn pure_analyzer_syntax::GreenNodeBuilder<'source>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl<'source> core::marker::Freeze for pure_analyzer_syntax::GreenNodeBuilder<'source>
+impl<'source> core::marker::Send for pure_analyzer_syntax::GreenNodeBuilder<'source>
+impl<'source> core::marker::Sync for pure_analyzer_syntax::GreenNodeBuilder<'source>
+impl<'source> core::marker::Unpin for pure_analyzer_syntax::GreenNodeBuilder<'source>
+impl<'source> core::marker::UnsafeUnpin for pure_analyzer_syntax::GreenNodeBuilder<'source>
+impl<'source> core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::GreenNodeBuilder<'source>
+impl<'source> core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::GreenNodeBuilder<'source>
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::GreenNodeBuilder<'source> where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::GreenNodeBuilder<'source>::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::GreenNodeBuilder<'source> where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::GreenNodeBuilder<'source>::Error = never
+pub fn pure_analyzer_syntax::GreenNodeBuilder<'source>::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::GreenNodeBuilder<'source> where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::GreenNodeBuilder<'source>::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::GreenNodeBuilder<'source>::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> core::any::Any for pure_analyzer_syntax::GreenNodeBuilder<'source> where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::GreenNodeBuilder<'source>::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::GreenNodeBuilder<'source> where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::GreenNodeBuilder<'source>::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::GreenNodeBuilder<'source> where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::GreenNodeBuilder<'source>::borrow_mut(&mut self) -> &mut T
+impl<T> core::convert::From<T> for pure_analyzer_syntax::GreenNodeBuilder<'source>
+pub fn pure_analyzer_syntax::GreenNodeBuilder<'source>::from(T) -> T
+pub struct pure_analyzer_syntax::GreenToken
+impl pure_analyzer_syntax::GreenToken
+pub const fn pure_analyzer_syntax::GreenToken::kind(&self) -> pure_analyzer_syntax::SyntaxKind
+pub fn pure_analyzer_syntax::GreenToken::text(&self) -> &str
+pub const fn pure_analyzer_syntax::GreenToken::text_range(&self) -> text_size::range::TextRange
+impl core::clone::Clone for pure_analyzer_syntax::GreenToken
+pub fn pure_analyzer_syntax::GreenToken::clone(&self) -> pure_analyzer_syntax::GreenToken
+impl core::cmp::Eq for pure_analyzer_syntax::GreenToken
+impl core::cmp::PartialEq for pure_analyzer_syntax::GreenToken
+pub fn pure_analyzer_syntax::GreenToken::eq(&self, &pure_analyzer_syntax::GreenToken) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::GreenToken
+pub fn pure_analyzer_syntax::GreenToken::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::GreenToken
+impl core::marker::Freeze for pure_analyzer_syntax::GreenToken
+impl core::marker::Send for pure_analyzer_syntax::GreenToken
+impl core::marker::Sync for pure_analyzer_syntax::GreenToken
+impl core::marker::Unpin for pure_analyzer_syntax::GreenToken
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::GreenToken
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::GreenToken
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::GreenToken
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::GreenToken where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::GreenToken::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::GreenToken where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::GreenToken::Error = never
+pub fn pure_analyzer_syntax::GreenToken::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::GreenToken where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::GreenToken::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::GreenToken::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::GreenToken where T: core::clone::Clone
+pub type pure_analyzer_syntax::GreenToken::Owned = T
+pub fn pure_analyzer_syntax::GreenToken::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::GreenToken::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::GreenToken where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::GreenToken::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::GreenToken where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::GreenToken::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::GreenToken where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::GreenToken::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::GreenToken where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::GreenToken::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::GreenToken
+pub fn pure_analyzer_syntax::GreenToken::from(T) -> T
+pub struct pure_analyzer_syntax::InvalidRawSyntaxKind
+impl pure_analyzer_syntax::InvalidRawSyntaxKind
+pub const fn pure_analyzer_syntax::InvalidRawSyntaxKind::value(self) -> u16
+impl core::clone::Clone for pure_analyzer_syntax::InvalidRawSyntaxKind
+pub fn pure_analyzer_syntax::InvalidRawSyntaxKind::clone(&self) -> pure_analyzer_syntax::InvalidRawSyntaxKind
+impl core::cmp::Eq for pure_analyzer_syntax::InvalidRawSyntaxKind
+impl core::cmp::PartialEq for pure_analyzer_syntax::InvalidRawSyntaxKind
+pub fn pure_analyzer_syntax::InvalidRawSyntaxKind::eq(&self, &pure_analyzer_syntax::InvalidRawSyntaxKind) -> bool
+impl core::error::Error for pure_analyzer_syntax::InvalidRawSyntaxKind
+impl core::fmt::Debug for pure_analyzer_syntax::InvalidRawSyntaxKind
+pub fn pure_analyzer_syntax::InvalidRawSyntaxKind::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for pure_analyzer_syntax::InvalidRawSyntaxKind
+pub fn pure_analyzer_syntax::InvalidRawSyntaxKind::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for pure_analyzer_syntax::InvalidRawSyntaxKind
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::InvalidRawSyntaxKind
+impl core::marker::Freeze for pure_analyzer_syntax::InvalidRawSyntaxKind
+impl core::marker::Send for pure_analyzer_syntax::InvalidRawSyntaxKind
+impl core::marker::Sync for pure_analyzer_syntax::InvalidRawSyntaxKind
+impl core::marker::Unpin for pure_analyzer_syntax::InvalidRawSyntaxKind
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::InvalidRawSyntaxKind
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::InvalidRawSyntaxKind
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::InvalidRawSyntaxKind
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::InvalidRawSyntaxKind where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::InvalidRawSyntaxKind::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::InvalidRawSyntaxKind where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::InvalidRawSyntaxKind::Error = never
+pub fn pure_analyzer_syntax::InvalidRawSyntaxKind::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::InvalidRawSyntaxKind where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::InvalidRawSyntaxKind::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::InvalidRawSyntaxKind::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::InvalidRawSyntaxKind where T: core::clone::Clone
+pub type pure_analyzer_syntax::InvalidRawSyntaxKind::Owned = T
+pub fn pure_analyzer_syntax::InvalidRawSyntaxKind::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::InvalidRawSyntaxKind::to_owned(&self) -> T
+impl<T> alloc::string::ToString for pure_analyzer_syntax::InvalidRawSyntaxKind where T: core::fmt::Display + ?core::marker::Sized
+pub fn pure_analyzer_syntax::InvalidRawSyntaxKind::to_string(&self) -> alloc::string::String
+impl<T> core::any::Any for pure_analyzer_syntax::InvalidRawSyntaxKind where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::InvalidRawSyntaxKind::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::InvalidRawSyntaxKind where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::InvalidRawSyntaxKind::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::InvalidRawSyntaxKind where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::InvalidRawSyntaxKind::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::InvalidRawSyntaxKind where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::InvalidRawSyntaxKind::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::InvalidRawSyntaxKind
+pub fn pure_analyzer_syntax::InvalidRawSyntaxKind::from(T) -> T
+pub struct pure_analyzer_syntax::RawSyntaxKind(_)
+impl pure_analyzer_syntax::RawSyntaxKind
+pub const fn pure_analyzer_syntax::RawSyntaxKind::get(self) -> u16
+pub const fn pure_analyzer_syntax::RawSyntaxKind::new(u16) -> Self
+impl core::clone::Clone for pure_analyzer_syntax::RawSyntaxKind
+pub fn pure_analyzer_syntax::RawSyntaxKind::clone(&self) -> pure_analyzer_syntax::RawSyntaxKind
+impl core::cmp::Eq for pure_analyzer_syntax::RawSyntaxKind
+impl core::cmp::PartialEq for pure_analyzer_syntax::RawSyntaxKind
+pub fn pure_analyzer_syntax::RawSyntaxKind::eq(&self, &pure_analyzer_syntax::RawSyntaxKind) -> bool
+impl core::convert::From<pure_analyzer_syntax::RawSyntaxKind> for u16
+pub fn u16::from(pure_analyzer_syntax::RawSyntaxKind) -> Self
+impl core::convert::From<pure_analyzer_syntax::SyntaxKind> for pure_analyzer_syntax::RawSyntaxKind
+pub fn pure_analyzer_syntax::RawSyntaxKind::from(pure_analyzer_syntax::SyntaxKind) -> Self
+impl core::convert::TryFrom<pure_analyzer_syntax::RawSyntaxKind> for pure_analyzer_syntax::SyntaxKind
+pub type pure_analyzer_syntax::SyntaxKind::Error = pure_analyzer_syntax::InvalidRawSyntaxKind
+pub fn pure_analyzer_syntax::SyntaxKind::try_from(pure_analyzer_syntax::RawSyntaxKind) -> core::result::Result<Self, Self::Error>
+impl core::fmt::Debug for pure_analyzer_syntax::RawSyntaxKind
+pub fn pure_analyzer_syntax::RawSyntaxKind::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for pure_analyzer_syntax::RawSyntaxKind
+pub fn pure_analyzer_syntax::RawSyntaxKind::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::Copy for pure_analyzer_syntax::RawSyntaxKind
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::RawSyntaxKind
+impl core::marker::Freeze for pure_analyzer_syntax::RawSyntaxKind
+impl core::marker::Send for pure_analyzer_syntax::RawSyntaxKind
+impl core::marker::Sync for pure_analyzer_syntax::RawSyntaxKind
+impl core::marker::Unpin for pure_analyzer_syntax::RawSyntaxKind
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::RawSyntaxKind
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::RawSyntaxKind
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::RawSyntaxKind
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::RawSyntaxKind where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::RawSyntaxKind::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::RawSyntaxKind where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::RawSyntaxKind::Error = never
+pub fn pure_analyzer_syntax::RawSyntaxKind::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::RawSyntaxKind where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::RawSyntaxKind::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::RawSyntaxKind::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::RawSyntaxKind where T: core::clone::Clone
+pub type pure_analyzer_syntax::RawSyntaxKind::Owned = T
+pub fn pure_analyzer_syntax::RawSyntaxKind::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::RawSyntaxKind::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::RawSyntaxKind where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::RawSyntaxKind::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::RawSyntaxKind where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::RawSyntaxKind::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::RawSyntaxKind where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::RawSyntaxKind::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::RawSyntaxKind where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::RawSyntaxKind::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::RawSyntaxKind
+pub fn pure_analyzer_syntax::RawSyntaxKind::from(T) -> T
+pub struct pure_analyzer_syntax::Root(_)
+impl core::clone::Clone for pure_analyzer_syntax::Root
+pub fn pure_analyzer_syntax::Root::clone(&self) -> pure_analyzer_syntax::Root
+impl core::cmp::Eq for pure_analyzer_syntax::Root
+impl core::cmp::PartialEq for pure_analyzer_syntax::Root
+pub fn pure_analyzer_syntax::Root::eq(&self, &pure_analyzer_syntax::Root) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::Root
+pub fn pure_analyzer_syntax::Root::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::Root
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::Root
+pub fn pure_analyzer_syntax::Root::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::Root::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::Root::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+impl core::marker::Freeze for pure_analyzer_syntax::Root
+impl core::marker::Send for pure_analyzer_syntax::Root
+impl core::marker::Sync for pure_analyzer_syntax::Root
+impl core::marker::Unpin for pure_analyzer_syntax::Root
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::Root
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::Root
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::Root
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::Root where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::Root::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::Root where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::Root::Error = never
+pub fn pure_analyzer_syntax::Root::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::Root where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::Root::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::Root::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::Root where T: core::clone::Clone
+pub type pure_analyzer_syntax::Root::Owned = T
+pub fn pure_analyzer_syntax::Root::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::Root::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::Root where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::Root::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::Root where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::Root::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::Root where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::Root::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::Root where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::Root::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::Root
+pub fn pure_analyzer_syntax::Root::from(T) -> T
+pub struct pure_analyzer_syntax::TokenIter<'tree>
+impl<'tree> core::fmt::Debug for pure_analyzer_syntax::TokenIter<'tree>
+pub fn pure_analyzer_syntax::TokenIter<'tree>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl<'tree> core::iter::traits::iterator::Iterator for pure_analyzer_syntax::TokenIter<'tree>
+pub type pure_analyzer_syntax::TokenIter<'tree>::Item = &'tree pure_analyzer_syntax::GreenToken
+pub fn pure_analyzer_syntax::TokenIter<'tree>::next(&mut self) -> core::option::Option<Self::Item>
+impl<'tree> core::marker::Freeze for pure_analyzer_syntax::TokenIter<'tree>
+impl<'tree> core::marker::Send for pure_analyzer_syntax::TokenIter<'tree>
+impl<'tree> core::marker::Sync for pure_analyzer_syntax::TokenIter<'tree>
+impl<'tree> core::marker::Unpin for pure_analyzer_syntax::TokenIter<'tree>
+impl<'tree> core::marker::UnsafeUnpin for pure_analyzer_syntax::TokenIter<'tree>
+impl<'tree> core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::TokenIter<'tree>
+impl<'tree> core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::TokenIter<'tree>
+impl<I> core::iter::traits::collect::IntoIterator for pure_analyzer_syntax::TokenIter<'tree> where I: core::iter::traits::iterator::Iterator
+pub type pure_analyzer_syntax::TokenIter<'tree>::IntoIter = I
+pub type pure_analyzer_syntax::TokenIter<'tree>::Item = <I as core::iter::traits::iterator::Iterator>::Item
+pub fn pure_analyzer_syntax::TokenIter<'tree>::into_iter(self) -> I
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::TokenIter<'tree> where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::TokenIter<'tree>::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::TokenIter<'tree> where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::TokenIter<'tree>::Error = never
+pub fn pure_analyzer_syntax::TokenIter<'tree>::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::TokenIter<'tree> where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::TokenIter<'tree>::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::TokenIter<'tree>::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> core::any::Any for pure_analyzer_syntax::TokenIter<'tree> where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::TokenIter<'tree>::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::TokenIter<'tree> where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::TokenIter<'tree>::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::TokenIter<'tree> where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::TokenIter<'tree>::borrow_mut(&mut self) -> &mut T
+impl<T> core::convert::From<T> for pure_analyzer_syntax::TokenIter<'tree>
+pub fn pure_analyzer_syntax::TokenIter<'tree>::from(T) -> T
+pub trait pure_analyzer_syntax::AstNode: core::marker::Sized
+pub fn pure_analyzer_syntax::AstNode::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::AstNode::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::AstNode::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::BinaryExpression
+pub fn pure_analyzer_syntax::BinaryExpression::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::BinaryExpression::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::BinaryExpression::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::Root
+pub fn pure_analyzer_syntax::Root::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::Root::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::Root::syntax(&self) -> &pure_analyzer_syntax::GreenNode
 pub fn pure_analyzer_syntax::version() -> &'static str
