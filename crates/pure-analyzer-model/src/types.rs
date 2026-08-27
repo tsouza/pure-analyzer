@@ -272,6 +272,15 @@ pub struct Multiplicity {
 }
 
 impl Multiplicity {
+    /// Construct the conventional zero-or-more multiplicity (`[0..*]`).
+    #[must_use]
+    pub const fn zero_or_more() -> Self {
+        Self {
+            lower: 0,
+            upper: None,
+        }
+    }
+
     /// Construct validated multiplicity bounds.
     ///
     /// # Errors

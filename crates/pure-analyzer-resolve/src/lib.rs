@@ -10,6 +10,15 @@
 use std::collections::BTreeSet;
 
 use pure_analyzer_diagnostics::TextRange;
+
+mod local;
+
+pub use local::{
+    LocalValue, LocalValueKind, NavigationAmbiguity, NavigationArityMismatch, NavigationChain,
+    NavigationCycle, NavigationFailure, NavigationHop, NavigationMissing, NavigationResolution,
+    NavigationResolver, NavigationStep, NavigationTarget, NavigationUnderResolution,
+    NavigationUnderResolutionReason, RelationRow, TypeEnvironment, TypeScope, UnknownValue,
+};
 use pure_analyzer_model::{
     ClassId, ClassInfo, ModelGraph, Multiplicity, Name, Provenance, QName, QpInfo, QpKind,
     SourceId, Temporal, TypeRef,
