@@ -307,6 +307,107 @@ fn relation_rows_bind_columns_and_require_zero_context_arguments() {
 }
 
 #[test]
+fn navigation_failures_retain_ambiguity_cycle_and_member_arity_metadata() {
+    let ambiguous_graph = graph(vec![
+        class("Left", &[], vec![property("shared", "String")], Vec::new()),
+        class(
+            "Right",
+            &[],
+            vec![property("shared", "Integer")],
+            Vec::new(),
+        ),
+        class(
+            "Child",
+            &["model::Right", "model::Left"],
+            Vec::new(),
+            Vec::new(),
+        ),
+    ]);
+    let ambiguous_resolver = NavigationResolver::new(&ambiguous_graph);
+    let ambiguity = ambiguous_resolver.resolve(
+        &class_value(&ambiguous_resolver, "Child"),
+        &[NavigationStep::property(name("shared"))],
+    );
+    let NavigationResolution::Ambiguous(ambiguity) = ambiguity else {
+        panic!("equally preferred inherited members must remain ambiguous");
+    };
+    assert_eq!(
+        ambiguity
+            .candidates()
+            .iter()
+            .map(|candidate| candidate.owner().path().as_str())
+            .collect::<Vec<_>>(),
+        ["model::Left", "model::Right"]
+    );
+    assert!(ambiguity.failure().completed().hops().is_empty());
+    assert_eq!(ambiguity.failure().step().name(), &name("shared"));
+
+    let cycle_graph = graph(vec![
+        class("A", &["model::B"], Vec::new(), Vec::new()),
+        class("B", &["model::A"], Vec::new(), Vec::new()),
+    ]);
+    let cycle_resolver = NavigationResolver::new(&cycle_graph);
+    let cycle = cycle_resolver.resolve(
+        &class_value(&cycle_resolver, "A"),
+        &[NavigationStep::property(name("missing"))],
+    );
+    let NavigationResolution::Cycle(cycle) = cycle else {
+        panic!("generalization cycles must remain distinct navigation failures");
+    };
+    assert_eq!(cycle.cycle(), &[qname("A"), qname("B"), qname("A")]);
+    assert!(cycle.failure().completed().hops().is_empty());
+    assert_eq!(cycle.failure().step().name(), &name("missing"));
+
+    let arity_graph = graph(vec![class(
+        "Source",
+        &[],
+        Vec::new(),
+        vec![user_qualified_property("byKey", "String", &["String"])],
+    )]);
+    let arity_resolver = NavigationResolver::new(&arity_graph);
+    let arity = arity_resolver.resolve(
+        &class_value(&arity_resolver, "Source"),
+        &[NavigationStep::property(name("byKey"))],
+    );
+    let NavigationResolution::WrongArity(arity) = arity else {
+        panic!("user qualified properties require their declared arguments");
+    };
+    assert_eq!(arity.expected(), ONE_ARGUMENT);
+    assert_eq!(arity.actual(), NO_ARGUMENTS);
+    assert!(arity.definition().is_some());
+    assert!(arity.failure().completed().hops().is_empty());
+    assert_eq!(arity.failure().step().name(), &name("byKey"));
+}
+
+#[test]
+fn intrinsic_scalars_do_not_turn_unmodeled_types_into_scalars() {
+    let graph = graph(vec![class(
+        "Source",
+        &[],
+        vec![
+            property("builtIn", "String"),
+            property("external", "vendor::Unmodeled"),
+        ],
+        Vec::new(),
+    )]);
+    let resolver = NavigationResolver::new(&graph);
+    let source = class_value(&resolver, "Source");
+
+    let built_in = found(resolver.resolve(&source, &[NavigationStep::property(name("builtIn"))]));
+    assert!(matches!(
+        built_in.value().kind(),
+        LocalValueKind::Scalar(value) if value.raw_type().as_str() == "String"
+    ));
+
+    let external = found(resolver.resolve(&source, &[NavigationStep::property(name("external"))]));
+    assert!(matches!(
+        external.value().kind(),
+        LocalValueKind::Unknown(UnknownValue::UnmodeledType(value))
+            if value.raw_type().as_str() == "vendor::Unmodeled"
+    ));
+}
+
+#[test]
 fn each_navigation_hop_uses_its_own_milestoning_context() {
     let graph = graph(vec![
         temporal_class("TemporalTarget"),
