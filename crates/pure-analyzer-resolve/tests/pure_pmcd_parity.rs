@@ -75,6 +75,21 @@ fn pmcd_qualified_property(
     })
 }
 
+fn pmcd_non_generated_milestoning_qualified_property(
+    name: &str,
+    target: &str,
+    lower: u32,
+    upper: Option<u32>,
+    parameter_types: &[&str],
+) -> Value {
+    let mut property = pmcd_qualified_property(name, target, lower, upper, false, parameter_types);
+    property["stereotypes"] = json!([{
+        "profile": MILESTONING_PROFILE,
+        "value": "notgenerated",
+    }]);
+    property
+}
+
 fn pmcd_class(
     name: &str,
     supertypes: &[&str],
@@ -199,6 +214,25 @@ fn assert_fact_parity(pmcd: &ResolvedMember, pure: &ResolvedMember) {
     assert_eq!(pure.provenance(), Provenance::PureFile);
 }
 
+fn assert_member_resolution_case(
+    pmcd: &ModelGraph,
+    pure: &ModelGraph,
+    name: &str,
+    expected_kind: ResolvedMemberKind,
+    expected_lower: u32,
+    expected_upper: Option<u32>,
+) {
+    let pmcd_member = found_member(pmcd, "Holder", name);
+    let pure_member = found_member(pure, "Holder", name);
+
+    assert_fact_parity(&pmcd_member, &pure_member);
+    assert_eq!(pmcd_member.target().raw_type().as_str(), "model::Target");
+    assert_eq!(pmcd_member.multiplicity().lower(), expected_lower);
+    assert_eq!(pmcd_member.multiplicity().upper(), expected_upper);
+    assert_eq!(pmcd_member.kind(), &expected_kind);
+    assert_eq!(pmcd_member.target_temporal_arity(), Some(2));
+}
+
 #[test]
 fn confirmed_class_members_have_pmcd_pure_resolution_parity() {
     let (pmcd, pure) = paired_graphs(
@@ -295,16 +329,73 @@ Class model::Holder
     ];
 
     for (name, expected_kind, expected_lower, expected_upper) in cases {
-        let pmcd_member = found_member(&pmcd, "Holder", name);
-        let pure_member = found_member(&pure, "Holder", name);
-
-        assert_fact_parity(&pmcd_member, &pure_member);
-        assert_eq!(pmcd_member.target().raw_type().as_str(), "model::Target");
-        assert_eq!(pmcd_member.multiplicity().lower(), expected_lower);
-        assert_eq!(pmcd_member.multiplicity().upper(), expected_upper);
-        assert_eq!(pmcd_member.kind(), &expected_kind);
-        assert_eq!(pmcd_member.target_temporal_arity(), Some(2));
+        assert_member_resolution_case(
+            &pmcd,
+            &pure,
+            name,
+            expected_kind,
+            expected_lower,
+            expected_upper,
+        );
     }
+}
+
+#[test]
+fn non_generated_all_versions_forms_are_user_qualified_in_pmcd_and_pure() {
+    let (pmcd, pure) = paired_graphs(
+        vec![
+            pmcd_class("Target", &[], Some(BITEMPORAL), Vec::new(), Vec::new()),
+            pmcd_class(
+                "Holder",
+                &[],
+                None,
+                Vec::new(),
+                vec![
+                    pmcd_non_generated_milestoning_qualified_property(
+                        "manualAllVersions",
+                        "model::Target",
+                        0,
+                        None,
+                        &[],
+                    ),
+                    pmcd_non_generated_milestoning_qualified_property(
+                        "manualAllVersionsInRange",
+                        "model::Target",
+                        1,
+                        None,
+                        &[],
+                    ),
+                ],
+            ),
+        ],
+        r#"
+Class <<temporal.bitemporal>> model::Target {
+}
+Class model::Holder {
+  <<milestoning.notgenerated>>
+  manualAllVersions(): model::Target[*] {};
+  <<milestoning.notgenerated>>
+  manualAllVersionsInRange(): model::Target[1..*] {};
+}
+"#,
+    );
+
+    assert_member_resolution_case(
+        &pmcd,
+        &pure,
+        "manualAllVersions",
+        ResolvedMemberKind::Qualified(QpKind::UserQualified),
+        0,
+        None,
+    );
+    assert_member_resolution_case(
+        &pmcd,
+        &pure,
+        "manualAllVersionsInRange",
+        ResolvedMemberKind::Qualified(QpKind::UserQualified),
+        1,
+        None,
+    );
 }
 
 fn precedence_pmcd_graph(parents: &[&str]) -> ModelGraph {
