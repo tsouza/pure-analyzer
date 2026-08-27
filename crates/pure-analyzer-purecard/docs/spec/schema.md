@@ -118,7 +118,7 @@ The decoder never calls Legend; the host builds `Schema` once, at session init, 
 How the PMCD / MCP tools are queried to _populate_ the contract is host-side. This spec defines the contract's _shape and semantics_, not the extraction, and the decoder ingests `Schema` from JSON at session init (`Schema::from_json`, §9).
 
 **L2 enforcement is mask-first.** `allowed_mask()` is the _sole_ point that
-enforces the supported L2 rules (§6.7 — N1/N2/N3/N5/N6 and part of T1): with a
+enforces the supported L2 rules (§6.7 — N1/N2/N3/N5/N6, T2, and part of T1): with a
 schema set it intersects the syntactic (L1) mask with that schema-legal set,
 clearing tokens illegal under a covered rule. `accept_token`/`accept_byte` enforce
 only the **grammar** — a schema-masked token that is grammar-legal is still
@@ -212,10 +212,11 @@ they are not constraints themselves.
 
 The schema overlay constrains **N3** (source class/store), **N1/N2**
 (property/navigation), **N5** (association direction through N1 member lookup),
-**N6** (relation columns), and the numeric/string portion of **T1** (comparison
-operand type). The other named categories are outside the supported overlay and
-pass through without schema narrowing. `src/schema/narrow.rs` is authoritative
-for the executable boundary.
+**N6** (relation columns), the numeric/string portion of **T1** (comparison
+operand type), and **T2** (ordered-comparator restriction, numeric/temporal only —
+boolean/string/enum operands mask `< > <= >=` and keep `== !=`). The other named
+categories are outside the supported overlay and pass through without schema
+narrowing. `src/schema/narrow.rs` is authoritative for the executable boundary.
 
 ---
 

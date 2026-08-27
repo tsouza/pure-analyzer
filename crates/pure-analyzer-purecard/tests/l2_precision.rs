@@ -270,6 +270,19 @@ fn t1_masks_a_type_mismatched_comparison_operand() {
 }
 
 #[test]
+fn t2_masks_an_ordered_comparator_on_a_non_ordered_operand() {
+    // `cylinders` is Integer (numeric): ordered comparators are legal, so `<`
+    // stays admissible after the property navExpr.
+    let numeric = "|spider::car_1::model::default::CarsData.all()->filter(x|$x.cylinders ";
+    assert_precision("car_1", numeric, b"<", b"<<");
+    // `horsepower` is String (declared-type caveat, §6.2.2): T2 restricts ordered
+    // comparators to numeric/temporal operands, so `<` is masked while the
+    // equality comparator `==` stays admissible.
+    let string = "|spider::car_1::model::default::CarsData.all()->filter(x|$x.horsepower ";
+    assert_precision("car_1", string, b"==", b"<");
+}
+
+#[test]
 fn n6_masks_an_unemitted_relation_column() {
     // After `project(...,['Name','Result'])` the relation columns are exactly
     // those names; a getInteger of an emitted name is admissible, of an unemitted
