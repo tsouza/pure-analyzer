@@ -103,6 +103,46 @@ fn checkpoint_retroactively_wraps_a_binary_expression() {
 }
 
 #[test]
+fn typed_ast_text_range_preserves_a_nondefault_subtree_range() {
+    const PREFIX: &str = "prefix ";
+    const SOURCE: &str = "prefix 1 + 2";
+
+    let tokens = lex(SOURCE);
+    let prefix_end = TextSize::try_from(PREFIX.len()).expect("fixture prefix should fit TextSize");
+    let expression_range = TextRange::new(
+        prefix_end,
+        TextSize::try_from(SOURCE.len()).expect("fixture length should fit TextSize"),
+    );
+    let prefix_tokens = tokens.partition_point(|(_, range)| range.end() <= prefix_end);
+    let mut builder = GreenNodeBuilder::new(SOURCE, &tokens);
+    builder.open(SyntaxKind::ROOT);
+    for _ in &tokens[..prefix_tokens] {
+        builder.advance();
+    }
+    let expression_start = builder.checkpoint();
+    for _ in &tokens[prefix_tokens..] {
+        builder.advance();
+    }
+    builder
+        .open_at(&expression_start, SyntaxKind::BINARY_EXPR)
+        .expect("checkpoint should wrap the expression suffix");
+    builder.close();
+    builder.close();
+
+    let tree = builder.finish().expect("events should be balanced");
+    let expression = tree
+        .children()
+        .iter()
+        .find_map(GreenElement::as_node)
+        .and_then(|node| BinaryExpression::cast(node.clone()))
+        .expect("root should contain a typed binary expression");
+
+    assert!(!expression_range.is_empty());
+    assert_ne!(expression_range, TextRange::default());
+    assert_eq!(expression.text_range(), expression_range);
+}
+
+#[test]
 fn checkpoints_remain_stable_after_earlier_insertions() {
     let source = "1 + 2 * 3";
     let tokens = lex(source);
