@@ -49,6 +49,19 @@ fn property(name: &str, target: &str, lower: u32, upper: Option<u32>) -> Value {
     })
 }
 
+fn milestoning_qualified_property(name: &str, stereotype_value: &str) -> Value {
+    json!({
+        "name": name,
+        "returnGenericType": {"rawType": "model::Quote"},
+        "returnMultiplicity": {"lowerBound": 0, "upperBound": null},
+        "stereotypes": [{
+            "profile": "meta::pure::profiles::milestoning",
+            "value": stereotype_value,
+        }],
+        "parameters": [],
+    })
+}
+
 fn association(package: &str, name: &str, ends: Vec<Value>) -> Value {
     json!({
         "_type": "association",
@@ -124,6 +137,42 @@ fn qualified_properties_preserve_signature_and_classification() {
     assert_eq!(properties["quotesEdge"].kind(), QpKind::EdgePoint);
     assert!(properties["quotes"].signature().is_none());
     assert!(properties["quotesEdge"].multiplicity().is_unbounded());
+}
+
+#[test]
+fn only_generated_milestoning_annotations_create_all_versions_navigation() {
+    let mut holder = class("model", "Holder", vec![]);
+    holder["qualifiedProperties"] = json!([
+        milestoning_qualified_property("generatedAllVersions", "generatedmilestoningproperty"),
+        milestoning_qualified_property(
+            "generatedAllVersionsInRange",
+            "generatedmilestoningproperty"
+        ),
+        milestoning_qualified_property("manualAllVersions", "notgenerated"),
+        milestoning_qualified_property("manualAllVersionsInRange", "notgenerated"),
+    ]);
+    let graph = load_values(&[("milestoning", document(vec![holder]))]).expect("load");
+    let properties = graph
+        .class("model::Holder")
+        .expect("holder")
+        .qualified_properties();
+
+    assert_eq!(
+        properties["generatedAllVersions"].kind(),
+        QpKind::AllVersions
+    );
+    assert_eq!(
+        properties["generatedAllVersionsInRange"].kind(),
+        QpKind::AllVersionsInRange
+    );
+    for name in ["manualAllVersions", "manualAllVersionsInRange"] {
+        let property = &properties[name];
+        assert_eq!(property.kind(), QpKind::UserQualified, "{name}");
+        assert_eq!(
+            property.signature().map(|signature| signature.len()),
+            Some(0)
+        );
+    }
 }
 
 #[test]

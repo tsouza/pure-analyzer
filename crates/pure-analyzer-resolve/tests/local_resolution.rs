@@ -111,6 +111,15 @@ fn user_qualified_property(name: &str, target: &str, parameters: &[&str]) -> Val
     })
 }
 
+fn non_generated_milestoning_property(name: &str, target: &str, parameters: &[&str]) -> Value {
+    let mut property = user_qualified_property(name, target, parameters);
+    property["stereotypes"] = json!([{
+        "profile": "meta::pure::profiles::milestoning",
+        "value": "notgenerated",
+    }]);
+    property
+}
+
 fn association(name: &str, first: Value, second: Value) -> Value {
     json!({
         "_type": "association",
@@ -567,6 +576,42 @@ fn user_qualified_properties_and_generated_navigation_have_distinct_arity_gates(
     ] {
         let outcome = resolver.resolve(&source, &[step]);
         assert!(matches!(outcome, NavigationResolution::WrongArity(_)));
+    }
+}
+
+#[test]
+fn non_generated_milestoning_suffixes_use_their_declared_signatures() {
+    let graph = graph(vec![class(
+        "Source",
+        &[],
+        Vec::new(),
+        vec![
+            non_generated_milestoning_property("manualAllVersions", "String", &["String"]),
+            non_generated_milestoning_property("manualAllVersionsInRange", "String", &["String"]),
+        ],
+    )]);
+    let resolver = NavigationResolver::new(&graph);
+    let source = class_value(&resolver, "Source");
+
+    for member_name in ["manualAllVersions", "manualAllVersionsInRange"] {
+        let chain = found(resolver.resolve(
+            &source,
+            &[NavigationStep::call(name(member_name), ONE_ARGUMENT)],
+        ));
+        let NavigationTarget::Member(member) = chain.hops()[0].target() else {
+            panic!("{member_name} must resolve a model member");
+        };
+        assert_eq!(
+            member.kind(),
+            &pure_analyzer_resolve::ResolvedMemberKind::Qualified(QpKind::UserQualified)
+        );
+
+        let mismatch = resolver.resolve(&source, &[NavigationStep::property(name(member_name))]);
+        let NavigationResolution::WrongArity(mismatch) = mismatch else {
+            panic!("{member_name} must require its declared argument");
+        };
+        assert_eq!(mismatch.expected(), ONE_ARGUMENT);
+        assert_eq!(mismatch.actual(), NO_ARGUMENTS);
     }
 }
 
