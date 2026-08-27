@@ -26,6 +26,12 @@
 
 use purecard::{CompiledGrammar, DecoderSession, Schema, Vocab};
 
+/// The single name a pipeline-source dot is ever narrowed to (`SOURCE_METHOD`
+/// in `src/schema/scope.rs`) — kept as its own literal since that constant is
+/// `pub(crate)` to the library and this is test-support code, a separate
+/// compilation unit.
+const SOURCE_METHOD: &str = "all";
+
 /// Number of accepting walks a full generation produces per schema.
 pub const WALK_COUNT: usize = 64;
 
@@ -221,6 +227,41 @@ enum PendingCall {
 /// sequence that is genuinely complete instead of forcing further growth into
 /// grammar territory the byte-PDA doesn't validate semantically (operator and
 /// predicate chaining — see that function's docs).
+///
+/// `pending_source_method` guards a third residue, found live against #56's
+/// S1 narrowing: `DecoderSession::is_complete()` is `Pda::is_accepting()` — a
+/// pure L1 *lookahead* fact (does a value-boundary byte from here reach
+/// `AfterValue`?) that never consults the L2-narrowed mask. Any partial
+/// identifier is trivially "completable" under that definition, because an
+/// identifier has no self-terminating byte — `InIdent`'s own rule `goto
+/// AfterValue` on any non-continuation byte fires regardless of how much of
+/// the identifier is actually typed. So the moment the vocabulary happens to
+/// hold a standalone token that is *also* a strict byte-prefix of the one
+/// name S1 forces (`"a"` next to `"all"`), the walker can stop there and
+/// call it done — confirmed live: a real walk ended in `Class.a`, which the
+/// engine correctly rejects (`can't find property 'a'`). No L2 change can
+/// fix this (`is_complete()` doesn't read the mask at all); the walker has
+/// to stop trusting it at the one position it's known to be forced. The
+/// first `.` before any `->`/`$` can only be the pipeline-source's own dot
+/// (`pipeline = source , { "->" step }`, `source = classpath ".all()"` —
+/// structurally nothing else precedes it), so it needs no L2 visibility to
+/// detect. `source_method_progress` accumulates the non-whitespace bytes
+/// emitted since that dot (whitespace before/inside the identifier is legal
+/// Pure and carries no identifier content); once it exactly matches
+/// `SOURCE_METHOD`, the identifier is genuinely done — S1's narrowing only
+/// ever lets an exact match through (anything else diverges the trie and is
+/// excluded from the mask) — and `pending` is armed to
+/// `PendingCall::MustOpen`: `all` is itself a niladic call (`.all()`), the
+/// same "mandatory parens" fact `PendingCall` already enforces for `->` hops
+/// (confirmed live: bare `Class.all` parses as a property read and fails to
+/// compile the same way `Db->tableToTDS` without `()` did), so the fix
+/// reuses that machinery rather than inventing a second one. Matching by
+/// accumulated byte content rather than by re-inspecting `Pda::state()`
+/// matters here: the PDA doesn't reach a clean `AfterValue` boundary until
+/// the *next* byte is processed (an identifier has no self-terminating
+/// byte), so checking the state immediately after accepting `all` itself
+/// would still read `InIdent` and never fire — the exact same lookahead gap
+/// `is_complete()` has, one layer down.
 fn attempt(
     grammar: &CompiledGrammar,
     schema: &Schema,
@@ -236,10 +277,13 @@ fn attempt(
     let mut emitted: Vec<u8> = Vec::new();
     let mut pending = PendingCall::None;
     let mut last_byte: Option<u8> = None;
+    let mut seen_arrow_or_dollar = false;
+    let mut pending_source_method = false;
+    let mut source_method_progress: Vec<u8> = Vec::new();
 
     for _ in 0..HARD_CAP {
         let growing = (out.len() as u64) < grow_target;
-        if !growing && walk_is_done(&pending, &session, out.len()) {
+        if !growing && !pending_source_method && walk_is_done(&pending, &session, out.len()) {
             return (Some(out), rng.state);
         }
         let cands = build_candidates(&mut session, vocab, &pending, growing, last_byte);
@@ -248,7 +292,7 @@ fn attempt(
             // admissible here despite every `->name` production requiring
             // it — a real grammar contradiction, not a dead end to accept
             // silently as complete.
-            return if walk_is_done(&pending, &session, out.len()) {
+            return if !pending_source_method && walk_is_done(&pending, &session, out.len()) {
                 (Some(out), rng.state)
             } else {
                 (None, rng.state)
@@ -272,9 +316,43 @@ fn attempt(
             PendingCall::None if emitted.ends_with(ARROW_BYTES) => PendingCall::JustArrowed,
             PendingCall::None => PendingCall::None,
         };
+        if bytes == b"$" || emitted.ends_with(ARROW_BYTES) {
+            seen_arrow_or_dollar = true;
+        }
+        if bytes == b"." && !seen_arrow_or_dollar {
+            // The first `.` before any `->`/`$` can only be the pipeline
+            // source's own dot (`pipeline = source , { "->" step }`,
+            // `source = classpath ".all()"` — nothing else precedes it
+            // structurally) — see the doc comment above for why
+            // `is_complete()` cannot be trusted here on its own.
+            pending_source_method = true;
+            source_method_progress.clear();
+        } else if pending_source_method {
+            // Whitespace between the dot and the identifier is legal Pure
+            // and carries no identifier bytes — skip it rather than let it
+            // break the exact-match check below.
+            if !bytes.iter().all(u8::is_ascii_whitespace) {
+                source_method_progress.extend_from_slice(bytes);
+            }
+            if source_method_progress == SOURCE_METHOD.as_bytes() {
+                // The forced identifier exactly matches — S1's narrowing
+                // only ever lets that happen on an exact match (anything
+                // else diverges the trie and is excluded from the mask).
+                // `SOURCE_METHOD` (`all`) is itself a niladic call
+                // (`source = classpath ".all()"`) — the same "every
+                // `->name`/`.name` this grammar admits is a call, parens
+                // mandatory" fact `PendingCall` already enforces for `->`
+                // hops (confirmed live: `Class.all` without `()` parses as
+                // a bare property read and fails to compile the same way
+                // `Db->tableToTDS` without `()` did) — so reuse it here
+                // rather than a second, parallel "force `(`" mechanism.
+                pending_source_method = false;
+                pending = PendingCall::MustOpen;
+            }
+        }
         last_byte = bytes.last().copied();
     }
-    if walk_is_done(&pending, &session, out.len()) {
+    if !pending_source_method && walk_is_done(&pending, &session, out.len()) {
         (Some(out), rng.state)
     } else {
         (None, rng.state)
@@ -436,4 +514,82 @@ pub fn generate_first_complete_schema_walks(
         "generate_first_complete_schema_walks fell short of WALK_COUNT within ATTEMPT_LIMIT attempts"
     );
     walks
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SAMPLE: &str = r#"{
+      "db_id": "d", "db_path": "spider::d::Db",
+      "classes": { "A": { "simple_name": "A", "properties": [] } },
+      "associations": [], "enums": {}
+    }"#;
+
+    fn schema() -> Schema {
+        Schema::from_json(SAMPLE).expect("parses")
+    }
+
+    /// A vocabulary reproducing the exact ambiguity found live against a real
+    /// schema: a standalone single-byte token (`"a"`) that is also a strict
+    /// byte-prefix of the only name S1 ever forces after the pipeline-source
+    /// dot (`SOURCE_METHOD`, `"all"`). Deliberately excludes any token that
+    /// is *also* a byte-prefix of `LET_KEYWORD` (`"let"`, `narrow.rs`) — an
+    /// `"l"` fragment was tried first and is a prefix of `"let"` too, which
+    /// let the walker pick it as a (masked-admissible, since N3's own
+    /// narrowing has the identical prefix-vs-lookahead gap this fix does not
+    /// touch) *source classpath*, an unrelated confound this test isn't
+    /// about.
+    fn vocab_with_source_method_ambiguity() -> Vocab {
+        let tokens: Vec<Vec<u8>> = ["|", "A", ".", "a", "all", "(", ")", "\n  "]
+            .iter()
+            .map(|s| s.as_bytes().to_vec())
+            .collect();
+        let eos = tokens.len() as u32;
+        Vocab::from_byte_tokens(tokens, eos)
+    }
+
+    /// Decode a walk's token ids to text via `grammar`'s vocabulary.
+    fn decode(grammar: &CompiledGrammar, walk: &[u32]) -> String {
+        let mut text = Vec::new();
+        for &id in walk {
+            text.extend_from_slice(grammar.vocab().bytes(id).expect("real token"));
+        }
+        String::from_utf8(text).expect("ASCII vocabulary")
+    }
+
+    #[test]
+    fn every_walk_opens_the_source_method_call_with_the_full_name_never_a_prefix() {
+        // Checks exactly the two facts `pending_source_method`/`MustOpen`
+        // fix: the identifier is never truncated (`a`/`al`), and it's always
+        // followed by an opening `(` rather than left as a bare property
+        // read (`Class.all` alone, confirmed live to fail to compile the
+        // same way `Db->tableToTDS` without `()` did).
+        //
+        // Deliberately *not* asserted: that the call closes immediately with
+        // no arguments. `.all()` is niladic in the real grammar, but nothing
+        // here yet forces that — `MustOpen` only forces the opening `(`, the
+        // same as it does for `->name(args)` calls that legitimately *do*
+        // take arguments, so once inside, this minimal vocabulary's only
+        // content-bearing token (`"all"`, reused as a generic value) can
+        // fill the argument slot (confirmed live and reproduced here: a real
+        // walk closed as `Class.all('French')`/`A.all(all)`). Closing that
+        // gap needs a `.all()`-specific "must close immediately" state
+        // distinct from `MustOpen`'s shared, argument-permitting one — out
+        // of scope for this fix, which targets the vastly more common
+        // truncated-identifier failure (over 40/64 walks in the original
+        // live baseline) rather than this narrower one (1/64).
+        let grammar = CompiledGrammar::compile(vocab_with_source_method_ambiguity());
+        let schema = schema();
+        let walks = generate_first_complete_schema_walks(&grammar, &schema);
+        assert_eq!(walks.len(), WALK_COUNT);
+        for (index, walk) in walks.iter().enumerate() {
+            let text = decode(&grammar, walk);
+            let stripped: String = text.chars().filter(|c| !c.is_whitespace()).collect();
+            assert!(
+                stripped.starts_with("|A.all("),
+                "walk {index} did not open `A.all(` with the full name: {text:?}"
+            );
+        }
+    }
 }
