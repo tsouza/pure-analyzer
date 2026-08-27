@@ -174,6 +174,9 @@ pub(crate) enum L2Position {
     Member(String),
     /// T1: the comparison operand's literal type must match `class`.
     ReValue(TypeClass),
+    /// T2: an ordered comparator (`< > <= >=`) is legal only when the completed
+    /// navExpr just left of it is numeric or temporal.
+    Comparator(TypeClass),
     /// N6: a relation-column string reference must name an emitted column.
     Column,
     /// N6 (arm-R): a *bare-ident* column access `$row.<Col>` on a relation row
@@ -288,7 +291,8 @@ pub(crate) struct ScopeTracker {
     /// The class a navigation chain has reached so far (feeds N2).
     nav_cursor: Option<String>,
     /// The type-class of the most recently completed primitive navExpr — read by
-    /// the *next* comparison operator to arm T1.
+    /// the *next* comparison operator to arm T1 (`cmp_pending`), and by the
+    /// `AfterValue` anchor right in front of it to arm T2 (`Comparator`).
     last_resolved: Option<TypeClass>,
     /// The class the most recently completed navExpr resolved to (a to-many/class
     /// nav receiver), used to bind a following method lambda's variable.
@@ -961,6 +965,10 @@ impl ScopeTracker {
                     L2Position::None
                 }
             }
+            State::AfterValue => match self.last_resolved {
+                Some(tc) => L2Position::Comparator(tc),
+                None => L2Position::None,
+            },
             _ => L2Position::None,
         }
     }

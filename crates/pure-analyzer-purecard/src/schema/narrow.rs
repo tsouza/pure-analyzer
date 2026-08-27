@@ -13,10 +13,11 @@
 //! *extend some* legal name from the bytes emitted since the anchor (a
 //! [`Trie`] walk). This is what makes the overlay sound under byte-level BPE,
 //! where a schema identifier arrives in fragments (adversarial-review B1). The
-//! type rule (T1) narrows by literal class, which BPE does not fragment.
+//! type rules (T1, T2) narrow by literal/operator class, which BPE does not
+//! fragment.
 //!
-//! Only the shipped rules build a constraining mask (N3, N1/N2, N6, T1). Every
-//! other position returns [`None`] — the mask passes through unchanged.
+//! Only the shipped rules build a constraining mask (N3, N1/N2, N6, T1, T2).
+//! Every other position returns [`None`] — the mask passes through unchanged.
 
 use std::collections::HashMap;
 
@@ -76,6 +77,8 @@ enum CacheKey {
     Member(String),
     /// T1 operand class — the literal-class lever (cursor-independent).
     ReValue(TypeClass),
+    /// T2 comparator class — the ordered-comparator lever (cursor-independent).
+    Comparator(TypeClass),
     /// N6 column set at a given emitted-column count (monotonic within a stream,
     /// so the count pins the set exactly).
     Column(usize),
@@ -145,6 +148,18 @@ pub(crate) fn narrow_into(
             let masked_by = *tc;
             with_cache(dst, cache, CacheKey::ReValue(masked_by), |dst| {
                 fill_operand(dst, vocab, eos_bit, masked_by);
+            });
+            true
+        }
+        L2Position::Comparator(TypeClass::Numeric | TypeClass::Temporal) => {
+            // An ordered comparator is legal on a numeric/temporal operand — no
+            // constraint to apply.
+            false
+        }
+        L2Position::Comparator(tc) => {
+            let masked_by = *tc;
+            with_cache(dst, cache, CacheKey::Comparator(masked_by), |dst| {
+                fill_comparator(dst, vocab, eos_bit, masked_by);
             });
             true
         }
@@ -439,6 +454,32 @@ fn fill_operand(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32, masked_by: TypeC
     for id in 0..vocab.len() as u32 {
         let bytes = vocab.bytes(id).unwrap_or(&[]);
         if keeps_operand(&classify(bytes), masked_by) {
+            dst.set(id);
+        }
+    }
+    dst.set(eos_bit);
+}
+
+/// Whether a comparator token is kept under a T2 constraint with LHS class `lhs`
+/// (§6.6 T2). [`classify`] folds every comparator shape into one [`Lexeme::Cmp`]
+/// (ordered-vs-equality is exactly what T2 distinguishes), so this reads the raw
+/// bytes directly rather than going through it. An ordered comparator (`< > <=
+/// >=`) is legal only for a numeric or temporal operand; equality/inequality
+/// (`== !=`) and every non-comparator shape stay kept.
+fn keeps_comparator(bytes: &[u8], lhs: TypeClass) -> bool {
+    if matches!(bytes, b"<" | b">" | b"<=" | b">=") {
+        matches!(lhs, TypeClass::Numeric | TypeClass::Temporal)
+    } else {
+        true
+    }
+}
+
+/// Refill `dst` with the T2 comparator set for LHS class `masked_by`, plus EOS.
+fn fill_comparator(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32, masked_by: TypeClass) {
+    dst.clear_all();
+    for id in 0..vocab.len() as u32 {
+        let bytes = vocab.bytes(id).unwrap_or(&[]);
+        if keeps_comparator(bytes, masked_by) {
             dst.set(id);
         }
     }
