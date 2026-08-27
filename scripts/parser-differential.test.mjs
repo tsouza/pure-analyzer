@@ -2,10 +2,12 @@ import { describe, expect, test } from "bun:test";
 
 import {
   CACHE_SCHEMA_VERSION,
+  CANONICAL_FAMILIES,
   EngineUnavailableError,
   PARSE_FAIL,
   PARSE_OK,
   assertEngineVersion,
+  assertAcceptedFamilyCoverage,
   assertMetadata,
   canUseCacheFallback,
   cacheMatches,
@@ -18,7 +20,7 @@ const metadata = {
   schema_version: CACHE_SCHEMA_VERSION,
   engine_version: "4.113.0",
   grammar_endpoint: "/api/pure/v1/grammar/grammarToJson/lambda",
-  required_families: ["test"],
+  required_families: [...CANONICAL_FAMILIES],
   provenance: "test",
   update_policy: "test",
 };
@@ -29,7 +31,7 @@ const fixtures = [
     query: "model::Person.all()",
     legend: PARSE_OK,
     endpoint: metadata.grammar_endpoint,
-    family: "test",
+    family: CANONICAL_FAMILIES[0],
     provenance: "test",
   },
   {
@@ -37,7 +39,7 @@ const fixtures = [
     query: "model::Person.all(",
     legend: PARSE_FAIL,
     endpoint: metadata.grammar_endpoint,
-    family: "test",
+    family: CANONICAL_FAMILIES[0],
     provenance: "test",
   },
 ];
@@ -50,6 +52,17 @@ describe("parser differential corpus validation", () => {
     );
     expect(() => assertMetadata({ ...metadata, grammar_endpoint: "https://other.example" })).toThrow(
       "absolute API path",
+    );
+    expect(() => assertMetadata({ ...metadata, required_families: CANONICAL_FAMILIES.slice(1) })).toThrow(
+      "canonical grammar classes",
+    );
+  });
+
+  test("requires a legal parse neighbor for every canonical grammar class", () => {
+    const legalNeighbors = CANONICAL_FAMILIES.map((family) => ({ family }));
+    expect(() => assertAcceptedFamilyCoverage(legalNeighbors)).not.toThrow();
+    expect(() => assertAcceptedFamilyCoverage(legalNeighbors.slice(1))).toThrow(
+      "parse_ok legal-neighbor fixture",
     );
   });
 

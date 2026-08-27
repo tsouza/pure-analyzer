@@ -14,6 +14,15 @@ const METADATA: &str = include_str!("../corpus/legend-4.113.0/metadata.json");
 const FIXTURE_FILE_ID: u32 = 27;
 const PARSE_OK: &str = "parse_ok";
 const PARSE_FAIL: &str = "parse_fail";
+// Required grammar-boundary classes. This list is deliberately code-owned
+// rather than corpus-owned so a corpus-only edit cannot silently remove a
+// legal-neighbor coverage guarantee.
+const CANONICAL_FAMILIES: &[&str] = &[
+    "bare-relation-column",
+    "zero-argument-navigation",
+    "date-navigation",
+    "generated-navigation",
+];
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -84,10 +93,15 @@ fn assert_metadata(metadata: &CorpusMetadata) {
             "{CORPUS_ROOT}: required_families must not contain empty entries"
         );
         assert!(
-            required_families.insert(family),
+            required_families.insert(family.as_str()),
             "{CORPUS_ROOT}: duplicate required grammar family {family:?}"
         );
     }
+    let canonical_families = CANONICAL_FAMILIES.iter().copied().collect();
+    assert_eq!(
+        required_families, canonical_families,
+        "{CORPUS_ROOT}: required_families must exactly list the canonical grammar classes"
+    );
     assert!(!metadata.provenance.trim().is_empty());
     assert!(!metadata.update_policy.trim().is_empty());
 }
@@ -209,11 +223,11 @@ fn assert_corpus(
     }
 }
 
-fn assert_required_families(metadata: &CorpusMetadata, families: &BTreeSet<String>) {
-    for family in &metadata.required_families {
+fn assert_required_accepted_families(families: &BTreeSet<String>) {
+    for family in CANONICAL_FAMILIES {
         assert!(
-            families.contains(family),
-            "{CORPUS_ROOT}: required grammar family {family:?} has no fixture"
+            families.contains(*family),
+            "{CORPUS_ROOT}: canonical grammar family {family:?} must have a parse_ok legal-neighbor fixture"
         );
     }
 }
@@ -223,7 +237,10 @@ fn test_metadata() -> CorpusMetadata {
         schema_version: 1,
         engine_version: CORPUS_VERSION.to_owned(),
         grammar_endpoint: "/api/pure/v1/grammar/grammarToJson/lambda".to_owned(),
-        required_families: vec!["registered".to_owned()],
+        required_families: CANONICAL_FAMILIES
+            .iter()
+            .map(|family| (*family).to_owned())
+            .collect(),
         provenance: "test provenance".to_owned(),
         update_policy: "test update policy".to_owned(),
     }
@@ -235,7 +252,7 @@ fn test_fixture() -> Fixture {
         query: "model::Person.all()".to_owned(),
         legend: PARSE_OK.to_owned(),
         endpoint: "/api/pure/v1/grammar/grammarToJson/lambda".to_owned(),
-        family: "registered".to_owned(),
+        family: CANONICAL_FAMILIES[0].to_owned(),
         provenance: "test provenance".to_owned(),
     }
 }
@@ -246,31 +263,58 @@ fn frozen_legend_grammar_verdicts_match_the_local_parser() {
     assert_metadata(&metadata);
 
     let mut ids = BTreeSet::new();
-    let mut families = BTreeSet::new();
-    for (path, text, expected_verdict) in [
-        ("accept.jsonl", ACCEPT_CORPUS, PARSE_OK),
-        ("reject.jsonl", REJECT_CORPUS, PARSE_FAIL),
-    ] {
-        assert_corpus(
-            &metadata,
-            path,
-            text,
-            expected_verdict,
-            &mut ids,
-            &mut families,
-        );
-    }
+    let mut accepted_families = BTreeSet::new();
+    assert_corpus(
+        &metadata,
+        "accept.jsonl",
+        ACCEPT_CORPUS,
+        PARSE_OK,
+        &mut ids,
+        &mut accepted_families,
+    );
+    assert_required_accepted_families(&accepted_families);
 
-    assert_required_families(&metadata, &families);
+    let mut rejected_families = BTreeSet::new();
+    assert_corpus(
+        &metadata,
+        "reject.jsonl",
+        REJECT_CORPUS,
+        PARSE_FAIL,
+        &mut ids,
+        &mut rejected_families,
+    );
 }
 
 #[test]
 #[should_panic(expected = "duplicate required grammar family")]
 fn corpus_metadata_rejects_duplicate_required_families() {
     let mut metadata = test_metadata();
-    metadata.required_families.push("registered".to_owned());
+    metadata
+        .required_families
+        .push(CANONICAL_FAMILIES[0].to_owned());
 
     assert_metadata(&metadata);
+}
+
+#[test]
+#[should_panic(expected = "canonical grammar classes")]
+fn corpus_metadata_cannot_remove_or_relabel_canonical_families() {
+    let mut metadata = test_metadata();
+    metadata.required_families.pop();
+
+    assert_metadata(&metadata);
+}
+
+#[test]
+#[should_panic(expected = "parse_ok legal-neighbor fixture")]
+fn corpus_requires_an_accept_fixture_for_each_canonical_family() {
+    let families = CANONICAL_FAMILIES
+        .iter()
+        .skip(1)
+        .map(|family| (*family).to_owned())
+        .collect();
+
+    assert_required_accepted_families(&families);
 }
 
 #[test]

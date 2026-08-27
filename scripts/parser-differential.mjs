@@ -18,6 +18,15 @@ export const INFO_ENDPOINT = "/api/server/v1/info";
 export const HTTP_OK = 200;
 export const HTTP_PARSER_ERROR = 400;
 export const REQUEST_TIMEOUT_MS = 8_000;
+// Required grammar-boundary classes. This list is deliberately code-owned
+// rather than corpus-owned so a corpus-only edit cannot silently remove a
+// legal-neighbor coverage guarantee.
+export const CANONICAL_FAMILIES = Object.freeze([
+  "bare-relation-column",
+  "zero-argument-navigation",
+  "date-navigation",
+  "generated-navigation",
+]);
 
 /** A connection or timeout prevented an engine request from completing. */
 export class EngineUnavailableError extends Error {}
@@ -47,6 +56,13 @@ export function assertMetadata(value) {
     new Set(value.required_families).size !== value.required_families.length
   ) {
     throw new Error("metadata required_families must be a non-empty unique string list");
+  }
+  const requiredFamilies = new Set(value.required_families);
+  if (
+    requiredFamilies.size !== CANONICAL_FAMILIES.length ||
+    CANONICAL_FAMILIES.some((family) => !requiredFamilies.has(family))
+  ) {
+    throw new Error("metadata required_families must exactly list the canonical grammar classes");
   }
   for (const field of ["provenance", "update_policy"]) {
     if (!nonEmptyString(value[field])) {
@@ -90,6 +106,18 @@ export function parseFixtures(text, expectedLegend, path) {
         throw error;
       }
     });
+}
+
+/** Require a legal parse neighbor for every documented grammar-boundary class. */
+export function assertAcceptedFamilyCoverage(fixtures) {
+  const acceptedFamilies = new Set(fixtures.map((fixture) => fixture.family));
+  for (const family of CANONICAL_FAMILIES) {
+    if (!acceptedFamilies.has(family)) {
+      throw new Error(
+        `canonical grammar family ${JSON.stringify(family)} must have a parse_ok legal-neighbor fixture`,
+      );
+    }
+  }
 }
 
 /** Convert the Legend grammar endpoint's parser status into a frozen verdict. */
@@ -185,9 +213,10 @@ async function loadCorpus() {
   if (accept.length === 0 || reject.length === 0) {
     throw new Error("both accept.jsonl and reject.jsonl must contain at least one fixture");
   }
+  assertAcceptedFamilyCoverage(accept);
+
   const fixtures = [...accept, ...reject];
   const ids = new Set();
-  const families = new Set();
   for (const fixture of fixtures) {
     if (!ids.add(fixture.id)) {
       throw new Error(`duplicate fixture id ${JSON.stringify(fixture.id)}`);
@@ -199,12 +228,6 @@ async function loadCorpus() {
     }
     if (!metadata.required_families.includes(fixture.family)) {
       throw new Error(`fixture ${fixture.id} uses undocumented grammar family ${fixture.family}`);
-    }
-    families.add(fixture.family);
-  }
-  for (const family of metadata.required_families) {
-    if (!families.has(family)) {
-      throw new Error(`required grammar family ${family} has no fixture`);
     }
   }
   return { metadata, fixtures };
