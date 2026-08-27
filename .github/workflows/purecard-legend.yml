@@ -1,0 +1,77 @@
+name: PureCARD Legend completeness
+
+# The live Legend engine/SDLC stack is too heavy (JVM cold start, ~1GB of
+# Docker images) for the per-PR lane, so this proof runs nightly with an
+# on-demand escape hatch — mirroring purecard-qwen-oracle.yml's pattern for
+# the other heavy, opt-in PureCARD lane.
+on:
+  schedule:
+    - cron: "37 4 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: purecard-legend-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: "1"
+  LEGEND_COMPOSE_FILE: crates/pure-analyzer-purecard/corpus/legend-stack/docker-compose.yml
+  # Mirrors the pins in LEGEND_COMPOSE_FILE — kept explicit here (rather than
+  # shelled out of the compose file) so `docker save`'s argument list never
+  # depends on unquoted command-substitution word-splitting.
+  LEGEND_ENGINE_IMAGE: finos/legend-engine-server-http-server:4.113.0
+  LEGEND_SDLC_IMAGE: finos/legend-sdlc-server-fs:0.195.0
+
+jobs:
+  legend-completeness:
+    name: Legend-backed completeness lane
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Install just and nextest
+        uses: taiki-e/install-action@b6ff580856c41316412a0b9b60540fbc6f8c82cc # v2.86.7
+        with:
+          tool: just@1.55.1,cargo-nextest
+      - name: Restore cached Legend images
+        id: legend-images
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /tmp/legend-images.tar
+          key: purecard-legend-images-${{ hashFiles(env.LEGEND_COMPOSE_FILE) }}
+      - name: Load cached Legend images
+        if: steps.legend-images.outputs.cache-hit == 'true'
+        run: docker load --input /tmp/legend-images.tar
+      - name: Pull Legend images on cache miss
+        if: steps.legend-images.outputs.cache-hit != 'true'
+        run: docker compose --file "$LEGEND_COMPOSE_FILE" pull
+      - name: Save Legend images to cache on miss
+        if: steps.legend-images.outputs.cache-hit != 'true'
+        run: docker save --output /tmp/legend-images.tar "$LEGEND_ENGINE_IMAGE" "$LEGEND_SDLC_IMAGE"
+      - name: Run the Legend completeness lane
+        run: just test-legend
+      - name: Upload Legend stack logs on failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: legend-stack-log
+          path: target/legend-stack.log
+          if-no-files-found: ignore
+
+  no-warnings:
+    name: no-warnings (log sweep)
+    needs: [legend-completeness]
+    if: always()
+    permissions:
+      actions: read # reusable sweep reads this workflow run's completed logs
+      contents: read
+    uses: ./.github/workflows/no-warnings.yml
