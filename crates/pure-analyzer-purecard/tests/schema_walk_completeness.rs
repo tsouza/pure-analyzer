@@ -102,3 +102,56 @@ fn generation_is_deterministic_across_repeated_calls() {
         );
     }
 }
+
+/// Every generated walk is admissible under **both** L1 and L2 at every step,
+/// and the L2 mask never admits an id L1 would reject (`L2 ⊆ L1`, the
+/// subtractive-overlay invariant §6 requires). Across the whole corpus, L2
+/// must also narrow at least one step relative to L1 — a schema overlay that
+/// never differs from L1 would be silently pass-through, not proof of a real
+/// constraint.
+#[test]
+fn every_step_is_l1_and_l2_admissible_with_l2_subset_of_l1_and_narrower_somewhere() {
+    let mut narrowed_anywhere = false;
+    for db_id in FIXTURE_DBS {
+        let (grammar, schema) = grammar_and_schema(db_id);
+        let walks = generate_schema_walks(&grammar, &schema);
+
+        for (index, walk) in walks.iter().enumerate() {
+            let mut l1 = DecoderSession::new(&grammar);
+            let mut l2 = DecoderSession::with_schema(&grammar, schema.clone())
+                .expect("grammar is fixed-engine");
+            for (step, &id) in walk.iter().enumerate() {
+                let l1_ids: std::collections::BTreeSet<u32> =
+                    l1.allowed_mask().iter_ones().collect();
+                let l2_ids: std::collections::BTreeSet<u32> =
+                    l2.allowed_mask().iter_ones().collect();
+                assert!(
+                    l2_ids.is_subset(&l1_ids),
+                    "db {db_id} walk {index} step {step}: L2 admitted an id L1 rejects"
+                );
+                assert!(
+                    l1_ids.contains(&id),
+                    "db {db_id} walk {index} step {step}: emitted token {id} not L1-admissible"
+                );
+                assert!(
+                    l2_ids.contains(&id),
+                    "db {db_id} walk {index} step {step}: emitted token {id} not L2-admissible"
+                );
+                if l2_ids.len() < l1_ids.len() {
+                    narrowed_anywhere = true;
+                }
+                l1.accept_token(id).unwrap_or_else(|err| {
+                    panic!("db {db_id} walk {index}: L1 rejected {id}: {err}")
+                });
+                l2.accept_token(id).unwrap_or_else(|err| {
+                    panic!("db {db_id} walk {index}: L2 rejected {id}: {err}")
+                });
+            }
+        }
+    }
+    assert!(
+        narrowed_anywhere,
+        "L2 never narrowed the mask relative to L1 across any fixture schema's walks — \
+         the schema overlay would be unproven, not just unexercised"
+    );
+}
