@@ -140,6 +140,17 @@ fn unquote(bytes: &[u8]) -> Vec<u8> {
 pub(crate) enum L2Position {
     /// N3: the pipeline source classpath must be a real class (or the store).
     SourceIdent,
+    /// S1: the identifier right after a pipeline-source classpath's `.` must be
+    /// exactly [`SOURCE_METHOD`] (`all`) — `ClassScope` is only ever entered via
+    /// `ClassPath.all()` (`docs/spec/schema.md` §6.4's S1/S3 progression), so
+    /// nothing else is a legal continuation of *this* dot. Kept distinct from
+    /// [`Member`](L2Position::Member): this dot's `dot_base` is deliberately
+    /// `None` (no class is being navigated *from* yet), so folding it into that
+    /// rule would also have to narrow every other class-typed `.` with no base
+    /// — wrongly reaching `EnumPath.IDENT` value positions (`SortDirection.ASC`)
+    /// that share the same `AfterDot` state but anchor at a value position, not
+    /// a source position (see [`on_dot`](ScopeTracker::on_dot)'s doc comment).
+    SourceMethod,
     /// N1/N2: the identifier after `.` must be a member of `class`.
     Member(String),
     /// T1: the comparison operand's literal type must match `class`.
@@ -155,8 +166,9 @@ pub(crate) enum L2Position {
 
 /// The method that opens a pipeline from a class extent (`Class.all()`). A call
 /// to it below the top level is a *nested* pipeline whose arm/relation state must
-/// not inherit or leak the enclosing pipeline's.
-const SOURCE_METHOD: &str = "all";
+/// not inherit or leak the enclosing pipeline's. `pub(crate)` so `narrow.rs` can
+/// build [`L2Position::SourceMethod`]'s single-name trie from the same constant.
+pub(crate) const SOURCE_METHOD: &str = "all";
 
 /// The least delimiter depth at which an `all()` call is *nested*: the top-level
 /// `|Class.all()` sits at depth 1, so a call at depth 2 or deeper is inside a
@@ -310,6 +322,20 @@ pub(crate) struct ScopeTracker {
     /// A `.` was just seen over a relation-row binder; the following identifier is a
     /// bare-ident column reference ([`RelationColumn`](L2Position::RelationColumn)).
     dot_is_column: bool,
+    /// The identifier just dispatched from a source-triggering anchor
+    /// (`ExpectSource`/`BlockStmt`/`BlockStmtClose`) was itself a real source path
+    /// (a schema class or the store) — read and cleared by the very next `.`
+    /// ([`on_dot`](ScopeTracker::on_dot)), which is the only thing that can follow
+    /// a source classpath other than `->`. Never true for `let` (also legal at
+    /// that anchor, per `schema.source_paths().chain(once(LET_KEYWORD))` in
+    /// `narrow.rs`), since `let` is not itself a source path.
+    source_ident_seen: bool,
+    /// A `.` was just seen right after a source classpath (`source_ident_seen`
+    /// was true); the following identifier must be [`SOURCE_METHOD`] (S1). Read
+    /// once by [`opening_position`](ScopeTracker::opening_position) when that
+    /// identifier's lexeme opens, then cleared the same way `dot_base` is
+    /// consumed by [`resolve_member`](ScopeTracker::resolve_member).
+    awaiting_source_method: bool,
     /// Every column name emitted so far — quoted string literals (arm-A N6,
     /// `~'Gross Credits'`) and arm-R `~`-introduced names (`~Col`, `~[Week, …]`
     /// keys). A superset stored as raw (unquoted) bytes, so a real reference to a
@@ -556,6 +582,14 @@ impl ScopeTracker {
         if schema.has_class(text) {
             self.cur_class = Some(text.to_owned());
         }
+        // This identifier closed at a source-triggering anchor and is itself a
+        // real source path (never true for the `let` keyword, also legal there
+        // but not a source path) — S1: the very next `.` (`on_dot`) must narrow
+        // its identifier to exactly `SOURCE_METHOD`, not any class member.
+        self.source_ident_seen = matches!(
+            pre_state,
+            State::ExpectSource | State::BlockStmt | State::BlockStmtClose
+        ) && schema.source_paths().any(|path| path == text);
         match pre_state {
             // A refVar use (`$x`): never a lambda binder, never a member position.
             State::AfterDollar => {
@@ -610,6 +644,11 @@ impl ScopeTracker {
         schema: &Schema,
         resolved_now: &mut Option<TypeClass>,
     ) {
+        if std::mem::take(&mut self.awaiting_source_method) {
+            // The identifier closing this dot was narrowed to `SOURCE_METHOD`
+            // (S1); `all` is not a class member, so there is nothing to resolve.
+            return;
+        }
         if self.dot_is_column {
             // A bare-ident column access (`$row.Col`) terminates navigation: a
             // column is a value, not a class, so no member resolves and a following
@@ -641,8 +680,16 @@ impl ScopeTracker {
         }
     }
 
+    /// A dot right after a just-dispatched source classpath (`source_ident_seen`)
+    /// arms [`awaiting_source_method`](Self::awaiting_source_method) so the
+    /// following identifier is narrowed to [`SOURCE_METHOD`] (S1) rather than
+    /// falling through the ordinary `dot_base`/member logic below, which would
+    /// otherwise stay `None` here regardless (a fresh source classpath sets
+    /// neither `pending_refvar` nor `nav_cursor`) and leave this dot fully
+    /// unnarrowed — the gap `L2Position::SourceMethod` exists to close.
     fn on_dot(&mut self) {
         self.dot_is_column = false;
+        self.awaiting_source_method = std::mem::take(&mut self.source_ident_seen);
         if let Some(var) = self.pending_refvar.take() {
             if self.relation_row_vars.contains(&var) {
                 // `$row.` over an arm-R relation-row binder: the next identifier is a
@@ -848,7 +895,9 @@ impl ScopeTracker {
                 L2Position::SourceIdent
             }
             State::AfterDot => {
-                if self.dot_is_column {
+                if self.awaiting_source_method {
+                    L2Position::SourceMethod
+                } else if self.dot_is_column {
                     L2Position::RelationColumn
                 } else {
                     match &self.dot_base {
@@ -1109,24 +1158,91 @@ mod tests {
     }
 
     #[test]
-    fn an_all_dot_is_not_a_member_navigation() {
-        // The `.` of `A.all()` navigates from no bound var — no Member narrowing, so
-        // `all` is never masked. (A source dot and a value dot share `AfterDot`.)
+    fn an_all_dot_is_a_source_method_position_not_a_member_navigation() {
+        // The `.` of `A.all()` navigates from no bound var — no Member narrowing —
+        // but it *is* narrowed: S1 requires exactly `all` here (A source dot and a
+        // value dot share `AfterDot`, so this is `SourceMethod`, not `None`).
         let (tracker, pda) = run(&[b"|", b"A", b"."]);
+        assert_eq!(pda.state(), State::AfterDot);
+        assert_eq!(tracker.position(pda.state()), L2Position::SourceMethod);
+    }
+
+    #[test]
+    fn a_quoted_member_after_a_source_dot_is_a_source_method_position() {
+        // `|A.'name'` — a quoted member off a source dot. The dot shares the unified
+        // `AfterDot` state (no bound var, so no Member narrowing), and the quoted
+        // member streams cleanly to an accepting state — still `SourceMethod` (S1: a
+        // quoted string is never `all`, so the narrower correctly rejects it here).
+        // This guards the original revert this rule is layered onto: the source dot
+        // must not be a separate, identifier-only PDA *state* that would reject a
+        // quoted continuation outright — `SourceMethod` narrows the shared
+        // `AfterDot` state's *position*, it does not change the automaton.
+        let (tracker, pda) = run(&[b"|", b"A", b".", b"'name'"]);
+        assert_eq!(pda.state(), State::InStrLit { escaped: true });
+        assert_eq!(tracker.position(pda.state()), L2Position::SourceMethod);
+    }
+
+    #[test]
+    fn a_nested_source_dot_is_deliberately_not_yet_a_source_method_position() {
+        // `|A.all()->filter(x|B.all()->isEmpty())` — a nested subquery source. Its
+        // classpath `B` dispatches from `ExpectValue` (a fresh lambda body's
+        // opening value position — the same anchor a lambda binder candidate or
+        // an `EnumPath.IDENT` value literal like `SortDirection.ASC` uses), not
+        // `ExpectSource`/`BlockStmt`/`BlockStmtClose`. `on_open`'s existing
+        // `SOURCE_METHOD && depth >= NESTED_SOURCE_MIN_DEPTH` check only
+        // recognizes a nested source *retroactively*, once `.all(` is actually
+        // seen — there is no positional signal available *before* that to
+        // distinguish "this value-position classpath is about to become a
+        // nested source" from a genuine value-position classpath (the exact
+        // `SortDirection.ASC` ambiguity `SourceMethod`'s doc comment describes).
+        // Extending S1 to nested sources needs that extra signal (e.g. "is this
+        // the pipe's first identifier") built and proven not to also catch
+        // `EnumPath.IDENT` — deliberately not attempted here; this test pins
+        // today's actual (unchanged, pre-existing) behavior so a future change
+        // is a visible, intentional decision, not a silent regression either way.
+        let (tracker, pda) = run(&[
+            b"|", b"A", b".", b"all", b"(", b")", b"->", b"filter", b"(", b"x", b"|", b"B", b".",
+        ]);
         assert_eq!(pda.state(), State::AfterDot);
         assert_eq!(tracker.position(pda.state()), L2Position::None);
     }
 
     #[test]
-    fn a_quoted_member_after_a_source_dot_is_not_a_member_navigation() {
-        // `|A.'name'` — a quoted member off a source dot. The dot shares the unified
-        // `AfterDot` state (no bound var, so no Member narrowing), and the quoted
-        // member streams cleanly to an accepting state with a non-member position.
-        // This guards the revert: the source dot must not be a separate,
-        // identifier-only state that would reject the quoted member.
-        let (tracker, pda) = run(&[b"|", b"A", b".", b"'name'"]);
-        assert_eq!(pda.state(), State::InStrLit { escaped: true });
-        assert_eq!(tracker.position(pda.state()), L2Position::None);
+    fn a_classpath_at_a_value_position_does_not_arm_source_method_narrowing() {
+        // A real class name dispatched from a *value* position (not a pipeline
+        // source anchor) must never arm S1's `SOURCE_METHOD` narrowing on its
+        // following dot — the regression guard the `EnumPath.IDENT` value-literal
+        // shape (`SortDirection.ASC`, `docs/spec/schema.md` §5.7/N4) needs: it
+        // shares the same `AfterDot` state as a source dot, but its classpath
+        // anchors at a value position, not `ExpectSource`/`BlockStmt`/
+        // `BlockStmtClose`. Drives `dispatch_token` directly (a private method,
+        // reachable from this in-file test module) rather than a hand-built PDA
+        // byte sequence, since the fact under test — which `pre_state` a
+        // dispatch closed at — does not depend on how that state was reached.
+        let mut tracker = ScopeTracker::new();
+        tracker.dispatch_token(b"A", State::ExpectValue, &schema());
+        assert!(
+            !tracker.source_ident_seen,
+            "a value-position classpath armed source_ident_seen"
+        );
+    }
+
+    #[test]
+    fn the_let_keyword_at_a_source_anchor_does_not_arm_source_method_narrowing() {
+        // The mirror image of the value-position guard above: `let` closes at a
+        // genuine source-triggering anchor (`ExpectSource`/`BlockStmt`/
+        // `BlockStmtClose`) — N3's own `source_paths().chain(once(LET_KEYWORD))`
+        // admits it there — but it is not itself a source *path*
+        // (`schema.source_paths()` never yields it), so `source_ident_seen` must
+        // stay false. Without this check, `on_ident` would arm S1 after `let`,
+        // wrongly forcing the block-statement's `$name = …` binder syntax through
+        // a trie that only ever admits `all`.
+        let mut tracker = ScopeTracker::new();
+        tracker.dispatch_token(b"let", State::BlockStmt, &schema());
+        assert!(
+            !tracker.source_ident_seen,
+            "the `let` keyword armed source_ident_seen"
+        );
     }
 
     #[test]
