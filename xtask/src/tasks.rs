@@ -196,6 +196,34 @@ pub fn test_legend() -> Result<()> {
     }
 }
 
+/// Replay the frozen Legend grammar corpus against the local analyzer parser.
+///
+/// With `refresh`, first ask the explicit Bun refresh tool to verify the
+/// committed oracle against a running, exactly pinned Legend engine. The
+/// ordinary path is hermetic: it runs only the parser integration test and
+/// never starts or contacts an engine.
+///
+/// # Errors
+///
+/// Returns an error when the optional refresh cannot validate the pinned
+/// oracle, or when the local parser diverges from a frozen verdict.
+pub fn parser_differential(refresh: bool) -> Result<()> {
+    if refresh {
+        run("bun", &["scripts/parser-differential.mjs", "--refresh"])?;
+    }
+    run(
+        "cargo",
+        &[
+            "nextest",
+            "run",
+            "-p",
+            "pure-analyzer-parser",
+            "--test",
+            "legend_differential",
+        ],
+    )
+}
+
 /// Run the default workspace-wide mutation pass, excluding PureCARD's
 /// feature-gated FFI source (covered separately by [`test_mutation_ffi`]).
 ///

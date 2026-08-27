@@ -1169,6 +1169,8 @@ dependencies = [
  "pure-analyzer-diagnostics",
  "pure-analyzer-lexer",
  "pure-analyzer-syntax",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
