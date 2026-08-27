@@ -23,7 +23,7 @@ use std::collections::HashMap;
 use crate::grammar::pda::{is_ident_start, is_ident_tail};
 use crate::mask::BitMask;
 use crate::schema::model::{Schema, TypeClass};
-use crate::schema::scope::{L2Position, Lexeme, classify};
+use crate::schema::scope::{L2Position, Lexeme, SOURCE_METHOD, classify};
 use crate::schema::trie::{Trie, Walk, walk};
 use crate::vocab::Vocab;
 
@@ -67,6 +67,8 @@ struct RuleCache {
 enum CacheKey {
     /// N3 source set — a schema constant.
     Source,
+    /// S1 source-method set — always the single name [`SOURCE_METHOD`].
+    SourceMethod,
     /// N1/N2 member set of a class — one per class.
     Member(String),
     /// T1 operand class — the literal-class lever (cursor-independent).
@@ -152,6 +154,16 @@ pub(crate) fn narrow_into(
             vocab,
             eos_bit,
             || Trie::from_names(schema.source_paths().chain(std::iter::once(LET_KEYWORD))),
+        ),
+        L2Position::SourceMethod => narrow_trie(
+            dst,
+            cache,
+            CacheKey::SourceMethod,
+            prefix,
+            TrieKind::Ident,
+            vocab,
+            eos_bit,
+            || Trie::from_names(std::iter::once(SOURCE_METHOD)),
         ),
         L2Position::Member(class) => narrow_trie(
             dst,
