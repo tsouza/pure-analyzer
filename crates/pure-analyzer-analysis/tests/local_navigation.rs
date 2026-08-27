@@ -8,7 +8,7 @@ use pure_analyzer_parser::parse_query;
 use pure_analyzer_resolve::{
     LocalValueKind, NavigationResolution, NavigationTarget, NavigationUnderResolution, Resolution,
 };
-use pure_analyzer_syntax::TextRange;
+use pure_analyzer_syntax::{GreenElement, GreenNode, SyntaxKind, TextRange};
 use serde_json::{Value, json};
 
 const PACKAGE: &str = "model";
@@ -80,6 +80,15 @@ fn range_text(source: &str, range: TextRange) -> &str {
     &source[usize::from(range.start())..usize::from(range.end())]
 }
 
+fn first_node_of_kind(node: &GreenNode, kind: SyntaxKind) -> Option<GreenNode> {
+    (node.kind() == kind).then(|| node.clone()).or_else(|| {
+        node.children()
+            .iter()
+            .filter_map(GreenElement::as_node)
+            .find_map(|child| first_node_of_kind(child, kind))
+    })
+}
+
 #[test]
 fn resolves_class_filter_let_and_navigation_hops_with_exact_spans() {
     let graph = graph(vec![
@@ -147,6 +156,36 @@ fn restores_outer_lambda_binding_after_nested_shadowing() {
         resolved_owners,
         ["model::Person", "model::Manager", "model::Person"]
     );
+}
+
+#[test]
+fn preserves_map_filter_and_lambda_results_for_later_navigation() {
+    let graph = graph(vec![
+        class("Person", vec![property("manager", "model::Manager")]),
+        class(
+            "Manager",
+            vec![property("name", "String"), property("title", "String")],
+        ),
+    ]);
+    let source = "model::Person.all()->map(x| $x.manager)->filter(x| $x.name).title";
+    let analysis = analyze(source, &graph);
+    let sites = analysis.sites();
+
+    assert_eq!(sites.len(), 4);
+    assert_eq!(range_text(source, sites[0].span()), "model::Person.all()");
+    for (site, (span, owner)) in sites[1..].iter().zip([
+        (".manager", "model::Person"),
+        (".name", "model::Manager"),
+        (".title", "model::Manager"),
+    ]) {
+        assert_eq!(range_text(source, site.span()), span);
+        assert!(matches!(
+            site.outcome(),
+            LocalResolution::Navigation(NavigationResolution::Found(chain))
+                if matches!(chain.hops()[0].target(), NavigationTarget::Member(member)
+                    if member.owner().path().as_str() == owner)
+        ));
+    }
 }
 
 #[test]
@@ -324,6 +363,83 @@ fn typed_relation_lambda_binder_resolves_known_column() {
         LocalResolution::Navigation(NavigationResolution::Found(chain))
             if matches!(chain.hops()[0].target(), NavigationTarget::RelationColumn)
     ));
+}
+
+#[test]
+fn preserves_typed_lambda_values_for_parenthesized_and_subtree_analysis() {
+    let graph = graph(Vec::new());
+    let source = "(row: Relation<(name:String[1])>| $row.name; $row).name";
+    let parsed = parse_query(source, FileId::new(TEST_FILE_ID)).expect("fixture must parse");
+    assert!(parsed.diagnostics.is_empty(), "{:#?}", parsed.diagnostics);
+
+    let root_analysis = analyze_m3_locals(&parsed.green, &graph);
+    let root_navigations = root_analysis
+        .sites()
+        .iter()
+        .filter(|site| range_text(source, site.span()) == ".name")
+        .collect::<Vec<_>>();
+    assert_eq!(root_navigations.len(), 2);
+    assert!(root_navigations.iter().all(|site| {
+        matches!(
+            site.outcome(),
+            LocalResolution::Navigation(NavigationResolution::Found(chain))
+                if matches!(chain.hops()[0].target(), NavigationTarget::RelationColumn)
+        )
+    }));
+
+    let lambda = first_node_of_kind(&parsed.green, SyntaxKind::LAMBDA_EXPR)
+        .expect("fixture must contain a lambda subtree");
+    let subtree_analysis = analyze_m3_locals(&lambda, &graph);
+    assert_eq!(subtree_analysis.sites().len(), 1);
+    assert!(matches!(
+        subtree_analysis.sites()[0].outcome(),
+        LocalResolution::Navigation(NavigationResolution::Found(chain))
+            if matches!(chain.hops()[0].target(), NavigationTarget::RelationColumn)
+    ));
+}
+
+#[test]
+fn evaluates_parenthesized_function_bases_before_the_call() {
+    let graph = graph(vec![
+        class("Person", vec![property("manager", "model::Manager")]),
+        class("Manager", Vec::new()),
+    ]);
+    let source = "(model::Person.all().manager)()";
+    let analysis = analyze(source, &graph);
+    let sites = analysis.sites();
+
+    assert_eq!(sites.len(), 2);
+    assert_eq!(range_text(source, sites[0].span()), "model::Person.all()");
+    assert_eq!(range_text(source, sites[1].span()), ".manager");
+    assert!(matches!(
+        sites[1].outcome(),
+        LocalResolution::Navigation(NavigationResolution::Found(chain))
+            if matches!(chain.hops()[0].target(), NavigationTarget::Member(member)
+                if member.owner().path().as_str() == "model::Person")
+    ));
+}
+
+#[test]
+fn resolves_zero_argument_qualified_navigation_as_a_property_step() {
+    let mut person = class("Person", Vec::new());
+    person["qualifiedProperties"] = json!([qualified_property("zero", "String", &[])]);
+    let graph = graph(vec![person]);
+    let source = "model::Person.all()->filter(x| $x.zero())";
+    let analysis = analyze(source, &graph);
+    let navigation = analysis
+        .sites()
+        .iter()
+        .find(|site| range_text(source, site.span()) == ".zero()")
+        .expect("zero-argument navigation site must be recorded");
+
+    let LocalResolution::Navigation(NavigationResolution::Found(chain)) = navigation.outcome()
+    else {
+        panic!(
+            "expected a resolved zero-argument qualified navigation, got {:#?}",
+            navigation.outcome()
+        );
+    };
+    assert_eq!(chain.hops()[0].step().argument_count(), 0);
 }
 
 #[test]
