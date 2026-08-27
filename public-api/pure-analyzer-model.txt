@@ -647,6 +647,7 @@ pub const fn pure_analyzer_model::Multiplicity::is_unbounded(self) -> bool
 pub const fn pure_analyzer_model::Multiplicity::lower(self) -> u32
 pub const fn pure_analyzer_model::Multiplicity::new(u32, core::option::Option<u32>) -> core::result::Result<Self, pure_analyzer_model::MultiplicityError>
 pub const fn pure_analyzer_model::Multiplicity::upper(self) -> core::option::Option<u32>
+pub const fn pure_analyzer_model::Multiplicity::zero_or_more() -> Self
 impl core::clone::Clone for pure_analyzer_model::Multiplicity
 pub fn pure_analyzer_model::Multiplicity::clone(&self) -> pure_analyzer_model::Multiplicity
 impl core::cmp::Eq for pure_analyzer_model::Multiplicity
