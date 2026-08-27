@@ -52,6 +52,7 @@ pub enum pure_analyzer_diagnostics::DiagCode
 pub pure_analyzer_diagnostics::DiagCode::BadToken
 pub pure_analyzer_diagnostics::DiagCode::CardinalityMisuse
 pub pure_analyzer_diagnostics::DiagCode::DerivedQualifiedProperty
+pub pure_analyzer_diagnostics::DiagCode::DuplicateModelDeclaration
 pub pure_analyzer_diagnostics::DiagCode::EquivalenceVerdict
 pub pure_analyzer_diagnostics::DiagCode::IllegalBracketIndex
 pub pure_analyzer_diagnostics::DiagCode::MalformedMilestoningArguments

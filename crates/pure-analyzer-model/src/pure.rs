@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use pure_analyzer_diagnostics::{Diagnostic, TextRange};
+use pure_analyzer_diagnostics::{DiagCode, Diagnostic, Label, Severity, TextRange};
 use pure_analyzer_parser::{DomainCoverageGap, DomainCoverageGapKind, parse_domain};
 use pure_analyzer_syntax::{GreenElement, GreenNode, GreenToken, SyntaxKind};
 
@@ -14,6 +14,13 @@ const GENERATED_MILESTONING_PROPERTY: &str = "generatedmilestoningproperty";
 const ALL_VERSIONS_SUFFIX: &str = "AllVersions";
 const ALL_VERSIONS_IN_RANGE_SUFFIX: &str = "AllVersionsInRange";
 
+#[derive(Clone, Copy)]
+struct LoweringContext<'a> {
+    gaps: &'a [DomainCoverageGap],
+    parser_diagnostics: &'a [Diagnostic],
+    source: SourceId,
+}
+
 /// Parses a resilient Domain source and lowers only its confirmed model facts.
 pub(super) fn parse_pure_document(
     source_name: &str,
@@ -24,49 +31,72 @@ pub(super) fn parse_pure_document(
         source_name: source_name.to_owned(),
         source: error,
     })?;
-    let (elements, coverage_gap) = lower_domain(
-        &parsed.green,
-        &parsed.coverage_gaps,
-        &parsed.diagnostics,
+    let context = LoweringContext {
+        gaps: &parsed.coverage_gaps,
+        parser_diagnostics: &parsed.diagnostics,
         source,
-    );
+    };
+    let (elements, mut lowering_diagnostics, coverage_gap) = lower_domain(&parsed.green, context);
+    let mut diagnostics = parsed.diagnostics;
+    diagnostics.append(&mut lowering_diagnostics);
+    diagnostics.sort_by_key(|diagnostic| range_start(diagnostic.primary.span));
     Ok(ModelFragment {
         elements,
-        diagnostics: parsed.diagnostics,
+        diagnostics,
         coverage_gap,
     })
 }
 
 fn lower_domain(
     root: &GreenNode,
-    gaps: &[DomainCoverageGap],
-    diagnostics: &[Diagnostic],
-    source: SourceId,
-) -> (BTreeMap<QName, FragmentElement>, bool) {
+    context: LoweringContext<'_>,
+) -> (BTreeMap<QName, FragmentElement>, Vec<Diagnostic>, bool) {
     let Some(file) = find_domain_file(root) else {
-        return (BTreeMap::new(), true);
+        return (BTreeMap::new(), Vec::new(), true);
     };
-    let classes = direct_nodes(file, SyntaxKind::DOMAIN_CLASS_DECL).collect::<Vec<_>>();
-    let associations = direct_nodes(file, SyntaxKind::DOMAIN_ASSOCIATION_DECL).collect::<Vec<_>>();
-    let association_paths = associations
-        .iter()
-        .filter_map(|association| declaration_path(association).map(|(path, _)| path))
-        .collect::<Vec<_>>();
 
-    let mut source_wide_gap = gaps
+    let mut source_wide_gap = context
+        .gaps
         .iter()
-        .any(|gap| gap.kind == DomainCoverageGapKind::UnsupportedTopLevel)
-        || !associations.is_empty();
-
+        .any(|gap| gap.kind == DomainCoverageGapKind::UnsupportedTopLevel);
     let mut class_entries = Vec::new();
-    for class in classes {
-        match lower_class(class, gaps, diagnostics, source) {
-            Some(class) => class_entries.push(class),
-            None => source_wide_gap = true,
+    let mut top_level_declarations = Vec::new();
+    let mut lowering_diagnostics = Vec::new();
+    for declaration in file.children().iter().filter_map(GreenElement::as_node) {
+        match declaration.kind() {
+            SyntaxKind::DOMAIN_CLASS_DECL => {
+                if let Some((path, _)) = declaration_path(declaration) {
+                    top_level_declarations.push(TopLevelDeclaration {
+                        path,
+                        kind: TopLevelDeclarationKind::Class,
+                        span: declaration.text_range(),
+                    });
+                }
+                match lower_class(declaration, context) {
+                    Some((class, diagnostics)) => {
+                        class_entries.push(class);
+                        lowering_diagnostics.extend(diagnostics);
+                    }
+                    None => source_wide_gap = true,
+                }
+            }
+            SyntaxKind::DOMAIN_ASSOCIATION_DECL => {
+                source_wide_gap = true;
+                if let Some((path, _)) = declaration_path(declaration) {
+                    top_level_declarations.push(TopLevelDeclaration {
+                        path,
+                        kind: TopLevelDeclarationKind::Association,
+                        span: declaration.text_range(),
+                    });
+                }
+            }
+            _ => {}
         }
     }
-    let duplicate_paths = duplicate_paths(&class_entries, &association_paths);
+    let (duplicate_paths, duplicate_diagnostics) =
+        duplicate_top_level_paths(&top_level_declarations, context.source);
     source_wide_gap |= !duplicate_paths.is_empty();
+    lowering_diagnostics.extend(duplicate_diagnostics);
 
     let mut elements = BTreeMap::new();
     for mut class in class_entries {
@@ -79,37 +109,86 @@ fn lower_domain(
         let path = class.path().clone();
         elements.insert(path, FragmentElement::Class(class));
     }
-    (elements, source_wide_gap)
+    (elements, lowering_diagnostics, source_wide_gap)
 }
 
-fn duplicate_paths(classes: &[ClassInfo], association_paths: &[QName]) -> BTreeSet<QName> {
-    let mut paths = BTreeSet::new();
+fn duplicate_top_level_paths(
+    declarations: &[TopLevelDeclaration],
+    source: SourceId,
+) -> (BTreeSet<QName>, Vec<Diagnostic>) {
+    let mut first_declarations: BTreeMap<QName, &TopLevelDeclaration> = BTreeMap::new();
     let mut duplicates = BTreeSet::new();
-    for class in classes {
-        if !paths.insert(class.path().clone()) {
-            duplicates.insert(class.path().clone());
+    let mut diagnostics = Vec::new();
+    for declaration in declarations {
+        if let Some(first) = first_declarations.get(&declaration.path) {
+            duplicates.insert(declaration.path.clone());
+            diagnostics.push(duplicate_top_level_diagnostic(first, declaration, source));
+        } else {
+            first_declarations.insert(declaration.path.clone(), declaration);
         }
     }
-    for association_path in association_paths {
-        if !paths.insert(association_path.clone()) {
-            duplicates.insert(association_path.clone());
+    (duplicates, diagnostics)
+}
+
+struct TopLevelDeclaration {
+    path: QName,
+    kind: TopLevelDeclarationKind,
+    span: TextRange,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum TopLevelDeclarationKind {
+    Class,
+    Association,
+}
+
+fn duplicate_top_level_diagnostic(
+    first: &TopLevelDeclaration,
+    duplicate: &TopLevelDeclaration,
+    source: SourceId,
+) -> Diagnostic {
+    let message = match (first.kind, duplicate.kind) {
+        (TopLevelDeclarationKind::Class, TopLevelDeclarationKind::Class) => {
+            format!(
+                "Pure source declares class `{}` more than once",
+                duplicate.path
+            )
         }
-    }
-    duplicates
+        (TopLevelDeclarationKind::Association, TopLevelDeclarationKind::Association) => {
+            format!(
+                "Pure source declares association `{}` more than once",
+                duplicate.path
+            )
+        }
+        _ => format!(
+            "Pure source declares `{}` as both a class and association",
+            duplicate.path
+        ),
+    };
+    Diagnostic::builder(
+        DiagCode::DuplicateModelDeclaration,
+        Severity::Error,
+        message,
+        Label::with_note(source.file_id(), duplicate.span, "duplicate declaration"),
+    )
+    .secondary(Label::with_note(
+        source.file_id(),
+        first.span,
+        "first declaration",
+    ))
+    .build()
 }
 
 fn lower_class(
     node: &GreenNode,
-    gaps: &[DomainCoverageGap],
-    diagnostics: &[Diagnostic],
-    source: SourceId,
-) -> Option<ClassInfo> {
+    context: LoweringContext<'_>,
+) -> Option<(ClassInfo, Vec<Diagnostic>)> {
     let (path, name_index) = declaration_path(node)?;
     let annotations = annotations_before(node, name_index);
-    let (supertypes, supertype_gap) = lower_supertypes(node, gaps, diagnostics);
-    let (properties, qualified_properties, member_gap) =
-        lower_class_members(node, name_index, gaps, diagnostics);
-    let coverage_gap = node_has_coverage_gap(node, gaps, diagnostics)
+    let (supertypes, supertype_gap) = lower_supertypes(node, context);
+    let (properties, qualified_properties, member_gap, member_diagnostics) =
+        lower_class_members(node, &path, name_index, context);
+    let coverage_gap = node_has_coverage_gap(node, context)
         || annotations.temporal_uncertain
         || supertype_gap
         || member_gap;
@@ -119,23 +198,19 @@ fn lower_class(
         annotations.temporal,
         properties,
         qualified_properties,
-        source,
+        context.source,
     );
     if coverage_gap {
         class.mark_coverage_gap();
     }
-    Some(class)
+    Some((class, member_diagnostics))
 }
 
-fn lower_supertypes(
-    node: &GreenNode,
-    gaps: &[DomainCoverageGap],
-    diagnostics: &[Diagnostic],
-) -> (Vec<QName>, bool) {
+fn lower_supertypes(node: &GreenNode, context: LoweringContext<'_>) -> (Vec<QName>, bool) {
     let Some(extends) = direct_nodes(node, SyntaxKind::DOMAIN_EXTENDS_CLAUSE).next() else {
         return (Vec::new(), false);
     };
-    if node_has_coverage_gap(extends, gaps, diagnostics) {
+    if node_has_coverage_gap(extends, context) {
         return (Vec::new(), true);
     }
     let mut supertypes = Vec::new();
@@ -154,14 +229,16 @@ fn lower_supertypes(
 
 fn lower_class_members(
     node: &GreenNode,
+    class: &QName,
     name_index: usize,
-    gaps: &[DomainCoverageGap],
-    diagnostics: &[Diagnostic],
-) -> (BTreeMap<Name, PropInfo>, BTreeMap<Name, QpInfo>, bool) {
-    let mut properties = BTreeMap::new();
-    let mut qualified_properties = BTreeMap::new();
-    let mut property_names = BTreeSet::new();
-    let mut qualified_property_names = BTreeSet::new();
+    context: LoweringContext<'_>,
+) -> (
+    BTreeMap<Name, PropInfo>,
+    BTreeMap<Name, QpInfo>,
+    bool,
+    Vec<Diagnostic>,
+) {
+    let mut members = ClassMemberFacts::default();
     let mut pending_annotations = AnnotationFacts::default();
     let mut coverage_gap = false;
 
@@ -174,23 +251,16 @@ fn lower_class_members(
                 pending_annotations.merge(annotation_facts(member));
             }
             SyntaxKind::DOMAIN_PROPERTY_DECL => {
-                coverage_gap |= !insert_property(
-                    &mut properties,
-                    &mut property_names,
-                    member,
-                    gaps,
-                    diagnostics,
-                );
+                coverage_gap |= !insert_property(&mut members, member, class, context);
                 pending_annotations = AnnotationFacts::default();
             }
             SyntaxKind::DOMAIN_QUALIFIED_PROPERTY_DECL => {
                 coverage_gap |= !insert_qualified_property(
-                    &mut qualified_properties,
-                    &mut qualified_property_names,
+                    &mut members,
                     member,
                     pending_annotations,
-                    gaps,
-                    diagnostics,
+                    class,
+                    context,
                 );
                 pending_annotations = AnnotationFacts::default();
             }
@@ -201,50 +271,127 @@ fn lower_class_members(
             _ => {}
         }
     }
-    (properties, qualified_properties, coverage_gap)
+    (
+        members.properties,
+        members.qualified_properties,
+        coverage_gap,
+        members.diagnostics,
+    )
+}
+
+#[derive(Default)]
+struct ClassMemberFacts {
+    properties: BTreeMap<Name, PropInfo>,
+    qualified_properties: BTreeMap<Name, QpInfo>,
+    property_declarations: BTreeMap<Name, TextRange>,
+    qualified_property_declarations: BTreeMap<Name, TextRange>,
+    diagnostics: Vec<Diagnostic>,
 }
 
 fn insert_property(
-    properties: &mut BTreeMap<Name, PropInfo>,
-    names: &mut BTreeSet<Name>,
+    members: &mut ClassMemberFacts,
     node: &GreenNode,
-    gaps: &[DomainCoverageGap],
-    diagnostics: &[Diagnostic],
+    class: &QName,
+    context: LoweringContext<'_>,
 ) -> bool {
-    if node_is_unconfirmed(node, gaps, diagnostics) {
+    if node_is_unconfirmed(node, context) {
         return false;
     }
     let Some(property) = lower_property(node) else {
         return false;
     };
     let name = property.name().clone();
-    if !names.insert(name.clone()) {
-        let _ = properties.remove(&name);
+    if let Some(first) = members.property_declarations.get(&name) {
+        let _ = members.properties.remove(&name);
+        members.diagnostics.push(duplicate_member_diagnostic(
+            class,
+            &name,
+            MemberDeclarationKind::Property,
+            *first,
+            node.text_range(),
+            context.source,
+        ));
         return false;
     }
-    properties.insert(name, property).is_none()
+    members
+        .property_declarations
+        .insert(name.clone(), node.text_range());
+    members.properties.insert(name, property).is_none()
 }
 
 fn insert_qualified_property(
-    properties: &mut BTreeMap<Name, QpInfo>,
-    names: &mut BTreeSet<Name>,
+    members: &mut ClassMemberFacts,
     node: &GreenNode,
     annotations: AnnotationFacts,
-    gaps: &[DomainCoverageGap],
-    diagnostics: &[Diagnostic],
+    class: &QName,
+    context: LoweringContext<'_>,
 ) -> bool {
-    if node_is_unconfirmed(node, gaps, diagnostics) {
+    if node_is_unconfirmed(node, context) {
         return false;
     }
-    let Some(property) = lower_qualified_property(node, annotations, gaps, diagnostics) else {
+    let Some(property) = lower_qualified_property(node, annotations, context) else {
         return false;
     };
     let name = property.name().clone();
-    if !names.insert(name.clone()) {
-        let _ = properties.remove(&name);
+    if let Some(first) = members.qualified_property_declarations.get(&name) {
+        let _ = members.qualified_properties.remove(&name);
+        members.diagnostics.push(duplicate_member_diagnostic(
+            class,
+            &name,
+            MemberDeclarationKind::QualifiedProperty,
+            *first,
+            node.text_range(),
+            context.source,
+        ));
         return false;
     }
-    properties.insert(name, property).is_none()
+    members
+        .qualified_property_declarations
+        .insert(name.clone(), node.text_range());
+    members
+        .qualified_properties
+        .insert(name, property)
+        .is_none()
+}
+
+#[derive(Clone, Copy)]
+enum MemberDeclarationKind {
+    Property,
+    QualifiedProperty,
+}
+
+impl MemberDeclarationKind {
+    const fn label(self) -> &'static str {
+        match self {
+            Self::Property => "property",
+            Self::QualifiedProperty => "qualified property",
+        }
+    }
+}
+
+fn duplicate_member_diagnostic(
+    class: &QName,
+    name: &Name,
+    kind: MemberDeclarationKind,
+    first: TextRange,
+    duplicate: TextRange,
+    source: SourceId,
+) -> Diagnostic {
+    Diagnostic::builder(
+        DiagCode::DuplicateModelDeclaration,
+        Severity::Error,
+        format!(
+            "Pure class `{class}` declares {} `{name}` more than once",
+            kind.label()
+        ),
+        Label::with_note(source.file_id(), duplicate, "duplicate declaration"),
+    )
+    .secondary(Label::with_note(
+        source.file_id(),
+        first,
+        "first declaration",
+    ))
+    .build()
 }
 
 fn lower_property(node: &GreenNode) -> Option<PropInfo> {
@@ -261,8 +408,7 @@ fn lower_property(node: &GreenNode) -> Option<PropInfo> {
 fn lower_qualified_property(
     node: &GreenNode,
     annotations: AnnotationFacts,
-    gaps: &[DomainCoverageGap],
-    diagnostics: &[Diagnostic],
+    context: LoweringContext<'_>,
 ) -> Option<QpInfo> {
     let name = direct_name(node)?;
     let target = direct_nodes(node, SyntaxKind::DOMAIN_TYPE_REF)
@@ -273,21 +419,17 @@ fn lower_qualified_property(
         .and_then(multiplicity_from_node)?;
     let kind = classify_pure_qualified_property(&name, multiplicity, annotations.generated);
     let signature = if kind == QpKind::UserQualified {
-        Some(lower_signature(node, gaps, diagnostics)?)
+        Some(lower_signature(node, context)?)
     } else {
         None
     };
     Some(QpInfo::new(name, target, multiplicity, kind, signature))
 }
 
-fn lower_signature(
-    node: &GreenNode,
-    gaps: &[DomainCoverageGap],
-    diagnostics: &[Diagnostic],
-) -> Option<Vec<TypeRef>> {
+fn lower_signature(node: &GreenNode, context: LoweringContext<'_>) -> Option<Vec<TypeRef>> {
     let mut signature = Vec::new();
     for parameter in direct_nodes(node, SyntaxKind::DOMAIN_PARAMETER_DECL) {
-        if node_is_unconfirmed(parameter, gaps, diagnostics) {
+        if node_is_unconfirmed(parameter, context) {
             return None;
         }
         let ty = direct_nodes(parameter, SyntaxKind::DOMAIN_TYPE_REF)
@@ -543,27 +685,23 @@ fn is_trivia(kind: SyntaxKind) -> bool {
     )
 }
 
-fn node_is_unconfirmed(
-    node: &GreenNode,
-    gaps: &[DomainCoverageGap],
-    diagnostics: &[Diagnostic],
-) -> bool {
-    gaps.iter().any(|gap| {
+fn node_is_unconfirmed(node: &GreenNode, context: LoweringContext<'_>) -> bool {
+    context.gaps.iter().any(|gap| {
         gap.kind == DomainCoverageGapKind::MalformedDeclaration
             && range_start(gap.span) == range_start(node.text_range())
-    }) || diagnostics
+    }) || context
+        .parser_diagnostics
         .iter()
         .any(|diagnostic| ranges_touch_or_overlap(diagnostic.primary.span, node.text_range()))
 }
 
-fn node_has_coverage_gap(
-    node: &GreenNode,
-    gaps: &[DomainCoverageGap],
-    diagnostics: &[Diagnostic],
-) -> bool {
-    gaps.iter()
+fn node_has_coverage_gap(node: &GreenNode, context: LoweringContext<'_>) -> bool {
+    context
+        .gaps
+        .iter()
         .any(|gap| ranges_touch_or_overlap(gap.span, node.text_range()))
-        || diagnostics
+        || context
+            .parser_diagnostics
             .iter()
             .any(|diagnostic| ranges_touch_or_overlap(diagnostic.primary.span, node.text_range()))
 }

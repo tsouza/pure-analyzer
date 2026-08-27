@@ -2,6 +2,7 @@
 
 #![allow(clippy::disallowed_methods)]
 
+use pure_analyzer_diagnostics::{DiagCode, Severity};
 use pure_analyzer_model::{
     MODEL_MERGE_CONFLICT, ModelDocument, PmcdDocument, Provenance, PureDocument, QpKind, Temporal,
     load_model_documents, load_pure_documents,
@@ -258,6 +259,26 @@ Class demo::Duplicate
         !duplicate.qualified_properties().contains_key("query"),
         "a duplicate qualified member is not a confirmed fact"
     );
+    let diagnostics = graph
+        .diagnostics()
+        .iter()
+        .filter(|diagnostic| diagnostic.code == DiagCode::DuplicateModelDeclaration)
+        .collect::<Vec<_>>();
+    assert_eq!(diagnostics.len(), 2);
+    assert!(diagnostics.iter().all(|diagnostic| {
+        diagnostic.severity == Severity::Error
+            && diagnostic.primary.file.index() == 0
+            && diagnostic.secondary.len() == 1
+            && diagnostic.secondary[0].file.index() == 0
+    }));
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic.message
+            == "Pure class `demo::Duplicate` declares property `value` more than once"
+    }));
+    assert!(diagnostics.iter().any(|diagnostic| {
+        diagnostic.message
+            == "Pure class `demo::Duplicate` declares qualified property `query` more than once"
+    }));
 }
 
 #[test]
@@ -279,6 +300,18 @@ Class demo::Collision
         graph.class("demo::Collision").is_none(),
         "duplicate class declarations cannot select a last definition"
     );
+    let diagnostics = graph
+        .diagnostics()
+        .iter()
+        .filter(|diagnostic| diagnostic.code == DiagCode::DuplicateModelDeclaration)
+        .collect::<Vec<_>>();
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0].severity, Severity::Error);
+    assert_eq!(
+        diagnostics[0].message,
+        "Pure source declares class `demo::Collision` more than once"
+    );
+    assert_eq!(diagnostics[0].secondary.len(), 1);
 }
 
 #[test]
@@ -316,6 +349,18 @@ Class demo::Collision
     );
     assert!(graph.class("demo::Left").expect("left").coverage_gap());
     assert!(graph.class("demo::Right").expect("right").coverage_gap());
+    let diagnostics = graph
+        .diagnostics()
+        .iter()
+        .filter(|diagnostic| diagnostic.code == DiagCode::DuplicateModelDeclaration)
+        .collect::<Vec<_>>();
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0].severity, Severity::Error);
+    assert_eq!(
+        diagnostics[0].message,
+        "Pure source declares `demo::Collision` as both a class and association"
+    );
+    assert_eq!(diagnostics[0].secondary.len(), 1);
 }
 
 #[test]
