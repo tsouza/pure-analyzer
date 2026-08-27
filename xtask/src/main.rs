@@ -32,8 +32,17 @@ enum Command {
     Sweep,
     /// Bring up the Legend stack, test only PureCARD, and always tear down.
     TestLegend,
-    /// Run the default and feature-gated mutation-test passes.
+    /// Run the default and feature-gated mutation-test passes, unsharded.
     TestMutation,
+    /// Run one shard of the workspace-wide mutation pass (CI matrix only).
+    TestMutationShard {
+        /// Zero-based shard index (matches `strategy.job-index`).
+        index: u32,
+        /// Total number of shards (matches `strategy.job-total`).
+        total: u32,
+    },
+    /// Run the feature-gated FFI-boundary mutation pass (fast; never sharded).
+    TestMutationFfi,
     /// Produce a test-coverage report via cargo-llvm-cov.
     Coverage {
         /// Emit an HTML report in addition to the summary.
@@ -77,6 +86,8 @@ fn main() -> Result<()> {
         Command::Sweep => tasks::sweep(),
         Command::TestLegend => tasks::test_legend(),
         Command::TestMutation => tasks::test_mutation(),
+        Command::TestMutationShard { index, total } => tasks::test_mutation_shard(index, total),
+        Command::TestMutationFfi => tasks::test_mutation_ffi(),
         Command::Coverage { html } => tasks::coverage(html),
         Command::ReleasePlzCheck => tasks::release_plz_check(),
         Command::CheckCoreDeplight => tasks::check_core_deplight(),

@@ -172,32 +172,59 @@ pub fn test_legend() -> Result<()> {
     }
 }
 
-/// Run both mutation-test passes with portable output-directory preparation.
+/// Run the default workspace-wide mutation pass, excluding PureCARD's
+/// feature-gated FFI source (covered separately by [`test_mutation_ffi`]).
 ///
-/// The default workspace pass excludes PureCARD's feature-gated FFI source;
-/// the second pass enables `python-test` and targets that source explicitly so
-/// neither surface can pass vacuously. Both run in place for parity with CI's
-/// disposable checkout and the existing local workflow.
+/// `shard`, when given, is a zero-based `(index, total)` pair, passed to
+/// cargo-mutants' own `--shard index/total` verbatim: despite its `--help`
+/// text showing "e.g. 1/4", cargo-mutants' shard index is zero-based (it
+/// rejects `k >= n`, so `total/total` errors, and `0/n` is the first shard) —
+/// confirmed empirically, since the help text's example is easy to
+/// misread as one-based. Zero-based also matches GitHub Actions'
+/// `strategy.job-index` directly, so the CI workflow never computes an
+/// offset inline. Each shard gets its own output directory so parallel CI
+/// matrix legs never collide.
 ///
 /// # Errors
 ///
-/// Returns an error when the output parent cannot be created or either
+/// Returns an error when the output parent cannot be created or the
 /// cargo-mutants pass fails.
-pub fn test_mutation() -> Result<()> {
+fn test_mutation_workspace(shard: Option<(u32, u32)>) -> Result<()> {
     std::fs::create_dir_all(MUTATION_OUTPUT_ROOT)
         .context("creating mutation report output parent")?;
-    run(
-        "cargo",
-        &[
-            "mutants",
-            "--workspace",
-            "--exclude",
-            PURECARD_FFI_SOURCE,
-            "--in-place",
-            "--output",
-            "target/mutants-default",
-        ],
-    )?;
+    let output = match shard {
+        Some((index, _)) => format!("target/mutants-default-shard-{index}"),
+        None => "target/mutants-default".to_string(),
+    };
+    let mut args = vec![
+        "mutants".to_string(),
+        "--workspace".to_string(),
+        "--exclude".to_string(),
+        PURECARD_FFI_SOURCE.to_string(),
+        "--in-place".to_string(),
+        "--output".to_string(),
+        output,
+    ];
+    if let Some((index, total)) = shard {
+        args.push("--shard".to_string());
+        args.push(format!("{index}/{total}"));
+    }
+    let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
+    run("cargo", &arg_refs)
+}
+
+/// Run the feature-gated FFI-boundary mutation pass: `python-test` enabled,
+/// targeting [`PURECARD_FFI_SOURCE`] explicitly so that surface can never pass
+/// vacuously by being excluded from the workspace pass above. Fast enough
+/// (~2 minutes) that it is never sharded, in CI or locally.
+///
+/// # Errors
+///
+/// Returns an error when the output parent cannot be created or the
+/// cargo-mutants pass fails.
+pub fn test_mutation_ffi() -> Result<()> {
+    std::fs::create_dir_all(MUTATION_OUTPUT_ROOT)
+        .context("creating mutation report output parent")?;
     run(
         "cargo",
         &[
@@ -215,6 +242,32 @@ pub fn test_mutation() -> Result<()> {
             "--lib",
         ],
     )
+}
+
+/// Run both mutation-test passes in full, unsharded — the local/`ci-full`
+/// entry point. CI itself shards the slow workspace pass across a matrix
+/// (see [`test_mutation_shard`]) rather than eating the ~1h serial runtime on
+/// every push; a local run has no such matrix, so it runs the whole thing.
+///
+/// # Errors
+///
+/// Returns an error when the output parent cannot be created or either
+/// cargo-mutants pass fails.
+pub fn test_mutation() -> Result<()> {
+    test_mutation_workspace(None)?;
+    test_mutation_ffi()
+}
+
+/// Run one shard of the workspace-wide mutation pass — the CI matrix entry
+/// point. `index` is zero-based (see [`test_mutation_workspace`]'s docs for
+/// why); `total` is the matrix's shard count.
+///
+/// # Errors
+///
+/// Returns an error when the output parent cannot be created or the
+/// cargo-mutants pass fails.
+pub fn test_mutation_shard(index: u32, total: u32) -> Result<()> {
+    test_mutation_workspace(Some((index, total)))
 }
 
 /// Time-box every target in PureCARD's dedicated cargo-fuzz project.

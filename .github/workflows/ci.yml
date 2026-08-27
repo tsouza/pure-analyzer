@@ -121,11 +121,60 @@ jobs:
         run: cargo xtask coverage
 
   # --- Mutation testing (cargo-mutants) ------------------------------------
+  # The workspace-wide pass is by far the slowest gate in this workflow
+  # (~893 mutants, close to an hour run serially) — sharded across a matrix so
+  # a PR's total wall-clock wait is bounded by the slowest shard, not the sum
+  # of all of them. 6 shards balances a large speedup against fixed per-job
+  # checkout/build overhead; cargo-mutants' own `--shard` flag splits the
+  # mutant list, so shards need no coordination beyond each writing to its own
+  # output directory (`test_mutation_shard`'s doc comment in xtask).
   mutation:
     name: mutation
     needs: changes
     # Mutation runs are expensive; keep them off draft PRs while preserving the
     # full two-pass suite on every reviewable PR, merge-group entry, and push.
+    if: >-
+      needs.changes.outputs.code == 'true' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5]
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: sccache
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba # v0.0.11
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - uses: taiki-e/install-action@b6ff580856c41316412a0b9b60540fbc6f8c82cc # v2.86.7
+        with:
+          tool: cargo-mutants,cargo-nextest,just
+      - name: cargo mutants (shard ${{ matrix.shard }}/${{ strategy.job-total }})
+        env:
+          MUTATION_SHARD_INDEX: ${{ matrix.shard }}
+          MUTATION_SHARD_TOTAL: ${{ strategy.job-total }}
+        run: just test-mutation-shard "$MUTATION_SHARD_INDEX" "$MUTATION_SHARD_TOTAL"
+      - name: Upload mutation report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: mutants-out-shard-${{ matrix.shard }}
+          path: target/mutants-default-shard-${{ matrix.shard }}
+          if-no-files-found: error
+
+  # The feature-gated FFI-boundary pass is fast (~2 minutes) on its own, so it
+  # stays a single job rather than joining the workspace matrix above.
+  mutation-ffi:
+    name: mutation-ffi
+    needs: changes
     if: >-
       needs.changes.outputs.code == 'true' &&
       (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
@@ -146,16 +195,14 @@ jobs:
       - uses: taiki-e/install-action@b6ff580856c41316412a0b9b60540fbc6f8c82cc # v2.86.7
         with:
           tool: cargo-mutants,cargo-nextest,just
-      - name: cargo mutants
-        run: just test-mutation
-      - name: Upload mutation reports
+      - name: cargo mutants (FFI boundary)
+        run: just test-mutation-ffi
+      - name: Upload mutation report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
-          name: mutants-out
-          path: |
-            target/mutants-default
-            target/mutants-ffi
+          name: mutants-out-ffi
+          path: target/mutants-ffi
           if-no-files-found: error
 
   # --- Supply chain: deny + audit + vet + unused deps ----------------------
@@ -351,7 +398,7 @@ jobs:
   # warnings in a job that failed.
   no-warnings:
     name: no-warnings (log sweep)
-    needs: [changes, check, coverage, mutation, supply-chain, api-stability, structural, docs, fuzz, bench]
+    needs: [changes, check, coverage, mutation, mutation-ffi, supply-chain, api-stability, structural, docs, fuzz, bench]
     if: always()
     permissions:
       actions: read
@@ -361,7 +408,7 @@ jobs:
   # --- Aggregate gate: the single required check ---------------------------
   ci-gate:
     name: ci-gate
-    needs: [changes, check, coverage, mutation, supply-chain, api-stability, structural, docs, fuzz, bench, no-warnings]
+    needs: [changes, check, coverage, mutation, mutation-ffi, supply-chain, api-stability, structural, docs, fuzz, bench, no-warnings]
     if: always()
     runs-on: ubuntu-latest
     steps:
