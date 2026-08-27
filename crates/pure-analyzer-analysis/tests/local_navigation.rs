@@ -168,6 +168,18 @@ fn visits_navigation_inside_regular_function_arguments() {
 }
 
 #[test]
+fn does_not_analyze_ungrounded_regular_function_lambdas() {
+    let graph = graph(Vec::new());
+    let source = "audit(x| $x.name)";
+    let analysis = analyze(source, &graph);
+
+    assert!(
+        analysis.sites().is_empty(),
+        "an unsupported regular function must not invent a lambda navigation outcome"
+    );
+}
+
+#[test]
 fn resolves_qualified_navigation_calls_with_arguments() {
     let mut person = class("Person", Vec::new());
     person["qualifiedProperties"] = json!([qualified_property("byKey", "String", &["Integer"])]);

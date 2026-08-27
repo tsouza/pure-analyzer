@@ -79,7 +79,8 @@ pub fn analyze_m3_locals(tree: &GreenNode, graph: &ModelGraph) -> LocalNavigatio
         sites: Vec::new(),
     };
     let mut environment = TypeEnvironment::new();
-    let _ = analyzer.evaluate_node(tree, &mut environment);
+    let mut root_scope = environment.scope();
+    let _ = analyzer.evaluate_node(tree, &mut root_scope);
     LocalNavigationAnalysis {
         sites: analyzer.sites,
     }
@@ -95,20 +96,6 @@ trait LocalBindings {
     fn bind(&mut self, name: Name, value: LocalValue);
     fn lookup(&self, name: &Name) -> Option<&LocalValue>;
     fn scope(&mut self) -> impl LocalBindings + '_;
-}
-
-impl LocalBindings for TypeEnvironment {
-    fn bind(&mut self, name: Name, value: LocalValue) {
-        let _ = TypeEnvironment::bind(self, name, value);
-    }
-
-    fn lookup(&self, name: &Name) -> Option<&LocalValue> {
-        TypeEnvironment::lookup(self, name)
-    }
-
-    fn scope(&mut self) -> impl LocalBindings + '_ {
-        TypeEnvironment::scope(self)
-    }
 }
 
 impl LocalBindings for TypeScope<'_> {
@@ -196,10 +183,6 @@ impl LocalAnalyzer<'_> {
                 }
                 SyntaxKind::LAMBDA_EXPR => {
                     value = self.evaluate_lambda(node, Self::unknown_value(), environment);
-                    variable_source = None;
-                }
-                SyntaxKind::LET_STMT => {
-                    value = self.evaluate_let(node, environment);
                     variable_source = None;
                 }
                 _ => {
