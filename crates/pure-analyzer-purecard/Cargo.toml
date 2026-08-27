@@ -65,6 +65,10 @@ tokenizers = { version = "0.23.1", optional = true }
 
 [dev-dependencies]
 anyhow.workspace = true
+# The schema-aware accepting-walk generator (issue #59), shared with the
+# separate `fuzz/` crate — a `#[path]`-included test-support file can't cross
+# that boundary, since `fuzz/` only ever sees a real crate's published API.
+schema_walker = { package = "purecard-schema-walker", path = "schema-walker" }
 # The `legend` lane's live-HTTP Legend client boundary. The engine is a
 # local, plain-HTTP service (http://localhost:6300), so TLS is disabled
 # (`default-features = false`): no rustls/ring/webpki-roots tree, smaller and

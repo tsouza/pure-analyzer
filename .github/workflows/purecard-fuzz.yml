@@ -94,7 +94,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [accept_token, allowed_mask, schema_from_json]
+        target:
+          [
+            accept_token,
+            allowed_mask,
+            schema_from_json,
+            schema_walk_generation,
+            spec_equivalence,
+          ]
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

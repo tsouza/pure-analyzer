@@ -1,0 +1,4 @@
+pub mod schema_walker
+pub const schema_walker::WALK_COUNT: usize
+pub fn schema_walker::generate_first_complete_schema_walks(&purecard::grammar::compiled::CompiledGrammar, &purecard::schema::model::Schema) -> alloc::vec::Vec<alloc::vec::Vec<u32>>
+pub fn schema_walker::generate_schema_walks(&purecard::grammar::compiled::CompiledGrammar, &purecard::schema::model::Schema) -> alloc::vec::Vec<alloc::vec::Vec<u32>>

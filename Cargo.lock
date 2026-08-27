@@ -1188,6 +1188,7 @@ dependencies = [
  "anyhow",
  "criterion",
  "proptest",
+ "purecard-schema-walker",
  "pyo3",
  "self_cell",
  "serde",
@@ -1215,6 +1216,13 @@ dependencies = [
  "pure-analyzer-lexer",
  "text-size",
  "thiserror",
+]
+
+[[package]]
+name = "purecard-schema-walker"
+version = "0.1.0"
+dependencies = [
+ "pure-analyzer-purecard",
 ]
 
 [[package]]

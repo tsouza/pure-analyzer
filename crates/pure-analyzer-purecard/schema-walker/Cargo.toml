@@ -1,0 +1,20 @@
+[package]
+name = "purecard-schema-walker"
+description = "Deterministic, schema-aware accepting-walk generator for PureCARD's test/fuzz support (issue #59) — not part of the published purecard API."
+publish = false
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lib]
+name = "schema_walker"
+path = "src/lib.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+purecard = { package = "pure-analyzer-purecard", path = ".." }

@@ -23,8 +23,6 @@ mod l2;
 mod legend;
 #[path = "support/lex.rs"]
 mod lex;
-#[path = "support/schema_walker.rs"]
-mod schema_walker;
 #[path = "support/store_grammar.rs"]
 mod store_grammar;
 

@@ -32,8 +32,6 @@ mod fixture_dbs;
 mod l2;
 #[path = "support/lex.rs"]
 mod lex;
-#[path = "support/schema_walker.rs"]
-mod schema_walker;
 
 use corpus::load_gold;
 use fixture_dbs::FIXTURE_DBS;
