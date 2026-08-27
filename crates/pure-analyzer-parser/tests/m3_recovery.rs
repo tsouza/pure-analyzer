@@ -324,6 +324,125 @@ fn empty_column_array_member_makes_progress_to_later_quoted_aliases() {
 }
 
 #[test]
+fn invalid_column_array_members_stop_cleanly_at_closing_bracket_and_eof() {
+    for (source, expected_syntax_errors, expected_error_nodes) in [("~[)]", 1, 1), ("~[)", 4, 2)] {
+        let parsed = parse(source);
+        let columns = only_node_of_kind(&parsed.green, SyntaxKind::COLUMN_SPEC_ARRAY);
+
+        assert_eq!(parsed.green.text(), source);
+        assert_eq!(columns.text(), source);
+        assert_eq!(
+            syntax_error_count(&parsed),
+            expected_syntax_errors,
+            "{source}"
+        );
+        assert_eq!(count_kind(columns, SyntaxKind::COLUMN_NAME), 0, "{source}");
+        assert_eq!(
+            count_kind(&parsed.green, SyntaxKind::ERROR_NODE),
+            expected_error_nodes,
+            "{source}"
+        );
+        assert_ranges_are_valid(source, &parsed);
+    }
+}
+
+#[test]
+fn trailing_column_array_commas_distinguish_closing_bracket_from_eof() {
+    for (source, expected_syntax_errors, expected_error_nodes) in
+        [("~[first:String[1],]", 1, 0), ("~[first:String[1],", 4, 1)]
+    {
+        let parsed = parse(source);
+        let columns = only_node_of_kind(&parsed.green, SyntaxKind::COLUMN_SPEC_ARRAY);
+
+        assert_eq!(parsed.green.text(), source);
+        assert_eq!(columns.text(), source);
+        assert_eq!(
+            syntax_error_count(&parsed),
+            expected_syntax_errors,
+            "{source}"
+        );
+        assert_eq!(count_kind(columns, SyntaxKind::COLUMN_NAME), 1, "{source}");
+        assert_eq!(
+            count_kind(&parsed.green, SyntaxKind::ERROR_NODE),
+            expected_error_nodes,
+            "{source}"
+        );
+        assert_ranges_are_valid(source, &parsed);
+    }
+}
+
+#[test]
+fn missing_column_array_separators_stop_cleanly_at_closing_bracket_and_eof() {
+    for (source, expected_syntax_errors, expected_error_nodes) in [
+        ("~[first:String[1] )]", 1, 1),
+        ("~[first:String[1] )", 4, 2),
+    ] {
+        let parsed = parse(source);
+        let columns = only_node_of_kind(&parsed.green, SyntaxKind::COLUMN_SPEC_ARRAY);
+
+        assert_eq!(parsed.green.text(), source);
+        assert_eq!(columns.text(), source);
+        assert_eq!(count_kind(columns, SyntaxKind::COLUMN_NAME), 1, "{source}");
+        assert_eq!(
+            syntax_error_count(&parsed),
+            expected_syntax_errors,
+            "{source}"
+        );
+        assert_eq!(
+            count_kind(&parsed.green, SyntaxKind::ERROR_NODE),
+            expected_error_nodes,
+            "{source}"
+        );
+        assert_ranges_are_valid(source, &parsed);
+    }
+}
+
+#[test]
+fn recovered_column_array_commas_report_closing_bracket_and_eof_boundaries() {
+    for (source, expected_columns, expected_syntax_errors, expected_error_nodes) in [
+        ("~[),]", 0, 2, 1),
+        ("~[),", 0, 5, 2),
+        ("~[first:String[1] ),]", 1, 2, 1),
+        ("~[first:String[1] ),", 1, 5, 2),
+    ] {
+        let parsed = parse(source);
+        let columns = only_node_of_kind(&parsed.green, SyntaxKind::COLUMN_SPEC_ARRAY);
+
+        assert_eq!(parsed.green.text(), source);
+        assert_eq!(columns.text(), source);
+        assert_eq!(
+            count_kind(columns, SyntaxKind::COLUMN_NAME),
+            expected_columns,
+            "{source}"
+        );
+        assert_eq!(
+            syntax_error_count(&parsed),
+            expected_syntax_errors,
+            "{source}"
+        );
+        assert_eq!(
+            count_kind(&parsed.green, SyntaxKind::ERROR_NODE),
+            expected_error_nodes,
+            "{source}"
+        );
+        assert_ranges_are_valid(source, &parsed);
+    }
+}
+
+#[test]
+fn malformed_column_arrays_stop_at_source_separators_and_keep_later_queries() {
+    let source = "~[); model::Person.all()";
+    let parsed = parse(source);
+    let columns = only_node_of_kind(&parsed.green, SyntaxKind::COLUMN_SPEC_ARRAY);
+
+    assert_eq!(parsed.green.text(), source);
+    assert_eq!(columns.text(), "~[)");
+    assert!(diagnostic_codes(&parsed).contains(&DiagCode::MalformedSyntax));
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::QUERY_EXPR), 2);
+    assert_ranges_are_valid(source, &parsed);
+}
+
+#[test]
 fn incomplete_variables_and_parentheses_propagate_to_outer_recovery() {
     for (source, expected_queries) in [("$); model::Person.all()", 2), ("(a", 1)] {
         let parsed = parse(source);

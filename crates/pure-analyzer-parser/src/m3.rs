@@ -621,7 +621,11 @@ impl<'tokens> Parser<'tokens> {
         self.parse_column_spec_array_items();
         let has_close = self.expect(TokenKind::BRACKET_CLOSE, "`]` after column specifications");
         self.close();
-        has_close
+        // A source separator is a safe outer recovery boundary.  Treat the
+        // malformed array as a completed primary expression here so the
+        // source parser, rather than generic expression recovery, consumes
+        // the `;` and retains the next query.
+        has_close || self.at(TokenKind::SEMICOLON)
     }
 
     fn parse_column_spec_array_items(&mut self) {
@@ -650,10 +654,9 @@ impl<'tokens> Parser<'tokens> {
                 {
                     break;
                 }
-                let recovered_comma = self.consume_if(TokenKind::COMMA);
-                if !recovered_comma && self.index == before {
-                    break;
-                }
+                // `recover_until` can only leave us at a comma here: the
+                // other recovery boundaries were handled immediately above.
+                let _ = self.consume_if(TokenKind::COMMA);
                 if self.at(TokenKind::BRACKET_CLOSE) || self.at_eof() {
                     self.error_current("expected a column specification after `,`");
                     break;
