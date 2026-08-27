@@ -77,6 +77,16 @@ test-unit:
 test-parser:
     cargo nextest run -p pure-analyzer-parser
 
+# Replay the frozen Legend parser corpus without a running engine.
+parser-differential-verify:
+    cargo xtask parser-differential
+
+# Validate the frozen corpus against an exactly pinned running Legend engine,
+# then replay it locally. The refresher only updates an ignored response cache;
+# committed verdicts remain immutable per corpus version.
+parser-differential-refresh:
+    cargo xtask parser-differential --refresh
+
 # Run doctests explicitly: nextest does not execute them. All features remain
 # compile-checked here; PureCARD's environment-bound feature tests are separate
 # integration-test binaries, so they are not executed by this doc-only command.

@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "engine_version": "4.113.0",
+  "grammar_endpoint": "/api/pure/v1/grammar/grammarToJson/lambda",
+  "required_families": [
+    "bare-relation-column",
+    "zero-argument-navigation",
+    "date-navigation",
+    "generated-navigation"
+  ],
+  "provenance": "Issue #27 M3 grammar-boundary corpus; frozen against the named Legend grammar endpoint.",
+  "update_policy": "Existing version directories are immutable. A Legend version change creates a new legend-<version> directory and is reviewed with its oracle differences."
+}
