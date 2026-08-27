@@ -1,9 +1,11 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
-//! Analyzer-pass package boundary.
-//!
-//! The crate currently exposes its package version as its complete public API.
+//! Conservative analysis passes over Pure syntax and model facts.
+
+mod local;
+
+pub use local::{LocalNavigationAnalysis, LocalResolution, LocalResolutionSite, analyze_m3_locals};
 
 /// The crate's semantic version, as declared in `Cargo.toml`.
 #[must_use]
