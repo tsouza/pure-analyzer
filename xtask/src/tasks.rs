@@ -126,6 +126,42 @@ fn purecard_path(relative: impl AsRef<Path>) -> PathBuf {
 /// 10s interval = 160s), plus headroom.
 const PURECARD_LEGEND_WAIT_TIMEOUT_SECS: &str = "180";
 
+/// Where a failed Legend lane's stack logs are written, for CI to pick up as
+/// a build artifact — teardown removes the containers (and their logs) on
+/// every path, success or failure, so this capture has to happen first.
+const PURECARD_LEGEND_LOG_PATH: &str = "target/legend-stack.log";
+
+/// Best-effort capture of every service's logs to [`PURECARD_LEGEND_LOG_PATH`]
+/// before teardown discards them. Failure to capture is logged but never
+/// masks the caller's own startup/test error — a missing log file is a worse
+/// debugging experience, not a reason to hide what actually failed.
+fn capture_legend_logs() {
+    match run_stdout(
+        "docker",
+        &[
+            "compose",
+            "-f",
+            PURECARD_LEGEND_COMPOSE,
+            "logs",
+            "--no-color",
+        ],
+    ) {
+        Ok(logs) => {
+            if let Err(write_err) = std::fs::write(PURECARD_LEGEND_LOG_PATH, logs) {
+                eprintln!(
+                    "warning: failed to write Legend stack log capture to \
+                     {PURECARD_LEGEND_LOG_PATH}: {write_err:#}"
+                );
+            }
+        }
+        Err(capture_err) => {
+            eprintln!(
+                "warning: failed to capture Legend stack logs before teardown: {capture_err:#}"
+            );
+        }
+    }
+}
+
 /// Run the opt-in PureCARD Legend lane with guaranteed stack teardown.
 ///
 /// The checked-in stack is brought up before package-scoped tests run,
@@ -138,7 +174,10 @@ const PURECARD_LEGEND_WAIT_TIMEOUT_SECS: &str = "180";
 /// concentrating the cold-start cost that used to be diluted across
 /// concurrently-starting tests onto a single one). Teardown is attempted
 /// after a failed startup as well as after tests, and the primary startup or
-/// test error is retained if cleanup also fails.
+/// test error is retained if cleanup also fails. On either failure, every
+/// service's logs are captured to [`PURECARD_LEGEND_LOG_PATH`] first — `down`
+/// removes the containers (and their logs) unconditionally, so capture has
+/// to happen before it, not after.
 ///
 /// # Errors
 ///
@@ -160,6 +199,7 @@ pub fn test_legend() -> Result<()> {
         ],
     );
     if let Err(start_err) = started {
+        capture_legend_logs();
         let torn_down = run(
             "docker",
             &["compose", "-f", PURECARD_LEGEND_COMPOSE, "down"],
@@ -183,6 +223,9 @@ pub fn test_legend() -> Result<()> {
             "legend",
         ],
     );
+    if tested.is_err() {
+        capture_legend_logs();
+    }
     let torn_down = run(
         "docker",
         &["compose", "-f", PURECARD_LEGEND_COMPOSE, "down"],
