@@ -38,11 +38,11 @@ retries = 0
 slow-timeout = { period = "120s", terminate-after = 2 }
 
 # The opt-in `legend` feature's tests all hit ONE shared, stateful Legend
-# Engine instance (`just test-legend` owns its single Docker container).
-# Nextest schedules every test in the run as one flat cross-binary pool, so
-# without this group two legend-hitting test binaries (or two tests in the
-# same binary) can fire concurrently against that single engine — confirmed
-# live: adding one more sequential-request-heavy test
+# Engine instance (`just test-legend` / `just test-real-model` each own their
+# single Docker container). Nextest schedules every test in the run as one
+# flat cross-binary pool, so without this group multiple legend-hitting test
+# binaries (or two tests in the same binary) can fire concurrently against
+# that single engine — confirmed live: adding one more sequential-request-heavy test
 # (`every_fixture_gold_corpus_compiles_against_its_assembled_store_grammar`,
 # ~270 HTTP round trips) tipped 5 previously-passing legend tests over the
 # default profile's 60s slow-timeout purely from request queueing, not any
@@ -63,11 +63,11 @@ legend-engine = { max-threads = 1 }
 # generous override here is not loosening that budget, just scoping it to
 # the lane it was never meant to bound.
 [[profile.default.overrides]]
-filter = 'binary_id(pure-analyzer-purecard::legend_completeness) or binary_id(pure-analyzer-purecard::live_legend_schema_walk_compile)'
+filter = 'binary_id(pure-analyzer-purecard::legend_completeness) or binary_id(pure-analyzer-purecard::live_legend_schema_walk_compile) or binary_id(pure-analyzer-purecard::real_model_legend_compile)'
 test-group = 'legend-engine'
 slow-timeout = { period = "60s", terminate-after = 5 }
 
 [[profile.ci.overrides]]
-filter = 'binary_id(pure-analyzer-purecard::legend_completeness) or binary_id(pure-analyzer-purecard::live_legend_schema_walk_compile)'
+filter = 'binary_id(pure-analyzer-purecard::legend_completeness) or binary_id(pure-analyzer-purecard::live_legend_schema_walk_compile) or binary_id(pure-analyzer-purecard::real_model_legend_compile)'
 test-group = 'legend-engine'
 slow-timeout = { period = "60s", terminate-after = 5 }

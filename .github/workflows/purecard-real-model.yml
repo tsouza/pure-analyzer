@@ -1,0 +1,82 @@
+name: PureCARD real-model inference
+
+# Issue #58: drives a real causal LM forward pass through PureCARD (mask,
+# sample, accept, EOS-map) and compiles every completed constrained output
+# with the pinned Legend stack. Needs a real model forward pass and a local
+# Docker Legend engine, neither available on hosted `ubuntu-latest` runners,
+# so this runs on a self-hosted runner carrying the `purecard-real-model`
+# label. If no such runner is registered, the job sits queued rather than
+# running — visible as "Queued" in the Actions tab, never a silent pass (the
+# acceptance criterion this satisfies explicitly forbids a silent skip). See
+# the PR that introduced this workflow for how to register one.
+on:
+  schedule:
+    - cron: "41 5 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: purecard-real-model-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: "1"
+  QWEN_INFER_REVISION: ea3f2471cf1b1f0db85067f1ef93848e38e88c25
+
+jobs:
+  real-model-inference:
+    name: Real-model inference + Legend compile-check
+    runs-on: [self-hosted, macos, purecard-real-model]
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12.14"
+      - name: Set up uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.5"
+          enable-cache: true
+          cache-dependency-glob: crates/pure-analyzer-purecard/uv.lock
+      - name: Install just and cargo-nextest
+        uses: taiki-e/install-action@b6ff580856c41316412a0b9b60540fbc6f8c82cc # v2.86.7
+        with:
+          tool: just@1.55.1,cargo-nextest
+      - name: Restore real-model weights
+        id: qwen-infer
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: target/purecard/qwen-infer
+          key: purecard-qwen-infer-${{ env.QWEN_INFER_REVISION }}
+      - name: Fetch real-model weights on cache miss
+        if: steps.qwen-infer.outputs.cache-hit != 'true'
+        run: just qwen-infer-model-fetch
+      - name: Run real-model inference + Legend compile-check
+        run: just test-real-model
+      - name: Upload inference traces
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: purecard-real-model-traces
+          path: target/purecard/real-model/
+          retention-days: 30
+          if-no-files-found: warn
+
+  no-warnings:
+    name: no-warnings (log sweep)
+    needs: [real-model-inference]
+    if: always()
+    permissions:
+      actions: read # reusable sweep reads this workflow run's completed logs
+      contents: read
+    uses: ./.github/workflows/no-warnings.yml
