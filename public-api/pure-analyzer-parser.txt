@@ -1,4 +1,128 @@
 pub mod pure_analyzer_parser
+pub enum pure_analyzer_parser::DomainCoverageGapKind
+pub pure_analyzer_parser::DomainCoverageGapKind::MalformedDeclaration
+pub pure_analyzer_parser::DomainCoverageGapKind::UnsupportedMember
+pub pure_analyzer_parser::DomainCoverageGapKind::UnsupportedTopLevel
+impl core::clone::Clone for pure_analyzer_parser::DomainCoverageGapKind
+pub fn pure_analyzer_parser::DomainCoverageGapKind::clone(&self) -> pure_analyzer_parser::DomainCoverageGapKind
+impl core::cmp::Eq for pure_analyzer_parser::DomainCoverageGapKind
+impl core::cmp::PartialEq for pure_analyzer_parser::DomainCoverageGapKind
+pub fn pure_analyzer_parser::DomainCoverageGapKind::eq(&self, &pure_analyzer_parser::DomainCoverageGapKind) -> bool
+impl core::fmt::Debug for pure_analyzer_parser::DomainCoverageGapKind
+pub fn pure_analyzer_parser::DomainCoverageGapKind::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for pure_analyzer_parser::DomainCoverageGapKind
+impl core::marker::StructuralPartialEq for pure_analyzer_parser::DomainCoverageGapKind
+impl core::marker::Freeze for pure_analyzer_parser::DomainCoverageGapKind
+impl core::marker::Send for pure_analyzer_parser::DomainCoverageGapKind
+impl core::marker::Sync for pure_analyzer_parser::DomainCoverageGapKind
+impl core::marker::Unpin for pure_analyzer_parser::DomainCoverageGapKind
+impl core::marker::UnsafeUnpin for pure_analyzer_parser::DomainCoverageGapKind
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_parser::DomainCoverageGapKind
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_parser::DomainCoverageGapKind
+impl<T, U> core::convert::Into<U> for pure_analyzer_parser::DomainCoverageGapKind where U: core::convert::From<T>
+pub fn pure_analyzer_parser::DomainCoverageGapKind::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_parser::DomainCoverageGapKind where U: core::convert::Into<T>
+pub type pure_analyzer_parser::DomainCoverageGapKind::Error = never
+pub fn pure_analyzer_parser::DomainCoverageGapKind::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_parser::DomainCoverageGapKind where U: core::convert::TryFrom<T>
+pub type pure_analyzer_parser::DomainCoverageGapKind::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_parser::DomainCoverageGapKind::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_parser::DomainCoverageGapKind where T: core::clone::Clone
+pub type pure_analyzer_parser::DomainCoverageGapKind::Owned = T
+pub fn pure_analyzer_parser::DomainCoverageGapKind::clone_into(&self, &mut T)
+pub fn pure_analyzer_parser::DomainCoverageGapKind::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_parser::DomainCoverageGapKind where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_parser::DomainCoverageGapKind::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_parser::DomainCoverageGapKind where T: ?core::marker::Sized
+pub fn pure_analyzer_parser::DomainCoverageGapKind::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_parser::DomainCoverageGapKind where T: ?core::marker::Sized
+pub fn pure_analyzer_parser::DomainCoverageGapKind::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_parser::DomainCoverageGapKind where T: core::clone::Clone
+pub unsafe fn pure_analyzer_parser::DomainCoverageGapKind::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_parser::DomainCoverageGapKind
+pub fn pure_analyzer_parser::DomainCoverageGapKind::from(T) -> T
+pub struct pure_analyzer_parser::DomainCoverageGap
+pub pure_analyzer_parser::DomainCoverageGap::kind: pure_analyzer_parser::DomainCoverageGapKind
+pub pure_analyzer_parser::DomainCoverageGap::span: text_size::range::TextRange
+impl core::clone::Clone for pure_analyzer_parser::DomainCoverageGap
+pub fn pure_analyzer_parser::DomainCoverageGap::clone(&self) -> pure_analyzer_parser::DomainCoverageGap
+impl core::cmp::Eq for pure_analyzer_parser::DomainCoverageGap
+impl core::cmp::PartialEq for pure_analyzer_parser::DomainCoverageGap
+pub fn pure_analyzer_parser::DomainCoverageGap::eq(&self, &pure_analyzer_parser::DomainCoverageGap) -> bool
+impl core::fmt::Debug for pure_analyzer_parser::DomainCoverageGap
+pub fn pure_analyzer_parser::DomainCoverageGap::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for pure_analyzer_parser::DomainCoverageGap
+impl core::marker::StructuralPartialEq for pure_analyzer_parser::DomainCoverageGap
+impl core::marker::Freeze for pure_analyzer_parser::DomainCoverageGap
+impl core::marker::Send for pure_analyzer_parser::DomainCoverageGap
+impl core::marker::Sync for pure_analyzer_parser::DomainCoverageGap
+impl core::marker::Unpin for pure_analyzer_parser::DomainCoverageGap
+impl core::marker::UnsafeUnpin for pure_analyzer_parser::DomainCoverageGap
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_parser::DomainCoverageGap
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_parser::DomainCoverageGap
+impl<T, U> core::convert::Into<U> for pure_analyzer_parser::DomainCoverageGap where U: core::convert::From<T>
+pub fn pure_analyzer_parser::DomainCoverageGap::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_parser::DomainCoverageGap where U: core::convert::Into<T>
+pub type pure_analyzer_parser::DomainCoverageGap::Error = never
+pub fn pure_analyzer_parser::DomainCoverageGap::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_parser::DomainCoverageGap where U: core::convert::TryFrom<T>
+pub type pure_analyzer_parser::DomainCoverageGap::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_parser::DomainCoverageGap::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_parser::DomainCoverageGap where T: core::clone::Clone
+pub type pure_analyzer_parser::DomainCoverageGap::Owned = T
+pub fn pure_analyzer_parser::DomainCoverageGap::clone_into(&self, &mut T)
+pub fn pure_analyzer_parser::DomainCoverageGap::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_parser::DomainCoverageGap where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_parser::DomainCoverageGap::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_parser::DomainCoverageGap where T: ?core::marker::Sized
+pub fn pure_analyzer_parser::DomainCoverageGap::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_parser::DomainCoverageGap where T: ?core::marker::Sized
+pub fn pure_analyzer_parser::DomainCoverageGap::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_parser::DomainCoverageGap where T: core::clone::Clone
+pub unsafe fn pure_analyzer_parser::DomainCoverageGap::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_parser::DomainCoverageGap
+pub fn pure_analyzer_parser::DomainCoverageGap::from(T) -> T
+pub struct pure_analyzer_parser::DomainParse
+pub pure_analyzer_parser::DomainParse::coverage_gaps: alloc::vec::Vec<pure_analyzer_parser::DomainCoverageGap>
+pub pure_analyzer_parser::DomainParse::diagnostics: alloc::vec::Vec<pure_analyzer_diagnostics::diagnostic::Diagnostic>
+pub pure_analyzer_parser::DomainParse::green: pure_analyzer_syntax::green::GreenNode
+impl core::clone::Clone for pure_analyzer_parser::DomainParse
+pub fn pure_analyzer_parser::DomainParse::clone(&self) -> pure_analyzer_parser::DomainParse
+impl core::cmp::Eq for pure_analyzer_parser::DomainParse
+impl core::cmp::PartialEq for pure_analyzer_parser::DomainParse
+pub fn pure_analyzer_parser::DomainParse::eq(&self, &pure_analyzer_parser::DomainParse) -> bool
+impl core::fmt::Debug for pure_analyzer_parser::DomainParse
+pub fn pure_analyzer_parser::DomainParse::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_parser::DomainParse
+impl core::marker::Freeze for pure_analyzer_parser::DomainParse
+impl core::marker::Send for pure_analyzer_parser::DomainParse
+impl core::marker::Sync for pure_analyzer_parser::DomainParse
+impl core::marker::Unpin for pure_analyzer_parser::DomainParse
+impl core::marker::UnsafeUnpin for pure_analyzer_parser::DomainParse
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_parser::DomainParse
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_parser::DomainParse
+impl<T, U> core::convert::Into<U> for pure_analyzer_parser::DomainParse where U: core::convert::From<T>
+pub fn pure_analyzer_parser::DomainParse::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_parser::DomainParse where U: core::convert::Into<T>
+pub type pure_analyzer_parser::DomainParse::Error = never
+pub fn pure_analyzer_parser::DomainParse::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_parser::DomainParse where U: core::convert::TryFrom<T>
+pub type pure_analyzer_parser::DomainParse::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_parser::DomainParse::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_parser::DomainParse where T: core::clone::Clone
+pub type pure_analyzer_parser::DomainParse::Owned = T
+pub fn pure_analyzer_parser::DomainParse::clone_into(&self, &mut T)
+pub fn pure_analyzer_parser::DomainParse::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_parser::DomainParse where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_parser::DomainParse::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_parser::DomainParse where T: ?core::marker::Sized
+pub fn pure_analyzer_parser::DomainParse::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_parser::DomainParse where T: ?core::marker::Sized
+pub fn pure_analyzer_parser::DomainParse::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_parser::DomainParse where T: core::clone::Clone
+pub unsafe fn pure_analyzer_parser::DomainParse::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_parser::DomainParse
+pub fn pure_analyzer_parser::DomainParse::from(T) -> T
 pub struct pure_analyzer_parser::Parse
 pub pure_analyzer_parser::Parse::diagnostics: alloc::vec::Vec<pure_analyzer_diagnostics::diagnostic::Diagnostic>
 pub pure_analyzer_parser::Parse::green: pure_analyzer_syntax::green::GreenNode
@@ -39,5 +163,6 @@ impl<T> core::clone::CloneToUninit for pure_analyzer_parser::Parse where T: core
 pub unsafe fn pure_analyzer_parser::Parse::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for pure_analyzer_parser::Parse
 pub fn pure_analyzer_parser::Parse::from(T) -> T
+pub fn pure_analyzer_parser::parse_domain(&str, pure_analyzer_diagnostics::file::FileId) -> core::result::Result<pure_analyzer_parser::DomainParse, pure_analyzer_syntax::builder::BuildError>
 pub fn pure_analyzer_parser::parse_query(&str, pure_analyzer_diagnostics::file::FileId) -> core::result::Result<pure_analyzer_parser::Parse, pure_analyzer_syntax::builder::BuildError>
 pub fn pure_analyzer_parser::version() -> &'static str

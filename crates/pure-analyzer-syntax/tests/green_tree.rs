@@ -291,6 +291,22 @@ fn raw_kind_ids_are_pinned_and_reject_unassigned_values() {
         (SyntaxKind::TYPE_REF, 0x801c),
         (SyntaxKind::MULTIPLICITY, 0x801d),
         (SyntaxKind::FUNCTION_CALL, 0x801e),
+        (SyntaxKind::DOMAIN_FILE, 0x801f),
+        (SyntaxKind::DOMAIN_CLASS_DECL, 0x8020),
+        (SyntaxKind::DOMAIN_ASSOCIATION_DECL, 0x8021),
+        (SyntaxKind::DOMAIN_PROFILE_DECL, 0x8022),
+        (SyntaxKind::DOMAIN_STEREOTYPE_DECL, 0x8023),
+        (SyntaxKind::DOMAIN_STEREOTYPE_APPLICATIONS, 0x8024),
+        (SyntaxKind::DOMAIN_EXTENDS_CLAUSE, 0x8025),
+        (SyntaxKind::DOMAIN_PROPERTY_DECL, 0x8026),
+        (SyntaxKind::DOMAIN_QUALIFIED_PROPERTY_DECL, 0x8027),
+        (SyntaxKind::DOMAIN_PARAMETER_DECL, 0x8028),
+        (SyntaxKind::DOMAIN_TYPE_REF, 0x8029),
+        (SyntaxKind::DOMAIN_MULTIPLICITY, 0x802a),
+        (SyntaxKind::DOMAIN_QUALIFIED_NAME, 0x802b),
+        (SyntaxKind::DOMAIN_OPAQUE_NODE, 0x802c),
+        (SyntaxKind::DOMAIN_OPAQUE_BODY, 0x802d),
+        (SyntaxKind::DOMAIN_PROFILE_SECTION, 0x802e),
     ];
 
     assert_eq!(SyntaxKind::all().len(), expected.len());
@@ -302,7 +318,7 @@ fn raw_kind_ids_are_pinned_and_reject_unassigned_values() {
         assert_eq!(SyntaxKind::try_from(RawSyntaxKind::new(value)), Ok(kind));
     }
 
-    for value in [0x0032, 0x7fff, 0x801f, u16::MAX] {
+    for value in [0x0032, 0x7fff, 0x802f, u16::MAX] {
         let error = SyntaxKind::try_from(RawSyntaxKind::new(value))
             .expect_err("unassigned raw kind must be rejected");
         assert_eq!(error.value(), value);
