@@ -197,6 +197,7 @@ pub pure_analyzer_syntax::SyntaxKind::BRACKET_OPEN = 16
 pub pure_analyzer_syntax::SyntaxKind::CALL_ARGS = 32781
 pub pure_analyzer_syntax::SyntaxKind::CAST_EXPR = 32789
 pub pure_analyzer_syntax::SyntaxKind::CODE_BLOCK = 32784
+pub pure_analyzer_syntax::SyntaxKind::COLLECTION_LITERAL = 32799
 pub pure_analyzer_syntax::SyntaxKind::COLON = 13
 pub pure_analyzer_syntax::SyntaxKind::COLUMN_INFO = 32791
 pub pure_analyzer_syntax::SyntaxKind::COLUMN_SPEC = 32786
@@ -645,6 +646,49 @@ impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::CodeBlock where T: 
 pub unsafe fn pure_analyzer_syntax::CodeBlock::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for pure_analyzer_syntax::CodeBlock
 pub fn pure_analyzer_syntax::CodeBlock::from(T) -> T
+pub struct pure_analyzer_syntax::CollectionLiteral(_)
+impl core::clone::Clone for pure_analyzer_syntax::CollectionLiteral
+pub fn pure_analyzer_syntax::CollectionLiteral::clone(&self) -> pure_analyzer_syntax::CollectionLiteral
+impl core::cmp::Eq for pure_analyzer_syntax::CollectionLiteral
+impl core::cmp::PartialEq for pure_analyzer_syntax::CollectionLiteral
+pub fn pure_analyzer_syntax::CollectionLiteral::eq(&self, &pure_analyzer_syntax::CollectionLiteral) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::CollectionLiteral
+pub fn pure_analyzer_syntax::CollectionLiteral::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::CollectionLiteral
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::CollectionLiteral
+pub fn pure_analyzer_syntax::CollectionLiteral::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::CollectionLiteral::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::CollectionLiteral::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::CollectionLiteral::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::CollectionLiteral
+impl core::marker::Send for pure_analyzer_syntax::CollectionLiteral
+impl core::marker::Sync for pure_analyzer_syntax::CollectionLiteral
+impl core::marker::Unpin for pure_analyzer_syntax::CollectionLiteral
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::CollectionLiteral
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::CollectionLiteral
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::CollectionLiteral
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::CollectionLiteral where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::CollectionLiteral::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::CollectionLiteral where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::CollectionLiteral::Error = never
+pub fn pure_analyzer_syntax::CollectionLiteral::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::CollectionLiteral where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::CollectionLiteral::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::CollectionLiteral::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::CollectionLiteral where T: core::clone::Clone
+pub type pure_analyzer_syntax::CollectionLiteral::Owned = T
+pub fn pure_analyzer_syntax::CollectionLiteral::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::CollectionLiteral::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::CollectionLiteral where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::CollectionLiteral::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::CollectionLiteral where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::CollectionLiteral::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::CollectionLiteral where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::CollectionLiteral::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::CollectionLiteral where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::CollectionLiteral::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::CollectionLiteral
+pub fn pure_analyzer_syntax::CollectionLiteral::from(T) -> T
 pub struct pure_analyzer_syntax::ColumnInfo(_)
 impl core::clone::Clone for pure_analyzer_syntax::ColumnInfo
 pub fn pure_analyzer_syntax::ColumnInfo::clone(&self) -> pure_analyzer_syntax::ColumnInfo
@@ -1971,6 +2015,11 @@ pub fn pure_analyzer_syntax::CodeBlock::can_cast(pure_analyzer_syntax::SyntaxKin
 pub fn pure_analyzer_syntax::CodeBlock::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
 pub fn pure_analyzer_syntax::CodeBlock::syntax(&self) -> &pure_analyzer_syntax::GreenNode
 pub fn pure_analyzer_syntax::CodeBlock::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::CollectionLiteral
+pub fn pure_analyzer_syntax::CollectionLiteral::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::CollectionLiteral::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::CollectionLiteral::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::CollectionLiteral::text_range(&self) -> text_size::range::TextRange
 impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::ColumnInfo
 pub fn pure_analyzer_syntax::ColumnInfo::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
 pub fn pure_analyzer_syntax::ColumnInfo::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>

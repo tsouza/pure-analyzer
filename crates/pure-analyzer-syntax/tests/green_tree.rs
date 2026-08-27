@@ -291,6 +291,7 @@ fn raw_kind_ids_are_pinned_and_reject_unassigned_values() {
         (SyntaxKind::TYPE_REF, 0x801c),
         (SyntaxKind::MULTIPLICITY, 0x801d),
         (SyntaxKind::FUNCTION_CALL, 0x801e),
+        (SyntaxKind::COLLECTION_LITERAL, 0x801f),
     ];
 
     assert_eq!(SyntaxKind::all().len(), expected.len());
@@ -302,7 +303,7 @@ fn raw_kind_ids_are_pinned_and_reject_unassigned_values() {
         assert_eq!(SyntaxKind::try_from(RawSyntaxKind::new(value)), Ok(kind));
     }
 
-    for value in [0x0032, 0x7fff, 0x801f, u16::MAX] {
+    for value in [0x0032, 0x7fff, 0x8020, u16::MAX] {
         let error = SyntaxKind::try_from(RawSyntaxKind::new(value))
             .expect_err("unassigned raw kind must be rejected");
         assert_eq!(error.value(), value);

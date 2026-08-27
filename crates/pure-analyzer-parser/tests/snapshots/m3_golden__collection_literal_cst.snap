@@ -1,0 +1,20 @@
+---
+ROOT 0..11
+  QUERY_EXPR 0..11
+    COLLECTION_LITERAL 0..8
+      BRACKET_OPEN 0..1 "["
+      QUALIFIED_NAME 1..2
+        IDENT 1..2 "a"
+      COMMA 2..3 ","
+      WHITESPACE 3..4 " "
+      COLLECTION_LITERAL 4..7
+        BRACKET_OPEN 4..5 "["
+        QUALIFIED_NAME 5..6
+          IDENT 5..6 "b"
+        BRACKET_CLOSE 6..7 "]"
+      BRACKET_CLOSE 7..8 "]"
+    BRACKET_INDEX 8..11
+      BRACKET_OPEN 8..9 "["
+      LITERAL_EXPR 9..10
+        INTEGER 9..10 "0"
+      BRACKET_CLOSE 10..11 "]"

@@ -102,6 +102,11 @@ ast_node!(
     "A typed view of a function-call node."
 );
 ast_node!(
+    CollectionLiteral,
+    COLLECTION_LITERAL,
+    "A typed view of a collection-literal node."
+);
+ast_node!(
     LambdaExpression,
     LAMBDA_EXPR,
     "A typed view of a lambda-expression node."

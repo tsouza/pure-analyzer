@@ -136,6 +136,10 @@ fn incomplete_delimiters_return_a_tree_and_structured_diagnostics() {
     for source in [
         "$",
         "model::Person.all(",
+        "[",
+        "[a,",
+        "[a,]",
+        "[[1]",
         "{x| let y =",
         "#>{db::Model.table",
         "#{ TDS",
@@ -196,6 +200,85 @@ fn malformed_primary_does_not_become_a_qualified_name() {
     );
     assert_eq!(count_kind(&parsed.green, SyntaxKind::QUALIFIED_NAME), 0);
     assert!(count_kind(&parsed.green, SyntaxKind::ERROR_NODE) > 0);
+    assert_ranges_are_valid(source, &parsed);
+}
+
+#[test]
+fn malformed_collection_literal_preserves_the_next_top_level_query() {
+    let source = "f([a, ); model::Person.all()";
+    let parsed = parse(source);
+
+    assert_eq!(parsed.green.text(), source);
+    assert!(
+        parsed
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == DiagCode::MalformedSyntax)
+    );
+    assert!(count_kind(&parsed.green, SyntaxKind::COLLECTION_LITERAL) > 0);
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::QUERY_EXPR), 2);
+    assert_ranges_are_valid(source, &parsed);
+}
+
+#[test]
+fn empty_collection_stops_at_the_closing_delimiter() {
+    let source = "[]";
+    let parsed = parse(source);
+    let collection = only_node_of_kind(&parsed.green, SyntaxKind::COLLECTION_LITERAL);
+
+    assert_eq!(parsed.green.text(), source);
+    assert_eq!(collection.text(), source);
+    assert!(parsed.diagnostics.is_empty(), "{:#?}", parsed.diagnostics);
+    assert_eq!(count_kind(collection, SyntaxKind::ERROR_NODE), 0);
+    assert_ranges_are_valid(source, &parsed);
+}
+
+#[test]
+fn malformed_collection_item_recovers_at_a_comma_and_keeps_later_items() {
+    let source = "[a, ), c]";
+    let parsed = parse(source);
+    let collection = only_node_of_kind(&parsed.green, SyntaxKind::COLLECTION_LITERAL);
+
+    assert_eq!(parsed.green.text(), source);
+    assert_eq!(collection.text(), source);
+    assert!(diagnostic_codes(&parsed).contains(&DiagCode::MalformedSyntax));
+    assert_eq!(count_kind(collection, SyntaxKind::QUALIFIED_NAME), 2);
+    assert_eq!(count_kind(collection, SyntaxKind::ERROR_NODE), 1);
+    assert_ranges_are_valid(source, &parsed);
+}
+
+#[test]
+fn malformed_collection_item_recovers_at_the_closing_delimiter() {
+    let source = "[a, )]";
+    let parsed = parse(source);
+    let collection = only_node_of_kind(&parsed.green, SyntaxKind::COLLECTION_LITERAL);
+
+    assert_eq!(parsed.green.text(), source);
+    assert_eq!(collection.text(), source);
+    assert_eq!(syntax_error_count(&parsed), 2, "{:#?}", parsed.diagnostics);
+    assert_eq!(count_kind(collection, SyntaxKind::QUALIFIED_NAME), 1);
+    assert_eq!(count_kind(collection, SyntaxKind::ERROR_NODE), 1);
+    assert_ranges_are_valid(source, &parsed);
+}
+
+#[test]
+fn collection_trailing_comma_stops_before_the_closing_delimiter() {
+    let source = "[a,]";
+    let parsed = parse(source);
+    let collection = only_node_of_kind(&parsed.green, SyntaxKind::COLLECTION_LITERAL);
+
+    assert_eq!(parsed.green.text(), source);
+    assert_eq!(collection.text(), source);
+    assert_eq!(count_kind(collection, SyntaxKind::QUALIFIED_NAME), 1);
+    assert_eq!(count_kind(collection, SyntaxKind::ERROR_NODE), 0);
+    assert_eq!(
+        diagnostic_details(&parsed),
+        vec![(
+            DiagCode::MalformedSyntax,
+            "expected an expression after `,`".to_owned(),
+            3..4,
+        )]
+    );
     assert_ranges_are_valid(source, &parsed);
 }
 
