@@ -36,11 +36,13 @@ pub enum DecodeError {
         offset: usize,
         /// The byte that had no valid continuation.
         byte: u8,
-        /// The automaton state the recognizer was in when the byte was rejected.
-        state: &'static str,
+        /// The automaton state the recognizer was in when the byte was
+        /// rejected. Owned rather than `&'static str`: a spec-compiled
+        /// automaton's state names are only known at runtime.
+        state: String,
         /// The frame on top of the recognizer's stack (or a sentinel for an
         /// empty stack) when the byte was rejected.
-        stack_top: &'static str,
+        stack_top: String,
     },
 
     /// An **in-range** (`id < eos`), non-EOS token was rejected by
@@ -80,6 +82,21 @@ pub enum DecodeError {
     /// stream is in fact complete.
     #[error("end-of-stream is not legal here: the query is not yet complete")]
     UnexpectedEos,
+
+    /// [`DecoderSession::with_schema`](crate::DecoderSession::with_schema) was
+    /// called with a grammar compiled from a supplied
+    /// [`GrammarSpec`](crate::grammar::spec::GrammarSpec)
+    /// ([`CompiledGrammar::from_spec`](crate::grammar::compiled::CompiledGrammar::from_spec)).
+    /// The L2 schema overlay is implemented against the fixed built-in
+    /// grammar's named states and is not available for a spec-compiled one —
+    /// use [`DecoderSession::new`](crate::DecoderSession::new) instead, or
+    /// build the grammar with
+    /// [`CompiledGrammar::compile`](crate::grammar::compiled::CompiledGrammar::compile).
+    #[error(
+        "the L2 schema overlay is unavailable for a grammar compiled from a supplied spec; \
+         use DecoderSession::new for L1-only recognition"
+    )]
+    SchemaRequiresFixedGrammar,
 }
 
 #[cfg(test)]
@@ -91,8 +108,8 @@ mod tests {
         let err = DecodeError::DeadState {
             offset: 7,
             byte: 0x2c,
-            state: "AfterArrow",
-            stack_top: "Paren",
+            state: "AfterArrow".to_string(),
+            stack_top: "Paren".to_string(),
         };
         let shown = err.to_string();
         assert!(shown.contains("offset 7"), "{shown}");

@@ -159,7 +159,7 @@ fn bench_l2_overhead(c: &mut Criterion) {
     // pre-warming the mask, then return it positioned for the timed `allowed_mask`.
     let drive_to_arrow = |schema: Option<Schema>| {
         let mut session = match schema {
-            Some(s) => DecoderSession::with_schema(&grammar, s),
+            Some(s) => DecoderSession::with_schema(&grammar, s).expect("grammar is fixed-engine"),
             None => DecoderSession::new(&grammar),
         };
         for token in tokens.iter().take(arrow_step + 1) {

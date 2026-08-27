@@ -28,7 +28,8 @@ fn assert_streams_soundly_under_l2(db_id: &str, query: &str) {
     let vocab = TokenVocab::build(&[query], &[]);
     let grammar = CompiledGrammar::compile(vocab.vocab());
     let schema = load_schema(db_id);
-    let mut session = DecoderSession::with_schema(&grammar, schema);
+    let mut session =
+        DecoderSession::with_schema(&grammar, schema).expect("grammar is fixed-engine");
     for (step, token) in lex(query).into_iter().enumerate() {
         let id = vocab
             .id_of(&token)
@@ -123,7 +124,8 @@ fn admissible_after(db_id: &str, prefix: &str, probes: &[&[u8]]) -> Vec<bool> {
     let vocab = TokenVocab::build(&[prefix], &extras);
     let grammar = CompiledGrammar::compile(vocab.vocab());
     let schema = load_schema(db_id);
-    let mut session = DecoderSession::with_schema(&grammar, schema);
+    let mut session =
+        DecoderSession::with_schema(&grammar, schema).expect("grammar is fixed-engine");
     for token in lex(prefix) {
         let id = vocab
             .id_of(&token)

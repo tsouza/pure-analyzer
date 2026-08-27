@@ -100,7 +100,12 @@ const PURECARD_FUZZ_DIR: &str = "crates/pure-analyzer-purecard/fuzz";
 /// PureCARD fuzz manifest, explicitly isolated from the ancestor workspace.
 const PURECARD_FUZZ_MANIFEST: &str = "crates/pure-analyzer-purecard/fuzz/Cargo.toml";
 /// Every target in PureCARD's dedicated fuzz project.
-const PURECARD_FUZZ_TARGETS: &[&str] = &["accept_token", "allowed_mask", "schema_from_json"];
+const PURECARD_FUZZ_TARGETS: &[&str] = &[
+    "accept_token",
+    "allowed_mask",
+    "schema_from_json",
+    "spec_equivalence",
+];
 /// Directory containing the source file for every registered PureCARD fuzz target.
 const PURECARD_FUZZ_TARGET_DIR: &str = "crates/pure-analyzer-purecard/fuzz/fuzz_targets";
 /// PureCARD's feature-gated FFI source, tested in a separate mutation pass.

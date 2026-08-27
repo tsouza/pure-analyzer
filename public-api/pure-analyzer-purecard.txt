@@ -4,10 +4,11 @@ pub enum purecard::error::DecodeError
 pub purecard::error::DecodeError::DeadState
 pub purecard::error::DecodeError::DeadState::byte: u8
 pub purecard::error::DecodeError::DeadState::offset: usize
-pub purecard::error::DecodeError::DeadState::stack_top: &'static str
-pub purecard::error::DecodeError::DeadState::state: &'static str
+pub purecard::error::DecodeError::DeadState::stack_top: alloc::string::String
+pub purecard::error::DecodeError::DeadState::state: alloc::string::String
 pub purecard::error::DecodeError::InadmissibleToken
 pub purecard::error::DecodeError::InadmissibleToken::id: u32
+pub purecard::error::DecodeError::SchemaRequiresFixedGrammar
 pub purecard::error::DecodeError::UnexpectedEos
 pub purecard::error::DecodeError::UnknownToken
 pub purecard::error::DecodeError::UnknownToken::id: u32
@@ -45,11 +46,187 @@ impl<T> core::convert::From<T> for purecard::error::DecodeError
 pub fn purecard::error::DecodeError::from(T) -> T
 impl<T> pyo3::marker::Ungil for purecard::error::DecodeError where T: core::marker::Send
 pub mod purecard::grammar
+pub mod purecard::grammar::compile
+pub enum purecard::grammar::compile::Step
+pub purecard::grammar::compile::Step::Dead
+pub purecard::grammar::compile::Step::Next(u32)
+pub purecard::grammar::compile::Step::Pop(u32)
+pub purecard::grammar::compile::Step::Push(u32, u32)
+impl core::clone::Clone for purecard::grammar::compile::Step
+pub fn purecard::grammar::compile::Step::clone(&self) -> purecard::grammar::compile::Step
+impl core::cmp::Eq for purecard::grammar::compile::Step
+impl core::cmp::PartialEq for purecard::grammar::compile::Step
+pub fn purecard::grammar::compile::Step::eq(&self, &purecard::grammar::compile::Step) -> bool
+impl core::fmt::Debug for purecard::grammar::compile::Step
+pub fn purecard::grammar::compile::Step::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for purecard::grammar::compile::Step
+impl core::marker::StructuralPartialEq for purecard::grammar::compile::Step
+impl core::marker::Freeze for purecard::grammar::compile::Step
+impl core::marker::Send for purecard::grammar::compile::Step
+impl core::marker::Sync for purecard::grammar::compile::Step
+impl core::marker::Unpin for purecard::grammar::compile::Step
+impl core::marker::UnsafeUnpin for purecard::grammar::compile::Step
+impl core::panic::unwind_safe::RefUnwindSafe for purecard::grammar::compile::Step
+impl core::panic::unwind_safe::UnwindSafe for purecard::grammar::compile::Step
+impl<T, U> core::convert::Into<U> for purecard::grammar::compile::Step where U: core::convert::From<T>
+pub fn purecard::grammar::compile::Step::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for purecard::grammar::compile::Step where U: core::convert::Into<T>
+pub type purecard::grammar::compile::Step::Error = never
+pub fn purecard::grammar::compile::Step::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for purecard::grammar::compile::Step where U: core::convert::TryFrom<T>
+pub type purecard::grammar::compile::Step::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn purecard::grammar::compile::Step::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for purecard::grammar::compile::Step where T: core::clone::Clone
+pub type purecard::grammar::compile::Step::Owned = T
+pub fn purecard::grammar::compile::Step::clone_into(&self, &mut T)
+pub fn purecard::grammar::compile::Step::to_owned(&self) -> T
+impl<T> core::any::Any for purecard::grammar::compile::Step where T: 'static + ?core::marker::Sized
+pub fn purecard::grammar::compile::Step::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for purecard::grammar::compile::Step where T: ?core::marker::Sized
+pub fn purecard::grammar::compile::Step::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for purecard::grammar::compile::Step where T: ?core::marker::Sized
+pub fn purecard::grammar::compile::Step::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for purecard::grammar::compile::Step where T: core::clone::Clone
+pub unsafe fn purecard::grammar::compile::Step::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for purecard::grammar::compile::Step
+pub fn purecard::grammar::compile::Step::from(T) -> T
+impl<T> pyo3::marker::Ungil for purecard::grammar::compile::Step where T: core::marker::Send
+pub struct purecard::grammar::compile::CompiledAutomaton
+impl purecard::grammar::compile::CompiledAutomaton
+pub fn purecard::grammar::compile::CompiledAutomaton::compile(&purecard::grammar::spec::GrammarSpec) -> core::result::Result<Self, purecard::grammar::spec::SpecError>
+pub fn purecard::grammar::compile::CompiledAutomaton::frame_name(&self, core::option::Option<u32>) -> &str
+pub fn purecard::grammar::compile::CompiledAutomaton::is_accepting_state(&self, u32) -> bool
+pub fn purecard::grammar::compile::CompiledAutomaton::start(&self) -> u32
+pub fn purecard::grammar::compile::CompiledAutomaton::state_count(&self) -> usize
+pub fn purecard::grammar::compile::CompiledAutomaton::state_name(&self, u32) -> &str
+pub fn purecard::grammar::compile::CompiledAutomaton::step(&self, u32, core::option::Option<u32>, u8) -> purecard::grammar::compile::Step
+impl core::clone::Clone for purecard::grammar::compile::CompiledAutomaton
+pub fn purecard::grammar::compile::CompiledAutomaton::clone(&self) -> purecard::grammar::compile::CompiledAutomaton
+impl core::fmt::Debug for purecard::grammar::compile::CompiledAutomaton
+pub fn purecard::grammar::compile::CompiledAutomaton::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for purecard::grammar::compile::CompiledAutomaton
+impl core::marker::Send for purecard::grammar::compile::CompiledAutomaton
+impl core::marker::Sync for purecard::grammar::compile::CompiledAutomaton
+impl core::marker::Unpin for purecard::grammar::compile::CompiledAutomaton
+impl core::marker::UnsafeUnpin for purecard::grammar::compile::CompiledAutomaton
+impl core::panic::unwind_safe::RefUnwindSafe for purecard::grammar::compile::CompiledAutomaton
+impl core::panic::unwind_safe::UnwindSafe for purecard::grammar::compile::CompiledAutomaton
+impl<T, U> core::convert::Into<U> for purecard::grammar::compile::CompiledAutomaton where U: core::convert::From<T>
+pub fn purecard::grammar::compile::CompiledAutomaton::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for purecard::grammar::compile::CompiledAutomaton where U: core::convert::Into<T>
+pub type purecard::grammar::compile::CompiledAutomaton::Error = never
+pub fn purecard::grammar::compile::CompiledAutomaton::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for purecard::grammar::compile::CompiledAutomaton where U: core::convert::TryFrom<T>
+pub type purecard::grammar::compile::CompiledAutomaton::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn purecard::grammar::compile::CompiledAutomaton::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for purecard::grammar::compile::CompiledAutomaton where T: core::clone::Clone
+pub type purecard::grammar::compile::CompiledAutomaton::Owned = T
+pub fn purecard::grammar::compile::CompiledAutomaton::clone_into(&self, &mut T)
+pub fn purecard::grammar::compile::CompiledAutomaton::to_owned(&self) -> T
+impl<T> core::any::Any for purecard::grammar::compile::CompiledAutomaton where T: 'static + ?core::marker::Sized
+pub fn purecard::grammar::compile::CompiledAutomaton::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for purecard::grammar::compile::CompiledAutomaton where T: ?core::marker::Sized
+pub fn purecard::grammar::compile::CompiledAutomaton::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for purecard::grammar::compile::CompiledAutomaton where T: ?core::marker::Sized
+pub fn purecard::grammar::compile::CompiledAutomaton::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for purecard::grammar::compile::CompiledAutomaton where T: core::clone::Clone
+pub unsafe fn purecard::grammar::compile::CompiledAutomaton::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for purecard::grammar::compile::CompiledAutomaton
+pub fn purecard::grammar::compile::CompiledAutomaton::from(T) -> T
+impl<T> pyo3::marker::Ungil for purecard::grammar::compile::CompiledAutomaton where T: core::marker::Send
+pub struct purecard::grammar::compile::RtnPda<'g>
+impl<'g> purecard::grammar::compile::RtnPda<'g>
+pub fn purecard::grammar::compile::RtnPda<'g>::admits(&self, &[u8], &mut alloc::vec::Vec<u32>) -> bool
+pub fn purecard::grammar::compile::RtnPda<'g>::advance(&mut self, u8) -> bool
+pub fn purecard::grammar::compile::RtnPda<'g>::at(&'g purecard::grammar::compile::CompiledAutomaton, u32) -> Self
+pub fn purecard::grammar::compile::RtnPda<'g>::automaton(&self) -> &'g purecard::grammar::compile::CompiledAutomaton
+pub fn purecard::grammar::compile::RtnPda<'g>::is_accepting(&self) -> bool
+pub fn purecard::grammar::compile::RtnPda<'g>::new(&'g purecard::grammar::compile::CompiledAutomaton) -> Self
+pub fn purecard::grammar::compile::RtnPda<'g>::probe(&self, &[u8], &mut alloc::vec::Vec<u32>) -> purecard::grammar::compile::RtnProbe
+pub fn purecard::grammar::compile::RtnPda<'g>::reset(&mut self)
+pub fn purecard::grammar::compile::RtnPda<'g>::stack_top(&self) -> core::option::Option<u32>
+pub fn purecard::grammar::compile::RtnPda<'g>::state(&self) -> u32
+impl<'g> core::clone::Clone for purecard::grammar::compile::RtnPda<'g>
+pub fn purecard::grammar::compile::RtnPda<'g>::clone(&self) -> purecard::grammar::compile::RtnPda<'g>
+impl<'g> core::fmt::Debug for purecard::grammar::compile::RtnPda<'g>
+pub fn purecard::grammar::compile::RtnPda<'g>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl<'g> core::marker::Freeze for purecard::grammar::compile::RtnPda<'g>
+impl<'g> core::marker::Send for purecard::grammar::compile::RtnPda<'g>
+impl<'g> core::marker::Sync for purecard::grammar::compile::RtnPda<'g>
+impl<'g> core::marker::Unpin for purecard::grammar::compile::RtnPda<'g>
+impl<'g> core::marker::UnsafeUnpin for purecard::grammar::compile::RtnPda<'g>
+impl<'g> core::panic::unwind_safe::RefUnwindSafe for purecard::grammar::compile::RtnPda<'g>
+impl<'g> core::panic::unwind_safe::UnwindSafe for purecard::grammar::compile::RtnPda<'g>
+impl<T, U> core::convert::Into<U> for purecard::grammar::compile::RtnPda<'g> where U: core::convert::From<T>
+pub fn purecard::grammar::compile::RtnPda<'g>::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for purecard::grammar::compile::RtnPda<'g> where U: core::convert::Into<T>
+pub type purecard::grammar::compile::RtnPda<'g>::Error = never
+pub fn purecard::grammar::compile::RtnPda<'g>::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for purecard::grammar::compile::RtnPda<'g> where U: core::convert::TryFrom<T>
+pub type purecard::grammar::compile::RtnPda<'g>::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn purecard::grammar::compile::RtnPda<'g>::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for purecard::grammar::compile::RtnPda<'g> where T: core::clone::Clone
+pub type purecard::grammar::compile::RtnPda<'g>::Owned = T
+pub fn purecard::grammar::compile::RtnPda<'g>::clone_into(&self, &mut T)
+pub fn purecard::grammar::compile::RtnPda<'g>::to_owned(&self) -> T
+impl<T> core::any::Any for purecard::grammar::compile::RtnPda<'g> where T: 'static + ?core::marker::Sized
+pub fn purecard::grammar::compile::RtnPda<'g>::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for purecard::grammar::compile::RtnPda<'g> where T: ?core::marker::Sized
+pub fn purecard::grammar::compile::RtnPda<'g>::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for purecard::grammar::compile::RtnPda<'g> where T: ?core::marker::Sized
+pub fn purecard::grammar::compile::RtnPda<'g>::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for purecard::grammar::compile::RtnPda<'g> where T: core::clone::Clone
+pub unsafe fn purecard::grammar::compile::RtnPda<'g>::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for purecard::grammar::compile::RtnPda<'g>
+pub fn purecard::grammar::compile::RtnPda<'g>::from(T) -> T
+impl<T> pyo3::marker::Ungil for purecard::grammar::compile::RtnPda<'g> where T: core::marker::Send
+pub struct purecard::grammar::compile::RtnProbe
+pub purecard::grammar::compile::RtnProbe::alive: bool
+pub purecard::grammar::compile::RtnProbe::consulted_ambient: bool
+impl core::clone::Clone for purecard::grammar::compile::RtnProbe
+pub fn purecard::grammar::compile::RtnProbe::clone(&self) -> purecard::grammar::compile::RtnProbe
+impl core::cmp::Eq for purecard::grammar::compile::RtnProbe
+impl core::cmp::PartialEq for purecard::grammar::compile::RtnProbe
+pub fn purecard::grammar::compile::RtnProbe::eq(&self, &purecard::grammar::compile::RtnProbe) -> bool
+impl core::fmt::Debug for purecard::grammar::compile::RtnProbe
+pub fn purecard::grammar::compile::RtnProbe::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for purecard::grammar::compile::RtnProbe
+impl core::marker::StructuralPartialEq for purecard::grammar::compile::RtnProbe
+impl core::marker::Freeze for purecard::grammar::compile::RtnProbe
+impl core::marker::Send for purecard::grammar::compile::RtnProbe
+impl core::marker::Sync for purecard::grammar::compile::RtnProbe
+impl core::marker::Unpin for purecard::grammar::compile::RtnProbe
+impl core::marker::UnsafeUnpin for purecard::grammar::compile::RtnProbe
+impl core::panic::unwind_safe::RefUnwindSafe for purecard::grammar::compile::RtnProbe
+impl core::panic::unwind_safe::UnwindSafe for purecard::grammar::compile::RtnProbe
+impl<T, U> core::convert::Into<U> for purecard::grammar::compile::RtnProbe where U: core::convert::From<T>
+pub fn purecard::grammar::compile::RtnProbe::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for purecard::grammar::compile::RtnProbe where U: core::convert::Into<T>
+pub type purecard::grammar::compile::RtnProbe::Error = never
+pub fn purecard::grammar::compile::RtnProbe::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for purecard::grammar::compile::RtnProbe where U: core::convert::TryFrom<T>
+pub type purecard::grammar::compile::RtnProbe::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn purecard::grammar::compile::RtnProbe::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for purecard::grammar::compile::RtnProbe where T: core::clone::Clone
+pub type purecard::grammar::compile::RtnProbe::Owned = T
+pub fn purecard::grammar::compile::RtnProbe::clone_into(&self, &mut T)
+pub fn purecard::grammar::compile::RtnProbe::to_owned(&self) -> T
+impl<T> core::any::Any for purecard::grammar::compile::RtnProbe where T: 'static + ?core::marker::Sized
+pub fn purecard::grammar::compile::RtnProbe::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for purecard::grammar::compile::RtnProbe where T: ?core::marker::Sized
+pub fn purecard::grammar::compile::RtnProbe::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for purecard::grammar::compile::RtnProbe where T: ?core::marker::Sized
+pub fn purecard::grammar::compile::RtnProbe::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for purecard::grammar::compile::RtnProbe where T: core::clone::Clone
+pub unsafe fn purecard::grammar::compile::RtnProbe::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for purecard::grammar::compile::RtnProbe
+pub fn purecard::grammar::compile::RtnProbe::from(T) -> T
+impl<T> pyo3::marker::Ungil for purecard::grammar::compile::RtnProbe where T: core::marker::Send
 pub mod purecard::grammar::compiled
 pub struct purecard::grammar::compiled::CompiledGrammar
 impl purecard::grammar::compiled::CompiledGrammar
 pub fn purecard::grammar::compiled::CompiledGrammar::compile(purecard::vocab::Vocab) -> Self
-pub fn purecard::grammar::compiled::CompiledGrammar::from_spec(&str, purecard::vocab::Vocab) -> Self
+pub fn purecard::grammar::compiled::CompiledGrammar::from_spec(&str, purecard::vocab::Vocab) -> core::result::Result<Self, purecard::grammar::spec::SpecError>
 pub fn purecard::grammar::compiled::CompiledGrammar::vocab(&self) -> &purecard::vocab::Vocab
 impl core::fmt::Debug for purecard::grammar::compiled::CompiledGrammar
 pub fn purecard::grammar::compiled::CompiledGrammar::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
@@ -77,6 +254,8 @@ pub fn purecard::grammar::compiled::CompiledGrammar::borrow_mut(&mut self) -> &m
 impl<T> core::convert::From<T> for purecard::grammar::compiled::CompiledGrammar
 pub fn purecard::grammar::compiled::CompiledGrammar::from(T) -> T
 impl<T> pyo3::marker::Ungil for purecard::grammar::compiled::CompiledGrammar where T: core::marker::Send
+pub mod purecard::grammar::emitted_subset
+pub const purecard::grammar::emitted_subset::EMITTED_SUBSET_SPEC: &str
 pub mod purecard::grammar::pda
 pub enum purecard::grammar::pda::Frame
 pub purecard::grammar::pda::Frame::Brace
@@ -355,6 +534,412 @@ impl<T> core::convert::From<T> for purecard::grammar::pda::Probe
 pub fn purecard::grammar::pda::Probe::from(T) -> T
 impl<T> pyo3::marker::Ungil for purecard::grammar::pda::Probe where T: core::marker::Send
 pub fn purecard::grammar::pda::step(purecard::grammar::pda::State, core::option::Option<purecard::grammar::pda::Frame>, u8) -> purecard::grammar::pda::Step
+pub mod purecard::grammar::spec
+pub enum purecard::grammar::spec::Action
+pub purecard::grammar::spec::Action::Dead
+pub purecard::grammar::spec::Action::Goto
+pub purecard::grammar::spec::Action::Goto::state: alloc::string::String
+pub purecard::grammar::spec::Action::Next
+pub purecard::grammar::spec::Action::Next::state: alloc::string::String
+pub purecard::grammar::spec::Action::Pop
+pub purecard::grammar::spec::Action::Pop::state: alloc::string::String
+pub purecard::grammar::spec::Action::Push
+pub purecard::grammar::spec::Action::Push::frame: alloc::string::String
+pub purecard::grammar::spec::Action::Push::state: alloc::string::String
+impl core::clone::Clone for purecard::grammar::spec::Action
+pub fn purecard::grammar::spec::Action::clone(&self) -> purecard::grammar::spec::Action
+impl core::fmt::Debug for purecard::grammar::spec::Action
+pub fn purecard::grammar::spec::Action::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl<'de> serde_core::de::Deserialize<'de> for purecard::grammar::spec::Action
+pub fn purecard::grammar::spec::Action::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for purecard::grammar::spec::Action
+impl core::marker::Send for purecard::grammar::spec::Action
+impl core::marker::Sync for purecard::grammar::spec::Action
+impl core::marker::Unpin for purecard::grammar::spec::Action
+impl core::marker::UnsafeUnpin for purecard::grammar::spec::Action
+impl core::panic::unwind_safe::RefUnwindSafe for purecard::grammar::spec::Action
+impl core::panic::unwind_safe::UnwindSafe for purecard::grammar::spec::Action
+impl<T, U> core::convert::Into<U> for purecard::grammar::spec::Action where U: core::convert::From<T>
+pub fn purecard::grammar::spec::Action::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for purecard::grammar::spec::Action where U: core::convert::Into<T>
+pub type purecard::grammar::spec::Action::Error = never
+pub fn purecard::grammar::spec::Action::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for purecard::grammar::spec::Action where U: core::convert::TryFrom<T>
+pub type purecard::grammar::spec::Action::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn purecard::grammar::spec::Action::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for purecard::grammar::spec::Action where T: core::clone::Clone
+pub type purecard::grammar::spec::Action::Owned = T
+pub fn purecard::grammar::spec::Action::clone_into(&self, &mut T)
+pub fn purecard::grammar::spec::Action::to_owned(&self) -> T
+impl<T> core::any::Any for purecard::grammar::spec::Action where T: 'static + ?core::marker::Sized
+pub fn purecard::grammar::spec::Action::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for purecard::grammar::spec::Action where T: ?core::marker::Sized
+pub fn purecard::grammar::spec::Action::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for purecard::grammar::spec::Action where T: ?core::marker::Sized
+pub fn purecard::grammar::spec::Action::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for purecard::grammar::spec::Action where T: core::clone::Clone
+pub unsafe fn purecard::grammar::spec::Action::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for purecard::grammar::spec::Action
+pub fn purecard::grammar::spec::Action::from(T) -> T
+impl<T> pyo3::marker::Ungil for purecard::grammar::spec::Action where T: core::marker::Send
+impl<T> serde_core::de::DeserializeOwned for purecard::grammar::spec::Action where T: for<'de> serde_core::de::Deserialize<'de>
+pub enum purecard::grammar::spec::ByteTest
+pub purecard::grammar::spec::ByteTest::Any
+pub purecard::grammar::spec::ByteTest::Digit
+pub purecard::grammar::spec::ByteTest::Exact
+pub purecard::grammar::spec::ByteTest::Exact::byte: u8
+pub purecard::grammar::spec::ByteTest::IdentStart
+pub purecard::grammar::spec::ByteTest::IdentTail
+pub purecard::grammar::spec::ByteTest::NoneOf
+pub purecard::grammar::spec::ByteTest::NoneOf::bytes: alloc::vec::Vec<u8>
+pub purecard::grammar::spec::ByteTest::OneOf
+pub purecard::grammar::spec::ByteTest::OneOf::bytes: alloc::vec::Vec<u8>
+pub purecard::grammar::spec::ByteTest::Whitespace
+impl core::clone::Clone for purecard::grammar::spec::ByteTest
+pub fn purecard::grammar::spec::ByteTest::clone(&self) -> purecard::grammar::spec::ByteTest
+impl core::cmp::Eq for purecard::grammar::spec::ByteTest
+impl core::cmp::PartialEq for purecard::grammar::spec::ByteTest
+pub fn purecard::grammar::spec::ByteTest::eq(&self, &purecard::grammar::spec::ByteTest) -> bool
+impl core::fmt::Debug for purecard::grammar::spec::ByteTest
+pub fn purecard::grammar::spec::ByteTest::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for purecard::grammar::spec::ByteTest
+impl<'de> serde_core::de::Deserialize<'de> for purecard::grammar::spec::ByteTest
+pub fn purecard::grammar::spec::ByteTest::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for purecard::grammar::spec::ByteTest
+impl core::marker::Send for purecard::grammar::spec::ByteTest
+impl core::marker::Sync for purecard::grammar::spec::ByteTest
+impl core::marker::Unpin for purecard::grammar::spec::ByteTest
+impl core::marker::UnsafeUnpin for purecard::grammar::spec::ByteTest
+impl core::panic::unwind_safe::RefUnwindSafe for purecard::grammar::spec::ByteTest
+impl core::panic::unwind_safe::UnwindSafe for purecard::grammar::spec::ByteTest
+impl<T, U> core::convert::Into<U> for purecard::grammar::spec::ByteTest where U: core::convert::From<T>
+pub fn purecard::grammar::spec::ByteTest::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for purecard::grammar::spec::ByteTest where U: core::convert::Into<T>
+pub type purecard::grammar::spec::ByteTest::Error = never
+pub fn purecard::grammar::spec::ByteTest::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for purecard::grammar::spec::ByteTest where U: core::convert::TryFrom<T>
+pub type purecard::grammar::spec::ByteTest::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn purecard::grammar::spec::ByteTest::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for purecard::grammar::spec::ByteTest where T: core::clone::Clone
+pub type purecard::grammar::spec::ByteTest::Owned = T
+pub fn purecard::grammar::spec::ByteTest::clone_into(&self, &mut T)
+pub fn purecard::grammar::spec::ByteTest::to_owned(&self) -> T
+impl<T> core::any::Any for purecard::grammar::spec::ByteTest where T: 'static + ?core::marker::Sized
+pub fn purecard::grammar::spec::ByteTest::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for purecard::grammar::spec::ByteTest where T: ?core::marker::Sized
+pub fn purecard::grammar::spec::ByteTest::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for purecard::grammar::spec::ByteTest where T: ?core::marker::Sized
+pub fn purecard::grammar::spec::ByteTest::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for purecard::grammar::spec::ByteTest where T: core::clone::Clone
+pub unsafe fn purecard::grammar::spec::ByteTest::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for purecard::grammar::spec::ByteTest
+pub fn purecard::grammar::spec::ByteTest::from(T) -> T
+impl<T> pyo3::marker::Ungil for purecard::grammar::spec::ByteTest where T: core::marker::Send
+impl<T> serde_core::de::DeserializeOwned for purecard::grammar::spec::ByteTest where T: for<'de> serde_core::de::Deserialize<'de>
+pub enum purecard::grammar::spec::GrammarSpec
+pub purecard::grammar::spec::GrammarSpec::V1(purecard::grammar::spec::GrammarSpecV1)
+impl purecard::grammar::spec::GrammarSpec
+pub fn purecard::grammar::spec::GrammarSpec::parse(&str) -> core::result::Result<Self, purecard::grammar::spec::SpecError>
+impl core::clone::Clone for purecard::grammar::spec::GrammarSpec
+pub fn purecard::grammar::spec::GrammarSpec::clone(&self) -> purecard::grammar::spec::GrammarSpec
+impl core::fmt::Debug for purecard::grammar::spec::GrammarSpec
+pub fn purecard::grammar::spec::GrammarSpec::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for purecard::grammar::spec::GrammarSpec
+pub fn purecard::grammar::spec::GrammarSpec::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl<'de> serde_core::de::Deserialize<'de> for purecard::grammar::spec::GrammarSpec
+pub fn purecard::grammar::spec::GrammarSpec::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for purecard::grammar::spec::GrammarSpec
+impl core::marker::Send for purecard::grammar::spec::GrammarSpec
+impl core::marker::Sync for purecard::grammar::spec::GrammarSpec
+impl core::marker::Unpin for purecard::grammar::spec::GrammarSpec
+impl core::marker::UnsafeUnpin for purecard::grammar::spec::GrammarSpec
+impl core::panic::unwind_safe::RefUnwindSafe for purecard::grammar::spec::GrammarSpec
+impl core::panic::unwind_safe::UnwindSafe for purecard::grammar::spec::GrammarSpec
+impl<T, U> core::convert::Into<U> for purecard::grammar::spec::GrammarSpec where U: core::convert::From<T>
+pub fn purecard::grammar::spec::GrammarSpec::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for purecard::grammar::spec::GrammarSpec where U: core::convert::Into<T>
+pub type purecard::grammar::spec::GrammarSpec::Error = never
+pub fn purecard::grammar::spec::GrammarSpec::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for purecard::grammar::spec::GrammarSpec where U: core::convert::TryFrom<T>
+pub type purecard::grammar::spec::GrammarSpec::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn purecard::grammar::spec::GrammarSpec::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for purecard::grammar::spec::GrammarSpec where T: core::clone::Clone
+pub type purecard::grammar::spec::GrammarSpec::Owned = T
+pub fn purecard::grammar::spec::GrammarSpec::clone_into(&self, &mut T)
+pub fn purecard::grammar::spec::GrammarSpec::to_owned(&self) -> T
+impl<T> alloc::string::ToString for purecard::grammar::spec::GrammarSpec where T: core::fmt::Display + ?core::marker::Sized
+pub fn purecard::grammar::spec::GrammarSpec::to_string(&self) -> alloc::string::String
+impl<T> core::any::Any for purecard::grammar::spec::GrammarSpec where T: 'static + ?core::marker::Sized
+pub fn purecard::grammar::spec::GrammarSpec::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for purecard::grammar::spec::GrammarSpec where T: ?core::marker::Sized
+pub fn purecard::grammar::spec::GrammarSpec::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for purecard::grammar::spec::GrammarSpec where T: ?core::marker::Sized
+pub fn purecard::grammar::spec::GrammarSpec::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for purecard::grammar::spec::GrammarSpec where T: core::clone::Clone
+pub unsafe fn purecard::grammar::spec::GrammarSpec::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for purecard::grammar::spec::GrammarSpec
+pub fn purecard::grammar::spec::GrammarSpec::from(T) -> T
+impl<T> pyo3::marker::Ungil for purecard::grammar::spec::GrammarSpec where T: core::marker::Send
+impl<T> serde_core::de::DeserializeOwned for purecard::grammar::spec::GrammarSpec where T: for<'de> serde_core::de::Deserialize<'de>
+pub enum purecard::grammar::spec::Guard
+pub purecard::grammar::spec::Guard::Always
+pub purecard::grammar::spec::Guard::StackEmpty
+pub purecard::grammar::spec::Guard::StackNonEmpty
+pub purecard::grammar::spec::Guard::StackTopIs
+pub purecard::grammar::spec::Guard::StackTopIs::frame: alloc::string::String
+pub purecard::grammar::spec::Guard::StackTopIsNot
+pub purecard::grammar::spec::Guard::StackTopIsNot::frame: alloc::string::String
+impl core::clone::Clone for purecard::grammar::spec::Guard
+pub fn purecard::grammar::spec::Guard::clone(&self) -> purecard::grammar::spec::Guard
+impl core::cmp::Eq for purecard::grammar::spec::Guard
+impl core::cmp::PartialEq for purecard::grammar::spec::Guard
+pub fn purecard::grammar::spec::Guard::eq(&self, &purecard::grammar::spec::Guard) -> bool
+impl core::default::Default for purecard::grammar::spec::Guard
+pub fn purecard::grammar::spec::Guard::default() -> purecard::grammar::spec::Guard
+impl core::fmt::Debug for purecard::grammar::spec::Guard
+pub fn purecard::grammar::spec::Guard::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for purecard::grammar::spec::Guard
+impl<'de> serde_core::de::Deserialize<'de> for purecard::grammar::spec::Guard
+pub fn purecard::grammar::spec::Guard::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for purecard::grammar::spec::Guard
+impl core::marker::Send for purecard::grammar::spec::Guard
+impl core::marker::Sync for purecard::grammar::spec::Guard
+impl core::marker::Unpin for purecard::grammar::spec::Guard
+impl core::marker::UnsafeUnpin for purecard::grammar::spec::Guard
+impl core::panic::unwind_safe::RefUnwindSafe for purecard::grammar::spec::Guard
+impl core::panic::unwind_safe::UnwindSafe for purecard::grammar::spec::Guard
+impl<T, U> core::convert::Into<U> for purecard::grammar::spec::Guard where U: core::convert::From<T>
+pub fn purecard::grammar::spec::Guard::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for purecard::grammar::spec::Guard where U: core::convert::Into<T>
+pub type purecard::grammar::spec::Guard::Error = never
+pub fn purecard::grammar::spec::Guard::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for purecard::grammar::spec::Guard where U: core::convert::TryFrom<T>
+pub type purecard::grammar::spec::Guard::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn purecard::grammar::spec::Guard::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for purecard::grammar::spec::Guard where T: core::clone::Clone
+pub type purecard::grammar::spec::Guard::Owned = T
+pub fn purecard::grammar::spec::Guard::clone_into(&self, &mut T)
+pub fn purecard::grammar::spec::Guard::to_owned(&self) -> T
+impl<T> core::any::Any for purecard::grammar::spec::Guard where T: 'static + ?core::marker::Sized
+pub fn purecard::grammar::spec::Guard::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for purecard::grammar::spec::Guard where T: ?core::marker::Sized
+pub fn purecard::grammar::spec::Guard::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for purecard::grammar::spec::Guard where T: ?core::marker::Sized
+pub fn purecard::grammar::spec::Guard::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for purecard::grammar::spec::Guard where T: core::clone::Clone
+pub unsafe fn purecard::grammar::spec::Guard::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for purecard::grammar::spec::Guard
+pub fn purecard::grammar::spec::Guard::from(T) -> T
+impl<T> pyo3::marker::Ungil for purecard::grammar::spec::Guard where T: core::marker::Send
+impl<T> serde_core::de::DeserializeOwned for purecard::grammar::spec::Guard where T: for<'de> serde_core::de::Deserialize<'de>
+pub enum purecard::grammar::spec::SpecError
+pub purecard::grammar::spec::SpecError::AmbiguousTransition
+pub purecard::grammar::spec::SpecError::AmbiguousTransition::first_index: usize
+pub purecard::grammar::spec::SpecError::AmbiguousTransition::rule_index: usize
+pub purecard::grammar::spec::SpecError::AmbiguousTransition::state: alloc::string::String
+pub purecard::grammar::spec::SpecError::CyclicGoto
+pub purecard::grammar::spec::SpecError::CyclicGoto::rule_index: usize
+pub purecard::grammar::spec::SpecError::CyclicGoto::state: alloc::string::String
+pub purecard::grammar::spec::SpecError::DuplicateFrame
+pub purecard::grammar::spec::SpecError::DuplicateFrame::frame: alloc::string::String
+pub purecard::grammar::spec::SpecError::Malformed
+pub purecard::grammar::spec::SpecError::Malformed::column: usize
+pub purecard::grammar::spec::SpecError::Malformed::line: usize
+pub purecard::grammar::spec::SpecError::Malformed::message: alloc::string::String
+pub purecard::grammar::spec::SpecError::NoReachableAccept
+pub purecard::grammar::spec::SpecError::NoReachableAccept::start: alloc::string::String
+pub purecard::grammar::spec::SpecError::TooManyFrames
+pub purecard::grammar::spec::SpecError::TooManyFrames::count: usize
+pub purecard::grammar::spec::SpecError::TooManyFrames::max: usize
+pub purecard::grammar::spec::SpecError::TooManyRules
+pub purecard::grammar::spec::SpecError::TooManyRules::count: usize
+pub purecard::grammar::spec::SpecError::TooManyRules::max: usize
+pub purecard::grammar::spec::SpecError::TooManyRules::state: alloc::string::String
+pub purecard::grammar::spec::SpecError::TooManyStates
+pub purecard::grammar::spec::SpecError::TooManyStates::count: usize
+pub purecard::grammar::spec::SpecError::TooManyStates::max: usize
+pub purecard::grammar::spec::SpecError::TooManyTotalRules
+pub purecard::grammar::spec::SpecError::TooManyTotalRules::count: usize
+pub purecard::grammar::spec::SpecError::TooManyTotalRules::max: usize
+pub purecard::grammar::spec::SpecError::UnguardedPop
+pub purecard::grammar::spec::SpecError::UnguardedPop::rule_index: usize
+pub purecard::grammar::spec::SpecError::UnguardedPop::state: alloc::string::String
+pub purecard::grammar::spec::SpecError::UnknownFrame
+pub purecard::grammar::spec::SpecError::UnknownFrame::frame: alloc::string::String
+pub purecard::grammar::spec::SpecError::UnknownFrame::rule_index: usize
+pub purecard::grammar::spec::SpecError::UnknownFrame::state: alloc::string::String
+pub purecard::grammar::spec::SpecError::UnknownStartState
+pub purecard::grammar::spec::SpecError::UnknownStartState::start: alloc::string::String
+pub purecard::grammar::spec::SpecError::UnknownTargetState
+pub purecard::grammar::spec::SpecError::UnknownTargetState::rule_index: usize
+pub purecard::grammar::spec::SpecError::UnknownTargetState::state: alloc::string::String
+pub purecard::grammar::spec::SpecError::UnknownTargetState::target: alloc::string::String
+pub purecard::grammar::spec::SpecError::UnreachableRule
+pub purecard::grammar::spec::SpecError::UnreachableRule::rule_index: usize
+pub purecard::grammar::spec::SpecError::UnreachableRule::shadowed_by: usize
+pub purecard::grammar::spec::SpecError::UnreachableRule::state: alloc::string::String
+impl core::convert::From<purecard::grammar::spec::SpecError> for pyo3::err::PyErr
+pub fn pyo3::err::PyErr::from(purecard::grammar::spec::SpecError) -> Self
+impl core::convert::From<serde_json::error::Error> for purecard::grammar::spec::SpecError
+pub fn purecard::grammar::spec::SpecError::from(serde_json::error::Error) -> Self
+impl core::error::Error for purecard::grammar::spec::SpecError
+impl core::fmt::Debug for purecard::grammar::spec::SpecError
+pub fn purecard::grammar::spec::SpecError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for purecard::grammar::spec::SpecError
+pub fn purecard::grammar::spec::SpecError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for purecard::grammar::spec::SpecError
+impl core::marker::Send for purecard::grammar::spec::SpecError
+impl core::marker::Sync for purecard::grammar::spec::SpecError
+impl core::marker::Unpin for purecard::grammar::spec::SpecError
+impl core::marker::UnsafeUnpin for purecard::grammar::spec::SpecError
+impl core::panic::unwind_safe::RefUnwindSafe for purecard::grammar::spec::SpecError
+impl core::panic::unwind_safe::UnwindSafe for purecard::grammar::spec::SpecError
+impl<T, U> core::convert::Into<U> for purecard::grammar::spec::SpecError where U: core::convert::From<T>
+pub fn purecard::grammar::spec::SpecError::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for purecard::grammar::spec::SpecError where U: core::convert::Into<T>
+pub type purecard::grammar::spec::SpecError::Error = never
+pub fn purecard::grammar::spec::SpecError::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for purecard::grammar::spec::SpecError where U: core::convert::TryFrom<T>
+pub type purecard::grammar::spec::SpecError::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn purecard::grammar::spec::SpecError::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::string::ToString for purecard::grammar::spec::SpecError where T: core::fmt::Display + ?core::marker::Sized
+pub fn purecard::grammar::spec::SpecError::to_string(&self) -> alloc::string::String
+impl<T> core::any::Any for purecard::grammar::spec::SpecError where T: 'static + ?core::marker::Sized
+pub fn purecard::grammar::spec::SpecError::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for purecard::grammar::spec::SpecError where T: ?core::marker::Sized
+pub fn purecard::grammar::spec::SpecError::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for purecard::grammar::spec::SpecError where T: ?core::marker::Sized
+pub fn purecard::grammar::spec::SpecError::borrow_mut(&mut self) -> &mut T
+impl<T> core::convert::From<T> for purecard::grammar::spec::SpecError
+pub fn purecard::grammar::spec::SpecError::from(T) -> T
+impl<T> pyo3::marker::Ungil for purecard::grammar::spec::SpecError where T: core::marker::Send
+pub struct purecard::grammar::spec::GrammarSpecV1
+pub purecard::grammar::spec::GrammarSpecV1::boundary_byte: u8
+pub purecard::grammar::spec::GrammarSpecV1::frames: alloc::vec::Vec<alloc::string::String>
+pub purecard::grammar::spec::GrammarSpecV1::start: alloc::string::String
+pub purecard::grammar::spec::GrammarSpecV1::states: alloc::collections::btree::map::BTreeMap<alloc::string::String, purecard::grammar::spec::StateSpec>
+impl core::clone::Clone for purecard::grammar::spec::GrammarSpecV1
+pub fn purecard::grammar::spec::GrammarSpecV1::clone(&self) -> purecard::grammar::spec::GrammarSpecV1
+impl core::fmt::Debug for purecard::grammar::spec::GrammarSpecV1
+pub fn purecard::grammar::spec::GrammarSpecV1::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl<'de> serde_core::de::Deserialize<'de> for purecard::grammar::spec::GrammarSpecV1
+pub fn purecard::grammar::spec::GrammarSpecV1::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for purecard::grammar::spec::GrammarSpecV1
+impl core::marker::Send for purecard::grammar::spec::GrammarSpecV1
+impl core::marker::Sync for purecard::grammar::spec::GrammarSpecV1
+impl core::marker::Unpin for purecard::grammar::spec::GrammarSpecV1
+impl core::marker::UnsafeUnpin for purecard::grammar::spec::GrammarSpecV1
+impl core::panic::unwind_safe::RefUnwindSafe for purecard::grammar::spec::GrammarSpecV1
+impl core::panic::unwind_safe::UnwindSafe for purecard::grammar::spec::GrammarSpecV1
+impl<T, U> core::convert::Into<U> for purecard::grammar::spec::GrammarSpecV1 where U: core::convert::From<T>
+pub fn purecard::grammar::spec::GrammarSpecV1::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for purecard::grammar::spec::GrammarSpecV1 where U: core::convert::Into<T>
+pub type purecard::grammar::spec::GrammarSpecV1::Error = never
+pub fn purecard::grammar::spec::GrammarSpecV1::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for purecard::grammar::spec::GrammarSpecV1 where U: core::convert::TryFrom<T>
+pub type purecard::grammar::spec::GrammarSpecV1::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn purecard::grammar::spec::GrammarSpecV1::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for purecard::grammar::spec::GrammarSpecV1 where T: core::clone::Clone
+pub type purecard::grammar::spec::GrammarSpecV1::Owned = T
+pub fn purecard::grammar::spec::GrammarSpecV1::clone_into(&self, &mut T)
+pub fn purecard::grammar::spec::GrammarSpecV1::to_owned(&self) -> T
+impl<T> core::any::Any for purecard::grammar::spec::GrammarSpecV1 where T: 'static + ?core::marker::Sized
+pub fn purecard::grammar::spec::GrammarSpecV1::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for purecard::grammar::spec::GrammarSpecV1 where T: ?core::marker::Sized
+pub fn purecard::grammar::spec::GrammarSpecV1::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for purecard::grammar::spec::GrammarSpecV1 where T: ?core::marker::Sized
+pub fn purecard::grammar::spec::GrammarSpecV1::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for purecard::grammar::spec::GrammarSpecV1 where T: core::clone::Clone
+pub unsafe fn purecard::grammar::spec::GrammarSpecV1::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for purecard::grammar::spec::GrammarSpecV1
+pub fn purecard::grammar::spec::GrammarSpecV1::from(T) -> T
+impl<T> pyo3::marker::Ungil for purecard::grammar::spec::GrammarSpecV1 where T: core::marker::Send
+impl<T> serde_core::de::DeserializeOwned for purecard::grammar::spec::GrammarSpecV1 where T: for<'de> serde_core::de::Deserialize<'de>
+pub struct purecard::grammar::spec::StateSpec
+pub purecard::grammar::spec::StateSpec::accepting: bool
+pub purecard::grammar::spec::StateSpec::rules: alloc::vec::Vec<purecard::grammar::spec::TransitionRule>
+impl core::clone::Clone for purecard::grammar::spec::StateSpec
+pub fn purecard::grammar::spec::StateSpec::clone(&self) -> purecard::grammar::spec::StateSpec
+impl core::fmt::Debug for purecard::grammar::spec::StateSpec
+pub fn purecard::grammar::spec::StateSpec::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl<'de> serde_core::de::Deserialize<'de> for purecard::grammar::spec::StateSpec
+pub fn purecard::grammar::spec::StateSpec::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for purecard::grammar::spec::StateSpec
+impl core::marker::Send for purecard::grammar::spec::StateSpec
+impl core::marker::Sync for purecard::grammar::spec::StateSpec
+impl core::marker::Unpin for purecard::grammar::spec::StateSpec
+impl core::marker::UnsafeUnpin for purecard::grammar::spec::StateSpec
+impl core::panic::unwind_safe::RefUnwindSafe for purecard::grammar::spec::StateSpec
+impl core::panic::unwind_safe::UnwindSafe for purecard::grammar::spec::StateSpec
+impl<T, U> core::convert::Into<U> for purecard::grammar::spec::StateSpec where U: core::convert::From<T>
+pub fn purecard::grammar::spec::StateSpec::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for purecard::grammar::spec::StateSpec where U: core::convert::Into<T>
+pub type purecard::grammar::spec::StateSpec::Error = never
+pub fn purecard::grammar::spec::StateSpec::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for purecard::grammar::spec::StateSpec where U: core::convert::TryFrom<T>
+pub type purecard::grammar::spec::StateSpec::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn purecard::grammar::spec::StateSpec::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for purecard::grammar::spec::StateSpec where T: core::clone::Clone
+pub type purecard::grammar::spec::StateSpec::Owned = T
+pub fn purecard::grammar::spec::StateSpec::clone_into(&self, &mut T)
+pub fn purecard::grammar::spec::StateSpec::to_owned(&self) -> T
+impl<T> core::any::Any for purecard::grammar::spec::StateSpec where T: 'static + ?core::marker::Sized
+pub fn purecard::grammar::spec::StateSpec::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for purecard::grammar::spec::StateSpec where T: ?core::marker::Sized
+pub fn purecard::grammar::spec::StateSpec::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for purecard::grammar::spec::StateSpec where T: ?core::marker::Sized
+pub fn purecard::grammar::spec::StateSpec::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for purecard::grammar::spec::StateSpec where T: core::clone::Clone
+pub unsafe fn purecard::grammar::spec::StateSpec::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for purecard::grammar::spec::StateSpec
+pub fn purecard::grammar::spec::StateSpec::from(T) -> T
+impl<T> pyo3::marker::Ungil for purecard::grammar::spec::StateSpec where T: core::marker::Send
+impl<T> serde_core::de::DeserializeOwned for purecard::grammar::spec::StateSpec where T: for<'de> serde_core::de::Deserialize<'de>
+pub struct purecard::grammar::spec::TransitionRule
+pub purecard::grammar::spec::TransitionRule::action: purecard::grammar::spec::Action
+pub purecard::grammar::spec::TransitionRule::byte_test: purecard::grammar::spec::ByteTest
+pub purecard::grammar::spec::TransitionRule::guard: purecard::grammar::spec::Guard
+impl core::clone::Clone for purecard::grammar::spec::TransitionRule
+pub fn purecard::grammar::spec::TransitionRule::clone(&self) -> purecard::grammar::spec::TransitionRule
+impl core::fmt::Debug for purecard::grammar::spec::TransitionRule
+pub fn purecard::grammar::spec::TransitionRule::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl<'de> serde_core::de::Deserialize<'de> for purecard::grammar::spec::TransitionRule
+pub fn purecard::grammar::spec::TransitionRule::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for purecard::grammar::spec::TransitionRule
+impl core::marker::Send for purecard::grammar::spec::TransitionRule
+impl core::marker::Sync for purecard::grammar::spec::TransitionRule
+impl core::marker::Unpin for purecard::grammar::spec::TransitionRule
+impl core::marker::UnsafeUnpin for purecard::grammar::spec::TransitionRule
+impl core::panic::unwind_safe::RefUnwindSafe for purecard::grammar::spec::TransitionRule
+impl core::panic::unwind_safe::UnwindSafe for purecard::grammar::spec::TransitionRule
+impl<T, U> core::convert::Into<U> for purecard::grammar::spec::TransitionRule where U: core::convert::From<T>
+pub fn purecard::grammar::spec::TransitionRule::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for purecard::grammar::spec::TransitionRule where U: core::convert::Into<T>
+pub type purecard::grammar::spec::TransitionRule::Error = never
+pub fn purecard::grammar::spec::TransitionRule::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for purecard::grammar::spec::TransitionRule where U: core::convert::TryFrom<T>
+pub type purecard::grammar::spec::TransitionRule::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn purecard::grammar::spec::TransitionRule::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for purecard::grammar::spec::TransitionRule where T: core::clone::Clone
+pub type purecard::grammar::spec::TransitionRule::Owned = T
+pub fn purecard::grammar::spec::TransitionRule::clone_into(&self, &mut T)
+pub fn purecard::grammar::spec::TransitionRule::to_owned(&self) -> T
+impl<T> core::any::Any for purecard::grammar::spec::TransitionRule where T: 'static + ?core::marker::Sized
+pub fn purecard::grammar::spec::TransitionRule::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for purecard::grammar::spec::TransitionRule where T: ?core::marker::Sized
+pub fn purecard::grammar::spec::TransitionRule::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for purecard::grammar::spec::TransitionRule where T: ?core::marker::Sized
+pub fn purecard::grammar::spec::TransitionRule::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for purecard::grammar::spec::TransitionRule where T: core::clone::Clone
+pub unsafe fn purecard::grammar::spec::TransitionRule::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for purecard::grammar::spec::TransitionRule
+pub fn purecard::grammar::spec::TransitionRule::from(T) -> T
+impl<T> pyo3::marker::Ungil for purecard::grammar::spec::TransitionRule where T: core::marker::Send
+impl<T> serde_core::de::DeserializeOwned for purecard::grammar::spec::TransitionRule where T: for<'de> serde_core::de::Deserialize<'de>
+pub const purecard::grammar::spec::MAX_FRAMES: usize
+pub const purecard::grammar::spec::MAX_RULES_PER_STATE: usize
+pub const purecard::grammar::spec::MAX_STATES: usize
+pub const purecard::grammar::spec::MAX_TOTAL_RULES: usize
 pub enum purecard::grammar::Envelope
 pub purecard::grammar::Envelope::ClassNav
 pub purecard::grammar::Envelope::RelationApi
@@ -400,10 +985,136 @@ pub unsafe fn purecard::grammar::Envelope::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for purecard::grammar::Envelope
 pub fn purecard::grammar::Envelope::from(T) -> T
 impl<T> pyo3::marker::Ungil for purecard::grammar::Envelope where T: core::marker::Send
+pub enum purecard::grammar::GrammarSpec
+pub purecard::grammar::GrammarSpec::V1(purecard::grammar::spec::GrammarSpecV1)
+impl purecard::grammar::spec::GrammarSpec
+pub fn purecard::grammar::spec::GrammarSpec::parse(&str) -> core::result::Result<Self, purecard::grammar::spec::SpecError>
+impl core::clone::Clone for purecard::grammar::spec::GrammarSpec
+pub fn purecard::grammar::spec::GrammarSpec::clone(&self) -> purecard::grammar::spec::GrammarSpec
+impl core::fmt::Debug for purecard::grammar::spec::GrammarSpec
+pub fn purecard::grammar::spec::GrammarSpec::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for purecard::grammar::spec::GrammarSpec
+pub fn purecard::grammar::spec::GrammarSpec::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl<'de> serde_core::de::Deserialize<'de> for purecard::grammar::spec::GrammarSpec
+pub fn purecard::grammar::spec::GrammarSpec::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for purecard::grammar::spec::GrammarSpec
+impl core::marker::Send for purecard::grammar::spec::GrammarSpec
+impl core::marker::Sync for purecard::grammar::spec::GrammarSpec
+impl core::marker::Unpin for purecard::grammar::spec::GrammarSpec
+impl core::marker::UnsafeUnpin for purecard::grammar::spec::GrammarSpec
+impl core::panic::unwind_safe::RefUnwindSafe for purecard::grammar::spec::GrammarSpec
+impl core::panic::unwind_safe::UnwindSafe for purecard::grammar::spec::GrammarSpec
+impl<T, U> core::convert::Into<U> for purecard::grammar::spec::GrammarSpec where U: core::convert::From<T>
+pub fn purecard::grammar::spec::GrammarSpec::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for purecard::grammar::spec::GrammarSpec where U: core::convert::Into<T>
+pub type purecard::grammar::spec::GrammarSpec::Error = never
+pub fn purecard::grammar::spec::GrammarSpec::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for purecard::grammar::spec::GrammarSpec where U: core::convert::TryFrom<T>
+pub type purecard::grammar::spec::GrammarSpec::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn purecard::grammar::spec::GrammarSpec::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for purecard::grammar::spec::GrammarSpec where T: core::clone::Clone
+pub type purecard::grammar::spec::GrammarSpec::Owned = T
+pub fn purecard::grammar::spec::GrammarSpec::clone_into(&self, &mut T)
+pub fn purecard::grammar::spec::GrammarSpec::to_owned(&self) -> T
+impl<T> alloc::string::ToString for purecard::grammar::spec::GrammarSpec where T: core::fmt::Display + ?core::marker::Sized
+pub fn purecard::grammar::spec::GrammarSpec::to_string(&self) -> alloc::string::String
+impl<T> core::any::Any for purecard::grammar::spec::GrammarSpec where T: 'static + ?core::marker::Sized
+pub fn purecard::grammar::spec::GrammarSpec::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for purecard::grammar::spec::GrammarSpec where T: ?core::marker::Sized
+pub fn purecard::grammar::spec::GrammarSpec::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for purecard::grammar::spec::GrammarSpec where T: ?core::marker::Sized
+pub fn purecard::grammar::spec::GrammarSpec::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for purecard::grammar::spec::GrammarSpec where T: core::clone::Clone
+pub unsafe fn purecard::grammar::spec::GrammarSpec::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for purecard::grammar::spec::GrammarSpec
+pub fn purecard::grammar::spec::GrammarSpec::from(T) -> T
+impl<T> pyo3::marker::Ungil for purecard::grammar::spec::GrammarSpec where T: core::marker::Send
+impl<T> serde_core::de::DeserializeOwned for purecard::grammar::spec::GrammarSpec where T: for<'de> serde_core::de::Deserialize<'de>
+pub enum purecard::grammar::SpecError
+pub purecard::grammar::SpecError::AmbiguousTransition
+pub purecard::grammar::SpecError::AmbiguousTransition::first_index: usize
+pub purecard::grammar::SpecError::AmbiguousTransition::rule_index: usize
+pub purecard::grammar::SpecError::AmbiguousTransition::state: alloc::string::String
+pub purecard::grammar::SpecError::CyclicGoto
+pub purecard::grammar::SpecError::CyclicGoto::rule_index: usize
+pub purecard::grammar::SpecError::CyclicGoto::state: alloc::string::String
+pub purecard::grammar::SpecError::DuplicateFrame
+pub purecard::grammar::SpecError::DuplicateFrame::frame: alloc::string::String
+pub purecard::grammar::SpecError::Malformed
+pub purecard::grammar::SpecError::Malformed::column: usize
+pub purecard::grammar::SpecError::Malformed::line: usize
+pub purecard::grammar::SpecError::Malformed::message: alloc::string::String
+pub purecard::grammar::SpecError::NoReachableAccept
+pub purecard::grammar::SpecError::NoReachableAccept::start: alloc::string::String
+pub purecard::grammar::SpecError::TooManyFrames
+pub purecard::grammar::SpecError::TooManyFrames::count: usize
+pub purecard::grammar::SpecError::TooManyFrames::max: usize
+pub purecard::grammar::SpecError::TooManyRules
+pub purecard::grammar::SpecError::TooManyRules::count: usize
+pub purecard::grammar::SpecError::TooManyRules::max: usize
+pub purecard::grammar::SpecError::TooManyRules::state: alloc::string::String
+pub purecard::grammar::SpecError::TooManyStates
+pub purecard::grammar::SpecError::TooManyStates::count: usize
+pub purecard::grammar::SpecError::TooManyStates::max: usize
+pub purecard::grammar::SpecError::TooManyTotalRules
+pub purecard::grammar::SpecError::TooManyTotalRules::count: usize
+pub purecard::grammar::SpecError::TooManyTotalRules::max: usize
+pub purecard::grammar::SpecError::UnguardedPop
+pub purecard::grammar::SpecError::UnguardedPop::rule_index: usize
+pub purecard::grammar::SpecError::UnguardedPop::state: alloc::string::String
+pub purecard::grammar::SpecError::UnknownFrame
+pub purecard::grammar::SpecError::UnknownFrame::frame: alloc::string::String
+pub purecard::grammar::SpecError::UnknownFrame::rule_index: usize
+pub purecard::grammar::SpecError::UnknownFrame::state: alloc::string::String
+pub purecard::grammar::SpecError::UnknownStartState
+pub purecard::grammar::SpecError::UnknownStartState::start: alloc::string::String
+pub purecard::grammar::SpecError::UnknownTargetState
+pub purecard::grammar::SpecError::UnknownTargetState::rule_index: usize
+pub purecard::grammar::SpecError::UnknownTargetState::state: alloc::string::String
+pub purecard::grammar::SpecError::UnknownTargetState::target: alloc::string::String
+pub purecard::grammar::SpecError::UnreachableRule
+pub purecard::grammar::SpecError::UnreachableRule::rule_index: usize
+pub purecard::grammar::SpecError::UnreachableRule::shadowed_by: usize
+pub purecard::grammar::SpecError::UnreachableRule::state: alloc::string::String
+impl core::convert::From<purecard::grammar::spec::SpecError> for pyo3::err::PyErr
+pub fn pyo3::err::PyErr::from(purecard::grammar::spec::SpecError) -> Self
+impl core::convert::From<serde_json::error::Error> for purecard::grammar::spec::SpecError
+pub fn purecard::grammar::spec::SpecError::from(serde_json::error::Error) -> Self
+impl core::error::Error for purecard::grammar::spec::SpecError
+impl core::fmt::Debug for purecard::grammar::spec::SpecError
+pub fn purecard::grammar::spec::SpecError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for purecard::grammar::spec::SpecError
+pub fn purecard::grammar::spec::SpecError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for purecard::grammar::spec::SpecError
+impl core::marker::Send for purecard::grammar::spec::SpecError
+impl core::marker::Sync for purecard::grammar::spec::SpecError
+impl core::marker::Unpin for purecard::grammar::spec::SpecError
+impl core::marker::UnsafeUnpin for purecard::grammar::spec::SpecError
+impl core::panic::unwind_safe::RefUnwindSafe for purecard::grammar::spec::SpecError
+impl core::panic::unwind_safe::UnwindSafe for purecard::grammar::spec::SpecError
+impl<T, U> core::convert::Into<U> for purecard::grammar::spec::SpecError where U: core::convert::From<T>
+pub fn purecard::grammar::spec::SpecError::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for purecard::grammar::spec::SpecError where U: core::convert::Into<T>
+pub type purecard::grammar::spec::SpecError::Error = never
+pub fn purecard::grammar::spec::SpecError::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for purecard::grammar::spec::SpecError where U: core::convert::TryFrom<T>
+pub type purecard::grammar::spec::SpecError::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn purecard::grammar::spec::SpecError::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::string::ToString for purecard::grammar::spec::SpecError where T: core::fmt::Display + ?core::marker::Sized
+pub fn purecard::grammar::spec::SpecError::to_string(&self) -> alloc::string::String
+impl<T> core::any::Any for purecard::grammar::spec::SpecError where T: 'static + ?core::marker::Sized
+pub fn purecard::grammar::spec::SpecError::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for purecard::grammar::spec::SpecError where T: ?core::marker::Sized
+pub fn purecard::grammar::spec::SpecError::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for purecard::grammar::spec::SpecError where T: ?core::marker::Sized
+pub fn purecard::grammar::spec::SpecError::borrow_mut(&mut self) -> &mut T
+impl<T> core::convert::From<T> for purecard::grammar::spec::SpecError
+pub fn purecard::grammar::spec::SpecError::from(T) -> T
+impl<T> pyo3::marker::Ungil for purecard::grammar::spec::SpecError where T: core::marker::Send
 pub struct purecard::grammar::CompiledGrammar
 impl purecard::grammar::compiled::CompiledGrammar
 pub fn purecard::grammar::compiled::CompiledGrammar::compile(purecard::vocab::Vocab) -> Self
-pub fn purecard::grammar::compiled::CompiledGrammar::from_spec(&str, purecard::vocab::Vocab) -> Self
+pub fn purecard::grammar::compiled::CompiledGrammar::from_spec(&str, purecard::vocab::Vocab) -> core::result::Result<Self, purecard::grammar::spec::SpecError>
 pub fn purecard::grammar::compiled::CompiledGrammar::vocab(&self) -> &purecard::vocab::Vocab
 impl core::fmt::Debug for purecard::grammar::compiled::CompiledGrammar
 pub fn purecard::grammar::compiled::CompiledGrammar::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
@@ -473,6 +1184,7 @@ pub unsafe fn purecard::grammar::DeadState::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for purecard::grammar::DeadState
 pub fn purecard::grammar::DeadState::from(T) -> T
 impl<T> pyo3::marker::Ungil for purecard::grammar::DeadState where T: core::marker::Send
+pub const purecard::grammar::EMITTED_SUBSET_SPEC: &str
 pub mod purecard::mask
 pub struct purecard::mask::BitMask
 impl purecard::mask::BitMask
@@ -678,9 +1390,9 @@ pub fn purecard::session::DecoderSession<'g>::allowed_mask(&mut self) -> &pureca
 pub fn purecard::session::DecoderSession<'g>::is_complete(&self) -> bool
 pub fn purecard::session::DecoderSession<'g>::new(&'g purecard::grammar::compiled::CompiledGrammar) -> Self
 pub fn purecard::session::DecoderSession<'g>::offset(&self) -> usize
-pub fn purecard::session::DecoderSession<'g>::pda(&self) -> &purecard::grammar::pda::Pda
+pub fn purecard::session::DecoderSession<'g>::pda(&self) -> core::option::Option<&purecard::grammar::pda::Pda>
 pub fn purecard::session::DecoderSession<'g>::reset(&mut self)
-pub fn purecard::session::DecoderSession<'g>::with_schema(&'g purecard::grammar::compiled::CompiledGrammar, purecard::Schema) -> Self
+pub fn purecard::session::DecoderSession<'g>::with_schema(&'g purecard::grammar::compiled::CompiledGrammar, purecard::Schema) -> core::result::Result<Self, purecard::error::DecodeError>
 impl purecard::recognizer::ByteRecognizer for purecard::session::DecoderSession<'_>
 pub fn purecard::session::DecoderSession<'_>::accept_byte(&mut self, u8) -> core::result::Result<(), purecard::error::DecodeError>
 pub fn purecard::session::DecoderSession<'_>::is_complete(&self) -> bool
@@ -764,10 +1476,11 @@ pub enum purecard::DecodeError
 pub purecard::DecodeError::DeadState
 pub purecard::DecodeError::DeadState::byte: u8
 pub purecard::DecodeError::DeadState::offset: usize
-pub purecard::DecodeError::DeadState::stack_top: &'static str
-pub purecard::DecodeError::DeadState::state: &'static str
+pub purecard::DecodeError::DeadState::stack_top: alloc::string::String
+pub purecard::DecodeError::DeadState::state: alloc::string::String
 pub purecard::DecodeError::InadmissibleToken
 pub purecard::DecodeError::InadmissibleToken::id: u32
+pub purecard::DecodeError::SchemaRequiresFixedGrammar
 pub purecard::DecodeError::UnexpectedEos
 pub purecard::DecodeError::UnknownToken
 pub purecard::DecodeError::UnknownToken::id: u32
@@ -1049,7 +1762,7 @@ impl<T> pyo3::marker::Ungil for purecard::mask::BitMask where T: core::marker::S
 pub struct purecard::CompiledGrammar
 impl purecard::grammar::compiled::CompiledGrammar
 pub fn purecard::grammar::compiled::CompiledGrammar::compile(purecard::vocab::Vocab) -> Self
-pub fn purecard::grammar::compiled::CompiledGrammar::from_spec(&str, purecard::vocab::Vocab) -> Self
+pub fn purecard::grammar::compiled::CompiledGrammar::from_spec(&str, purecard::vocab::Vocab) -> core::result::Result<Self, purecard::grammar::spec::SpecError>
 pub fn purecard::grammar::compiled::CompiledGrammar::vocab(&self) -> &purecard::vocab::Vocab
 impl core::fmt::Debug for purecard::grammar::compiled::CompiledGrammar
 pub fn purecard::grammar::compiled::CompiledGrammar::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
@@ -1084,9 +1797,9 @@ pub fn purecard::session::DecoderSession<'g>::allowed_mask(&mut self) -> &pureca
 pub fn purecard::session::DecoderSession<'g>::is_complete(&self) -> bool
 pub fn purecard::session::DecoderSession<'g>::new(&'g purecard::grammar::compiled::CompiledGrammar) -> Self
 pub fn purecard::session::DecoderSession<'g>::offset(&self) -> usize
-pub fn purecard::session::DecoderSession<'g>::pda(&self) -> &purecard::grammar::pda::Pda
+pub fn purecard::session::DecoderSession<'g>::pda(&self) -> core::option::Option<&purecard::grammar::pda::Pda>
 pub fn purecard::session::DecoderSession<'g>::reset(&mut self)
-pub fn purecard::session::DecoderSession<'g>::with_schema(&'g purecard::grammar::compiled::CompiledGrammar, purecard::Schema) -> Self
+pub fn purecard::session::DecoderSession<'g>::with_schema(&'g purecard::grammar::compiled::CompiledGrammar, purecard::Schema) -> core::result::Result<Self, purecard::error::DecodeError>
 impl purecard::recognizer::ByteRecognizer for purecard::session::DecoderSession<'_>
 pub fn purecard::session::DecoderSession<'_>::accept_byte(&mut self, u8) -> core::result::Result<(), purecard::error::DecodeError>
 pub fn purecard::session::DecoderSession<'_>::is_complete(&self) -> bool

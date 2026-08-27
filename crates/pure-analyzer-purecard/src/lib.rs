@@ -33,14 +33,15 @@
 //! // silently-passing smoke check) breaks this example.
 //! const TOY_EOS: u32 = 1; // reserved EOS id, one past the toy vocab's lone token
 //! let toy = Vocab::from_byte_tokens(vec![b"filter".to_vec()], TOY_EOS);
-//! let toy_grammar = CompiledGrammar::from_spec("", toy);
+//! let toy_grammar = CompiledGrammar::compile(toy);
 //! assert_eq!(
 //!     self_check_smoke(&toy_grammar),
 //!     Err(SelfCheckError::Unsegmentable { query_index: 0, pos: 0 }),
 //! );
 //!
 //! // A host vocabulary of whole tokens (token id → raw bytes) that expresses the
-//! // query `|X.all()->take(1)`; `from_spec` compiles the emitted-Pure grammar.
+//! // query `|X.all()->take(1)`; `compile` builds the emitted-Pure grammar (a
+//! // supplied grammar spec compiles instead through `from_spec`).
 //! // The ids are named so reordering the vocabulary can't silently point a later
 //! // `accept_token` at the wrong token.
 //! const SOURCE: u32 = 0; // a complete source expression, `|X.all()`
@@ -57,7 +58,7 @@
 //!     ],
 //!     EOS,
 //! );
-//! let grammar = CompiledGrammar::from_spec("", vocab);
+//! let grammar = CompiledGrammar::compile(vocab);
 //!
 //! // L1 (syntactic) session: the source token is admissible from the start; once
 //! // accepted it is itself a complete query, and opening a call re-opens the stream.
@@ -83,7 +84,7 @@
 //! // suite (`tests/l2_precision.rs`) and, against fragmented BPE tokens, by
 //! // `tests/bpe_split_soundness.rs` — not re-litigated in this doc example.
 //! let schema = Schema::from_json(r#"{"db_id": "d", "db_path": "model::Db", "classes": {}}"#)?;
-//! let mut sess = DecoderSession::with_schema(&grammar, schema);
+//! let mut sess = DecoderSession::with_schema(&grammar, schema)?;
 //! assert!(sess.allowed_mask().test(SOURCE), "L2 only narrows; the L1 source token survives");
 //! sess.accept_token(SOURCE)?;
 //! assert!(sess.is_complete());

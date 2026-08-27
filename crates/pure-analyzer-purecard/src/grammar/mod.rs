@@ -6,15 +6,23 @@
 //! [`Envelope`] classifier that names which corpus idiom a query belongs to, and
 //! the [`DeadState`] carrier the [`Pda`](pda::Pda) hands back on rejection.
 //!
-//! The emitted-Pure grammar (§5) is fixed: the recogniser plus the
-//! [`CompiledGrammar`] vocabulary/mask cache (`docs/spec/architecture.md` §4),
-//! and [`CompiledGrammar::from_spec`] ignores its `spec` argument, compiling the
-//! single fixed PDA against the vocab.
+//! [`CompiledGrammar`] wraps the recogniser with the vocabulary/mask cache
+//! (`docs/spec/architecture.md` §4). [`compiled::CompiledGrammar::compile`]
+//! always builds the fixed §5 PDA above; a host can instead supply its own
+//! grammar via [`compiled::CompiledGrammar::from_spec`], which lowers a
+//! versioned [`spec::GrammarSpec`] (see [`compile::CompiledAutomaton`] and
+//! `docs/decisions/0010-declarative-transition-table-spec.md`) — L1 syntactic
+//! recognition only; the L2 schema overlay remains [`pda`]-specific.
 
+pub mod compile;
 pub mod compiled;
+pub mod emitted_subset;
 pub mod pda;
+pub mod spec;
 
 pub use compiled::CompiledGrammar;
+pub use emitted_subset::EMITTED_SUBSET_SPEC;
+pub use spec::{GrammarSpec, SpecError};
 
 /// The automaton configuration at the point a byte was rejected: the names of the
 /// current [`State`](pda::State) and the top [`Frame`](pda::Frame).

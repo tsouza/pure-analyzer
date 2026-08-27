@@ -19,13 +19,142 @@
 //! additive narrowing that leaves the `schema`-is-`None` (L1-only) path untouched.
 
 use crate::error::DecodeError;
-use crate::grammar::compiled::CompiledGrammar;
+use crate::grammar::compile::RtnPda;
+use crate::grammar::compiled::{CompiledGrammar, Engine};
 use crate::grammar::pda::{Frame, Pda};
 use crate::mask::BitMask;
 use crate::recognizer::ByteRecognizer;
 use crate::schema::Schema;
 use crate::schema::narrow::{NarrowCache, narrow_fused_into, narrow_into};
 use crate::schema::scope::ScopeTracker;
+
+/// Which automaton a [`DecoderSession`] drives.
+///
+/// [`Cursor::Spec`] carries no [`ScopeTracker`]-visible position information —
+/// the L2 schema overlay is implemented against [`Cursor::Fixed`]'s named
+/// [`State`](crate::grammar::pda::State)s only (see
+/// `docs/decisions/0010-declarative-transition-table-spec.md`), so
+/// [`DecoderSession::with_schema`] refuses a [`Cursor::Spec`] grammar rather
+/// than silently skipping the overlay.
+#[derive(Debug, Clone)]
+enum Cursor<'g> {
+    /// The hand-written `grammar::pda` automaton.
+    Fixed {
+        /// The live automaton.
+        pda: Pda,
+        /// A reused scratch stack for the per-step deferred-token re-probe.
+        scratch: Vec<Frame>,
+    },
+    /// An automaton lowered from a supplied grammar spec (L1-only).
+    Spec {
+        /// The live automaton.
+        pda: RtnPda<'g>,
+        /// A reused scratch stack for the per-step deferred-token re-probe.
+        scratch: Vec<u32>,
+    },
+}
+
+impl<'g> Cursor<'g> {
+    fn new(grammar: &'g CompiledGrammar) -> Self {
+        match grammar.engine() {
+            Engine::Fixed => Cursor::Fixed {
+                pda: Pda::new(),
+                scratch: Vec::new(),
+            },
+            Engine::Spec(automaton) => Cursor::Spec {
+                pda: RtnPda::new(automaton),
+                scratch: Vec::new(),
+            },
+        }
+    }
+
+    /// The memoized vocabulary partition for the current state.
+    fn cached<'a>(&self, grammar: &'a CompiledGrammar) -> &'a crate::grammar::compiled::Cached {
+        match self {
+            Cursor::Fixed { pda, .. } => grammar.cached(pda.state()),
+            Cursor::Spec { pda, .. } => grammar.cached_spec(pda.automaton(), pda.state()),
+        }
+    }
+
+    fn stack_top_present(&self) -> bool {
+        match self {
+            Cursor::Fixed { pda, .. } => pda.stack_top().is_some(),
+            Cursor::Spec { pda, .. } => pda.stack_top().is_some(),
+        }
+    }
+
+    /// Whether `bytes` keeps the live configuration alive, reusing this
+    /// cursor's own scratch stack.
+    fn admits(&mut self, bytes: &[u8]) -> bool {
+        match self {
+            Cursor::Fixed { pda, scratch } => pda.admits(bytes, scratch),
+            Cursor::Spec { pda, scratch } => pda.admits(bytes, scratch),
+        }
+    }
+
+    fn is_accepting(&self) -> bool {
+        match self {
+            Cursor::Fixed { pda, .. } => pda.is_accepting(),
+            Cursor::Spec { pda, .. } => pda.is_accepting(),
+        }
+    }
+
+    fn reset(&mut self) {
+        match self {
+            Cursor::Fixed { pda, .. } => pda.reset(),
+            Cursor::Spec { pda, .. } => pda.reset(),
+        }
+    }
+
+    /// Feed one byte, advancing the live configuration. On rejection, returns
+    /// the state/stack-top names for [`DecodeError::DeadState`] and leaves
+    /// the cursor unchanged (both engines' `advance` already guarantee this).
+    fn advance_byte(&mut self, byte: u8) -> Result<(), (String, String)> {
+        match self {
+            Cursor::Fixed { pda, .. } => pda
+                .advance(byte)
+                .map_err(|dead| (dead.state.to_string(), dead.stack_top.to_string())),
+            Cursor::Spec { pda, .. } => {
+                let automaton = pda.automaton();
+                if pda.advance(byte) {
+                    Ok(())
+                } else {
+                    Err((
+                        automaton.state_name(pda.state()).to_string(),
+                        automaton.frame_name(pda.stack_top()).to_string(),
+                    ))
+                }
+            }
+        }
+    }
+
+    /// Fold `bytes` through a clone of the live configuration, committing
+    /// only on full success — the whole-token analogue of `advance_byte`.
+    fn try_accept_token(&mut self, bytes: &[u8]) -> bool {
+        match self {
+            Cursor::Fixed { pda, .. } => {
+                let mut probe = pda.clone();
+                for &byte in bytes {
+                    if probe.advance(byte).is_err() {
+                        return false;
+                    }
+                }
+                *pda = probe;
+                true
+            }
+            Cursor::Spec { pda, .. } => {
+                let mut probe = pda.clone();
+                for &byte in bytes {
+                    if !probe.advance(byte) {
+                        return false;
+                    }
+                }
+                *pda = probe;
+                true
+            }
+        }
+    }
+}
 
 /// A byte-at-a-time decode session over the emitted-Pure grammar, bound to a
 /// [`CompiledGrammar`].
@@ -38,16 +167,13 @@ use crate::schema::scope::ScopeTracker;
 /// the automaton's stack and the mask buffer allocated.
 #[derive(Debug, Clone)]
 pub struct DecoderSession<'g> {
-    pda: Pda,
+    cursor: Cursor<'g>,
     offset: usize,
     grammar: &'g CompiledGrammar,
     /// The owned, reused mask buffer `allowed_mask` refills each step — sized to
     /// [`CompiledGrammar::mask_len`] (EOS bit included) so no per-step allocation
     /// is needed.
     mask: BitMask,
-    /// A reused scratch stack for the per-step deferred-token re-probe, kept here
-    /// so the hot path never allocates.
-    scratch: Vec<Frame>,
     /// A second reused buffer the L2 overlay refills in place with the
     /// schema-legal set, then intersects into `mask` — so narrowing allocates no
     /// per-step mask (§4.3). Sized, like `mask`, to
@@ -75,11 +201,10 @@ impl<'g> DecoderSession<'g> {
     /// [`with_schema`](DecoderSession::with_schema) cannot drift apart.
     fn build(grammar: &'g CompiledGrammar, schema: Option<Schema>) -> Self {
         Self {
-            pda: Pda::new(),
+            cursor: Cursor::new(grammar),
             offset: 0,
             grammar,
             mask: BitMask::with_len(grammar.mask_len()),
-            scratch: Vec::new(),
             narrow_buf: BitMask::with_len(grammar.mask_len()),
             schema,
             tracker: ScopeTracker::new(),
@@ -90,6 +215,10 @@ impl<'g> DecoderSession<'g> {
     /// A fresh session at the start of a stream, masking against `grammar`.
     ///
     /// L1-only: no schema, so the mask is the pure syntactic next-token set.
+    /// Works for a grammar built with either
+    /// [`CompiledGrammar::compile`](crate::grammar::compiled::CompiledGrammar::compile)
+    /// or
+    /// [`CompiledGrammar::from_spec`](crate::grammar::compiled::CompiledGrammar::from_spec).
     #[must_use]
     pub fn new(grammar: &'g CompiledGrammar) -> Self {
         Self::build(grammar, None)
@@ -102,9 +231,18 @@ impl<'g> DecoderSession<'g> {
     /// *narrows* — the additive counterpart to [`new`](DecoderSession::new), which
     /// stays L1-only and byte-compatible. It is not a full-query
     /// schema-validity or compiler-success guarantee.
-    #[must_use]
-    pub fn with_schema(grammar: &'g CompiledGrammar, schema: Schema) -> Self {
-        Self::build(grammar, Some(schema))
+    ///
+    /// # Errors
+    /// Returns [`DecodeError::SchemaRequiresFixedGrammar`] if `grammar` was
+    /// built with
+    /// [`CompiledGrammar::from_spec`](crate::grammar::compiled::CompiledGrammar::from_spec) —
+    /// the L2 overlay is implemented against the fixed built-in grammar's
+    /// named states only.
+    pub fn with_schema(grammar: &'g CompiledGrammar, schema: Schema) -> Result<Self, DecodeError> {
+        if matches!(grammar.engine(), Engine::Spec(_)) {
+            return Err(DecodeError::SchemaRequiresFixedGrammar);
+        }
+        Ok(Self::build(grammar, Some(schema)))
     }
 
     /// The number of bytes consumed since the last [`reset`](DecoderSession::reset).
@@ -137,22 +275,22 @@ impl<'g> DecoderSession<'g> {
     /// `&BitMask` is impossible without handing out a reference into an owned
     /// buffer it must first mutate, and `unsafe` is forbidden (constitution §1).
     pub fn allowed_mask(&mut self) -> &BitMask {
-        let cached = self.grammar.cached(self.pda.state());
+        let cached = self.cursor.cached(self.grammar);
         self.mask.copy_from(&cached.indep);
         // Every deferred token is context-dependent *because* it needs an
         // enclosing frame (it died consulting the ambient stack during the
         // empty-scratch build). With an empty live stack there is nothing to
         // consult, so all of them stay dead — skip the whole re-probe.
-        if self.pda.stack_top().is_some() {
+        if self.cursor.stack_top_present() {
             for &id in &cached.deferred {
                 let bytes = self.grammar.vocab().bytes(id).unwrap_or(&[]);
-                if self.pda.admits(bytes, &mut self.scratch) {
+                if self.cursor.admits(bytes) {
                     self.mask.set(id);
                 }
             }
         }
         let eos = self.grammar.eos_bit();
-        if self.pda.is_accepting() {
+        if self.cursor.is_accepting() {
             self.mask.set(eos);
         } else {
             self.mask.clear(eos);
@@ -162,9 +300,12 @@ impl<'g> DecoderSession<'g> {
         // structural; the narrow set always keeps EOS so a complete query stays
         // completable. The set is built into the reused `narrow_buf` (no per-step
         // alloc); when `schema` is `None` the block is skipped entirely, so the
-        // L1-only path keeps its zero added per-step cost.
-        if let Some(schema) = &self.schema {
-            let pos = self.tracker.position(self.pda.state());
+        // L1-only path keeps its zero added per-step cost. `with_schema` already
+        // refused a spec-compiled grammar, so `schema.is_some()` implies `Fixed` —
+        // the `Cursor::Spec` arm below is unreachable in practice, not merely
+        // unimplemented, so it is a no-op rather than a postponed-work marker.
+        if let (Some(schema), Cursor::Fixed { pda, .. }) = (&self.schema, &self.cursor) {
+            let pos = self.tracker.position(pda.state());
             if narrow_into(
                 &mut self.narrow_buf,
                 &mut self.narrow_cache,
@@ -232,7 +373,7 @@ impl<'g> DecoderSession<'g> {
     /// re-checked here — see the mask-first note above).
     pub fn accept_token(&mut self, id: u32) -> Result<(), DecodeError> {
         if id == self.grammar.eos_bit() {
-            return if self.pda.is_accepting() {
+            return if self.cursor.is_accepting() {
                 Ok(())
             } else {
                 Err(DecodeError::UnexpectedEos)
@@ -243,38 +384,50 @@ impl<'g> DecoderSession<'g> {
         let Some(bytes) = self.grammar.vocab().bytes(id) else {
             return Err(DecodeError::UnknownToken { id });
         };
-        // Fold into a clone and commit only on full success: a rejection never
-        // touches `self.pda`, so no stack contents can be corrupted by a
-        // Pop-then-fail. One small stack clone per call, off the per-candidate
-        // mask hot path.
-        let mut probe = self.pda.clone();
-        for &byte in bytes {
-            if probe.advance(byte).is_err() {
-                return Err(DecodeError::InadmissibleToken { id });
+        // `with_schema` already refused a spec-compiled grammar, so
+        // `schema.is_some()` implies `Cursor::Fixed`; the fall-through `else`
+        // below is unreachable in practice for that case, not merely
+        // unimplemented, so a schema-tagged `Cursor::Spec` (impossible today)
+        // degrades to the plain L1 path rather than panicking.
+        if let (Some(schema), Cursor::Fixed { pda, .. }) = (&self.schema, &mut self.cursor) {
+            // Fold into a clone and commit only on full success: a rejection never
+            // touches `pda`, so no stack contents can be corrupted by a
+            // Pop-then-fail. One small stack clone per call, off the per-candidate
+            // mask hot path.
+            let mut probe = pda.clone();
+            for &byte in bytes {
+                if probe.advance(byte).is_err() {
+                    return Err(DecodeError::InadmissibleToken { id });
+                }
             }
+            // Advance the L2 scope machine in lockstep, so the next `allowed_mask`
+            // narrows against the scope this token established. The tracker
+            // re-drives the byte-PDA over the token from its **pre-fold**
+            // configuration (state *and* stack, still live in `pda` here),
+            // splitting a lexeme-straddling token at its interior boundaries.
+            self.tracker.observe(bytes, pda, schema);
+            *pda = probe;
+        } else if !self.cursor.try_accept_token(bytes) {
+            return Err(DecodeError::InadmissibleToken { id });
         }
-        // Advance the L2 scope machine in lockstep, so the next `allowed_mask`
-        // narrows against the scope this token established. The tracker re-drives
-        // the byte-PDA over the token from its **pre-fold** configuration (state
-        // *and* stack, still live in `self.pda` here), splitting a lexeme-straddling
-        // token at its interior boundaries. Skipped when L1-only.
-        if let Some(schema) = &self.schema {
-            self.tracker.observe(bytes, &self.pda, schema);
-        }
-        self.pda = probe;
         self.offset += bytes.len();
         Ok(())
     }
 
-    /// The underlying byte-PDA at its full `(state, stack)` configuration.
+    /// The underlying byte-PDA at its full `(state, stack)` configuration, or
+    /// `None` if this session was built from a spec-compiled grammar
+    /// ([`CompiledGrammar::from_spec`](crate::grammar::compiled::CompiledGrammar::from_spec)).
     ///
     /// Exposed so a caller — or a test — can compare two sessions for a
     /// byte-identical automaton configuration, which the derived
     /// [`allowed_mask`](DecoderSession::allowed_mask) view cannot prove on its
     /// own: two different `(state, stack)` configurations can share a mask.
     #[must_use]
-    pub fn pda(&self) -> &Pda {
-        &self.pda
+    pub fn pda(&self) -> Option<&Pda> {
+        match &self.cursor {
+            Cursor::Fixed { pda, .. } => Some(pda),
+            Cursor::Spec { .. } => None,
+        }
     }
 
     /// Whether the stream so far is a complete query (an accepting configuration).
@@ -283,13 +436,13 @@ impl<'g> DecoderSession<'g> {
     /// mirrors [`ByteRecognizer::is_complete`].
     #[must_use]
     pub fn is_complete(&self) -> bool {
-        self.pda.is_accepting()
+        self.cursor.is_accepting()
     }
 
     /// Return to a fresh stream, keeping the automaton's stack and the mask
     /// buffer allocated for reuse (§9.1). Mirrors [`ByteRecognizer::reset`].
     pub fn reset(&mut self) {
-        self.pda.reset();
+        self.cursor.reset();
         self.offset = 0;
         self.tracker = ScopeTracker::new();
         // The N6 column memo is keyed on the emitted-column count, which resets
@@ -301,16 +454,17 @@ impl<'g> DecoderSession<'g> {
 
 impl ByteRecognizer for DecoderSession<'_> {
     fn accept_byte(&mut self, byte: u8) -> Result<(), DecodeError> {
-        match self.pda.advance(byte) {
+        let offset = self.offset;
+        match self.cursor.advance_byte(byte) {
             Ok(()) => {
                 self.offset += 1;
                 Ok(())
             }
-            Err(dead) => Err(DecodeError::DeadState {
-                offset: self.offset,
+            Err((state, stack_top)) => Err(DecodeError::DeadState {
+                offset,
                 byte,
-                state: dead.state,
-                stack_top: dead.stack_top,
+                state,
+                stack_top,
             }),
         }
     }
@@ -326,7 +480,7 @@ impl ByteRecognizer for DecoderSession<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::DecoderSession;
+    use super::{Cursor, DecoderSession};
     use crate::error::DecodeError;
     use crate::grammar::compiled::CompiledGrammar;
     use crate::recognizer::ByteRecognizer;
@@ -337,6 +491,24 @@ mod tests {
     /// byte-recognizer surface, which does not consult the vocab.
     fn l1_grammar() -> CompiledGrammar {
         CompiledGrammar::compile(Vocab::from_byte_tokens(Vec::new(), 0))
+    }
+
+    #[test]
+    fn cursor_stack_top_present_tracks_the_live_stack_not_a_constant() {
+        let grammar = l1_grammar();
+        let mut cursor = Cursor::new(&grammar);
+        assert!(
+            !cursor.stack_top_present(),
+            "a fresh cursor has an empty stack"
+        );
+        // `(` opens a `Paren` frame from `ExpectValue` after a source.
+        for &byte in b"|X.all()->take(" {
+            assert!(matches!(cursor.advance_byte(byte), Ok(())));
+        }
+        assert!(
+            cursor.stack_top_present(),
+            "a pushed frame must be reported present"
+        );
     }
 
     /// A byte-token grammar: one single-byte token per value, so token id == byte.
@@ -361,7 +533,8 @@ mod tests {
             "associations":[]}"#;
         let grammar = byte_grammar();
         let schema = Schema::from_json(SCHEMA).expect("schema parses");
-        let mut session = DecoderSession::with_schema(&grammar, schema);
+        let mut session =
+            DecoderSession::with_schema(&grammar, schema).expect("grammar is fixed-engine");
         for &byte in b"|demo::Reading.all()->filter(x|$x." {
             session
                 .accept_token(u32::from(byte))
@@ -472,16 +645,28 @@ mod tests {
         let grammar = CompiledGrammar::compile(token_vocab());
         let mut session = DecoderSession::new(&grammar);
         // A fresh session sits at the initial configuration…
-        assert_eq!(session.pda().state(), State::Start);
-        assert_eq!(session.pda().stack_top(), None);
+        assert_eq!(
+            session.pda().expect("fixed-engine grammar").state(),
+            State::Start
+        );
+        assert_eq!(
+            session.pda().expect("fixed-engine grammar").stack_top(),
+            None
+        );
         // …and after opening a call the accessor reflects the *real* live state
         // and stack, so it cannot be a constant / default value.
         session.accept_token(0).expect("source is admissible");
         session
             .accept_token(1)
             .expect("a step opener is admissible");
-        assert_eq!(session.pda().state(), State::ExpectValue);
-        assert_eq!(session.pda().stack_top(), Some(Frame::Paren));
+        assert_eq!(
+            session.pda().expect("fixed-engine grammar").state(),
+            State::ExpectValue
+        );
+        assert_eq!(
+            session.pda().expect("fixed-engine grammar").stack_top(),
+            Some(Frame::Paren)
+        );
     }
 
     #[test]
@@ -605,5 +790,56 @@ mod tests {
             session.allowed_mask().test(eos),
             "completed stream allows EOS"
         );
+    }
+
+    /// Accepts exactly the literal `"ok"` — used to drive a spec-compiled
+    /// (`Cursor::Spec`) session, mirroring `grammar::compile::tests`'
+    /// `LITERAL_OK_SPEC` but kept local so this module doesn't depend on a
+    /// `#[cfg(test)]`-only item from another module.
+    const LITERAL_OK_SPEC: &str = r#"{
+        "version": "1",
+        "start": "start",
+        "frames": [],
+        "states": {
+            "start": { "rules": [
+                { "match": { "kind": "exact", "byte": 111 }, "action": { "kind": "next", "state": "saw_o" } }
+            ] },
+            "saw_o": { "rules": [
+                { "match": { "kind": "exact", "byte": 107 }, "action": { "kind": "next", "state": "done" } }
+            ] },
+            "done": { "accepting": true, "rules": [] }
+        }
+    }"#;
+
+    fn spec_vocab() -> Vocab {
+        // 0: the whole valid literal; 1: a token that dies on its second byte
+        // (alive on `o`, dead on `x` — never reaching `saw_o`'s `k` rule).
+        Vocab::from_byte_tokens(vec![b"ok".to_vec(), b"ox".to_vec()], 2)
+    }
+
+    #[test]
+    fn a_spec_compiled_session_streams_its_literal_and_completes() {
+        let grammar =
+            crate::grammar::compiled::CompiledGrammar::from_spec(LITERAL_OK_SPEC, spec_vocab())
+                .expect("valid spec");
+        let mut session = DecoderSession::new(&grammar);
+        session.accept_token(0).expect("the literal is admissible");
+        assert!(session.is_complete());
+    }
+
+    #[test]
+    fn a_spec_compiled_session_rejects_a_token_that_dies_partway_through() {
+        let grammar =
+            crate::grammar::compiled::CompiledGrammar::from_spec(LITERAL_OK_SPEC, spec_vocab())
+                .expect("valid spec");
+        let mut session = DecoderSession::new(&grammar);
+        let err = session
+            .accept_token(1)
+            .expect_err("the second byte dead-ends the spec-compiled automaton");
+        assert!(matches!(err, DecodeError::InadmissibleToken { id: 1 }));
+        // The rejected token must leave the session untouched (§8.5 rollback),
+        // exactly like the fixed-engine contract.
+        assert_eq!(session.offset(), 0);
+        assert!(!session.is_complete());
     }
 }

@@ -65,7 +65,8 @@ fn assert_l2_subset_l1(
     query: &str,
 ) {
     let mut l1 = DecoderSession::new(grammar);
-    let mut l2 = DecoderSession::with_schema(grammar, schema.clone());
+    let mut l2 =
+        DecoderSession::with_schema(grammar, schema.clone()).expect("grammar is fixed-engine");
     for token in lex(query) {
         let id = vocab.id_of(&token).expect("gold token in vocab");
         assert_masks_subset(&mut l1, &mut l2, source_id, query);

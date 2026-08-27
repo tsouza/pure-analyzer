@@ -1,0 +1,1301 @@
+//! Deterministic, bounded lowering of a validated [`GrammarSpec`] into a
+//! dense runtime transition table, plus [`RtnPda`] — the data-driven
+//! automaton driver that plays the same role as `grammar::pda::Pda`, but over
+//! a spec-declared state/frame alphabet instead of a hand-written one.
+//!
+//! Lowering here is table-building and validation, never grammar
+//! interpretation: [`CompiledAutomaton::compile`] resolves every name to a
+//! dense index once, up front, so the hot per-step path
+//! ([`CompiledAutomaton::step`]) never touches a string.
+
+use std::collections::BTreeMap;
+
+use super::spec::{
+    Action, ByteTest, GrammarSpec, GrammarSpecV1, Guard, MAX_FRAMES, MAX_RULES_PER_STATE,
+    MAX_STATES, MAX_TOTAL_RULES, SpecError,
+};
+
+/// A generous, fixed upper bound on the number of iterations a graph
+/// traversal over a validated spec's states/rules may take — comfortably
+/// above [`MAX_STATES`] `+` [`MAX_TOTAL_RULES`] (the largest any
+/// `compile_v1`-accepted spec can be), so it is never approached by a
+/// correct traversal regardless of a particular spec's actual (smaller)
+/// size. A single literal rather than a computed sum: the exact value only
+/// needs to be "obviously enough", so there is no arithmetic expression here
+/// for a subtly wrong computation to hide behind.
+const GRAPH_TRAVERSAL_BUDGET: usize = 100_000;
+
+/// The outcome of feeding one byte to [`CompiledAutomaton::step`] — the
+/// runtime analogue of `grammar::pda::Step`, generic over the compiled
+/// automaton's own dense state/frame ids.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Step {
+    /// Stay within the current frame; move to the given state.
+    Next(u32),
+    /// Open a new delimiter: push the frame, move to the given state.
+    Push(u32, u32),
+    /// Close the current delimiter: pop the stack, move to the given state.
+    Pop(u32),
+    /// No valid continuation: the byte is rejected.
+    Dead,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum CompiledGuard {
+    Always,
+    StackTopIs(u32),
+    StackTopIsNot(u32),
+    StackNonEmpty,
+    StackEmpty,
+}
+
+impl CompiledGuard {
+    fn matches(self, stack_top: Option<u32>) -> bool {
+        match self {
+            CompiledGuard::Always => true,
+            CompiledGuard::StackTopIs(frame) => stack_top == Some(frame),
+            CompiledGuard::StackTopIsNot(frame) => stack_top.is_some_and(|top| top != frame),
+            CompiledGuard::StackNonEmpty => stack_top.is_some(),
+            CompiledGuard::StackEmpty => stack_top.is_none(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum CompiledAction {
+    Next(u32),
+    Push(u32, u32),
+    Pop(u32),
+    Goto(u32),
+    Dead,
+}
+
+#[derive(Debug, Clone)]
+struct CompiledRule {
+    byte_test: ByteTest,
+    guard: CompiledGuard,
+    action: CompiledAction,
+}
+
+#[derive(Debug, Clone)]
+struct CompiledState {
+    accepting: bool,
+    rules: Vec<CompiledRule>,
+}
+
+/// A validated, dense, runtime-ready automaton table compiled from a
+/// [`GrammarSpec`]. Immutable once built; cheap to share behind a shared
+/// reference across every [`RtnPda`] instance it drives.
+#[derive(Debug, Clone)]
+pub struct CompiledAutomaton {
+    states: Vec<CompiledState>,
+    start: u32,
+    frame_count: u32,
+    boundary_byte: u8,
+    state_names: Vec<String>,
+    frame_names: Vec<String>,
+}
+
+impl CompiledAutomaton {
+    /// The automaton's declared start state.
+    #[must_use]
+    pub fn start(&self) -> u32 {
+        self.start
+    }
+
+    /// The declared name of state `id`, or `"unknown"` if out of range —
+    /// used only for [`crate::error::DecodeError::DeadState`] reporting, off
+    /// the per-step hot path.
+    #[must_use]
+    pub fn state_name(&self, id: u32) -> &str {
+        self.state_names
+            .get(id as usize)
+            .map_or("unknown", String::as_str)
+    }
+
+    /// The declared name of frame `id`, or `"none"` for no frame / `"unknown"`
+    /// if out of range — used only for
+    /// [`crate::error::DecodeError::DeadState`] reporting.
+    #[must_use]
+    pub fn frame_name(&self, id: Option<u32>) -> &str {
+        match id {
+            None => "none",
+            Some(id) => self
+                .frame_names
+                .get(id as usize)
+                .map_or("unknown", String::as_str),
+        }
+    }
+
+    /// The number of states this automaton declares — the bound a
+    /// per-state cache (mirroring `grammar::compiled::CompiledGrammar`'s
+    /// mask cache) must size itself to.
+    #[must_use]
+    pub fn state_count(&self) -> usize {
+        self.states.len()
+    }
+
+    /// The pure transition function: `(state, stack_top, byte) -> Step`.
+    ///
+    /// Resolves any `Goto` chain internally (bounded by `state_count()`,
+    /// since [`CompiledAutomaton::compile`] rejects a spec whose `Goto`
+    /// edges cycle), so a caller only ever observes `Next`/`Push`/`Pop`/`Dead`.
+    #[must_use]
+    pub fn step(&self, state: u32, stack_top: Option<u32>, byte: u8) -> Step {
+        let mut state = state;
+        // Bounded by `state_count()`: `compile` proves the `Goto` graph is
+        // acyclic, so a chain can revisit each state at most once.
+        for _ in 0..=self.states.len() {
+            let Some(compiled) = self.states.get(state as usize) else {
+                return Step::Dead;
+            };
+            let selected = compiled
+                .rules
+                .iter()
+                .find(|rule| rule.byte_test.matches(byte) && rule.guard.matches(stack_top));
+            match selected.map(|rule| rule.action) {
+                Some(CompiledAction::Next(next)) => return Step::Next(next),
+                Some(CompiledAction::Push(frame, next)) => return Step::Push(frame, next),
+                Some(CompiledAction::Pop(next)) => {
+                    if stack_top.is_none() {
+                        // The guard that selected a `Pop` action already
+                        // proved the stack non-empty (`UnguardedPop`); this
+                        // is defense in depth against a future validation
+                        // gap, not a reachable path today.
+                        return Step::Dead;
+                    }
+                    return Step::Pop(next);
+                }
+                Some(CompiledAction::Goto(next)) => state = next,
+                Some(CompiledAction::Dead) | None => return Step::Dead,
+            }
+        }
+        Step::Dead
+    }
+
+    /// Whether `state`, reached with an empty stack, is a complete query.
+    ///
+    /// True if `state` is itself marked `accepting`, or if feeding
+    /// `boundary_byte` from `state` (empty stack) resolves — via `Next`
+    /// only — to a state that is marked `accepting`. The second clause is
+    /// what lets a mid-token state (an identifier body, an open number)
+    /// complete without carrying its own `accepting` flag, mirroring the
+    /// hand-written PDA's derivation of terminality from `step` itself.
+    #[must_use]
+    pub fn is_accepting_state(&self, state: u32) -> bool {
+        let Some(compiled) = self.states.get(state as usize) else {
+            return false;
+        };
+        if compiled.accepting {
+            return true;
+        }
+        matches!(
+            self.step(state, None, self.boundary_byte),
+            Step::Next(landed) if self.states.get(landed as usize).is_some_and(|s| s.accepting)
+        )
+    }
+
+    /// Deterministically compile `spec` into a dense, validated automaton.
+    ///
+    /// # Errors
+    /// Returns [`SpecError`] for any malformed, unsupported, ambiguous, or
+    /// explosive spec — see the individual [`SpecError`] variants. No
+    /// [`RtnPda`] can be built from a spec this rejects.
+    pub fn compile(spec: &GrammarSpec) -> Result<Self, SpecError> {
+        let GrammarSpec::V1(v1) = spec;
+        Self::compile_v1(v1)
+    }
+
+    fn compile_v1(v1: &GrammarSpecV1) -> Result<Self, SpecError> {
+        if v1.frames.len() > MAX_FRAMES {
+            return Err(SpecError::TooManyFrames {
+                count: v1.frames.len(),
+                max: MAX_FRAMES,
+            });
+        }
+        let mut frame_ids = BTreeMap::new();
+        for (index, frame) in v1.frames.iter().enumerate() {
+            if frame_ids.insert(frame.as_str(), index as u32).is_some() {
+                return Err(SpecError::DuplicateFrame {
+                    frame: frame.clone(),
+                });
+            }
+        }
+
+        if v1.states.len() > MAX_STATES {
+            return Err(SpecError::TooManyStates {
+                count: v1.states.len(),
+                max: MAX_STATES,
+            });
+        }
+        let state_ids: BTreeMap<&str, u32> = v1
+            .states
+            .keys()
+            .enumerate()
+            .map(|(index, name)| (name.as_str(), index as u32))
+            .collect();
+
+        let start =
+            *state_ids
+                .get(v1.start.as_str())
+                .ok_or_else(|| SpecError::UnknownStartState {
+                    start: v1.start.clone(),
+                })?;
+
+        let total_rules: usize = v1.states.values().map(|s| s.rules.len()).sum();
+        if total_rules > MAX_TOTAL_RULES {
+            return Err(SpecError::TooManyTotalRules {
+                count: total_rules,
+                max: MAX_TOTAL_RULES,
+            });
+        }
+
+        let mut states = Vec::with_capacity(v1.states.len());
+        for (name, state_spec) in &v1.states {
+            if state_spec.rules.len() > MAX_RULES_PER_STATE {
+                return Err(SpecError::TooManyRules {
+                    state: name.clone(),
+                    count: state_spec.rules.len(),
+                    max: MAX_RULES_PER_STATE,
+                });
+            }
+
+            let mut rules = Vec::with_capacity(state_spec.rules.len());
+            for (rule_index, rule) in state_spec.rules.iter().enumerate() {
+                let guard = compile_guard(name, rule_index, &rule.guard, &frame_ids)?;
+                let action = compile_action(
+                    name,
+                    rule_index,
+                    &rule.action,
+                    &state_ids,
+                    &frame_ids,
+                    guard,
+                )?;
+                check_shadowing(name, rule_index, &rule.byte_test, guard, &rules)?;
+                rules.push(CompiledRule {
+                    byte_test: rule.byte_test.clone(),
+                    guard,
+                    action,
+                });
+            }
+
+            states.push((
+                state_ids[name.as_str()],
+                CompiledState {
+                    accepting: state_spec.accepting,
+                    rules,
+                },
+            ));
+        }
+        states.sort_by_key(|(id, _)| *id);
+        let states = states.into_iter().map(|(_, state)| state).collect();
+
+        let automaton = CompiledAutomaton {
+            states,
+            start,
+            frame_count: frame_ids.len() as u32,
+            boundary_byte: v1.boundary_byte,
+            // `state_ids` assigns ids by enumerating this same sorted-key
+            // iteration order, so index `i` here is exactly state id `i`.
+            state_names: v1.states.keys().cloned().collect(),
+            frame_names: v1.frames.clone(),
+        };
+
+        check_goto_acyclic(v1, &state_ids)?;
+        check_reachable_accept(&automaton, &v1.start)?;
+
+        Ok(automaton)
+    }
+}
+
+fn compile_guard(
+    state: &str,
+    rule_index: usize,
+    guard: &Guard,
+    frame_ids: &BTreeMap<&str, u32>,
+) -> Result<CompiledGuard, SpecError> {
+    let resolve = |frame: &str| {
+        frame_ids
+            .get(frame)
+            .copied()
+            .ok_or_else(|| SpecError::UnknownFrame {
+                state: state.to_string(),
+                rule_index,
+                frame: frame.to_string(),
+            })
+    };
+    Ok(match guard {
+        Guard::Always => CompiledGuard::Always,
+        Guard::StackTopIs { frame } => CompiledGuard::StackTopIs(resolve(frame)?),
+        Guard::StackTopIsNot { frame } => CompiledGuard::StackTopIsNot(resolve(frame)?),
+        Guard::StackNonEmpty => CompiledGuard::StackNonEmpty,
+        Guard::StackEmpty => CompiledGuard::StackEmpty,
+    })
+}
+
+fn compile_action(
+    state: &str,
+    rule_index: usize,
+    action: &Action,
+    state_ids: &BTreeMap<&str, u32>,
+    frame_ids: &BTreeMap<&str, u32>,
+    guard: CompiledGuard,
+) -> Result<CompiledAction, SpecError> {
+    let resolve_state = |target: &str| {
+        state_ids
+            .get(target)
+            .copied()
+            .ok_or_else(|| SpecError::UnknownTargetState {
+                state: state.to_string(),
+                rule_index,
+                target: target.to_string(),
+            })
+    };
+    let resolve_frame = |frame: &str| {
+        frame_ids
+            .get(frame)
+            .copied()
+            .ok_or_else(|| SpecError::UnknownFrame {
+                state: state.to_string(),
+                rule_index,
+                frame: frame.to_string(),
+            })
+    };
+    match action {
+        Action::Next { state: target } => Ok(CompiledAction::Next(resolve_state(target)?)),
+        Action::Push {
+            frame,
+            state: target,
+        } => Ok(CompiledAction::Push(
+            resolve_frame(frame)?,
+            resolve_state(target)?,
+        )),
+        Action::Pop { state: target } => {
+            if !matches!(
+                guard,
+                CompiledGuard::StackTopIs(_) | CompiledGuard::StackNonEmpty
+            ) {
+                return Err(SpecError::UnguardedPop {
+                    state: state.to_string(),
+                    rule_index,
+                });
+            }
+            Ok(CompiledAction::Pop(resolve_state(target)?))
+        }
+        Action::Goto { state: target } => Ok(CompiledAction::Goto(resolve_state(target)?)),
+        Action::Dead => Ok(CompiledAction::Dead),
+    }
+}
+
+/// Reject a rule that is either an exact duplicate of an earlier rule in the
+/// same state (ambiguous — which one "wins" was never a deliberate choice)
+/// or wholly shadowed by one (unreachable — it can never fire).
+fn check_shadowing(
+    state: &str,
+    rule_index: usize,
+    byte_test: &ByteTest,
+    guard: CompiledGuard,
+    earlier: &[CompiledRule],
+) -> Result<(), SpecError> {
+    for (earlier_index, earlier_rule) in earlier.iter().enumerate() {
+        if !same_guard(earlier_rule.guard, guard) {
+            continue;
+        }
+        if *byte_test == earlier_rule.byte_test {
+            return Err(SpecError::AmbiguousTransition {
+                state: state.to_string(),
+                first_index: earlier_index,
+                rule_index,
+            });
+        }
+        if byte_test.is_subsumed_by(&earlier_rule.byte_test) {
+            return Err(SpecError::UnreachableRule {
+                state: state.to_string(),
+                rule_index,
+                shadowed_by: earlier_index,
+            });
+        }
+    }
+    Ok(())
+}
+
+fn same_guard(a: CompiledGuard, b: CompiledGuard) -> bool {
+    match (a, b) {
+        (CompiledGuard::Always, CompiledGuard::Always)
+        | (CompiledGuard::StackNonEmpty, CompiledGuard::StackNonEmpty)
+        | (CompiledGuard::StackEmpty, CompiledGuard::StackEmpty) => true,
+        (CompiledGuard::StackTopIs(x), CompiledGuard::StackTopIs(y))
+        | (CompiledGuard::StackTopIsNot(x), CompiledGuard::StackTopIsNot(y)) => x == y,
+        _ => false,
+    }
+}
+
+/// Reject a spec whose `Goto` actions can cycle back to a state without ever
+/// consuming a byte — such a chain could not terminate at runtime.
+fn check_goto_acyclic(
+    v1: &GrammarSpecV1,
+    state_ids: &BTreeMap<&str, u32>,
+) -> Result<(), SpecError> {
+    let mut edges: Vec<Vec<u32>> = vec![Vec::new(); state_ids.len()];
+    let mut owning_rule: BTreeMap<(u32, u32), (String, usize)> = BTreeMap::new();
+    for (name, state_spec) in &v1.states {
+        let from = state_ids[name.as_str()];
+        for (rule_index, rule) in state_spec.rules.iter().enumerate() {
+            if let Action::Goto { state: target } = &rule.action {
+                let Some(&to) = state_ids.get(target.as_str()) else {
+                    continue; // reported by `compile_action`'s own resolution pass
+                };
+                edges[from as usize].push(to);
+                owning_rule
+                    .entry((from, to))
+                    .or_insert_with(|| (name.clone(), rule_index));
+            }
+        }
+    }
+
+    #[derive(Clone, Copy, PartialEq)]
+    enum Mark {
+        Unvisited,
+        InProgress,
+        Done,
+    }
+    // A correct traversal pops the stack at most once per node-start plus
+    // once per outgoing edge — comfortably under GRAPH_TRAVERSAL_BUDGET for
+    // *any* spec `compile_v1` has already bounded, regardless of this one's
+    // actual (smaller) size. Bounding the loop explicitly (rather than
+    // trusting `next_edge`'s increment alone to make progress) means a
+    // defect here fails fast with a conservative "assume cyclic" verdict
+    // instead of hanging.
+    let iteration_budget = GRAPH_TRAVERSAL_BUDGET;
+    let mut marks = vec![Mark::Unvisited; state_ids.len()];
+    for start in 0..state_ids.len() as u32 {
+        if marks[start as usize] != Mark::Unvisited {
+            continue;
+        }
+        let mut stack = vec![(start, 0usize)];
+        marks[start as usize] = Mark::InProgress;
+        let mut exhausted = true;
+        for _ in 0..=iteration_budget {
+            let Some((node, next_edge)) = stack.pop() else {
+                exhausted = false;
+                break;
+            };
+            if next_edge >= edges[node as usize].len() {
+                marks[node as usize] = Mark::Done;
+                continue;
+            }
+            stack.push((node, next_edge + 1));
+            let neighbor = edges[node as usize][next_edge];
+            match marks[neighbor as usize] {
+                Mark::InProgress => {
+                    let (state, rule_index) = owning_rule[&(node, neighbor)].clone();
+                    return Err(SpecError::CyclicGoto { state, rule_index });
+                }
+                Mark::Unvisited => {
+                    marks[neighbor as usize] = Mark::InProgress;
+                    stack.push((neighbor, 0));
+                }
+                Mark::Done => {}
+            }
+        }
+        // The iteration budget is a proven upper bound for a traversal that
+        // correctly drains its stack; not draining it within that bound is
+        // itself proof of a defect in this function, not a property any real
+        // spec can trigger — conservatively reported as a cycle rather than
+        // silently accepted, so a regression here fails fast, not by hanging.
+        if exhausted {
+            return Err(SpecError::CyclicGoto {
+                state: v1.start.clone(),
+                rule_index: 0,
+            });
+        }
+    }
+    Ok(())
+}
+
+/// Reject a spec with no accepting state reachable from `start` at all — a
+/// loose, guard-blind reachability check (every action edge is followed
+/// regardless of guard), so it only ever catches a grammar that rejects
+/// every input outright.
+fn check_reachable_accept(
+    automaton: &CompiledAutomaton,
+    start_name: &str,
+) -> Result<(), SpecError> {
+    let mut seen = vec![false; automaton.states.len()];
+    let mut stack = vec![automaton.start];
+    seen[automaton.start as usize] = true;
+    // A correct traversal pushes each state at most once (guarded by `seen`),
+    // so `MAX_STATES` — the largest state count `compile_v1` ever lets
+    // through, regardless of this automaton's actual (smaller) size — is a
+    // safe, size-independent upper bound on iterations. Bounding the loop
+    // explicitly means a defect here fails fast (conservatively, as "no
+    // reachable accept") instead of hanging on a spec whose reachability
+    // graph has cycles, which real specs routinely do (e.g. a whitespace
+    // self-loop).
+    for _ in 0..=MAX_STATES {
+        let Some(state) = stack.pop() else {
+            break;
+        };
+        if automaton.is_accepting_state(state) {
+            return Ok(());
+        }
+        let Some(compiled) = automaton.states.get(state as usize) else {
+            continue;
+        };
+        for rule in &compiled.rules {
+            let next = match rule.action {
+                CompiledAction::Next(s) | CompiledAction::Push(_, s) | CompiledAction::Pop(s) => {
+                    Some(s)
+                }
+                CompiledAction::Goto(s) => Some(s),
+                CompiledAction::Dead => None,
+            };
+            if let Some(next) = next
+                && !seen[next as usize]
+            {
+                seen[next as usize] = true;
+                stack.push(next);
+            }
+        }
+    }
+    Err(SpecError::NoReachableAccept {
+        start: start_name.to_string(),
+    })
+}
+
+/// A pushdown automaton instance driven by a [`CompiledAutomaton`] table —
+/// the data-driven analogue of `grammar::pda::Pda`.
+#[derive(Debug, Clone)]
+pub struct RtnPda<'g> {
+    automaton: &'g CompiledAutomaton,
+    state: u32,
+    stack: Vec<u32>,
+}
+
+/// The outcome of an [`RtnPda::probe`]: whether a candidate token's bytes
+/// keep the automaton alive, and whether deciding that consulted the ambient
+/// stack — the runtime analogue of `grammar::pda::Probe`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RtnProbe {
+    /// Whether every byte was accepted (the automaton never died).
+    pub alive: bool,
+    /// Whether the verdict depended on the ambient (pre-existing) stack.
+    pub consulted_ambient: bool,
+}
+
+impl<'g> RtnPda<'g> {
+    /// A fresh automaton positioned at `automaton`'s start state with an
+    /// empty stack.
+    #[must_use]
+    pub fn new(automaton: &'g CompiledAutomaton) -> Self {
+        Self {
+            automaton,
+            state: automaton.start(),
+            stack: Vec::new(),
+        }
+    }
+
+    /// An automaton pinned at `state` with an **empty** stack — the base
+    /// configuration a mask cache probes each candidate token from.
+    #[must_use]
+    pub fn at(automaton: &'g CompiledAutomaton, state: u32) -> Self {
+        Self {
+            automaton,
+            state,
+            stack: Vec::new(),
+        }
+    }
+
+    /// The current state id.
+    #[must_use]
+    pub fn state(&self) -> u32 {
+        self.state
+    }
+
+    /// The frame id on top of the stack, or `None` for an empty stack.
+    #[must_use]
+    pub fn stack_top(&self) -> Option<u32> {
+        self.stack.last().copied()
+    }
+
+    /// The automaton this instance is driven by.
+    #[must_use]
+    pub fn automaton(&self) -> &'g CompiledAutomaton {
+        self.automaton
+    }
+
+    /// Feed one `byte`, advancing the state and stack. Returns `false` — and
+    /// leaves the automaton unchanged — iff `byte` has no valid continuation.
+    #[must_use = "an unhandled dead-state return leaves the caller unaware the byte was rejected"]
+    pub fn advance(&mut self, byte: u8) -> bool {
+        let top = self.stack.last().copied();
+        match self.automaton.step(self.state, top, byte) {
+            Step::Next(next) => {
+                self.state = next;
+                true
+            }
+            Step::Push(frame, next) => {
+                self.stack.push(frame);
+                self.state = next;
+                true
+            }
+            Step::Pop(next) => {
+                self.stack.pop();
+                self.state = next;
+                true
+            }
+            Step::Dead => false,
+        }
+    }
+
+    /// Whether the stream so far is a complete query: the stack is empty and
+    /// the current state is marked accepting.
+    #[must_use]
+    pub fn is_accepting(&self) -> bool {
+        self.stack.is_empty() && self.automaton.is_accepting_state(self.state)
+    }
+
+    /// Reset to the initial configuration, retaining the stack's allocation.
+    pub fn reset(&mut self) {
+        self.state = self.automaton.start();
+        self.stack.clear();
+    }
+
+    /// Whether replaying `bytes` from the live configuration keeps the
+    /// automaton alive, reusing `scratch` as the throwaway stack.
+    #[must_use]
+    pub fn admits(&self, bytes: &[u8], scratch: &mut Vec<u32>) -> bool {
+        scratch.clear();
+        scratch.extend_from_slice(&self.stack);
+        let mut state = self.state;
+        for &byte in bytes {
+            let top = scratch.last().copied();
+            match self.automaton.step(state, top, byte) {
+                Step::Next(next) => state = next,
+                Step::Push(frame, next) => {
+                    scratch.push(frame);
+                    state = next;
+                }
+                Step::Pop(next) => {
+                    scratch.pop();
+                    state = next;
+                }
+                Step::Dead => return false,
+            }
+        }
+        true
+    }
+
+    /// Replay `bytes` over [`CompiledAutomaton::step`] without touching the
+    /// live automaton, also classifying whether the verdict consulted the
+    /// ambient stack.
+    #[must_use]
+    pub fn probe(&self, bytes: &[u8], scratch: &mut Vec<u32>) -> RtnProbe {
+        scratch.clear();
+        scratch.extend_from_slice(&self.stack);
+        let mut state = self.state;
+        for &byte in bytes {
+            let top = scratch.last().copied();
+            match self.automaton.step(state, top, byte) {
+                Step::Next(next) => state = next,
+                Step::Push(frame, next) => {
+                    scratch.push(frame);
+                    state = next;
+                }
+                Step::Pop(next) => {
+                    scratch.pop();
+                    state = next;
+                }
+                Step::Dead => {
+                    let consulted_ambient = scratch.is_empty()
+                        && (0..self.automaton.frame_count).any(|f| {
+                            !matches!(self.automaton.step(state, Some(f), byte), Step::Dead)
+                        });
+                    return RtnProbe {
+                        alive: false,
+                        consulted_ambient,
+                    };
+                }
+            }
+        }
+        RtnProbe {
+            alive: true,
+            consulted_ambient: false,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::grammar::spec::GrammarSpec;
+
+    /// Accepts exactly the literal "ok"; nothing else.
+    const LITERAL_OK_SPEC: &str = r#"{
+        "version": "1",
+        "start": "start",
+        "frames": [],
+        "states": {
+            "start": { "rules": [
+                { "match": { "kind": "exact", "byte": 111 }, "action": { "kind": "next", "state": "saw_o" } }
+            ] },
+            "saw_o": { "rules": [
+                { "match": { "kind": "exact", "byte": 107 }, "action": { "kind": "next", "state": "done" } }
+            ] },
+            "done": { "accepting": true, "rules": [] }
+        }
+    }"#;
+
+    fn compile(text: &str) -> CompiledAutomaton {
+        let spec = GrammarSpec::parse(text).expect("valid JSON spec");
+        CompiledAutomaton::compile(&spec).expect("spec compiles")
+    }
+
+    fn accepts(automaton: &CompiledAutomaton, input: &[u8]) -> bool {
+        let mut pda = RtnPda::new(automaton);
+        for &byte in input {
+            if !pda.advance(byte) {
+                return false;
+            }
+        }
+        pda.is_accepting()
+    }
+
+    #[test]
+    fn accepts_the_literal_it_was_compiled_for() {
+        let automaton = compile(LITERAL_OK_SPEC);
+        assert!(accepts(&automaton, b"ok"));
+    }
+
+    #[test]
+    fn rejects_a_non_matching_literal() {
+        let automaton = compile(LITERAL_OK_SPEC);
+        assert!(!accepts(&automaton, b"no"));
+        assert!(!accepts(&automaton, b"okx"));
+        assert!(!accepts(&automaton, b"o"));
+    }
+
+    #[test]
+    fn editing_the_spec_changes_the_accepted_language() {
+        // Same shape, different literal — proves the compiler actually reads
+        // the spec rather than always producing one fixed automaton.
+        let edited = LITERAL_OK_SPEC.replace("107", "112"); // 'k' (107) -> 'p' (112)
+        let automaton = compile(&edited);
+        assert!(accepts(&automaton, b"op"));
+        assert!(!accepts(&automaton, b"ok"));
+    }
+
+    #[test]
+    fn a_spec_with_balanced_parens_via_push_pop() {
+        let text = r#"{
+            "version": "1",
+            "start": "value",
+            "frames": ["paren"],
+            "states": {
+                "value": { "rules": [
+                    { "match": { "kind": "exact", "byte": 40 }, "action": { "kind": "push", "frame": "paren", "state": "value" } },
+                    { "match": { "kind": "ident_start" }, "action": { "kind": "next", "state": "after" } }
+                ] },
+                "after": {
+                    "accepting": true,
+                    "rules": [
+                        { "match": { "kind": "exact", "byte": 41 }, "guard": { "kind": "stack_top_is", "frame": "paren" }, "action": { "kind": "pop", "state": "after" } }
+                    ]
+                }
+            }
+        }"#;
+        let automaton = compile(text);
+        assert!(accepts(&automaton, b"x"));
+        assert!(accepts(&automaton, b"(x)"));
+        assert!(accepts(&automaton, b"((x))"));
+        assert!(!accepts(&automaton, b"(x"));
+        assert!(!accepts(&automaton, b"x)"));
+    }
+
+    #[test]
+    fn goto_delegates_the_same_byte_without_consuming_it() {
+        // `in_ident` falls through to `after` for any non-ident-tail byte,
+        // exactly like `pda::step_in_ident`'s delegation to `AfterValue`.
+        // `in_ident` carries no `accepting` flag of its own — completion is
+        // entirely derived from where the boundary byte resolves, mirroring
+        // `Pda::is_accepting`'s space-probe trick.
+        let text = r#"{
+            "version": "1",
+            "start": "in_ident",
+            "frames": [],
+            "states": {
+                "in_ident": { "rules": [
+                    { "match": { "kind": "ident_tail" }, "action": { "kind": "next", "state": "in_ident" } },
+                    { "match": { "kind": "any" }, "action": { "kind": "goto", "state": "after" } }
+                ] },
+                "after": {
+                    "accepting": true,
+                    "rules": [
+                        { "match": { "kind": "whitespace" }, "action": { "kind": "next", "state": "after" } },
+                        { "match": { "kind": "exact", "byte": 46 }, "action": { "kind": "next", "state": "after_dot" } }
+                    ]
+                },
+                "after_dot": { "rules": [
+                    { "match": { "kind": "ident_start" }, "action": { "kind": "next", "state": "in_ident" } },
+                    { "match": { "kind": "whitespace" }, "action": { "kind": "next", "state": "after_dot" } }
+                ] }
+            }
+        }"#;
+        let automaton = compile(text);
+        assert!(accepts(&automaton, b"abc"));
+        assert!(accepts(&automaton, b"abc.def"));
+        // A trailing dot lands in `after_dot`, which never resolves back to
+        // an `accepting` state — an identifier must follow the dot.
+        assert!(!accepts(&automaton, b"abc."));
+    }
+
+    #[test]
+    fn an_invalid_spec_fails_before_any_decoder_session_could_start() {
+        let text = r#"{
+            "version": "1",
+            "start": "nowhere",
+            "frames": [],
+            "states": {}
+        }"#;
+        let spec = GrammarSpec::parse(text).expect("valid JSON spec");
+        let error = CompiledAutomaton::compile(&spec).expect_err("start state is undeclared");
+        assert!(matches!(error, SpecError::UnknownStartState { start } if start == "nowhere"));
+    }
+
+    #[test]
+    fn rejects_an_unknown_target_state() {
+        let text = r#"{
+            "version": "1",
+            "start": "start",
+            "frames": [],
+            "states": {
+                "start": { "accepting": true, "rules": [
+                    { "match": { "kind": "any" }, "action": { "kind": "next", "state": "ghost" } }
+                ] }
+            }
+        }"#;
+        let spec = GrammarSpec::parse(text).expect("valid JSON spec");
+        let error = CompiledAutomaton::compile(&spec).expect_err("target state is undeclared");
+        assert!(matches!(error, SpecError::UnknownTargetState { target, .. } if target == "ghost"));
+    }
+
+    #[test]
+    fn rejects_an_unknown_frame() {
+        let text = r#"{
+            "version": "1",
+            "start": "start",
+            "frames": [],
+            "states": {
+                "start": { "accepting": true, "rules": [
+                    { "match": { "kind": "any" }, "guard": { "kind": "stack_top_is", "frame": "ghost" }, "action": { "kind": "next", "state": "start" } }
+                ] }
+            }
+        }"#;
+        let spec = GrammarSpec::parse(text).expect("valid JSON spec");
+        let error = CompiledAutomaton::compile(&spec).expect_err("frame is undeclared");
+        assert!(matches!(error, SpecError::UnknownFrame { frame, .. } if frame == "ghost"));
+    }
+
+    #[test]
+    fn rejects_an_ambiguous_duplicate_rule() {
+        let text = r#"{
+            "version": "1",
+            "start": "start",
+            "frames": [],
+            "states": {
+                "start": { "accepting": true, "rules": [
+                    { "match": { "kind": "exact", "byte": 97 }, "action": { "kind": "next", "state": "start" } },
+                    { "match": { "kind": "exact", "byte": 97 }, "action": { "kind": "dead" } }
+                ] }
+            }
+        }"#;
+        let spec = GrammarSpec::parse(text).expect("valid JSON spec");
+        let error = CompiledAutomaton::compile(&spec).expect_err("duplicate (match, guard) pair");
+        assert!(matches!(error, SpecError::AmbiguousTransition { .. }));
+    }
+
+    #[test]
+    fn rejects_an_unreachable_rule_shadowed_by_any() {
+        let text = r#"{
+            "version": "1",
+            "start": "start",
+            "frames": [],
+            "states": {
+                "start": { "accepting": true, "rules": [
+                    { "match": { "kind": "any" }, "action": { "kind": "next", "state": "start" } },
+                    { "match": { "kind": "exact", "byte": 97 }, "action": { "kind": "dead" } }
+                ] }
+            }
+        }"#;
+        let spec = GrammarSpec::parse(text).expect("valid JSON spec");
+        let error = CompiledAutomaton::compile(&spec).expect_err("second rule can never fire");
+        assert!(matches!(error, SpecError::UnreachableRule { .. }));
+    }
+
+    #[test]
+    fn rejects_a_pop_without_a_stack_guard() {
+        let text = r#"{
+            "version": "1",
+            "start": "start",
+            "frames": ["paren"],
+            "states": {
+                "start": { "accepting": true, "rules": [
+                    { "match": { "kind": "any" }, "action": { "kind": "pop", "state": "start" } }
+                ] }
+            }
+        }"#;
+        let spec = GrammarSpec::parse(text).expect("valid JSON spec");
+        let error = CompiledAutomaton::compile(&spec).expect_err("pop needs a stack guard");
+        assert!(matches!(error, SpecError::UnguardedPop { .. }));
+    }
+
+    #[test]
+    fn rejects_a_goto_cycle() {
+        let text = r#"{
+            "version": "1",
+            "start": "a",
+            "frames": [],
+            "states": {
+                "a": { "rules": [ { "match": { "kind": "any" }, "action": { "kind": "goto", "state": "b" } } ] },
+                "b": { "rules": [ { "match": { "kind": "any" }, "action": { "kind": "goto", "state": "a" } } ] }
+            }
+        }"#;
+        let spec = GrammarSpec::parse(text).expect("valid JSON spec");
+        let error =
+            CompiledAutomaton::compile(&spec).expect_err("goto cycles without consuming a byte");
+        assert!(matches!(error, SpecError::CyclicGoto { .. }));
+    }
+
+    #[test]
+    fn rejects_a_spec_with_no_reachable_accept() {
+        let text = r#"{
+            "version": "1",
+            "start": "start",
+            "frames": [],
+            "states": {
+                "start": { "rules": [
+                    { "match": { "kind": "any" }, "action": { "kind": "dead" } }
+                ] }
+            }
+        }"#;
+        let spec = GrammarSpec::parse(text).expect("valid JSON spec");
+        let error = CompiledAutomaton::compile(&spec).expect_err("no accepting state is reachable");
+        assert!(matches!(error, SpecError::NoReachableAccept { .. }));
+    }
+
+    #[test]
+    fn rejects_a_duplicate_frame_name() {
+        let text = r#"{
+            "version": "1",
+            "start": "start",
+            "frames": ["paren", "paren"],
+            "states": {
+                "start": { "accepting": true, "rules": [] }
+            }
+        }"#;
+        let spec = GrammarSpec::parse(text).expect("valid JSON spec");
+        let error = CompiledAutomaton::compile(&spec).expect_err("duplicate frame name");
+        assert!(matches!(error, SpecError::DuplicateFrame { .. }));
+    }
+
+    #[test]
+    fn malformed_json_reports_a_typed_span_aware_error() {
+        let error = GrammarSpec::parse("{ not json").expect_err("malformed JSON");
+        assert!(matches!(error, SpecError::Malformed { .. }));
+    }
+
+    #[test]
+    fn probe_flags_context_dependence_for_a_bare_closer() {
+        let text = r#"{
+            "version": "1",
+            "start": "value",
+            "frames": ["paren"],
+            "states": {
+                "value": { "rules": [
+                    { "match": { "kind": "exact", "byte": 40 }, "action": { "kind": "push", "frame": "paren", "state": "value" } },
+                    { "match": { "kind": "ident_start" }, "action": { "kind": "next", "state": "after" } }
+                ] },
+                "after": {
+                    "accepting": true,
+                    "rules": [
+                        { "match": { "kind": "exact", "byte": 41 }, "guard": { "kind": "stack_top_is", "frame": "paren" }, "action": { "kind": "pop", "state": "after" } }
+                    ]
+                }
+            }
+        }"#;
+        let automaton = compile(text);
+        let mut live = RtnPda::new(&automaton);
+        assert!(live.advance(b'x')); // "value" -> "after", the state a ')' rule lives in
+        let after = live.state();
+
+        let mut scratch = Vec::new();
+        // A bare `)` dies against an empty scratch stack, but would survive
+        // under a `paren` frame — exactly the deferred/context-dependent case.
+        let probe = RtnPda::at(&automaton, after).probe(b")", &mut scratch);
+        assert!(!probe.alive);
+        assert!(probe.consulted_ambient);
+        // A `.`-free non-closer never depends on the stack: no frame could
+        // make it alive at `after`, so it is unambiguously dead.
+        let probe = RtnPda::at(&automaton, after).probe(b"!", &mut scratch);
+        assert!(!probe.alive);
+        assert!(!probe.consulted_ambient);
+    }
+
+    #[test]
+    fn compiled_guard_matches_every_variant_both_ways() {
+        assert!(CompiledGuard::Always.matches(None));
+        assert!(CompiledGuard::Always.matches(Some(0)));
+
+        assert!(CompiledGuard::StackTopIs(0).matches(Some(0)));
+        assert!(!CompiledGuard::StackTopIs(0).matches(Some(1)));
+        assert!(!CompiledGuard::StackTopIs(0).matches(None));
+
+        assert!(!CompiledGuard::StackTopIsNot(0).matches(Some(0)));
+        assert!(CompiledGuard::StackTopIsNot(0).matches(Some(1)));
+        assert!(
+            !CompiledGuard::StackTopIsNot(0).matches(None),
+            "an empty stack is not 'some other frame'"
+        );
+
+        assert!(CompiledGuard::StackNonEmpty.matches(Some(0)));
+        assert!(!CompiledGuard::StackNonEmpty.matches(None));
+
+        assert!(CompiledGuard::StackEmpty.matches(None));
+        assert!(!CompiledGuard::StackEmpty.matches(Some(0)));
+    }
+
+    #[test]
+    fn same_guard_compares_stack_top_is_by_frame() {
+        assert!(same_guard(
+            CompiledGuard::StackTopIs(0),
+            CompiledGuard::StackTopIs(0)
+        ));
+        assert!(!same_guard(
+            CompiledGuard::StackTopIs(0),
+            CompiledGuard::StackTopIs(1)
+        ));
+        assert!(same_guard(
+            CompiledGuard::StackTopIsNot(0),
+            CompiledGuard::StackTopIsNot(0)
+        ));
+        assert!(!same_guard(
+            CompiledGuard::StackTopIsNot(0),
+            CompiledGuard::StackTopIsNot(1)
+        ));
+    }
+
+    /// A spec exercising two distinct frames, so a stack-top query can
+    /// distinguish `Some(0)` from `Some(1)`, not just `None` from `Some(_)`.
+    const TWO_FRAME_SPEC: &str = r#"{
+        "version": "1",
+        "start": "start",
+        "frames": ["alpha", "beta"],
+        "states": {
+            "start": { "rules": [
+                { "match": { "kind": "exact", "byte": 97 }, "action": { "kind": "push", "frame": "alpha", "state": "in_alpha" } },
+                { "match": { "kind": "exact", "byte": 98 }, "action": { "kind": "push", "frame": "beta", "state": "in_beta" } }
+            ] },
+            "in_alpha": { "accepting": true, "rules": [
+                { "match": { "kind": "exact", "byte": 41 }, "guard": { "kind": "stack_top_is", "frame": "alpha" }, "action": { "kind": "pop", "state": "start" } },
+                { "match": { "kind": "any" }, "guard": { "kind": "stack_top_is_not", "frame": "alpha" }, "action": { "kind": "dead" } }
+            ] },
+            "in_beta": { "accepting": true, "rules": [
+                { "match": { "kind": "exact", "byte": 41 }, "guard": { "kind": "stack_top_is", "frame": "beta" }, "action": { "kind": "pop", "state": "start" } }
+            ] }
+        }
+    }"#;
+
+    #[test]
+    fn rtn_pda_state_reports_the_current_dense_id() {
+        let automaton = compile(TWO_FRAME_SPEC);
+        let mut pda = RtnPda::new(&automaton);
+        assert_eq!(pda.state(), automaton.start());
+        assert!(pda.advance(b'a'));
+        assert_ne!(pda.state(), automaton.start());
+    }
+
+    #[test]
+    fn rtn_pda_stack_top_distinguishes_which_frame_is_on_top() {
+        let automaton = compile(TWO_FRAME_SPEC);
+        let mut pda = RtnPda::new(&automaton);
+        assert_eq!(
+            pda.stack_top(),
+            None,
+            "a fresh automaton has an empty stack"
+        );
+        assert!(pda.advance(b'a'));
+        let alpha_top = pda.stack_top().expect("alpha was pushed");
+        pda.reset();
+        assert!(pda.advance(b'b'));
+        let beta_top = pda.stack_top().expect("beta was pushed");
+        assert_ne!(
+            alpha_top, beta_top,
+            "two distinct frame kinds must report distinct ids"
+        );
+    }
+
+    #[test]
+    fn rtn_pda_reset_restores_the_initial_configuration() {
+        let automaton = compile(TWO_FRAME_SPEC);
+        let mut pda = RtnPda::new(&automaton);
+        assert!(pda.advance(b'a'));
+        assert_ne!(pda.state(), automaton.start());
+        assert!(pda.stack_top().is_some());
+        pda.reset();
+        assert_eq!(pda.state(), automaton.start());
+        assert_eq!(pda.stack_top(), None);
+    }
+
+    #[test]
+    fn rtn_pda_admits_reports_whether_bytes_keep_the_configuration_alive() {
+        let automaton = compile(TWO_FRAME_SPEC);
+        let pda = RtnPda::new(&automaton);
+        let mut scratch = Vec::new();
+        assert!(
+            pda.admits(b"a", &mut scratch),
+            "a live byte from the start state must be admitted"
+        );
+        assert!(
+            !pda.admits(b")", &mut scratch),
+            "a closer with nothing to close must not be admitted"
+        );
+    }
+
+    #[test]
+    fn state_name_and_frame_name_report_the_declared_names() {
+        let automaton = compile(TWO_FRAME_SPEC);
+        assert_eq!(automaton.state_name(automaton.start()), "start");
+        assert_eq!(automaton.state_name(999), "unknown");
+        // `in_alpha` pushes `alpha` (frame id resolved via the same sorted
+        // order `compile_v1` assigns ids in — `alpha` < `beta`).
+        assert_eq!(automaton.frame_name(Some(0)), "alpha");
+        assert_eq!(automaton.frame_name(Some(1)), "beta");
+        assert_eq!(automaton.frame_name(None), "none");
+        assert_eq!(automaton.frame_name(Some(999)), "unknown");
+    }
+
+    #[test]
+    fn state_count_matches_the_declared_state_count() {
+        let automaton = compile(TWO_FRAME_SPEC);
+        assert_eq!(automaton.state_count(), 3);
+        let literal_ok = compile(LITERAL_OK_SPEC);
+        assert_eq!(literal_ok.state_count(), 3);
+    }
+
+    /// Build a minimal valid spec with `state_count` states (a single
+    /// self-looping accepting state, then `state_count - 1` unreachable
+    /// filler states) — used to probe the `MAX_STATES` boundary without
+    /// hand-writing hundreds of states.
+    fn spec_with_state_count(state_count: usize) -> String {
+        let mut states = String::from(
+            r#""s0": {"accepting": true, "rules": [{"match": {"kind": "any"}, "action": {"kind": "next", "state": "s0"}}]}"#,
+        );
+        for i in 1..state_count {
+            states.push_str(&format!(r#","s{i}": {{"rules": []}}"#));
+        }
+        format!(r#"{{"version": "1", "start": "s0", "frames": [], "states": {{{states}}}}}"#)
+    }
+
+    #[test]
+    fn exactly_max_states_compiles_but_one_more_is_rejected() {
+        let at_limit = spec_with_state_count(MAX_STATES);
+        compile(&at_limit);
+        let spec = GrammarSpec::parse(&spec_with_state_count(MAX_STATES + 1)).expect("valid JSON");
+        let error = CompiledAutomaton::compile(&spec).expect_err("one over MAX_STATES");
+        assert!(matches!(error, SpecError::TooManyStates { .. }));
+    }
+
+    /// Build a minimal valid spec whose single state declares `rule_count`
+    /// rules, each testing a distinct byte (so none shadow one another,
+    /// requiring `rule_count <= 256`) — used to probe the
+    /// `MAX_RULES_PER_STATE` boundary independently of `MAX_FRAMES`.
+    fn spec_with_rule_count(rule_count: usize) -> String {
+        assert!(rule_count <= 256, "distinct byte values are exhausted");
+        let rules: Vec<String> = (0..rule_count)
+            .map(|byte| {
+                format!(
+                    r#"{{"match": {{"kind": "exact", "byte": {byte}}}, "action": {{"kind": "dead"}}}}"#
+                )
+            })
+            .collect();
+        format!(
+            r#"{{"version": "1", "start": "s0", "frames": [], "states": {{"s0": {{"accepting": true, "rules": [{}]}}}}}}"#,
+            rules.join(",")
+        )
+    }
+
+    #[test]
+    fn exactly_max_rules_per_state_compiles_but_one_more_is_rejected() {
+        let at_limit = spec_with_rule_count(MAX_RULES_PER_STATE);
+        compile(&at_limit);
+        let spec =
+            GrammarSpec::parse(&spec_with_rule_count(MAX_RULES_PER_STATE + 1)).expect("valid JSON");
+        let error = CompiledAutomaton::compile(&spec).expect_err("one over MAX_RULES_PER_STATE");
+        assert!(matches!(error, SpecError::TooManyRules { .. }));
+    }
+
+    /// Build a minimal valid spec with `total_rules` total rules spread
+    /// evenly (well under `MAX_RULES_PER_STATE` each) across as many states
+    /// as needed — used to probe the `MAX_TOTAL_RULES` boundary
+    /// independently of the per-state bound.
+    fn spec_with_total_rule_count(total_rules: usize) -> String {
+        // Exactly `MAX_RULES_PER_STATE`, so reaching `MAX_TOTAL_RULES` needs
+        // only `MAX_TOTAL_RULES / MAX_RULES_PER_STATE` states — comfortably
+        // under `MAX_STATES` — rather than tripping that bound first.
+        const PER_STATE: usize = MAX_RULES_PER_STATE;
+        let state_count = total_rules.div_ceil(PER_STATE);
+        let mut states = Vec::new();
+        let mut remaining = total_rules;
+        for s in 0..state_count {
+            let here = remaining.min(PER_STATE);
+            remaining -= here;
+            let next = format!("s{}", (s + 1) % state_count);
+            let rules: Vec<String> = (0..here)
+                .map(|i| {
+                    let byte = (s * PER_STATE + i) % 256;
+                    format!(
+                        r#"{{"match": {{"kind": "exact", "byte": {byte}}}, "action": {{"kind": "next", "state": "{next}"}}}}"#
+                    )
+                })
+                .collect();
+            states.push(format!(
+                r#""s{s}": {{"accepting": true, "rules": [{}]}}"#,
+                rules.join(",")
+            ));
+        }
+        format!(
+            r#"{{"version": "1", "start": "s0", "frames": [], "states": {{{}}}}}"#,
+            states.join(",")
+        )
+    }
+
+    #[test]
+    fn exactly_max_total_rules_compiles_but_one_more_is_rejected() {
+        let at_limit = spec_with_total_rule_count(MAX_TOTAL_RULES);
+        compile(&at_limit);
+        let spec = GrammarSpec::parse(&spec_with_total_rule_count(MAX_TOTAL_RULES + 1))
+            .expect("valid JSON");
+        let error = CompiledAutomaton::compile(&spec).expect_err("one over MAX_TOTAL_RULES");
+        assert!(matches!(error, SpecError::TooManyTotalRules { .. }));
+    }
+
+    /// Build a minimal valid spec declaring `frame_count` distinct frame
+    /// names, none of them referenced by any rule — used to probe the
+    /// `MAX_FRAMES` boundary independently of the state/rule bounds.
+    fn spec_with_frame_count(frame_count: usize) -> String {
+        let frames: Vec<String> = (0..frame_count).map(|i| format!(r#""f{i}""#)).collect();
+        format!(
+            r#"{{"version": "1", "start": "s0", "frames": [{}], "states": {{"s0": {{"accepting": true, "rules": []}}}}}}"#,
+            frames.join(",")
+        )
+    }
+
+    #[test]
+    fn exactly_max_frames_compiles_but_one_more_is_rejected() {
+        let at_limit = spec_with_frame_count(MAX_FRAMES);
+        compile(&at_limit);
+        let spec = GrammarSpec::parse(&spec_with_frame_count(MAX_FRAMES + 1)).expect("valid JSON");
+        let error = CompiledAutomaton::compile(&spec).expect_err("one over MAX_FRAMES");
+        assert!(matches!(error, SpecError::TooManyFrames { .. }));
+    }
+}

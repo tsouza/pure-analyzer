@@ -40,6 +40,9 @@ src/
     mod.rs          Envelope classifier + DeadState carrier
     pda.rs          hand-written pushdown automaton (states, stack frames, byte transitions)
     compiled.rs     CompiledGrammar: vocabulary + lazy per-state mask cache (the perf core, §4)
+    spec.rs         GrammarSpec: versioned, serde-based transition-table schema for a supplied grammar
+    compile.rs      CompiledAutomaton/RtnPda: bounded, validated lowering of a GrammarSpec (ADR-0010)
+    emitted_subset.rs   pub const EMITTED_SUBSET_SPEC: the shipped grammar as a canonical GrammarSpec JSON asset
   vocab.rs        model vocabulary as raw byte strings per token id
   mask.rs         BitMask: the dense per-step token bitset (§4)
   recognizer.rs   ByteRecognizer trait (the byte-at-a-time surface)
@@ -55,11 +58,15 @@ src/
   ffi.rs          #[cfg(feature="python")] PyO3 bindings (§9)
 ```
 
-There is no `grammar/spec.rs` or `grammar/build.rs`: the emitted-Pure grammar
-(§5) is fixed, so `CompiledGrammar::from_spec` accepts a `spec` argument but
-selects that single hand-written PDA against the vocab (see
-`src/grammar/mod.rs`). `from_spec` selects the fixed PDA; it does not lower its
-argument. Masking lives in one `mask.rs`
+`CompiledGrammar::compile` always builds the fixed, hand-written emitted-Pure
+grammar (§5) in `pda.rs`. A host may instead supply its own grammar via
+`CompiledGrammar::from_spec`, which parses and validates a versioned
+`GrammarSpec` (`spec.rs`) and lowers it into a `CompiledAutomaton` (`compile.rs`)
+— a dense, bounded, data-driven automaton, not an EBNF interpreter (ADR-0010).
+A spec-compiled grammar supports L1 syntactic recognition only: the L2 schema
+overlay (§3.1, `schema/scope.rs`) is implemented against the fixed PDA's named
+states and is unavailable for it (`DecoderSession::with_schema` returns
+`Err(DecodeError::SchemaRequiresFixedGrammar)`). Masking lives in one `mask.rs`
 (there is no `mask/` directory), and the soundness/differential harness lives
 under `tests/`, not an in-crate `testing/` module (ADR-0003).
 
@@ -167,30 +174,30 @@ impl Vocab { pub fn from_byte_tokens(tokens: Vec<Vec<u8>>, eos: u32) -> Self; }
 
 pub struct CompiledGrammar { /* owns Vocab + lazy per-state mask cache */ }
 impl CompiledGrammar {
-    pub fn compile(vocab: Vocab) -> Self;               // bind vocab, size the lazy caches
-    pub fn from_spec(spec: &str, vocab: Vocab) -> Self; // accepts spec; compiles the fixed §5 PDA
-                                                        // over the single fixed PDA
+    pub fn compile(vocab: Vocab) -> Self;                             // fixed §5 PDA; bind vocab, size the lazy caches
+    pub fn from_spec(spec: &str, vocab: Vocab) -> Result<Self, SpecError>; // validate + lower a supplied GrammarSpec (ADR-0010)
     pub fn vocab(&self) -> &Vocab;
 }
 
 pub struct Schema { /* §6.2 */ }
 impl Schema { pub fn from_json(s: &str) -> Result<Self, SchemaError>; }
 
-pub struct DecoderSession<'g> { /* state, stack, scope, &CompiledGrammar */ }
+pub struct DecoderSession<'g> { /* cursor (fixed PDA or spec-compiled automaton), offset, scope, &CompiledGrammar */ }
 impl<'g> DecoderSession<'g> {
-    pub fn new(g: &'g CompiledGrammar) -> Self;                       // fixed PDA only
-    pub fn with_schema(g: &'g CompiledGrammar, schema: Schema) -> Self; // partial L2 overlay
+    pub fn new(g: &'g CompiledGrammar) -> Self;                       // either grammar kind; L1 only
+    pub fn with_schema(g: &'g CompiledGrammar, schema: Schema) -> Result<Self, DecodeError>; // fixed-PDA grammar only (partial L2 overlay)
     pub fn allowed_mask(&mut self) -> &BitMask;  // over vocab; EOS bit set iff is_complete().
                                                  // `&mut` because it refills the session's
                                                  // reused mask buffer and lazy per-state cache
                                                  // in place (no per-step alloc; unsafe is forbidden).
     pub fn accept_token(&mut self, id: u32) -> Result<(), DecodeError>;
+    pub fn pda(&self) -> Option<&Pda>;            // Some only for a fixed-PDA-backed session
     pub fn is_complete(&self) -> bool;
     pub fn reset(&mut self);                      // reuse allocation across generations
 }
 ```
 
-`DecodeError` is the single error enum: a byte-level `DeadState` plus the token-level `InadmissibleToken` / `UnknownToken` / `UnexpectedEos` variants (there is no separate `GrammarError`; grammar construction is infallible today).
+`DecodeError` is the single decode-time error enum: a byte-level `DeadState` plus the token-level `InadmissibleToken` / `UnknownToken` / `UnexpectedEos` variants and `SchemaRequiresFixedGrammar` (from `with_schema` against a spec-compiled grammar). Grammar *construction* is fallible only through `from_spec`, which reports a malformed/unsupported/explosive spec as a distinct `SpecError` (`compile` itself stays infallible).
 
 ### 9.2 PyO3 boundary
 
