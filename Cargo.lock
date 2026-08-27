@@ -1164,6 +1164,12 @@ dependencies = [
 [[package]]
 name = "pure-analyzer-parser"
 version = "0.1.0"
+dependencies = [
+ "proptest",
+ "pure-analyzer-diagnostics",
+ "pure-analyzer-lexer",
+ "pure-analyzer-syntax",
+]
 
 [[package]]
 name = "pure-analyzer-purecard"

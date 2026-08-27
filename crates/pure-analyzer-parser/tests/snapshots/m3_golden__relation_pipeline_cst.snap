@@ -1,0 +1,140 @@
+---
+source: crates/pure-analyzer-parser/tests/m3_golden.rs
+expression: rendered
+---
+ROOT 0..204
+  QUERY_EXPR 0..203
+    ISLAND 0..27
+      STORE_TABLE_POINTER 0..27
+        HASH_STORE_OPEN 0..3 "#>{"
+        QUALIFIED_NAME 3..13
+          IDENT 3..5 "db"
+          PATH_SEPARATOR 5..7 "::"
+          IDENT 7..13 "testDB"
+        DOT 13..14 "."
+        IDENT 14..25 "personTable"
+        ISLAND_END 25..27 "}#"
+    ARROW_CALL 27..119
+      WHITESPACE 27..30 "\n  "
+      ARROW 30..32 "->"
+      QUALIFIED_NAME 32..36
+        IDENT 32..36 "join"
+      CALL_ARGS 36..119
+        PAREN_OPEN 36..37 "("
+        ISLAND 37..73
+          STORE_TABLE_POINTER 37..73
+            HASH_STORE_OPEN 37..40 "#>{"
+            QUALIFIED_NAME 40..50
+              IDENT 40..42 "db"
+              PATH_SEPARATOR 42..44 "::"
+              IDENT 44..50 "testDB"
+            DOT 50..51 "."
+            IDENT 51..71 "groupMembershipTable"
+            ISLAND_END 71..73 "}#"
+        COMMA 73..74 ","
+        WHITESPACE 74..75 " "
+        QUALIFIED_NAME 75..83
+          IDENT 75..83 "JoinKind"
+        PROPERTY_NAV 83..89
+          DOT 83..84 "."
+          IDENT 84..89 "INNER"
+        COMMA 89..90 ","
+        WHITESPACE 90..91 " "
+        LAMBDA_EXPR 91..118
+          BRACE_OPEN 91..92 "{"
+          LAMBDA_PARAMS 92..95
+            IDENT 92..93 "x"
+            COMMA 93..94 ","
+            IDENT 94..95 "y"
+          PIPE 95..96 "|"
+          CODE_BLOCK 96..117
+            QUERY_EXPR 96..117
+              BINARY_EXPR 96..117
+                WHITESPACE 96..97 " "
+                VARIABLE_EXPR 97..99
+                  DOLLAR 97..98 "$"
+                  IDENT 98..99 "x"
+                PROPERTY_NAV 99..102
+                  DOT 99..100 "."
+                  IDENT 100..102 "ID"
+                WHITESPACE 102..103 " "
+                EQ 103..105 "=="
+                WHITESPACE 105..106 " "
+                VARIABLE_EXPR 106..108
+                  DOLLAR 106..107 "$"
+                  IDENT 107..108 "y"
+                PROPERTY_NAV 108..117
+                  DOT 108..109 "."
+                  IDENT 109..117 "PERSONID"
+          BRACE_CLOSE 117..118 "}"
+        PAREN_CLOSE 118..119 ")"
+    ARROW_CALL 119..203
+      WHITESPACE 119..122 "\n  "
+      ARROW 122..124 "->"
+      QUALIFIED_NAME 124..130
+        IDENT 124..130 "extend"
+      CALL_ARGS 130..203
+        PAREN_OPEN 130..131 "("
+        FUNCTION_CALL 131..167
+          QUALIFIED_NAME 131..135
+            IDENT 131..135 "over"
+          CALL_ARGS 135..167
+            PAREN_OPEN 135..136 "("
+            COLUMN_SPEC 136..144
+              TILDE 136..137 "~"
+              IDENT 137..144 "GROUPID"
+            COMMA 144..145 ","
+            WHITESPACE 145..146 " "
+            COLUMN_SPEC 146..153
+              TILDE 146..147 "~"
+              IDENT 147..153 "SALARY"
+            ARROW_CALL 153..166
+              ARROW 153..155 "->"
+              QUALIFIED_NAME 155..164
+                IDENT 155..164 "ascending"
+              CALL_ARGS 164..166
+                PAREN_OPEN 164..165 "("
+                PAREN_CLOSE 165..166 ")"
+            PAREN_CLOSE 166..167 ")"
+        COMMA 167..168 ","
+        WHITESPACE 168..169 " "
+        COLUMN_SPEC_ARRAY 169..202
+          TILDE 169..170 "~"
+          BRACKET_OPEN 170..171 "["
+          COLUMN_SPEC 171..201
+            IDENT 171..175 "RANK"
+            COLON 175..176 ":"
+            LAMBDA_EXPR 176..201
+              BRACE_OPEN 176..177 "{"
+              LAMBDA_PARAMS 177..182
+                IDENT 177..178 "p"
+                COMMA 178..179 ","
+                IDENT 179..180 "w"
+                COMMA 180..181 ","
+                IDENT 181..182 "r"
+              PIPE 182..183 "|"
+              CODE_BLOCK 183..200
+                QUERY_EXPR 183..200
+                  WHITESPACE 183..184 " "
+                  VARIABLE_EXPR 184..186
+                    DOLLAR 184..185 "$"
+                    IDENT 185..186 "p"
+                  ARROW_CALL 186..200
+                    ARROW 186..188 "->"
+                    QUALIFIED_NAME 188..192
+                      IDENT 188..192 "rank"
+                    CALL_ARGS 192..200
+                      PAREN_OPEN 192..193 "("
+                      VARIABLE_EXPR 193..195
+                        DOLLAR 193..194 "$"
+                        IDENT 194..195 "w"
+                      COMMA 195..196 ","
+                      WHITESPACE 196..197 " "
+                      VARIABLE_EXPR 197..199
+                        DOLLAR 197..198 "$"
+                        IDENT 198..199 "r"
+                      PAREN_CLOSE 199..200 ")"
+              BRACE_CLOSE 200..201 "}"
+          BRACKET_CLOSE 201..202 "]"
+        PAREN_CLOSE 202..203 ")"
+  SEMICOLON 203..204 ";"

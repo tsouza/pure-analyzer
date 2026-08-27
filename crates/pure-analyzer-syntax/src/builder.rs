@@ -260,8 +260,9 @@ impl<'source> GreenNodeBuilder<'source> {
     /// Validates all inputs and constructs exactly one [`SyntaxKind::ROOT`].
     pub fn finish(self) -> Result<GreenNode, BuildError> {
         let source_end = validate_tokens(self.source, self.tokens)?;
+        let source: Arc<str> = Arc::from(self.source);
         fold_events(
-            self.source,
+            &source,
             self.tokens,
             self.events.iter().filter_map(BuilderEvent::event),
             source_end,
@@ -342,7 +343,7 @@ fn validate_token_range(
 }
 
 fn fold_events(
-    source: &str,
+    source: &Arc<str>,
     tokens: &[(LexerSyntaxKind, TextRange)],
     events: impl Iterator<Item = Event>,
     source_end: TextSize,
@@ -387,7 +388,7 @@ fn open_node(
 }
 
 fn advance_token(
-    source: &str,
+    source: &Arc<str>,
     tokens: &[(LexerSyntaxKind, TextRange)],
     stack: &mut [PendingNode],
     event_index: usize,
@@ -403,12 +404,9 @@ fn advance_token(
             event_index,
             token_count: tokens.len(),
         })?;
-    let text = source
-        .get(usize::from(range.start())..usize::from(range.end()))
-        .ok_or(BuildError::InvalidSourceSlice { token_index, range })?;
     parent.children.push(GreenElement::Token(GreenToken::new(
         kind.into(),
-        text,
+        Arc::clone(source),
         range,
     )));
     Ok(range.end())

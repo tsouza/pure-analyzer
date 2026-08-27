@@ -73,6 +73,10 @@ test:
 test-unit:
     cargo nextest run --workspace --lib
 
+# Run the analyzer parser's focused lossless/recovery contract suite.
+test-parser:
+    cargo nextest run -p pure-analyzer-parser
+
 # Run doctests explicitly: nextest does not execute them. All features remain
 # compile-checked here; PureCARD's environment-bound feature tests are separate
 # integration-test binaries, so they are not executed by this doc-only command.
@@ -127,7 +131,7 @@ test-mutation-ffi:
 # ---------------------------------------------------------------------------
 
 # Run cargo-fuzz targets for a bounded time (default 60s per target).
-# Pass a target name to fuzz just one, e.g. `just fuzz diagnostics`. Uses the nightly
+# Pass a target name to fuzz just one, e.g. `just fuzz m3_parser`. Uses the nightly
 # toolchain cargo-fuzz needs for the sanitizers; CI's fuzz-smoke job calls this.
 # `triple` forces the build target: CI passes the gnu triple because a
 # musl-installed cargo-fuzz (taiki-e's static binary) otherwise defaults to a
@@ -374,7 +378,7 @@ ci: no-work-ledger
 # environment-bound and cannot run faithfully here — the CodSpeed bench (needs
 # the CodSpeed service), the no-warnings log sweep (reads the run's own Actions
 # logs), and the fuzz-smoke (needs nightly for cargo-fuzz's sanitizers) — so they
-# are only enforced in CI. Run the fuzz-smoke directly with `just fuzz diagnostics
+# are only enforced in CI. Run the relevant fuzz-smoke directly with `just fuzz <target>
 # 60` if you have nightly. Use before a PR when a change touches what the fast
 # gate skips.
 ci-full: ci coverage test-mutation deny audit vet machete release-plz-check semver public-api sweep postponed-markers docs test-scripts lint-actions zizmor

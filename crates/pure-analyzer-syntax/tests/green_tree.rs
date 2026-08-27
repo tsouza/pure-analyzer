@@ -223,6 +223,34 @@ fn raw_kind_ids_are_pinned_and_reject_unassigned_values() {
         (SyntaxKind::ROOT, 0x8000),
         (SyntaxKind::ERROR_NODE, 0x8001),
         (SyntaxKind::BINARY_EXPR, 0x8002),
+        (SyntaxKind::QUERY_EXPR, 0x8003),
+        (SyntaxKind::ALL_EXPR, 0x8004),
+        (SyntaxKind::QUALIFIED_NAME, 0x8005),
+        (SyntaxKind::VARIABLE_EXPR, 0x8006),
+        (SyntaxKind::LITERAL_EXPR, 0x8007),
+        (SyntaxKind::PAREN_EXPR, 0x8008),
+        (SyntaxKind::UNARY_EXPR, 0x8009),
+        (SyntaxKind::ARROW_CALL, 0x800a),
+        (SyntaxKind::PROPERTY_NAV, 0x800b),
+        (SyntaxKind::BRACKET_INDEX, 0x800c),
+        (SyntaxKind::CALL_ARGS, 0x800d),
+        (SyntaxKind::LAMBDA_EXPR, 0x800e),
+        (SyntaxKind::LAMBDA_PARAMS, 0x800f),
+        (SyntaxKind::CODE_BLOCK, 0x8010),
+        (SyntaxKind::LET_STMT, 0x8011),
+        (SyntaxKind::COLUMN_SPEC, 0x8012),
+        (SyntaxKind::COLUMN_SPEC_ARRAY, 0x8013),
+        (SyntaxKind::NEW_INSTANCE_EXPR, 0x8014),
+        (SyntaxKind::CAST_EXPR, 0x8015),
+        (SyntaxKind::RELATION_TYPE, 0x8016),
+        (SyntaxKind::COLUMN_INFO, 0x8017),
+        (SyntaxKind::ISLAND, 0x8018),
+        (SyntaxKind::STORE_TABLE_POINTER, 0x8019),
+        (SyntaxKind::NAV_PATH_ISLAND, 0x801a),
+        (SyntaxKind::OPAQUE_ISLAND, 0x801b),
+        (SyntaxKind::TYPE_REF, 0x801c),
+        (SyntaxKind::MULTIPLICITY, 0x801d),
+        (SyntaxKind::FUNCTION_CALL, 0x801e),
     ];
 
     assert_eq!(SyntaxKind::all().len(), expected.len());
@@ -234,7 +262,7 @@ fn raw_kind_ids_are_pinned_and_reject_unassigned_values() {
         assert_eq!(SyntaxKind::try_from(RawSyntaxKind::new(value)), Ok(kind));
     }
 
-    for value in [0x0032, 0x7fff, 0x8003, u16::MAX] {
+    for value in [0x0032, 0x7fff, 0x801f, u16::MAX] {
         let error = SyntaxKind::try_from(RawSyntaxKind::new(value))
             .expect_err("unassigned raw kind must be rejected");
         assert_eq!(error.value(), value);

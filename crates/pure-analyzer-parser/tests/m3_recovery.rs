@@ -1,0 +1,232 @@
+//! Recovery and arbitrary-input contracts for the M3 parser.
+
+use std::panic;
+
+use proptest::prelude::*;
+use pure_analyzer_diagnostics::{DiagCode, FileId};
+use pure_analyzer_lexer::lex;
+use pure_analyzer_parser::parse_query;
+use pure_analyzer_syntax::{GreenElement, GreenNode, SyntaxKind, TextRange};
+
+fn test_file() -> FileId {
+    FileId::new(73)
+}
+
+const EXCESSIVE_NESTING: usize = 1_024;
+const LONG_BINARY_CHAIN: usize = 4_096;
+const LONG_MIXED_BINARY_CHAIN: usize = 512;
+const EXCESSIVE_POSTFIX_CHAIN: usize = 320;
+
+fn parse(source: &str) -> pure_analyzer_parser::Parse {
+    parse_query(source, test_file()).expect("small test sources must build a tree")
+}
+
+fn assert_ranges_are_valid(source: &str, parsed: &pure_analyzer_parser::Parse) {
+    for diagnostic in &parsed.diagnostics {
+        assert_eq!(diagnostic.primary.file, test_file());
+        assert_range_is_valid(source, diagnostic.primary.span);
+    }
+    for token in parsed.green.tokens() {
+        assert_range_is_valid(source, token.text_range());
+    }
+}
+
+fn assert_range_is_valid(source: &str, range: TextRange) {
+    let start = usize::from(range.start());
+    let end = usize::from(range.end());
+    assert!(start <= end);
+    assert!(end <= source.len());
+    assert!(source.is_char_boundary(start));
+    assert!(source.is_char_boundary(end));
+}
+
+fn count_kind(node: &GreenNode, kind: SyntaxKind) -> usize {
+    usize::from(node.kind() == kind)
+        + node
+            .children()
+            .iter()
+            .map(|element| match element {
+                GreenElement::Node(child) => count_kind(child, kind),
+                GreenElement::Token(_) => 0,
+            })
+            .sum::<usize>()
+}
+
+fn max_kind_depth(node: &GreenNode, kind: SyntaxKind) -> usize {
+    let descendant_depth = node
+        .children()
+        .iter()
+        .filter_map(GreenElement::as_node)
+        .map(|child| max_kind_depth(child, kind))
+        .max()
+        .unwrap_or(0);
+    descendant_depth + usize::from(node.kind() == kind)
+}
+
+#[test]
+fn lexical_errors_are_recovered_without_losing_later_source() {
+    let source = "$x \u{0} ->filter(y|$y.name); model::Person.all()";
+    let parsed = parse(source);
+
+    assert_eq!(parsed.green.text(), source);
+    assert!(
+        parsed
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == DiagCode::BadToken)
+    );
+    assert_ranges_are_valid(source, &parsed);
+}
+
+#[test]
+fn incomplete_delimiters_return_a_tree_and_structured_diagnostics() {
+    for source in [
+        "$",
+        "model::Person.all(",
+        "{x| let y =",
+        "#>{db::Model.table",
+        "#{ TDS",
+    ] {
+        let result = panic::catch_unwind(|| parse(source));
+        let parsed = result.expect("parser must not panic for incomplete input");
+
+        assert_eq!(parsed.green.text(), source);
+        assert!(!parsed.diagnostics.is_empty(), "{source}");
+        assert_ranges_are_valid(source, &parsed);
+    }
+}
+
+#[test]
+fn malformed_input_recovers_at_a_top_level_semicolon() {
+    let source = ") ; model::Person.all()";
+    let parsed = parse(source);
+    let tree_tokens = parsed.green.tokens().collect::<Vec<_>>();
+    let lexer_tokens = lex(source);
+
+    assert_eq!(parsed.green.text(), source);
+    assert_eq!(tree_tokens.len(), lexer_tokens.len());
+    assert!(
+        parsed
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == DiagCode::MalformedSyntax)
+    );
+    assert_ranges_are_valid(source, &parsed);
+}
+
+#[test]
+fn malformed_delimiters_preserve_the_next_top_level_query() {
+    let source = "foo(] ; model::Person.all()";
+    let parsed = parse(source);
+
+    assert_eq!(parsed.green.text(), source);
+    assert!(
+        parsed
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == DiagCode::MalformedSyntax)
+    );
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::QUERY_EXPR), 2);
+    assert_ranges_are_valid(source, &parsed);
+}
+
+#[test]
+fn malformed_let_binding_preserves_the_next_code_block_statement() {
+    let source = "{x| let y = ; $x.name()}";
+    let parsed = parse(source);
+
+    assert_eq!(parsed.green.text(), source);
+    assert!(
+        parsed
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == DiagCode::MalformedSyntax)
+    );
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::LET_STMT), 1);
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::QUERY_EXPR), 2);
+    assert_ranges_are_valid(source, &parsed);
+}
+
+#[test]
+fn excessive_nesting_is_recovered_without_a_stack_overflow() {
+    let source = format!(
+        "{}value{}",
+        "(".repeat(EXCESSIVE_NESTING),
+        ")".repeat(EXCESSIVE_NESTING)
+    );
+    let result = panic::catch_unwind(|| parse(&source));
+    let parsed = result.expect("deep input must not panic");
+
+    assert_eq!(parsed.green.text(), source);
+    assert!(
+        parsed
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == DiagCode::MalformedSyntax)
+    );
+    assert_ranges_are_valid(&source, &parsed);
+}
+
+#[test]
+fn long_left_associative_binary_chain_is_flat_and_lossless() {
+    let source = format!("value{}", " + value".repeat(LONG_BINARY_CHAIN));
+    let result = panic::catch_unwind(|| parse(&source));
+    let parsed = result.expect("long binary chains must not panic");
+
+    assert_eq!(parsed.green.text(), source);
+    assert!(parsed.diagnostics.is_empty(), "{:#?}", parsed.diagnostics);
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::BINARY_EXPR), 1);
+    assert_ranges_are_valid(&source, &parsed);
+}
+
+#[test]
+fn binary_cst_keeps_precedence_without_repeated_associative_nesting() {
+    let parsed = parse("a * b + c + d");
+
+    assert!(parsed.diagnostics.is_empty(), "{:#?}", parsed.diagnostics);
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::BINARY_EXPR), 2);
+    assert_eq!(max_kind_depth(&parsed.green, SyntaxKind::BINARY_EXPR), 2);
+}
+
+#[test]
+fn long_mixed_precedence_chain_remains_valid_and_lossless() {
+    let source = format!(
+        "value{}",
+        " * value + value".repeat(LONG_MIXED_BINARY_CHAIN)
+    );
+    let parsed = parse(&source);
+
+    assert_eq!(parsed.green.text(), source);
+    assert!(parsed.diagnostics.is_empty(), "{:#?}", parsed.diagnostics);
+    assert_ranges_are_valid(&source, &parsed);
+}
+
+#[test]
+fn excessive_postfix_nesting_is_recovered_without_a_stack_overflow() {
+    let source = format!("f{}", "()".repeat(EXCESSIVE_POSTFIX_CHAIN));
+    let result = panic::catch_unwind(|| parse(&source));
+    let parsed = result.expect("long postfix chains must not panic");
+
+    assert_eq!(parsed.green.text(), source);
+    assert!(
+        parsed
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == DiagCode::MalformedSyntax)
+    );
+    assert_ranges_are_valid(&source, &parsed);
+}
+
+proptest! {
+    #[test]
+    fn arbitrary_utf8_is_lossless_and_deterministic(source in any::<String>()) {
+        let first = panic::catch_unwind(|| parse(&source));
+        let second = panic::catch_unwind(|| parse(&source));
+        let first = first.expect("parser must not panic");
+        let second = second.expect("parser must not panic");
+
+        prop_assert_eq!(first.green.text(), source.as_str());
+        prop_assert_eq!(&first, &second);
+        assert_ranges_are_valid(&source, &first);
+    }
+}

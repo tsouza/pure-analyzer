@@ -1,9 +1,16 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
-//! Analyzer parser package boundary.
+//! Resilient, lossless parsers for the analyzer's supported Pure surface.
 //!
-//! The crate currently exposes its package version as its complete public API.
+//! [`parse_query`] accepts a modern M3/Relation query and returns a concrete
+//! syntax tree even when its source is incomplete or malformed. Ordinary
+//! syntax failures are reported in [`Parse::diagnostics`]; the `Result` only
+//! reports an infrastructure failure while constructing the validated tree.
+
+mod m3;
+
+pub use m3::{Parse, parse_query};
 
 /// The crate's semantic version, as declared in `Cargo.toml`.
 #[must_use]

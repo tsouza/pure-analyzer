@@ -10,7 +10,7 @@ macro_rules! define_syntax_kinds {
         /// The stable token-ID namespace is `0x0000..=0x7fff`; current
         /// assignments are contiguous at `0x0000..=0x0031`. The stable node-ID
         /// namespace is the disjoint `0x8000..=0xffff`; current assignments are
-        /// `0x8000..=0x8002`. Existing assignments do not change.
+        /// `0x8000..=0x801e`. Existing assignments do not change.
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
         #[repr(u16)]
         #[allow(non_camel_case_types, missing_docs)]
@@ -106,6 +106,34 @@ define_syntax_kinds! {
         ROOT = 0x8000,
         ERROR_NODE = 0x8001,
         BINARY_EXPR = 0x8002,
+        QUERY_EXPR = 0x8003,
+        ALL_EXPR = 0x8004,
+        QUALIFIED_NAME = 0x8005,
+        VARIABLE_EXPR = 0x8006,
+        LITERAL_EXPR = 0x8007,
+        PAREN_EXPR = 0x8008,
+        UNARY_EXPR = 0x8009,
+        ARROW_CALL = 0x800a,
+        PROPERTY_NAV = 0x800b,
+        BRACKET_INDEX = 0x800c,
+        CALL_ARGS = 0x800d,
+        LAMBDA_EXPR = 0x800e,
+        LAMBDA_PARAMS = 0x800f,
+        CODE_BLOCK = 0x8010,
+        LET_STMT = 0x8011,
+        COLUMN_SPEC = 0x8012,
+        COLUMN_SPEC_ARRAY = 0x8013,
+        NEW_INSTANCE_EXPR = 0x8014,
+        CAST_EXPR = 0x8015,
+        RELATION_TYPE = 0x8016,
+        COLUMN_INFO = 0x8017,
+        ISLAND = 0x8018,
+        STORE_TABLE_POINTER = 0x8019,
+        NAV_PATH_ISLAND = 0x801a,
+        OPAQUE_ISLAND = 0x801b,
+        TYPE_REF = 0x801c,
+        MULTIPLICITY = 0x801d,
+        FUNCTION_CALL = 0x801e,
     }
 }
 
