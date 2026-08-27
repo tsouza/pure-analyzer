@@ -106,8 +106,21 @@ test-scripts:
 # Mutation testing verifies that the test suite actually catches regressions.
 # The default workspace and feature-gated PureCARD FFI surface run separately
 # so neither pass can succeed vacuously; xtask portably prepares their output.
+# Full, unsharded — the local/ci-full entry point (CI itself shards the slow
+# workspace pass across a matrix; see test-mutation-shard).
 test-mutation:
     cargo xtask test-mutation
+
+# One shard of the workspace-wide mutation pass (CI matrix only): `index` is
+# zero-based, matching GitHub Actions' `strategy.job-index`/`strategy.job-total`.
+test-mutation-shard index total:
+    cargo xtask test-mutation-shard {{index}} {{total}}
+
+# The feature-gated PureCARD FFI-boundary mutation pass alone (fast; never
+# sharded). Split out of `test-mutation` so CI can run it as its own job
+# alongside the sharded workspace matrix.
+test-mutation-ffi:
+    cargo xtask test-mutation-ffi
 
 # ---------------------------------------------------------------------------
 # Fuzzing & benchmarking
