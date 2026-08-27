@@ -1315,12 +1315,70 @@ impl Pda {
     }
 }
 
+/// Every distinct automaton state — the single source of truth both the
+/// in-crate `index`/`COUNT` bijection check and external state-coverage
+/// tests read, so there is never a second, independently-maintained copy to
+/// drift out of sync. `#[doc(hidden)]`: this is test-support surface, not
+/// part of the crate's documented public contract (excluded from the
+/// `cargo public-api` snapshot), but a plain private `pub(crate)` cannot
+/// cross the crate boundary integration tests under `tests/` compile behind.
+#[doc(hidden)]
+pub const ALL_STATES: [State; State::COUNT] = [
+    State::Start,
+    State::ExpectSource,
+    State::AfterBraceOpen,
+    State::BlockStmt,
+    State::BlockStmtClose,
+    State::InSourceIdent,
+    State::SourceColon,
+    State::SourceColon2,
+    State::SourceDash,
+    State::LetL,
+    State::LetLe,
+    State::LetLet,
+    State::ExpectBinder,
+    State::InBinder,
+    State::AfterBinder,
+    State::InMultiplicity,
+    State::ExpectBraceBinder,
+    State::AfterColonWs,
+    State::ExpectValue,
+    State::ExpectValueReq,
+    State::AfterValue,
+    State::InIdent,
+    State::SawNumSign,
+    State::InNumberInt,
+    State::NeedFracDigit,
+    State::InNumberFrac,
+    State::SawExp,
+    State::NeedExpDigit,
+    State::InExp,
+    State::InStrLit { escaped: false },
+    State::InStrLit { escaped: true },
+    State::SawPercent,
+    State::InDateLit,
+    State::InMilestoneLit,
+    State::AfterDollar,
+    State::AfterDot,
+    State::AfterArrow,
+    State::AfterColon,
+    State::AfterColon2,
+    State::SawDash,
+    State::SawPipe,
+    State::SawEq,
+    State::SawBang,
+    State::SawGt,
+    State::SawLt,
+    State::SawAmp,
+    State::SawTilde,
+];
+
 #[cfg(test)]
 mod tests {
     use std::collections::{HashMap, VecDeque, hash_map::Entry};
 
     use super::{
-        ALL_FRAMES, Frame, LexKind, Pda, State, Step, WS, is_date_char, is_ident_start,
+        ALL_FRAMES, ALL_STATES, Frame, LexKind, Pda, State, Step, WS, is_date_char, is_ident_start,
         is_ident_tail, step,
     };
 
@@ -1348,59 +1406,6 @@ mod tests {
         pushed_frames: [bool; ALL_FRAMES.len()],
         black_holes: Vec<Config>,
     }
-
-    /// Every distinct automaton state, for the `index`/`COUNT` bijection check.
-    /// [`State::index`]'s exhaustive match already makes a new variant a compile
-    /// error; this list makes an index *collision or gap* a test failure too.
-    const ALL_STATES: [State; State::COUNT] = [
-        State::Start,
-        State::ExpectSource,
-        State::AfterBraceOpen,
-        State::BlockStmt,
-        State::BlockStmtClose,
-        State::InSourceIdent,
-        State::SourceColon,
-        State::SourceColon2,
-        State::SourceDash,
-        State::LetL,
-        State::LetLe,
-        State::LetLet,
-        State::ExpectBinder,
-        State::InBinder,
-        State::AfterBinder,
-        State::InMultiplicity,
-        State::ExpectBraceBinder,
-        State::AfterColonWs,
-        State::ExpectValue,
-        State::ExpectValueReq,
-        State::AfterValue,
-        State::InIdent,
-        State::SawNumSign,
-        State::InNumberInt,
-        State::NeedFracDigit,
-        State::InNumberFrac,
-        State::SawExp,
-        State::NeedExpDigit,
-        State::InExp,
-        State::InStrLit { escaped: false },
-        State::InStrLit { escaped: true },
-        State::SawPercent,
-        State::InDateLit,
-        State::InMilestoneLit,
-        State::AfterDollar,
-        State::AfterDot,
-        State::AfterArrow,
-        State::AfterColon,
-        State::AfterColon2,
-        State::SawDash,
-        State::SawPipe,
-        State::SawEq,
-        State::SawBang,
-        State::SawGt,
-        State::SawLt,
-        State::SawAmp,
-        State::SawTilde,
-    ];
 
     fn seed_config() -> Config {
         Config {
