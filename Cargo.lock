@@ -1156,6 +1156,8 @@ version = "0.1.0"
 dependencies = [
  "proptest",
  "pure-analyzer-diagnostics",
+ "pure-analyzer-parser",
+ "pure-analyzer-syntax",
  "serde",
  "serde_json",
  "thiserror",

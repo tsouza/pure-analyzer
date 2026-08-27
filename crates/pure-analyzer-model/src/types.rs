@@ -189,9 +189,8 @@ impl fmt::Display for SourceId {
 
 /// Input kinds represented by the analyzer model API.
 ///
-/// PMCD loading functions consume `PmcdJson` paths. `PureModelFile` preserves
-/// the provenance needed by another loader that constructs the same
-/// [`ModelGraph`].
+/// [`crate::load_model_files`] accepts either variant and normalizes both into
+/// the same [`ModelGraph`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ModelSource {
     /// Engine-produced PureModelContextData JSON.
@@ -527,6 +526,30 @@ impl ClassInfo {
         }
     }
 
+    pub(crate) const fn from_pure(
+        path: QName,
+        supertypes: Vec<QName>,
+        temporal: Option<Temporal>,
+        properties: BTreeMap<Name, PropInfo>,
+        qualified_properties: BTreeMap<Name, QpInfo>,
+        source: SourceId,
+    ) -> Self {
+        Self {
+            path,
+            supertypes,
+            temporal,
+            properties,
+            qualified_properties,
+            provenance: Provenance::PureFile,
+            source,
+            coverage_gap: false,
+        }
+    }
+
+    pub(crate) fn mark_coverage_gap(&mut self) {
+        self.coverage_gap = true;
+    }
+
     pub(crate) fn properties_mut(&mut self) -> &mut BTreeMap<Name, PropInfo> {
         &mut self.properties
     }
@@ -537,7 +560,7 @@ impl ClassInfo {
         &self.path
     }
 
-    /// Declared supertypes in PMCD order.
+    /// Declared supertypes in source order.
     #[must_use]
     pub fn supertypes(&self) -> &[QName] {
         &self.supertypes
@@ -617,11 +640,12 @@ pub struct AssocInfo {
 }
 
 impl AssocInfo {
-    pub(crate) const fn new(
+    pub(crate) const fn from_source(
         path: QName,
         end_a: AssociationEndInfo,
         end_b: AssociationEndInfo,
         temporal: Option<Temporal>,
+        provenance: Provenance,
         source: SourceId,
     ) -> Self {
         Self {
@@ -629,7 +653,7 @@ impl AssocInfo {
             end_a,
             end_b,
             temporal,
-            provenance: Provenance::Pmcd,
+            provenance,
             source,
         }
     }
@@ -640,13 +664,13 @@ impl AssocInfo {
         &self.path
     }
 
-    /// First end in PMCD declaration order, materialized on the opposite class.
+    /// First end in source declaration order, materialized on the opposite class.
     #[must_use]
     pub const fn end_a(&self) -> &AssociationEndInfo {
         &self.end_a
     }
 
-    /// Second end in PMCD declaration order, materialized on the opposite class.
+    /// Second end in source declaration order, materialized on the opposite class.
     #[must_use]
     pub const fn end_b(&self) -> &AssociationEndInfo {
         &self.end_b

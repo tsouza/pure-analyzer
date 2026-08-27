@@ -1,4 +1,45 @@
 pub mod pure_analyzer_model
+pub enum pure_analyzer_model::ModelDocument<'a>
+pub pure_analyzer_model::ModelDocument::Pmcd(pure_analyzer_model::PmcdDocument<'a>)
+pub pure_analyzer_model::ModelDocument::Pure(pure_analyzer_model::PureDocument<'a>)
+impl<'a> core::clone::Clone for pure_analyzer_model::ModelDocument<'a>
+pub fn pure_analyzer_model::ModelDocument<'a>::clone(&self) -> pure_analyzer_model::ModelDocument<'a>
+impl<'a> core::convert::From<pure_analyzer_model::PmcdDocument<'a>> for pure_analyzer_model::ModelDocument<'a>
+pub fn pure_analyzer_model::ModelDocument<'a>::from(pure_analyzer_model::PmcdDocument<'a>) -> Self
+impl<'a> core::convert::From<pure_analyzer_model::PureDocument<'a>> for pure_analyzer_model::ModelDocument<'a>
+pub fn pure_analyzer_model::ModelDocument<'a>::from(pure_analyzer_model::PureDocument<'a>) -> Self
+impl<'a> core::fmt::Debug for pure_analyzer_model::ModelDocument<'a>
+pub fn pure_analyzer_model::ModelDocument<'a>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl<'a> core::marker::Copy for pure_analyzer_model::ModelDocument<'a>
+impl<'a> core::marker::Freeze for pure_analyzer_model::ModelDocument<'a>
+impl<'a> core::marker::Send for pure_analyzer_model::ModelDocument<'a>
+impl<'a> core::marker::Sync for pure_analyzer_model::ModelDocument<'a>
+impl<'a> core::marker::Unpin for pure_analyzer_model::ModelDocument<'a>
+impl<'a> core::marker::UnsafeUnpin for pure_analyzer_model::ModelDocument<'a>
+impl<'a> core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_model::ModelDocument<'a>
+impl<'a> core::panic::unwind_safe::UnwindSafe for pure_analyzer_model::ModelDocument<'a>
+impl<T, U> core::convert::Into<U> for pure_analyzer_model::ModelDocument<'a> where U: core::convert::From<T>
+pub fn pure_analyzer_model::ModelDocument<'a>::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_model::ModelDocument<'a> where U: core::convert::Into<T>
+pub type pure_analyzer_model::ModelDocument<'a>::Error = never
+pub fn pure_analyzer_model::ModelDocument<'a>::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_model::ModelDocument<'a> where U: core::convert::TryFrom<T>
+pub type pure_analyzer_model::ModelDocument<'a>::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_model::ModelDocument<'a>::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_model::ModelDocument<'a> where T: core::clone::Clone
+pub type pure_analyzer_model::ModelDocument<'a>::Owned = T
+pub fn pure_analyzer_model::ModelDocument<'a>::clone_into(&self, &mut T)
+pub fn pure_analyzer_model::ModelDocument<'a>::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_model::ModelDocument<'a> where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_model::ModelDocument<'a>::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_model::ModelDocument<'a> where T: ?core::marker::Sized
+pub fn pure_analyzer_model::ModelDocument<'a>::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_model::ModelDocument<'a> where T: ?core::marker::Sized
+pub fn pure_analyzer_model::ModelDocument<'a>::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_model::ModelDocument<'a> where T: core::clone::Clone
+pub unsafe fn pure_analyzer_model::ModelDocument<'a>::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_model::ModelDocument<'a>
+pub fn pure_analyzer_model::ModelDocument<'a>::from(T) -> T
 pub enum pure_analyzer_model::ModelError
 pub pure_analyzer_model::ModelError::InvalidDocument
 pub pure_analyzer_model::ModelError::InvalidDocument::message: alloc::string::String
@@ -14,6 +55,9 @@ pub pure_analyzer_model::ModelError::InvalidMergedGraph::source_id: pure_analyze
 pub pure_analyzer_model::ModelError::Json
 pub pure_analyzer_model::ModelError::Json::source: serde_json::error::Error
 pub pure_analyzer_model::ModelError::Json::source_name: alloc::string::String
+pub pure_analyzer_model::ModelError::PureParse
+pub pure_analyzer_model::ModelError::PureParse::source: pure_analyzer_syntax::builder::BuildError
+pub pure_analyzer_model::ModelError::PureParse::source_name: alloc::string::String
 pub pure_analyzer_model::ModelError::Read
 pub pure_analyzer_model::ModelError::Read::path: std::path::PathBuf
 pub pure_analyzer_model::ModelError::Read::source: core::io::error::Error
@@ -802,6 +846,8 @@ pub const fn pure_analyzer_model::PmcdDocument<'a>::label(self) -> &'a str
 pub const fn pure_analyzer_model::PmcdDocument<'a>::new(&'a str, &'a str) -> Self
 impl<'a> core::clone::Clone for pure_analyzer_model::PmcdDocument<'a>
 pub fn pure_analyzer_model::PmcdDocument<'a>::clone(&self) -> pure_analyzer_model::PmcdDocument<'a>
+impl<'a> core::convert::From<pure_analyzer_model::PmcdDocument<'a>> for pure_analyzer_model::ModelDocument<'a>
+pub fn pure_analyzer_model::ModelDocument<'a>::from(pure_analyzer_model::PmcdDocument<'a>) -> Self
 impl<'a> core::fmt::Debug for pure_analyzer_model::PmcdDocument<'a>
 pub fn pure_analyzer_model::PmcdDocument<'a>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl<'a> core::marker::Copy for pure_analyzer_model::PmcdDocument<'a>
@@ -878,6 +924,47 @@ impl<T> core::clone::CloneToUninit for pure_analyzer_model::PropInfo where T: co
 pub unsafe fn pure_analyzer_model::PropInfo::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for pure_analyzer_model::PropInfo
 pub fn pure_analyzer_model::PropInfo::from(T) -> T
+pub struct pure_analyzer_model::PureDocument<'a>
+impl<'a> pure_analyzer_model::PureDocument<'a>
+pub const fn pure_analyzer_model::PureDocument<'a>::label(self) -> &'a str
+pub const fn pure_analyzer_model::PureDocument<'a>::new(&'a str, &'a str) -> Self
+pub const fn pure_analyzer_model::PureDocument<'a>::source(self) -> &'a str
+impl<'a> core::clone::Clone for pure_analyzer_model::PureDocument<'a>
+pub fn pure_analyzer_model::PureDocument<'a>::clone(&self) -> pure_analyzer_model::PureDocument<'a>
+impl<'a> core::convert::From<pure_analyzer_model::PureDocument<'a>> for pure_analyzer_model::ModelDocument<'a>
+pub fn pure_analyzer_model::ModelDocument<'a>::from(pure_analyzer_model::PureDocument<'a>) -> Self
+impl<'a> core::fmt::Debug for pure_analyzer_model::PureDocument<'a>
+pub fn pure_analyzer_model::PureDocument<'a>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl<'a> core::marker::Copy for pure_analyzer_model::PureDocument<'a>
+impl<'a> core::marker::Freeze for pure_analyzer_model::PureDocument<'a>
+impl<'a> core::marker::Send for pure_analyzer_model::PureDocument<'a>
+impl<'a> core::marker::Sync for pure_analyzer_model::PureDocument<'a>
+impl<'a> core::marker::Unpin for pure_analyzer_model::PureDocument<'a>
+impl<'a> core::marker::UnsafeUnpin for pure_analyzer_model::PureDocument<'a>
+impl<'a> core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_model::PureDocument<'a>
+impl<'a> core::panic::unwind_safe::UnwindSafe for pure_analyzer_model::PureDocument<'a>
+impl<T, U> core::convert::Into<U> for pure_analyzer_model::PureDocument<'a> where U: core::convert::From<T>
+pub fn pure_analyzer_model::PureDocument<'a>::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_model::PureDocument<'a> where U: core::convert::Into<T>
+pub type pure_analyzer_model::PureDocument<'a>::Error = never
+pub fn pure_analyzer_model::PureDocument<'a>::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_model::PureDocument<'a> where U: core::convert::TryFrom<T>
+pub type pure_analyzer_model::PureDocument<'a>::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_model::PureDocument<'a>::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_model::PureDocument<'a> where T: core::clone::Clone
+pub type pure_analyzer_model::PureDocument<'a>::Owned = T
+pub fn pure_analyzer_model::PureDocument<'a>::clone_into(&self, &mut T)
+pub fn pure_analyzer_model::PureDocument<'a>::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_model::PureDocument<'a> where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_model::PureDocument<'a>::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_model::PureDocument<'a> where T: ?core::marker::Sized
+pub fn pure_analyzer_model::PureDocument<'a>::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_model::PureDocument<'a> where T: ?core::marker::Sized
+pub fn pure_analyzer_model::PureDocument<'a>::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_model::PureDocument<'a> where T: core::clone::Clone
+pub unsafe fn pure_analyzer_model::PureDocument<'a>::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_model::PureDocument<'a>
+pub fn pure_analyzer_model::PureDocument<'a>::from(T) -> T
 pub struct pure_analyzer_model::QName(_)
 impl pure_analyzer_model::QName
 pub fn pure_analyzer_model::QName::as_str(&self) -> &str
@@ -1082,6 +1169,10 @@ pub unsafe fn pure_analyzer_model::TypeRef::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for pure_analyzer_model::TypeRef
 pub fn pure_analyzer_model::TypeRef::from(T) -> T
 pub const pure_analyzer_model::MODEL_MERGE_CONFLICT: pure_analyzer_diagnostics::code::DiagCode
+pub fn pure_analyzer_model::load_model_documents(&[pure_analyzer_model::ModelDocument<'_>]) -> core::result::Result<pure_analyzer_model::ModelGraph, pure_analyzer_model::ModelError>
+pub fn pure_analyzer_model::load_model_files(&[pure_analyzer_model::ModelSource]) -> core::result::Result<pure_analyzer_model::ModelGraph, pure_analyzer_model::ModelError>
 pub fn pure_analyzer_model::load_pmcd_documents(&[pure_analyzer_model::PmcdDocument<'_>]) -> core::result::Result<pure_analyzer_model::ModelGraph, pure_analyzer_model::ModelError>
 pub fn pure_analyzer_model::load_pmcd_files(&[std::path::PathBuf]) -> core::result::Result<pure_analyzer_model::ModelGraph, pure_analyzer_model::ModelError>
+pub fn pure_analyzer_model::load_pure_documents(&[pure_analyzer_model::PureDocument<'_>]) -> core::result::Result<pure_analyzer_model::ModelGraph, pure_analyzer_model::ModelError>
+pub fn pure_analyzer_model::load_pure_files(&[std::path::PathBuf]) -> core::result::Result<pure_analyzer_model::ModelGraph, pure_analyzer_model::ModelError>
 pub fn pure_analyzer_model::version() -> &'static str
