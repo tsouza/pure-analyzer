@@ -160,7 +160,7 @@ pub(crate) fn narrow_into(
             cache,
             CacheKey::SourceMethod,
             prefix,
-            TrieKind::Ident,
+            TrieKind::IdentOrStr,
             vocab,
             eos_bit,
             || Trie::from_names(std::iter::once(SOURCE_METHOD)),
@@ -399,6 +399,16 @@ enum TrieKind {
     /// A quoted string (N6): a candidate token opens a string (`'`) or continues
     /// one already in flight.
     Str,
+    /// S1's source-method position: unlike every other rule here, which narrows
+    /// one lexeme *shape* and lets every other shape pass through untouched
+    /// (a quoted literal is legal wherever a property name is, so `Member`
+    /// governs `Ident` only and leaves `Str` alone), a source classpath's dot
+    /// only ever legally continues into the bare word `all` — a quoted literal
+    /// here is never legal at all, so both shapes are candidates: whichever one
+    /// it is, it must extend [`SOURCE_METHOD`](crate::schema::scope::SOURCE_METHOD)
+    /// or it is cleared. A candidate token opens with an identifier-tail byte,
+    /// opens a string (`'`), or continues one already in flight.
+    IdentOrStr,
 }
 
 /// Whether an operand token is kept under a T1 constraint with LHS class `lhs`
@@ -466,6 +476,7 @@ fn is_candidate(bytes: &[u8], kind: TrieKind, mid_lexeme: bool) -> bool {
         Some(&first) => match kind {
             TrieKind::Ident => is_ident_tail(first),
             TrieKind::Str => first == b'\'' || mid_lexeme,
+            TrieKind::IdentOrStr => is_ident_tail(first) || first == b'\'' || mid_lexeme,
         },
     }
 }
@@ -643,6 +654,30 @@ mod tests {
         let (_applied, mask) = run(&L2Position::SourceIdent, &[], v);
         assert!(bit(&mask, 0), "a leading classpath prefix survives");
         assert!(!bit(&mask, 1), "a prefix off every source is masked");
+    }
+
+    #[test]
+    fn source_method_keeps_all_and_a_leading_prefix_but_masks_a_quoted_literal() {
+        // S1: the identifier right after a pipeline-source classpath's `.` must
+        // be exactly `all`. Unlike every other trie rule here, a quoted literal
+        // is never legal at this position either (`Class.'name'` is never valid
+        // Pure, verified live), so `IdentOrStr` must mask it too — the bug this
+        // regression guards: an earlier version used plain `Ident`, which left
+        // every `Str`-shaped candidate (a quoted phantom property) completely
+        // unnarrowed, since `fill_trie` keeps a non-candidate token unconditionally.
+        let v = vocab(&[b"all", b"a", b"'name'", b"Xy"]);
+        let (applied, mask) = run(&L2Position::SourceMethod, &[], v);
+        assert!(applied);
+        assert!(bit(&mask, 0), "the exact method name survives");
+        assert!(
+            bit(&mask, 1),
+            "a leading prefix of the method name survives"
+        );
+        assert!(
+            !bit(&mask, 2),
+            "a quoted literal is masked, not passed through"
+        );
+        assert!(!bit(&mask, 3), "an unrelated identifier is masked");
     }
 
     #[test]
