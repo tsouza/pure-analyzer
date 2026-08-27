@@ -378,6 +378,7 @@ impl<'tokens> Parser<'tokens> {
             | TokenKind::STRICT_DATE
             | TokenKind::LATEST_DATE => self.parse_literal_expression(),
             TokenKind::PAREN_OPEN => self.parse_parenthesized_expression(),
+            TokenKind::BRACKET_OPEN => self.parse_collection_literal(),
             TokenKind::BRACE_OPEN => self.parse_braced_lambda(),
             TokenKind::PIPE => self.parse_parameterless_lambda(),
             TokenKind::TILDE => self.parse_column_builder(),
@@ -437,6 +438,70 @@ impl<'tokens> Parser<'tokens> {
                 break;
             }
             if self.at(TokenKind::PAREN_CLOSE) {
+                self.error_current("expected an expression after `,`");
+                break;
+            }
+        }
+    }
+
+    fn parse_collection_literal(&mut self) -> bool {
+        self.open(SyntaxKind::COLLECTION_LITERAL);
+        let _ = self.expect(TokenKind::BRACKET_OPEN, "`[` before a collection literal");
+        self.parse_collection_items();
+        let has_close = self.expect(TokenKind::BRACKET_CLOSE, "`]` after a collection literal");
+        self.close();
+        has_close
+    }
+
+    fn parse_collection_items(&mut self) {
+        if self.at(TokenKind::BRACKET_CLOSE) {
+            return;
+        }
+        loop {
+            let before = self.index;
+            if !self.parse_expression(LOWEST_PRECEDENCE) {
+                self.error_current("expected an expression inside a collection literal");
+                self.recover_until(&[
+                    TokenKind::COMMA,
+                    TokenKind::BRACKET_CLOSE,
+                    TokenKind::SEMICOLON,
+                ]);
+            }
+            self.consume_trivia();
+            if self.at(TokenKind::SEMICOLON) {
+                break;
+            }
+
+            let has_comma = self.consume_if(TokenKind::COMMA);
+            if self.index == before {
+                break;
+            }
+            if has_comma {
+                if self.at(TokenKind::BRACKET_CLOSE) {
+                    self.error_current("expected an expression after `,`");
+                    break;
+                }
+                continue;
+            }
+            if self.at(TokenKind::BRACKET_CLOSE) || self.at_eof() {
+                break;
+            }
+
+            self.error_current("expected `,` or `]` after a collection item");
+            let recovery_start = self.index;
+            self.recover_until(&[
+                TokenKind::COMMA,
+                TokenKind::BRACKET_CLOSE,
+                TokenKind::SEMICOLON,
+            ]);
+            if self.at(TokenKind::SEMICOLON) || self.at(TokenKind::BRACKET_CLOSE) || self.at_eof() {
+                break;
+            }
+            if self.index == recovery_start {
+                break;
+            }
+            let _ = self.consume_if(TokenKind::COMMA);
+            if self.at(TokenKind::BRACKET_CLOSE) {
                 self.error_current("expected an expression after `,`");
                 break;
             }

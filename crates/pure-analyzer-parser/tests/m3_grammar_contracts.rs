@@ -202,6 +202,73 @@ fn delimited_grammar_families_keep_each_member_and_terminator() {
 }
 
 #[test]
+fn collection_literals_are_distinct_from_postfix_indexes() {
+    let source = "[item][0]";
+    let parsed = parse(source);
+
+    assert_valid(
+        source,
+        &[
+            SyntaxKind::COLLECTION_LITERAL,
+            SyntaxKind::BRACKET_INDEX,
+            SyntaxKind::QUALIFIED_NAME,
+            SyntaxKind::LITERAL_EXPR,
+        ],
+    );
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::COLLECTION_LITERAL), 1);
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::BRACKET_INDEX), 1);
+}
+
+#[test]
+fn incomplete_collection_literals_fail_as_outer_expressions() {
+    assert_outer_expression_failure("[item", SyntaxKind::COLLECTION_LITERAL);
+}
+
+#[test]
+fn malformed_collection_members_recover_at_commas() {
+    let source = "[first second, third]";
+    let parsed = parse(source);
+
+    assert_eq!(parsed.green.text(), source);
+    assert!(contains_kind(&parsed.green, SyntaxKind::COLLECTION_LITERAL));
+    assert_eq!(syntax_error_count(&parsed), 1, "{:#?}", parsed.diagnostics);
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::QUALIFIED_NAME), 2);
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::ERROR_NODE), 1);
+}
+
+#[test]
+fn malformed_collection_members_stop_at_closing_delimiters() {
+    let source = "[first second]";
+    let parsed = parse(source);
+
+    assert_eq!(parsed.green.text(), source);
+    assert_eq!(syntax_error_count(&parsed), 1, "{:#?}", parsed.diagnostics);
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::ERROR_NODE), 1);
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::QUALIFIED_NAME), 1);
+}
+
+#[test]
+fn malformed_collection_members_stop_at_eof() {
+    let source = "[first second";
+    let parsed = parse(source);
+
+    assert_eq!(parsed.green.text(), source);
+    assert_eq!(syntax_error_count(&parsed), 4, "{:#?}", parsed.diagnostics);
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::ERROR_NODE), 2);
+}
+
+#[test]
+fn malformed_collection_members_stop_at_source_separators() {
+    let source = "[first second; model::Person.all()";
+    let parsed = parse(source);
+
+    assert_eq!(parsed.green.text(), source);
+    assert_eq!(syntax_error_count(&parsed), 5, "{:#?}", parsed.diagnostics);
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::QUERY_EXPR), 1);
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::ERROR_NODE), 3);
+}
+
+#[test]
 fn typed_short_lambda_lookahead_respects_nested_boundaries() {
     let valid = "item: Relation<(name:String[1])>| $item";
 

@@ -3,7 +3,9 @@
 use pure_analyzer_diagnostics::FileId;
 use pure_analyzer_lexer::lex;
 use pure_analyzer_parser::parse_query;
-use pure_analyzer_syntax::{AstNode, GreenElement, GreenNode, QueryExpression, SyntaxKind};
+use pure_analyzer_syntax::{
+    AstNode, CollectionLiteral, GreenElement, GreenNode, QueryExpression, SyntaxKind,
+};
 
 fn test_file() -> FileId {
     FileId::new(41)
@@ -14,11 +16,16 @@ fn parse(source: &str) -> pure_analyzer_parser::Parse {
 }
 
 fn contains_kind(node: &GreenNode, kind: SyntaxKind) -> bool {
-    node.kind() == kind
-        || node.children().iter().any(|element| match element {
-            GreenElement::Node(child) => contains_kind(child, kind),
-            GreenElement::Token(_) => false,
-        })
+    find_node(node, kind).is_some()
+}
+
+fn find_node(node: &GreenNode, kind: SyntaxKind) -> Option<&GreenNode> {
+    (node.kind() == kind).then_some(node).or_else(|| {
+        node.children()
+            .iter()
+            .filter_map(GreenElement::as_node)
+            .find_map(|child| find_node(child, kind))
+    })
 }
 
 fn nodes_with_kind<'tree>(
@@ -132,6 +139,33 @@ fn distinguishes_all_and_parenthesized_expression_nodes() {
         assert!(contains_kind(&parsed.green, expected), "{source}");
         assert_lossless(source);
     }
+}
+
+#[test]
+fn parses_collection_literals_in_relation_expressions() {
+    for source in [
+        "model::Person.all()->sort([~name->ascending(), ~age->descending()])",
+        "[[], [$x, 2]][0]",
+        "f([a, b], [])",
+    ] {
+        let parsed = parse(source);
+
+        assert!(
+            parsed.diagnostics.is_empty(),
+            "{source}: {:#?}",
+            parsed.diagnostics
+        );
+        assert!(contains_kind(&parsed.green, SyntaxKind::COLLECTION_LITERAL));
+        assert_lossless(source);
+    }
+
+    let parsed = parse("f([a, b])");
+    let collection = find_node(&parsed.green, SyntaxKind::COLLECTION_LITERAL)
+        .and_then(|node| CollectionLiteral::cast(node.clone()))
+        .expect("call argument should be a typed collection literal");
+
+    assert_eq!(collection.syntax().text(), "[a, b]");
+    assert_eq!(collection.text_range(), collection.syntax().text_range());
 }
 
 #[test]
