@@ -184,3 +184,83 @@ ast_node!(
     ERROR_NODE,
     "A typed view of a recovered error region."
 );
+ast_node!(
+    DomainFile,
+    DOMAIN_FILE,
+    "A typed view of a Domain source file."
+);
+ast_node!(
+    DomainClassDeclaration,
+    DOMAIN_CLASS_DECL,
+    "A typed view of a Domain class declaration."
+);
+ast_node!(
+    DomainAssociationDeclaration,
+    DOMAIN_ASSOCIATION_DECL,
+    "A typed view of a Domain association declaration."
+);
+ast_node!(
+    DomainProfileDeclaration,
+    DOMAIN_PROFILE_DECL,
+    "A typed view of a Domain profile declaration."
+);
+ast_node!(
+    DomainStereotypeDeclaration,
+    DOMAIN_STEREOTYPE_DECL,
+    "A typed view of a Domain profile stereotype declaration."
+);
+ast_node!(
+    DomainStereotypeApplications,
+    DOMAIN_STEREOTYPE_APPLICATIONS,
+    "A typed view of Domain stereotype applications."
+);
+ast_node!(
+    DomainExtendsClause,
+    DOMAIN_EXTENDS_CLAUSE,
+    "A typed view of a Domain inheritance clause."
+);
+ast_node!(
+    DomainPropertyDeclaration,
+    DOMAIN_PROPERTY_DECL,
+    "A typed view of a Domain property declaration."
+);
+ast_node!(
+    DomainQualifiedPropertyDeclaration,
+    DOMAIN_QUALIFIED_PROPERTY_DECL,
+    "A typed view of a Domain qualified-property declaration."
+);
+ast_node!(
+    DomainParameterDeclaration,
+    DOMAIN_PARAMETER_DECL,
+    "A typed view of a Domain qualified-property parameter."
+);
+ast_node!(
+    DomainTypeReference,
+    DOMAIN_TYPE_REF,
+    "A typed view of a Domain type reference."
+);
+ast_node!(
+    DomainMultiplicity,
+    DOMAIN_MULTIPLICITY,
+    "A typed view of a Domain multiplicity."
+);
+ast_node!(
+    DomainQualifiedName,
+    DOMAIN_QUALIFIED_NAME,
+    "A typed view of a Domain qualified name."
+);
+ast_node!(
+    DomainOpaqueNode,
+    DOMAIN_OPAQUE_NODE,
+    "A typed view of an unsupported but lossless Domain construct."
+);
+ast_node!(
+    DomainOpaqueBody,
+    DOMAIN_OPAQUE_BODY,
+    "A typed view of an opaque qualified-property implementation body."
+);
+ast_node!(
+    DomainProfileSection,
+    DOMAIN_PROFILE_SECTION,
+    "A typed view of a Domain profile section."
+);

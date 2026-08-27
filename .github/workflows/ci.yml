@@ -361,6 +361,8 @@ jobs:
         run: just fuzz diagnostics 60 x86_64-unknown-linux-gnu
       - name: M3 parser fuzz-smoke (60s)
         run: just fuzz m3_parser 60 x86_64-unknown-linux-gnu
+      - name: Domain parser fuzz-smoke (60s)
+        run: just fuzz domain_parser 60 x86_64-unknown-linux-gnu
 
   # --- Performance regression via CodSpeed (criterion benches) -------------
   bench:
