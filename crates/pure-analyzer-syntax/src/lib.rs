@@ -17,9 +17,8 @@ mod kind;
 pub use ast::{
     AllExpression, ArrowCall, AstNode, BinaryExpression, BracketIndex, CallArguments,
     CastExpression, CodeBlock, CollectionLiteral, ColumnInfo, ColumnName, ColumnSpec,
-    ColumnSpecArray,
-    DomainAssociationDeclaration, DomainClassDeclaration, DomainExtendsClause, DomainFile,
-    DomainMultiplicity, DomainOpaqueBody, DomainOpaqueNode, DomainParameterDeclaration,
+    ColumnSpecArray, DomainAssociationDeclaration, DomainClassDeclaration, DomainExtendsClause,
+    DomainFile, DomainMultiplicity, DomainOpaqueBody, DomainOpaqueNode, DomainParameterDeclaration,
     DomainProfileDeclaration, DomainProfileSection, DomainPropertyDeclaration, DomainQualifiedName,
     DomainQualifiedPropertyDeclaration, DomainStereotypeApplications, DomainStereotypeDeclaration,
     DomainTypeReference, ErrorNode, FunctionCall, Island, LambdaExpression, LambdaParameters,
