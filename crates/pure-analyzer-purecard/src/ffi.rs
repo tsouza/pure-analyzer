@@ -282,14 +282,24 @@ mod tests {
         format!(r#"{{"version": "1", "start": "s0", "frames": [], "states": {{{states}}}}}"#)
     }
 
+    /// Non-Pure control bytes, `\x01\x02\x03\x04`: the built-in fixed
+    /// grammar (what an empty spec string falls back to) rejects this as its
+    /// very first byte, so a mutation that empties [`literal_spec`] out and
+    /// silently substitutes the fixed grammar is caught by
+    /// `session_surface_delegates_to_the_decoder_core` rather than passing
+    /// unnoticed — the fixed grammar happens to also accept real Pure syntax
+    /// like `|X.all()->take(1)`, which this literal spec used to be built
+    /// from, so that choice couldn't distinguish the two grammars.
+    const LITERAL_TEXT: [u8; 4] = [0x01, 0x02, 0x03, 0x04];
+
     fn grammar() -> super::Grammar {
         compile_grammar(
-            &literal_spec(b"|X.all()->take(1)"),
+            &literal_spec(&LITERAL_TEXT),
             vec![
-                b"|X.all()".to_vec(),
-                b"->take(".to_vec(),
-                b"1".to_vec(),
-                b")".to_vec(),
+                vec![LITERAL_TEXT[0]],
+                vec![LITERAL_TEXT[1]],
+                vec![LITERAL_TEXT[2]],
+                vec![LITERAL_TEXT[3]],
                 Vec::new(),
             ],
             EOS_ID,
