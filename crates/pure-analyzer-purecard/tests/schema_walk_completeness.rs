@@ -155,3 +155,55 @@ fn every_step_is_l1_and_l2_admissible_with_l2_subset_of_l1_and_narrower_somewher
          the schema overlay would be unproven, not just unexercised"
     );
 }
+
+/// The schema's internal `L2Position`/rule classification is private (the L2
+/// overlay's scoping boundary, ADR-0010 and `DecoderSession::with_schema`'s
+/// docs), so this cannot name *which* shipped rule (N1/N2/N3/N6/T1-numeric/
+/// T1-string) fired at a given step. What is externally observable — and
+/// still a genuine, checkable coverage signal — is the PDA `(state,
+/// stack-top)` configuration active whenever L2 narrows relative to L1: each
+/// named [`State`](purecard::grammar::pda::State) corresponds to a distinct
+/// narrowing context, so narrowing at only one configuration would mean the
+/// generated corpus exercises at most one rule family, not several.
+#[test]
+fn schema_narrowing_spans_more_than_one_pda_configuration() {
+    let mut narrowed_configurations: std::collections::HashSet<String> =
+        std::collections::HashSet::new();
+    for db_id in FIXTURE_DBS {
+        let (grammar, schema) = grammar_and_schema(db_id);
+        let walks = generate_schema_walks(&grammar, &schema);
+
+        for walk in &walks {
+            let mut l1 = DecoderSession::new(&grammar);
+            let mut l2 = DecoderSession::with_schema(&grammar, schema.clone())
+                .expect("grammar is fixed-engine");
+            for &id in walk {
+                let l1_ids: std::collections::BTreeSet<u32> =
+                    l1.allowed_mask().iter_ones().collect();
+                let l2_ids: std::collections::BTreeSet<u32> =
+                    l2.allowed_mask().iter_ones().collect();
+                if l2_ids.len() < l1_ids.len() {
+                    let pda = l2
+                        .pda()
+                        .expect("fixed-engine grammar always exposes its Pda");
+                    narrowed_configurations.insert(format!(
+                        "{:?}/{:?}",
+                        pda.state(),
+                        pda.stack_top()
+                    ));
+                }
+                l1.accept_token(id)
+                    .expect("a walk's own token is always L1-admissible");
+                l2.accept_token(id)
+                    .expect("a walk's own token is always L2-admissible");
+            }
+        }
+    }
+    assert!(
+        narrowed_configurations.len() > 1,
+        "schema narrowing was observed at only {} distinct (state, stack-top) \
+         configuration(s) across the whole corpus: {narrowed_configurations:?} — \
+         expected the shipped rule families to each narrow at their own position",
+        narrowed_configurations.len()
+    );
+}
