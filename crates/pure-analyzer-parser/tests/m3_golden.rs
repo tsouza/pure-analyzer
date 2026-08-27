@@ -7,6 +7,8 @@ use pure_analyzer_parser::parse_query;
 use pure_analyzer_syntax::{GreenElement, GreenNode};
 
 const INDENT: &str = "  ";
+const COLLECTION_LITERAL_CST: &str =
+    include_str!("snapshots/m3_golden__collection_literal_cst.snap");
 const RELATION_PIPELINE_CST: &str = include_str!("snapshots/m3_golden__relation_pipeline_cst.snap");
 
 fn test_file() -> FileId {
@@ -49,4 +51,15 @@ fn relation_pipeline_cst_is_stable() {
 
     render_tree(&parsed.green, 0, &mut rendered);
     assert_eq!(rendered, golden_body(RELATION_PIPELINE_CST));
+}
+
+#[test]
+fn collection_literal_cst_is_stable() {
+    let source = "[a, [b]][0]";
+    let parsed = parse_query(source, test_file()).expect("fixture must build a tree");
+    let mut rendered = String::new();
+
+    assert!(parsed.diagnostics.is_empty(), "{:#?}", parsed.diagnostics);
+    render_tree(&parsed.green, 0, &mut rendered);
+    assert_eq!(rendered, golden_body(COLLECTION_LITERAL_CST));
 }
