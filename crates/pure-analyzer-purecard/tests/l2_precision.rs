@@ -178,6 +178,23 @@ fn n3_masks_a_phantom_source_class() {
 }
 
 #[test]
+fn source_method_arg_masks_a_phantom_argument_but_keeps_the_closer_and_a_milestone_date() {
+    // `Class.all(...)` ordinarily takes no argument at all; a real class's own
+    // call must still close cleanly, but a phantom identifier/string argument —
+    // exactly the shape the schema walker was observed emitting
+    // (`Class.all('French')`, `Class.all(all)`, both confirmed live to fail
+    // Legend compilation) — must be masked at the argument position.
+    let prefix = "|spider::car_1::model::default::CarsData.all(";
+    assert_precision("car_1", prefix, b")", b"'French'");
+    assert_precision("car_1", prefix, b")", b"all");
+    // Bitemporal milestoning's exception: a milestone/date literal is a real
+    // argument here (corpus `differential_l1.jsonl`'s `Firm.all(%latest)`), so it
+    // must stay admissible — the phantom above is the identifier/string shape,
+    // never the milestoning one.
+    assert_precision("car_1", prefix, b"%latest", b"'French'");
+}
+
+#[test]
 fn n1_masks_a_phantom_property_after_a_bound_var() {
     // `$x` is bound to CarsData; `cylinders` is a real property, `sallary` is not.
     let prefix = "|spider::car_1::model::default::CarsData.all()->filter(x|$x.";

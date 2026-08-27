@@ -151,6 +151,25 @@ pub(crate) enum L2Position {
     /// that share the same `AfterDot` state but anchor at a value position, not
     /// a source position (see [`on_dot`](ScopeTracker::on_dot)'s doc comment).
     SourceMethod,
+    /// N3's grammar production for the pipeline source is the literal
+    /// `classpath ".all()"` (`docs/spec/schema.md` §7) — the call ordinarily
+    /// takes no argument, with one carved-out exception: bitemporal milestoning
+    /// legally passes zero, one, or two comma-separated milestone/date literals
+    /// (`Firm.all(%latest, %latest)`, corpus `differential_l1.jsonl`;
+    /// `docs/spec/grammar.md`'s `milestoneLit`/`dateLit`). [`SourceMethod`](L2Position::SourceMethod)
+    /// narrows the identifier to exactly `all`; this narrows the position right
+    /// after the call's own opening `(` (or a following comma) to admit only
+    /// whitespace, a milestoning date, or — at the first slot — the matching
+    /// closer, so the call cannot smuggle a phantom identifier/string/number
+    /// argument in behind it (confirmed live: `Class.all('French')` /
+    /// `Class.all(all)` both fail to compile). It does not cap the argument
+    /// count at two or validate a milestone symbol beyond its lexical shape —
+    /// that residue, like every other `%`-literal position in this overlay, is
+    /// left to the compiler oracle. Armed only for [`SOURCE_METHOD`]'s own
+    /// call — other niladic builtins (`->toOne()`, aggregation reducers) may
+    /// have the same latent gap but are not narrowed here; out of scope for
+    /// this rule.
+    SourceMethodArg,
     /// N1/N2: the identifier after `.` must be a member of `class`.
     Member(String),
     /// T1: the comparison operand's literal type must match `class`.
@@ -336,6 +355,19 @@ pub(crate) struct ScopeTracker {
     /// identifier's lexeme opens, then cleared the same way `dot_base` is
     /// consumed by [`resolve_member`](ScopeTracker::resolve_member).
     awaiting_source_method: bool,
+    /// The call just opened via `on_open` was [`SOURCE_METHOD`]'s own — the
+    /// value position immediately following it (and after each following
+    /// comma) admits only whitespace, a milestoning date, or the call's own
+    /// closer, never a phantom identifier/string/number argument
+    /// ([`L2Position::SourceMethodArg`]). Cleared unconditionally at the matching
+    /// `on_close`, not merely consumed on first read like
+    /// [`awaiting_source_method`](Self::awaiting_source_method): the value
+    /// position it targets can be re-queried across whitespace tokens before
+    /// the closer commits, but once the call's own delimiter closes the flag
+    /// must not survive to wrongly mask an unrelated value position reached
+    /// without an intervening `on_open` (a comparison operand directly
+    /// following the call's close, e.g. a hypothetical `A.all() == 5`).
+    in_source_method_args: bool,
     /// Every column name emitted so far — quoted string literals (arm-A N6,
     /// `~'Gross Credits'`) and arm-R `~`-introduced names (`~Col`, `~[Week, …]`
     /// keys). A superset stored as raw (unquoted) bytes, so a real reference to a
@@ -493,8 +525,12 @@ impl ScopeTracker {
     /// Buffer a lexeme still open at the token's end into [`Pending`], resolved and
     /// narrowed once a later token closes it (§6.4, B1). A continuation extends
     /// the existing buffer; a fresh run opens a new one, stamping the rule its
-    /// anchor establishes (T1's `ReValue` lever is a whole-token literal-class
-    /// test, so its continuation sub-tokens pass through untouched).
+    /// anchor establishes (T1's `ReValue` lever and S1's `SourceMethodArg` are
+    /// both whole-token classify-based tests with no prefix/trie walk, so their
+    /// continuation sub-tokens pass through untouched once the anchor token's own
+    /// shape has already been narrowed — e.g. a milestoning literal fragmented by
+    /// BPE, `%late` + `st`, must not have its second fragment masked for not
+    /// itself starting with `%`).
     fn buffer_trailing(&mut self, kind: LexKind, seg: &[u8], anchor: State, continuing: bool) {
         if continuing {
             if let Some(pending) = self.pending.as_mut() {
@@ -503,7 +539,7 @@ impl ScopeTracker {
             return;
         }
         let pos = match self.opening_position(anchor) {
-            L2Position::ReValue(_) => L2Position::None,
+            L2Position::ReValue(_) | L2Position::SourceMethodArg => L2Position::None,
             narrowed => narrowed,
         };
         self.pending = Some(Pending {
@@ -765,6 +801,10 @@ impl ScopeTracker {
     fn on_open(&mut self, pre_state: State) {
         let method = self.last_ident.take();
         self.depth += 1;
+        // N3's grammar production constrains `all()`'s argument slot regardless
+        // of nesting depth — unlike the nested-pipeline reset below, this is not
+        // depth-gated.
+        self.in_source_method_args = method.as_deref() == Some(SOURCE_METHOD);
         // A `~[` opens a relation column set: latch the pipeline as arm-R, so an
         // `ExpectValue` key identifier inside it is a column name and a following
         // relation-row binder narrows column access. The flag is pushed for *every*
@@ -798,6 +838,10 @@ impl ScopeTracker {
     }
 
     fn on_close(&mut self) {
+        // Consume the source-method-args flag at its own call's close — it must
+        // never survive to wrongly mask a later value position reached without
+        // an intervening `on_open` (see `in_source_method_args`'s doc comment).
+        self.in_source_method_args = false;
         // Restore every binder introduced at the closing delimiter's depth to what it
         // shadowed, so a lambda's binder never outlives its scope (§6.4). Deeper
         // scopes have already restored and popped, so the depth-matching saves are
@@ -907,7 +951,9 @@ impl ScopeTracker {
                 }
             }
             State::ExpectValue | State::ExpectValueReq => {
-                if let Some(tc) = self.cmp_pending {
+                if self.in_source_method_args {
+                    L2Position::SourceMethodArg
+                } else if let Some(tc) = self.cmp_pending {
                     L2Position::ReValue(tc)
                 } else if self.in_column_arg() {
                     L2Position::Column
@@ -999,7 +1045,7 @@ impl ScopeTracker {
 
 #[cfg(test)]
 mod tests {
-    use super::{L2Position, Lexeme, ScopeTracker, classify, is_two_byte_op};
+    use super::{L2Position, Lexeme, SOURCE_METHOD, ScopeTracker, classify, is_two_byte_op};
     use crate::grammar::pda::{Pda, State};
     use crate::schema::model::{Schema, TypeClass};
 
@@ -1224,6 +1270,65 @@ mod tests {
         assert!(
             !tracker.source_ident_seen,
             "a value-position classpath armed source_ident_seen"
+        );
+    }
+
+    #[test]
+    fn the_source_methods_own_open_paren_is_a_source_method_arg_position() {
+        // `|A.all(` — the position right after the call's own opening `(` must
+        // be narrowed (N3's grammar constrains `all()`'s argument to at most a
+        // milestoning date), not fall through to `L2Position::None` the way an
+        // ordinary call's first argument slot does.
+        let (tracker, pda) = run(&[b"|", b"A", b".", b"all", b"("]);
+        assert_eq!(pda.state(), State::ExpectValue);
+        assert_eq!(tracker.position(pda.state()), L2Position::SourceMethodArg);
+    }
+
+    #[test]
+    fn a_milestoning_date_argument_is_admitted_and_the_call_still_closes() {
+        // `|A.all(%latest)` — bitemporal milestoning's single-argument form
+        // (corpus `differential_l1.jsonl`'s `Firm.all(%latest)`) must reach a
+        // clean `AfterValue` close, proving `SourceMethodArg` does not regress
+        // the pre-existing milestoning pass-through
+        // (`a_milestoning_literal_is_an_l2_pass_through_operand`) into a mask.
+        let (_tracker, pda) = run(&[b"|", b"A", b".", b"all", b"(", b"%latest", b")"]);
+        assert_eq!(pda.state(), State::AfterValue);
+    }
+
+    #[test]
+    fn an_ordinary_calls_open_paren_is_not_a_source_method_arg_position() {
+        // `|A.all()->filter(` — `filter` is not `SOURCE_METHOD`, so its own
+        // argument slot must stay unconstrained (a lambda binder candidate),
+        // proving `in_source_method_args` is armed by the method name, not by every
+        // call's opening paren.
+        let (tracker, pda) = run(&[b"|", b"A", b".", b"all", b"(", b")", b"->", b"filter", b"("]);
+        assert_eq!(pda.state(), State::ExpectValue);
+        assert_eq!(tracker.position(pda.state()), L2Position::None);
+    }
+
+    #[test]
+    fn source_method_arg_does_not_leak_past_the_calls_own_close() {
+        // Drives `on_open`/`on_close` directly (private methods, reachable from
+        // this in-file test module) to prove `in_source_method_args` cannot survive
+        // its own call's close and wrongly mask an unrelated value position
+        // reached without an intervening `on_open` — e.g. a comparison operand
+        // directly following the call (a hypothetical `A.all() == 5`). Without
+        // the unconditional clear in `on_close`, this would wrongly report
+        // `SourceMethodArg` instead of the armed `ReValue` comparison.
+        let mut tracker = ScopeTracker::new();
+        tracker.last_ident = Some(SOURCE_METHOD.to_owned());
+        tracker.on_open(State::AfterDot);
+        assert_eq!(
+            tracker.opening_position(State::ExpectValue),
+            L2Position::SourceMethodArg,
+            "sanity: opening the source method's call arms SourceMethodArg"
+        );
+        tracker.on_close();
+        tracker.cmp_pending = Some(TypeClass::Numeric);
+        assert_eq!(
+            tracker.opening_position(State::ExpectValue),
+            L2Position::ReValue(TypeClass::Numeric),
+            "a stale SourceMethodArg flag must not mask a real comparison after the call's own close"
         );
     }
 

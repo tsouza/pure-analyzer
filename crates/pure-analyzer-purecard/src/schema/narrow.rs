@@ -69,6 +69,9 @@ enum CacheKey {
     Source,
     /// S1 source-method set — always the single name [`SOURCE_METHOD`].
     SourceMethod,
+    /// The source method's argument-position set — a whole-vocab constant
+    /// (independent of schema, class, or emitted prefix), so one key suffices.
+    SourceMethodArg,
     /// N1/N2 member set of a class — one per class.
     Member(String),
     /// T1 operand class — the literal-class lever (cursor-independent).
@@ -165,6 +168,12 @@ pub(crate) fn narrow_into(
             eos_bit,
             || Trie::from_names(std::iter::once(SOURCE_METHOD)),
         ),
+        L2Position::SourceMethodArg => {
+            with_cache(dst, cache, CacheKey::SourceMethodArg, |dst| {
+                fill_source_method_arg(dst, vocab, eos_bit);
+            });
+            true
+        }
         L2Position::Member(class) => narrow_trie(
             dst,
             cache,
@@ -436,6 +445,38 @@ fn fill_operand(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32, masked_by: TypeC
     dst.set(eos_bit);
 }
 
+/// Refill `dst` with [`L2Position::SourceMethodArg`]'s set, plus EOS: unlike every
+/// other rule here, which keeps a token unless it is a wrong-shaped *candidate*
+/// the rule specifically governs, this rule's default is inverted — the value
+/// position right after the source method's own `(` (or after a comma inside
+/// it) has no legal *identifier/literal* argument at all, only its own closer,
+/// intervening whitespace, or a milestoning date (`docs/spec/grammar.md`'s
+/// `milestoneLit`/`dateLit`, both classified [`Lexeme::Date`] — bitemporal
+/// milestoning legally passes zero, one, or two comma-separated date arguments
+/// here, confirmed by the corpus's own `Firm.all(%latest, %latest)` fixture and
+/// the modern-dialect seed corpus). This rule does not cap the count at two or
+/// validate a milestone symbol beyond its lexical shape — like every other
+/// `%`-literal position in this overlay, that residue is left to the compiler
+/// oracle; it only ever masks the phantom-argument shapes the walker was
+/// actually observed emitting (`Class.all('French')`, `Class.all(all)` — an
+/// identifier or string literal, never legal here). Every OTHER legal-at-L1
+/// value-start byte (an identifier, a string quote, a non-milestone digit, `$`,
+/// `~`, a nested opener, `|`) resolves to a distinct, non-`Ws`/`Close`/`Date`
+/// [`Lexeme`] under [`classify`], so a whole-token classification (mirroring
+/// [`fill_operand`]'s style — no trie/prefix-walk is needed, since legality here
+/// is a function of shape alone) keeps exactly the three shapes that are never a
+/// phantom argument: `Ws`, `Close`, and `Date`.
+fn fill_source_method_arg(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32) {
+    dst.clear_all();
+    for id in 0..vocab.len() as u32 {
+        let bytes = vocab.bytes(id).unwrap_or(&[]);
+        if matches!(classify(bytes), Lexeme::Ws | Lexeme::Close | Lexeme::Date) {
+            dst.set(id);
+        }
+    }
+    dst.set(eos_bit);
+}
+
 /// Refill `dst` from a trie walk: keep the reserved EOS bit and every vocab token
 /// that is either a *non-candidate* (a structural/whitespace token the rule does
 /// not govern) or a candidate that can still reach a legal name from `cursor`.
@@ -678,6 +719,41 @@ mod tests {
             "a quoted literal is masked, not passed through"
         );
         assert!(!bit(&mask, 3), "an unrelated identifier is masked");
+    }
+
+    #[test]
+    fn source_method_arg_keeps_the_closer_and_milestone_dates_but_masks_a_phantom_argument() {
+        // The position right after the source method's own `(` (or after a
+        // comma inside it): a milestoning date argument legally appears here
+        // (bitemporal `Firm.all(%latest, %latest)`, confirmed in the corpus'
+        // `differential_l1.jsonl`), so `Lexeme::Date` must survive alongside the
+        // matching closer and whitespace — but the exact phantom-argument shapes
+        // the walker was observed emitting (`Class.all('French')`,
+        // `Class.all(all)`) must still be masked.
+        let v = vocab(&[
+            b")",           // 0: the matching closer — kept
+            b"  ",          // 1: inter-token whitespace — kept
+            b"%latest",     // 2: a symbolic milestoning literal — kept
+            b"%2018-01-01", // 3: a numeric date literal — kept
+            b"all",         // 4: an identifier (a phantom argument) — masked
+            b"'name'",      // 5: a string literal argument — masked
+            b"5",           // 6: a numeric literal argument — masked
+            b"$",           // 7: a refVar argument — masked
+            b"(",           // 8: a nested call argument — masked
+            b",", // 9: not legal at L1 here either, but never a candidate structure — masked
+        ]);
+        let (applied, mask) = run(&L2Position::SourceMethodArg, &[], v);
+        assert!(applied);
+        assert!(bit(&mask, 0), "the matching closer survives");
+        assert!(bit(&mask, 1), "inter-token whitespace survives");
+        assert!(bit(&mask, 2), "a symbolic milestoning literal survives");
+        assert!(bit(&mask, 3), "a numeric date literal survives");
+        assert!(!bit(&mask, 4), "an identifier argument is masked");
+        assert!(!bit(&mask, 5), "a string literal argument is masked");
+        assert!(!bit(&mask, 6), "a numeric literal argument is masked");
+        assert!(!bit(&mask, 7), "a refVar argument is masked");
+        assert!(!bit(&mask, 8), "a nested call argument is masked");
+        assert!(!bit(&mask, 9), "a comma is masked");
     }
 
     #[test]
