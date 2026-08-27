@@ -5,9 +5,10 @@ use pure_analyzer_parser::{DomainCoverageGap, DomainCoverageGapKind, parse_domai
 use pure_analyzer_syntax::{GreenElement, GreenNode, GreenToken, SyntaxKind};
 
 use crate::error::ModelError;
-use crate::loader::{FragmentElement, ModelFragment};
+use crate::loader::{AssocDraft, FragmentElement, ModelFragment};
 use crate::{
-    ClassInfo, Multiplicity, Name, PropInfo, QName, QpInfo, QpKind, SourceId, Temporal, TypeRef,
+    ClassInfo, Multiplicity, Name, PropInfo, Provenance, QName, QpInfo, QpKind, SourceId, Temporal,
+    TypeRef,
 };
 
 const GENERATED_MILESTONING_PROPERTY: &str = "generatedmilestoningproperty";
@@ -54,12 +55,12 @@ fn lower_domain(
     let Some(file) = find_domain_file(root) else {
         return (BTreeMap::new(), Vec::new(), true);
     };
-
     let mut source_wide_gap = context
         .gaps
         .iter()
         .any(|gap| gap.kind == DomainCoverageGapKind::UnsupportedTopLevel);
     let mut class_entries = Vec::new();
+    let mut association_entries = Vec::new();
     let mut top_level_declarations = Vec::new();
     let mut lowering_diagnostics = Vec::new();
     for declaration in file.children().iter().filter_map(GreenElement::as_node) {
@@ -81,13 +82,17 @@ fn lower_domain(
                 }
             }
             SyntaxKind::DOMAIN_ASSOCIATION_DECL => {
-                source_wide_gap = true;
                 if let Some((path, _)) = declaration_path(declaration) {
                     top_level_declarations.push(TopLevelDeclaration {
                         path,
                         kind: TopLevelDeclarationKind::Association,
                         span: declaration.text_range(),
                     });
+                }
+                let lowered = lower_association(declaration, context);
+                source_wide_gap |= lowered.uncertain;
+                if let Some(association) = lowered.value {
+                    association_entries.push(association);
                 }
             }
             _ => {}
@@ -108,6 +113,15 @@ fn lower_domain(
         }
         let path = class.path().clone();
         elements.insert(path, FragmentElement::Class(class));
+    }
+    for association in association_entries {
+        if duplicate_paths.contains(&association.path) {
+            continue;
+        }
+        elements.insert(
+            association.path.clone(),
+            FragmentElement::Association(association),
+        );
     }
     (elements, lowering_diagnostics, source_wide_gap)
 }
@@ -430,6 +444,69 @@ fn duplicate_member_diagnostic(
         "first declaration",
     ))
     .build()
+}
+
+struct LoweredAssociation {
+    value: Option<AssocDraft>,
+    uncertain: bool,
+}
+
+fn lower_association(node: &GreenNode, context: LoweringContext<'_>) -> LoweredAssociation {
+    if node_has_coverage_gap(node, context) {
+        return LoweredAssociation {
+            value: None,
+            uncertain: true,
+        };
+    }
+    let Some((path, name_index)) = declaration_path(node) else {
+        return LoweredAssociation {
+            value: None,
+            uncertain: true,
+        };
+    };
+    let annotations = annotations_before(node, name_index);
+    if annotations.temporal_uncertain {
+        return LoweredAssociation {
+            value: None,
+            uncertain: true,
+        };
+    }
+
+    let mut ends = Vec::new();
+    for property in direct_nodes(node, SyntaxKind::DOMAIN_PROPERTY_DECL) {
+        if node_is_unconfirmed(property, context) {
+            return LoweredAssociation {
+                value: None,
+                uncertain: true,
+            };
+        }
+        let Some(property) = lower_property(property) else {
+            return LoweredAssociation {
+                value: None,
+                uncertain: true,
+            };
+        };
+        ends.push(property);
+    }
+    let mut ends = ends.into_iter();
+    let (Some(first), Some(second), None) = (ends.next(), ends.next(), ends.next()) else {
+        return LoweredAssociation {
+            value: None,
+            uncertain: true,
+        };
+    };
+
+    LoweredAssociation {
+        value: Some(AssocDraft {
+            path,
+            first,
+            second,
+            temporal: annotations.temporal,
+            provenance: Provenance::PureFile,
+            source: context.source,
+        }),
+        uncertain: false,
+    }
 }
 
 fn lower_property(node: &GreenNode) -> Option<PropInfo> {

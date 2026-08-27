@@ -59,10 +59,10 @@ spell built-in profiles in short (`temporal`, `milestoning`) or fully-qualified
 form; both forms normalize identically. It ignores unrelated packageable
 element kinds, but rejects a malformed class or association rather than
 returning incomplete resolver facts. Pure ingestion is resilient: it retains
-confirmed class facts. Source-wide uncertainty, including unsupported
-top-level source and any Pure association declaration, marks all loaded
-classes with `coverage_gap`. Pure associations do not add association or
-association-end facts to the graph.
+confirmed facts. Fully confirmed Pure associations add association and
+association-end facts to the graph. Source-wide uncertainty, including
+unsupported top-level source or an incomplete Pure association, marks all
+loaded classes with `coverage_gap`.
 
 ## Product boundary
 

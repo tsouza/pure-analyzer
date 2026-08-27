@@ -154,7 +154,7 @@ pub fn load_pmcd_files(paths: &[PathBuf]) -> Result<ModelGraph, ModelError> {
 ///
 /// Pure parsing is resilient: confirmed facts are retained while per-class
 /// coverage gaps preserve open-world resolution where the source is incomplete
-/// or declares an association.
+/// or contains an incomplete association.
 ///
 /// # Errors
 ///

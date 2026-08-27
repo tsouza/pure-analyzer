@@ -56,6 +56,12 @@ Class demo::Order extends demo::Entity
   tags: List<String>[*];
   priceAfter(asOf: StrictDate[1]): Decimal[0..1] { $this.id; };
 }
+
+Association <<temporal.processingtemporal>> demo::Order_Entity
+{
+  order: demo::Order[1];
+  entities: demo::Entity[*];
+}
 "#,
     );
 
@@ -79,6 +85,11 @@ Class demo::Order extends demo::Entity
     assert_eq!(entity.temporal(), Some(Temporal::BusinessTemporal));
     let processing = graph.class("demo::Processing").expect("processing");
     assert_eq!(processing.temporal(), Some(Temporal::ProcessingTemporal));
+    assert!(entity.properties()["order"].from_assoc());
+    assert!(order.properties()["entities"].from_assoc());
+    let association = &graph.associations()[0];
+    assert_eq!(association.temporal(), Some(Temporal::ProcessingTemporal));
+    assert_eq!(association.provenance(), Provenance::PureFile);
     assert_eq!(graph.sources()[0].provenance(), Provenance::PureFile);
 }
 
@@ -308,7 +319,7 @@ Class demo::Partial
 }
 
 #[test]
-fn pure_associations_are_not_materialized_and_open_same_source_classes() {
+fn incomplete_associations_open_same_source_classes() {
     let graph = pure(
         r#"
 Class demo::Left
@@ -320,7 +331,6 @@ Class demo::Right
 Association demo::Broken
 {
   left: demo::Left[1];
-  right: demo::Right[1];
 }
 "#,
     );
