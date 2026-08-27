@@ -61,6 +61,21 @@ fn assert_lossless(source: &str, parsed: &DomainParse) {
     }
 }
 
+fn assert_only_malformed_declaration(source: &str) {
+    let parsed = parse(source);
+    assert_eq!(
+        parsed
+            .coverage_gaps
+            .iter()
+            .map(|gap| gap.kind)
+            .collect::<Vec<_>>(),
+        vec![DomainCoverageGapKind::MalformedDeclaration],
+        "malformed declaration must conservatively mark coverage: {:#?}",
+        parsed.coverage_gaps
+    );
+    assert_lossless(source, &parsed);
+}
+
 #[test]
 fn parses_model_facts_with_domain_specific_ast_contracts() {
     let source = r#"
@@ -227,6 +242,136 @@ Class demo::Broken extends
             .iter()
             .any(|gap| gap.kind == DomainCoverageGapKind::MalformedDeclaration),
         "the class needs conservative coverage when its inheritance is malformed: {:#?}",
+        parsed.coverage_gaps
+    );
+    assert_lossless(source, &parsed);
+}
+
+#[test]
+fn class_header_missing_its_name_marks_malformed_coverage() {
+    assert_only_malformed_declaration(
+        r#"
+Class
+{
+  id: Integer[1];
+}
+"#,
+    );
+}
+
+#[test]
+fn association_header_missing_its_name_marks_malformed_coverage() {
+    assert_only_malformed_declaration(
+        r#"
+Association
+{
+  left: demo::Left[1];
+  right: demo::Right[1];
+}
+"#,
+    );
+}
+
+#[test]
+fn profile_header_missing_its_name_marks_malformed_coverage() {
+    assert_only_malformed_declaration(
+        r#"
+Profile
+{
+  stereotypes: [sensitive];
+}
+"#,
+    );
+}
+
+#[test]
+fn qualified_property_missing_return_colon_marks_malformed_coverage() {
+    assert_only_malformed_declaration(
+        r#"
+Class demo::Broken
+{
+  derived() String[1] { $this; }
+}
+"#,
+    );
+}
+
+#[test]
+fn qualified_property_missing_return_type_marks_malformed_coverage() {
+    assert_only_malformed_declaration(
+        r#"
+Class demo::Broken
+{
+  derived(): [1] { $this; }
+}
+"#,
+    );
+}
+
+#[test]
+fn qualified_property_missing_return_multiplicity_marks_malformed_coverage() {
+    assert_only_malformed_declaration(
+        r#"
+Class demo::Broken
+{
+  derived(): String { $this; }
+}
+"#,
+    );
+}
+
+#[test]
+fn qualified_property_missing_body_marks_malformed_coverage() {
+    assert_only_malformed_declaration(
+        r#"
+Class demo::Broken
+{
+  derived(): String[1];
+}
+"#,
+    );
+}
+
+#[test]
+fn qualified_property_malformed_parameter_marks_malformed_coverage() {
+    assert_only_malformed_declaration(
+        r#"
+Class demo::Broken
+{
+  derived(value String[1]): String[1] { $this; }
+}
+"#,
+    );
+}
+
+#[test]
+fn coverage_gaps_follow_source_order_when_malformed_extends_contains_an_opaque_member() {
+    let source = r#"
+Class demo::Broken extends
+{
+  nativeThing foo;
+}
+"#;
+    let parsed = parse(source);
+
+    assert_eq!(
+        parsed
+            .coverage_gaps
+            .iter()
+            .map(|gap| gap.kind)
+            .collect::<Vec<_>>(),
+        vec![
+            DomainCoverageGapKind::MalformedDeclaration,
+            DomainCoverageGapKind::UnsupportedMember,
+        ],
+        "outer malformed declarations must precede later body coverage gaps"
+    );
+    assert!(
+        parsed
+            .coverage_gaps
+            .windows(2)
+            .all(|gaps| gaps[0].span.start() <= gaps[1].span.start()),
+        "coverage gaps must be ordered by source span: {:#?}",
         parsed.coverage_gaps
     );
     assert_lossless(source, &parsed);

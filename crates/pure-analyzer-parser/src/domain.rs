@@ -129,6 +129,8 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
 
         self.close();
         self.close();
+        self.coverage_gaps
+            .sort_by_key(|gap| (gap.span.start(), gap.span.end()));
         (self.events, self.diagnostics, self.coverage_gaps)
     }
 
