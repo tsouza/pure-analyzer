@@ -1,0 +1,9 @@
+self-hosted-runner:
+  # Custom label for the self-hosted runner `purecard-real-model.yml` targets
+  # (issue #58): real-model inference needs a real forward pass and a local
+  # Docker Legend engine, neither available on hosted `ubuntu-latest`/`macos-*`
+  # runners. Registering a runner with this label is an infra step outside
+  # this repo; until one exists, the workflow's job sits queued rather than
+  # running (see that workflow's own top-of-file comment).
+  labels:
+    - purecard-real-model

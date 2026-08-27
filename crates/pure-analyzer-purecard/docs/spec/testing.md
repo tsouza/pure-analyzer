@@ -33,7 +33,8 @@ actual pinned Qwen tokenizer, builds `Vocab` in token-ID order, tokenizes every
 gold query, and checks each actual next token ID against `allowed_mask()`. It
 runs via `just qwen-oracle` and the scheduled/on-demand tokenizer workflow, not
 the per-PR lane. This proves real-tokenizer token-ID replay. It does **not** run a
-model forward pass and does **not** compile output with Legend.
+model forward pass and does **not** compile output with Legend — §8.8 covers
+that.
 
 ### 8.2 Completeness — live Legend integration
 
@@ -82,6 +83,32 @@ The enforced hermetic gates include full byte-level corpus replay, the
 implemented L2 fixture replay, properties/precision regressions, doc facts, and
 normal workspace quality checks. Real-Qwen token-ID replay is scheduled and
 on-demand because it is heavy and network-fed.
+
+### 8.8 Real-model integration proof (issue #58)
+
+`python/tests/test_real_model_inference.py` is the host-side integration
+§9.3 describes, exercised for real: it loads the pinned
+Qwen2.5-Coder-0.5B-Instruct model, builds the byte-token vocabulary via
+`python/tests/support/byte_decode.py` (a port of `tests/support/byte_decode.rs`),
+and drives a real forward pass through unconstrained, L1, and L2 constrained
+generation for each deterministic fixture in
+`python/tests/fixtures/real_model_prompts.json`, masking the model's logits
+token by token through the shipped wheel, mapping its real stop ids onto
+PureCARD's reserved EOS bit, and preserving raw token ids and per-step mask
+signatures as JSONL artifacts under `target/purecard/real-model/`.
+`tests/real_model_legend_compile.rs` then compiles every completed constrained
+output through the pinned Legend stack and separately measures return-type
+faithfulness against a hand-authored gold reference per fixture — a **compile
+success** metric and a **return-type faithfulness** metric, not full
+execution-equivalence (the H2 store here seeds no data, matching §13's other
+compile-only lanes).
+
+Opt-in via `just real-model-infer` (harness alone) or `just test-real-model`
+(harness + live Legend compile-check, with guaranteed stack teardown); never
+part of `just test-python` / `just ci` — it needs the pinned model weights
+(`just qwen-infer-model-fetch`, never committed) and, for the compile-check, a
+live engine. Scheduled and on-demand via `purecard-real-model.yml`, on the same
+self-hosted-runner basis as the heavier Legend lanes.
 
 ---
 

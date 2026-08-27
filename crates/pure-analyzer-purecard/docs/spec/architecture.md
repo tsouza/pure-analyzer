@@ -223,7 +223,10 @@ decoder state and mask. PureCARD exposes itself via PyO3 and is designed to
 constrain **only the final-query span** of an agentic trajectory (not the whole
 trajectory).
 
-Host-side contract for the inference loop (out of scope to build here):
+Host-side contract for the inference loop (out of scope to build here as
+shipped product code; `python/tests/test_real_model_inference.py` is a
+reference implementation of it against a real model, `docs/spec/testing.md`
+§8.8):
 
 - The host provides the vocabulary as **raw byte strings per token id**, handling the tokenizer's metaspace / leading-space conventions (byte-BPE vs SentencePiece) _before_ handing bytes over. Getting this exactly right is a soundness prerequisite; the decoder treats tokens as opaque byte strings.
 - The host builds `Schema` from the PMCD / MCP tools and passes it (as JSON) at session init.

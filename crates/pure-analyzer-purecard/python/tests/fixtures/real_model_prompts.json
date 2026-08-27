@@ -1,0 +1,30 @@
+{
+  "_comment": "Deterministic prompt/query fixtures for the real-model harness (issue #58 bullet 3). Each targets a FIXTURE_DBS schema already committed at tests/fixtures/schemas/<db_id>.json, so the L2 lane reuses the exact same schema contract the hermetic L2 suite verifies. `gold_pure_text` is the intended arm-C `Class.all()` query a human would write for `question` — the reference the faithfulness metric (return-type equivalence) compares constrained model output against, per docs/spec/testing.md and store_grammar.rs's existing arm-C precedent (`every_fixture_class_all_lambda_compiles_against_its_own_pmcd`).",
+  "max_new_tokens": {
+    "unconstrained": 48,
+    "constrained": 32
+  },
+  "fixtures": [
+    {
+      "fixture_id": "concert_singer_all_concerts",
+      "db_id": "concert_singer",
+      "class_path": "spider::concert_singer::model::default::Concert",
+      "question": "List every concert in the database.",
+      "gold_pure_text": "|spider::concert_singer::model::default::Concert.all()"
+    },
+    {
+      "fixture_id": "pets_1_all_students",
+      "db_id": "pets_1",
+      "class_path": "spider::pets_1::model::default::Student",
+      "question": "List every student in the database.",
+      "gold_pure_text": "|spider::pets_1::model::default::Student.all()"
+    },
+    {
+      "fixture_id": "battle_death_all_ships",
+      "db_id": "battle_death",
+      "class_path": "spider::battle_death::model::default::Ship",
+      "question": "List every ship in the database.",
+      "gold_pure_text": "|spider::battle_death::model::default::Ship.all()"
+    }
+  ]
+}

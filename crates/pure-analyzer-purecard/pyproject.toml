@@ -21,6 +21,20 @@ dynamic = ["version"]
 # fixes GHSA-6w46-j5rx-g56g but requires Python >=3.10. The marker does not
 # change the shipped wheel's declared Python 3.9 floor.
 test = ["pytest==9.1.1; python_version >= '3.10'"]
+# Real-model inference harness (issue #58), opt-in via `just real-model-infer`
+# / `just test-real-model` only — never pulled in by `just test-python` or `just
+# ci`, so the fast hermetic lane stays network- and heavy-dependency-free. Runs
+# on the explicit 3.12 toolchain those recipes pin (`numpy==2.5.2` itself needs
+# Python >=3.12), same reasoning as `test`'s own marker above. Versions are the
+# latest stable releases verified against PyPI at pin time (constitution §2
+# "latest stable, verified"); bump the same way.
+real-model = [
+    "torch==2.13.0; python_version >= '3.12'",
+    "transformers==5.16.1; python_version >= '3.12'",
+    "huggingface-hub==1.29.0; python_version >= '3.12'",
+    "numpy==2.5.2; python_version >= '3.12'",
+    "pytest==9.1.1; python_version >= '3.10'",
+]
 
 [tool.maturin]
 # Build the crate with the PyO3 boundary compiled in. abi3-py39 (declared by the
