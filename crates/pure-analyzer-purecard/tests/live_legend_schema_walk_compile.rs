@@ -25,6 +25,8 @@ mod legend;
 mod lex;
 #[path = "support/schema_walker.rs"]
 mod schema_walker;
+#[path = "support/store_grammar.rs"]
+mod store_grammar;
 
 use corpus::load_gold;
 use fixture_dbs::FIXTURE_DBS;
@@ -39,6 +41,21 @@ const STRUCTURAL_BYTES: &[u8] = b"abXY1_ |{}()[].,;:$%'-><=!&+*/";
 
 fn corpus_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("corpus/gold_queries.jsonl")
+}
+
+/// `db_id`'s full Pure model text: the committed Class/Association grammar
+/// (`pure_model_text`) plus the derived Database/Mapping/Connection/Runtime
+/// grammar (`store_grammar::store_grammar_text`) arm-A's
+/// `Db->tableReference(...)->tableToTDS()` shape needs and a class-anchored
+/// query's own execution coordinates (`ClassRt`/`DbMapping`) name. Assembled
+/// the same way for every caller in this file, so a PMCD built from it always
+/// carries the complete, documented coordinate set.
+fn full_model_text(db_id: &str) -> String {
+    format!(
+        "{}\n{}",
+        pure_model_text(db_id),
+        store_grammar::store_grammar_text(db_id)
+    )
 }
 
 /// The `corpus/schemas/*.md` context-file basename for `db_id` — the first
@@ -107,6 +124,64 @@ fn first_class_path(db_id: &str) -> String {
     rest[..end].to_string()
 }
 
+/// The full, real, execution-verified gold corpus — arm-A
+/// (`Db->tableReference(...)->tableToTDS()`) and arm-C (`Class.all()->...`)
+/// alike, across all 8 `FIXTURE_DBS` (269 queries total) — compiles against
+/// its DB's assembled store grammar. This closes the gap `PR #84` found and
+/// `store_grammar.rs`'s own doc comment documents: the committed
+/// schema-context Pure model text alone (Class/Association only) cannot
+/// resolve arm-A's `tableReference`/`tableToTDS` calls, which need a real
+/// `Database`/`Mapping`/`Connection`/`Runtime`. Live-verified 269/269 before
+/// this test was written (see the PR description for the raw run); this pins
+/// that result as a regression gate for this opt-in lane, not just a
+/// diagnostic.
+#[test]
+fn every_fixture_gold_corpus_compiles_against_its_assembled_store_grammar() {
+    let client = LegendClient::new(ENGINE_BASE);
+    client
+        .health_wait(HEALTH_TIMEOUT)
+        .expect("Legend engine must become healthy");
+
+    let mut total = 0usize;
+    let mut failures: Vec<String> = Vec::new();
+    for &db_id in FIXTURE_DBS {
+        let pmcd = client
+            .grammar_to_json_model(&full_model_text(db_id))
+            .unwrap_or_else(|err| panic!("{db_id}: assembled model must parse: {err}"));
+        let queries: Vec<String> = load_gold(&corpus_path())
+            .expect("open the committed gold corpus")
+            .filter_map(Result::ok)
+            .filter(|record| record.db_id == db_id)
+            .map(|record| record.pure_text)
+            .collect();
+        assert!(
+            !queries.is_empty(),
+            "no gold queries for fixture db {db_id}"
+        );
+        total += queries.len();
+        for (index, text) in queries.iter().enumerate() {
+            match client.grammar_to_json_lambda(text) {
+                Err(err) => failures.push(format!("{db_id} query {index}: PARSE: {err}\n  {text}")),
+                Ok(lambda_json) => match client
+                    .lambda_return_type(&lambda_json, &pmcd)
+                    .unwrap_or_else(|err| panic!("{db_id} query {index} request failed: {err}"))
+                {
+                    ReturnTypeOutcome::ReturnType(_) => {}
+                    ReturnTypeOutcome::CompileError(message) => failures.push(format!(
+                        "{db_id} query {index}: COMPILE: {message}\n  {text}"
+                    )),
+                },
+            }
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "{}/{total} gold queries failed to compile:\n{}",
+        failures.len(),
+        failures.join("\n\n")
+    );
+}
+
 /// Every fixture DB's real, committed schema produces a genuinely compiling
 /// `Class.all()` lambda against its own live-assembled PMCD — the documented
 /// arm-C shape (`docs/spec/grammar.md` §5: "`|Class.all()->…`"), and the one
@@ -155,8 +230,15 @@ fn every_fixture_class_all_lambda_compiles_against_its_own_pmcd() {
 /// Two real, walker-level bugs surfaced and were fixed this way (see
 /// `schema_walker.rs`'s `PendingCall`/`would_fuse` docs: a `->name` call
 /// missing its mandatory `()`, and two tokens silently fusing into one bogus
-/// lexeme). What's left after those fixes is not a walker bug: replaying the
-/// result showed 0/64 compiling, split into two causes neither of which
+/// lexeme). What's left after those fixes is not a walker bug: replaying
+/// against the now-assembled store grammar (this lane's model text includes
+/// `store_grammar.rs`'s Database/Mapping/Connection/Runtime, closing the gap
+/// the previous revision of this comment documented as separately blocking)
+/// still shows only 1/64 compiling — the missing store grammar was never the
+/// dominant cause here; `every_fixture_gold_corpus_compiles_against_its_assembled_store_grammar`
+/// proves that gap is in fact closed (269/269 *real* gold queries compile
+/// against the same grammar this diagnostic uses). What actually dominates
+/// this walk set's failures, split into two causes neither of which
 /// `schema_walker.rs` can fix by itself —
 ///
 /// - ~1/3 fail to even *parse*: nested predicate/operator combinations
@@ -173,15 +255,6 @@ fn every_fixture_class_all_lambda_compiles_against_its_own_pmcd() {
 ///   never a real one — confirmed live: `Class.all()` and
 ///   `Class.all()->filter(...)` both compile; a bare `Class.'name'` never can,
 ///   regardless of which name is chosen.
-///
-/// Separately (not exercised by this world_1 lane at all): `world_1`'s own
-/// gold corpus is 100% arm-A (`Db->tableReference(...)->tableToTDS()`), and
-/// the committed schema-context Pure model only carries the Class/Association
-/// grammar, not the Database/Mapping/Connection grammar the docs' own
-/// "Assemble from grammar" note says arm-A compilation also needs — even
-/// replaying real, execution-verified gold queries here would fail today for
-/// that reason. Closing *that* gap means fetching and committing the missing
-/// grammar once, not something this lane can paper over.
 #[test]
 fn schema_aware_walks_compile_against_a_real_pmcd() {
     let client = LegendClient::new(ENGINE_BASE);
@@ -190,10 +263,9 @@ fn schema_aware_walks_compile_against_a_real_pmcd() {
         .expect("Legend engine must become healthy");
 
     let db_id = "world_1";
-    let model_text = pure_model_text(db_id);
     let pmcd = client
-        .grammar_to_json_model(&model_text)
-        .expect("the committed schema-context Pure model must itself parse");
+        .grammar_to_json_model(&full_model_text(db_id))
+        .expect("the assembled model must itself parse");
 
     let extra: Vec<Vec<u8>> = STRUCTURAL_BYTES.iter().map(|&byte| vec![byte]).collect();
     let queries: Vec<String> = load_gold(&corpus_path())
