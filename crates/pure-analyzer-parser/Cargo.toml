@@ -13,3 +13,9 @@ publish = false
 workspace = true
 
 [dependencies]
+pure-analyzer-diagnostics.workspace = true
+pure-analyzer-lexer.workspace = true
+pure-analyzer-syntax.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true

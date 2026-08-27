@@ -1,2 +1,43 @@
 pub mod pure_analyzer_parser
+pub struct pure_analyzer_parser::Parse
+pub pure_analyzer_parser::Parse::diagnostics: alloc::vec::Vec<pure_analyzer_diagnostics::diagnostic::Diagnostic>
+pub pure_analyzer_parser::Parse::green: pure_analyzer_syntax::green::GreenNode
+impl core::clone::Clone for pure_analyzer_parser::Parse
+pub fn pure_analyzer_parser::Parse::clone(&self) -> pure_analyzer_parser::Parse
+impl core::cmp::Eq for pure_analyzer_parser::Parse
+impl core::cmp::PartialEq for pure_analyzer_parser::Parse
+pub fn pure_analyzer_parser::Parse::eq(&self, &pure_analyzer_parser::Parse) -> bool
+impl core::fmt::Debug for pure_analyzer_parser::Parse
+pub fn pure_analyzer_parser::Parse::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_parser::Parse
+impl core::marker::Freeze for pure_analyzer_parser::Parse
+impl core::marker::Send for pure_analyzer_parser::Parse
+impl core::marker::Sync for pure_analyzer_parser::Parse
+impl core::marker::Unpin for pure_analyzer_parser::Parse
+impl core::marker::UnsafeUnpin for pure_analyzer_parser::Parse
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_parser::Parse
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_parser::Parse
+impl<T, U> core::convert::Into<U> for pure_analyzer_parser::Parse where U: core::convert::From<T>
+pub fn pure_analyzer_parser::Parse::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_parser::Parse where U: core::convert::Into<T>
+pub type pure_analyzer_parser::Parse::Error = never
+pub fn pure_analyzer_parser::Parse::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_parser::Parse where U: core::convert::TryFrom<T>
+pub type pure_analyzer_parser::Parse::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_parser::Parse::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_parser::Parse where T: core::clone::Clone
+pub type pure_analyzer_parser::Parse::Owned = T
+pub fn pure_analyzer_parser::Parse::clone_into(&self, &mut T)
+pub fn pure_analyzer_parser::Parse::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_parser::Parse where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_parser::Parse::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_parser::Parse where T: ?core::marker::Sized
+pub fn pure_analyzer_parser::Parse::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_parser::Parse where T: ?core::marker::Sized
+pub fn pure_analyzer_parser::Parse::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_parser::Parse where T: core::clone::Clone
+pub unsafe fn pure_analyzer_parser::Parse::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_parser::Parse
+pub fn pure_analyzer_parser::Parse::from(T) -> T
+pub fn pure_analyzer_parser::parse_query(&str, pure_analyzer_diagnostics::file::FileId) -> core::result::Result<pure_analyzer_parser::Parse, pure_analyzer_syntax::builder::BuildError>
 pub fn pure_analyzer_parser::version() -> &'static str

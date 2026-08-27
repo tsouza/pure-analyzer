@@ -15,10 +15,18 @@ serde_json = "1.0.151"
 # Path is relative to this crate, which lives outside the workspace (see the
 # root `Cargo.toml` `exclude`).
 pure-analyzer-diagnostics = { path = "../crates/pure-analyzer-diagnostics" }
+pure-analyzer-parser = { path = "../crates/pure-analyzer-parser" }
 
 [[bin]]
 name = "diagnostics"
 path = "fuzz_targets/diagnostics.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "m3_parser"
+path = "fuzz_targets/m3_parser.rs"
 test = false
 doc = false
 bench = false

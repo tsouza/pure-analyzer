@@ -178,10 +178,12 @@ pub unsafe fn pure_analyzer_syntax::GreenElement::clone_to_uninit(&self, *mut u8
 impl<T> core::convert::From<T> for pure_analyzer_syntax::GreenElement
 pub fn pure_analyzer_syntax::GreenElement::from(T) -> T
 #[repr(u16)] pub enum pure_analyzer_syntax::SyntaxKind
+pub pure_analyzer_syntax::SyntaxKind::ALL_EXPR = 32772
 pub pure_analyzer_syntax::SyntaxKind::ALL_KW = 31
 pub pure_analyzer_syntax::SyntaxKind::ALL_VERSIONS_IN_RANGE_KW = 34
 pub pure_analyzer_syntax::SyntaxKind::ALL_VERSIONS_KW = 33
 pub pure_analyzer_syntax::SyntaxKind::ARROW = 6
+pub pure_analyzer_syntax::SyntaxKind::ARROW_CALL = 32778
 pub pure_analyzer_syntax::SyntaxKind::ASSIGN = 49
 pub pure_analyzer_syntax::SyntaxKind::AT = 8
 pub pure_analyzer_syntax::SyntaxKind::BINARY_EXPR = 32770
@@ -190,8 +192,15 @@ pub pure_analyzer_syntax::SyntaxKind::BOOLEAN = 38
 pub pure_analyzer_syntax::SyntaxKind::BRACE_CLOSE = 30
 pub pure_analyzer_syntax::SyntaxKind::BRACE_OPEN = 29
 pub pure_analyzer_syntax::SyntaxKind::BRACKET_CLOSE = 17
+pub pure_analyzer_syntax::SyntaxKind::BRACKET_INDEX = 32780
 pub pure_analyzer_syntax::SyntaxKind::BRACKET_OPEN = 16
+pub pure_analyzer_syntax::SyntaxKind::CALL_ARGS = 32781
+pub pure_analyzer_syntax::SyntaxKind::CAST_EXPR = 32789
+pub pure_analyzer_syntax::SyntaxKind::CODE_BLOCK = 32784
 pub pure_analyzer_syntax::SyntaxKind::COLON = 13
+pub pure_analyzer_syntax::SyntaxKind::COLUMN_INFO = 32791
+pub pure_analyzer_syntax::SyntaxKind::COLUMN_SPEC = 32786
+pub pure_analyzer_syntax::SyntaxKind::COLUMN_SPEC_ARRAY = 32787
 pub pure_analyzer_syntax::SyntaxKind::COMMA = 11
 pub pure_analyzer_syntax::SyntaxKind::DATE_TIME = 0
 pub pure_analyzer_syntax::SyntaxKind::DOLLAR = 5
@@ -199,6 +208,7 @@ pub pure_analyzer_syntax::SyntaxKind::DOT = 10
 pub pure_analyzer_syntax::SyntaxKind::EQ = 18
 pub pure_analyzer_syntax::SyntaxKind::ERROR = 48
 pub pure_analyzer_syntax::SyntaxKind::ERROR_NODE = 32769
+pub pure_analyzer_syntax::SyntaxKind::FUNCTION_CALL = 32798
 pub pure_analyzer_syntax::SyntaxKind::GE = 26
 pub pure_analyzer_syntax::SyntaxKind::GT = 27
 pub pure_analyzer_syntax::SyntaxKind::HASH = 44
@@ -206,30 +216,48 @@ pub pure_analyzer_syntax::SyntaxKind::HASH_ISLAND_OPEN = 41
 pub pure_analyzer_syntax::SyntaxKind::HASH_STORE_OPEN = 40
 pub pure_analyzer_syntax::SyntaxKind::IDENT = 36
 pub pure_analyzer_syntax::SyntaxKind::INTEGER = 37
+pub pure_analyzer_syntax::SyntaxKind::ISLAND = 32792
 pub pure_analyzer_syntax::SyntaxKind::ISLAND_END = 43
+pub pure_analyzer_syntax::SyntaxKind::LAMBDA_EXPR = 32782
+pub pure_analyzer_syntax::SyntaxKind::LAMBDA_PARAMS = 32783
 pub pure_analyzer_syntax::SyntaxKind::LATEST_DATE = 2
 pub pure_analyzer_syntax::SyntaxKind::LE = 24
 pub pure_analyzer_syntax::SyntaxKind::LET_KW = 32
+pub pure_analyzer_syntax::SyntaxKind::LET_STMT = 32785
 pub pure_analyzer_syntax::SyntaxKind::LINE_COMMENT = 46
+pub pure_analyzer_syntax::SyntaxKind::LITERAL_EXPR = 32775
 pub pure_analyzer_syntax::SyntaxKind::LT = 25
 pub pure_analyzer_syntax::SyntaxKind::MINUS = 21
+pub pure_analyzer_syntax::SyntaxKind::MULTIPLICITY = 32797
 pub pure_analyzer_syntax::SyntaxKind::NAV_PATH_BLOCK = 42
+pub pure_analyzer_syntax::SyntaxKind::NAV_PATH_ISLAND = 32794
 pub pure_analyzer_syntax::SyntaxKind::NEQ = 19
+pub pure_analyzer_syntax::SyntaxKind::NEW_INSTANCE_EXPR = 32788
 pub pure_analyzer_syntax::SyntaxKind::NEW_SYMBOL = 9
+pub pure_analyzer_syntax::SyntaxKind::OPAQUE_ISLAND = 32795
 pub pure_analyzer_syntax::SyntaxKind::PAREN_CLOSE = 15
+pub pure_analyzer_syntax::SyntaxKind::PAREN_EXPR = 32776
 pub pure_analyzer_syntax::SyntaxKind::PAREN_OPEN = 14
 pub pure_analyzer_syntax::SyntaxKind::PATH_SEPARATOR = 12
 pub pure_analyzer_syntax::SyntaxKind::PERCENT = 3
 pub pure_analyzer_syntax::SyntaxKind::PIPE = 7
 pub pure_analyzer_syntax::SyntaxKind::PLUS = 20
+pub pure_analyzer_syntax::SyntaxKind::PROPERTY_NAV = 32779
+pub pure_analyzer_syntax::SyntaxKind::QUALIFIED_NAME = 32773
+pub pure_analyzer_syntax::SyntaxKind::QUERY_EXPR = 32771
+pub pure_analyzer_syntax::SyntaxKind::RELATION_TYPE = 32790
 pub pure_analyzer_syntax::SyntaxKind::ROOT = 32768
 pub pure_analyzer_syntax::SyntaxKind::SEMICOLON = 28
 pub pure_analyzer_syntax::SyntaxKind::SLASH = 23
 pub pure_analyzer_syntax::SyntaxKind::STAR = 22
+pub pure_analyzer_syntax::SyntaxKind::STORE_TABLE_POINTER = 32793
 pub pure_analyzer_syntax::SyntaxKind::STRICT_DATE = 1
 pub pure_analyzer_syntax::SyntaxKind::STRING = 39
 pub pure_analyzer_syntax::SyntaxKind::TILDE = 4
 pub pure_analyzer_syntax::SyntaxKind::TO_BYTES_KW = 35
+pub pure_analyzer_syntax::SyntaxKind::TYPE_REF = 32796
+pub pure_analyzer_syntax::SyntaxKind::UNARY_EXPR = 32777
+pub pure_analyzer_syntax::SyntaxKind::VARIABLE_EXPR = 32774
 pub pure_analyzer_syntax::SyntaxKind::WHITESPACE = 45
 impl pure_analyzer_syntax::SyntaxKind
 pub const fn pure_analyzer_syntax::SyntaxKind::all() -> &'static [Self]
@@ -282,6 +310,92 @@ impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::SyntaxKind where T:
 pub unsafe fn pure_analyzer_syntax::SyntaxKind::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for pure_analyzer_syntax::SyntaxKind
 pub fn pure_analyzer_syntax::SyntaxKind::from(T) -> T
+pub struct pure_analyzer_syntax::AllExpression(_)
+impl core::clone::Clone for pure_analyzer_syntax::AllExpression
+pub fn pure_analyzer_syntax::AllExpression::clone(&self) -> pure_analyzer_syntax::AllExpression
+impl core::cmp::Eq for pure_analyzer_syntax::AllExpression
+impl core::cmp::PartialEq for pure_analyzer_syntax::AllExpression
+pub fn pure_analyzer_syntax::AllExpression::eq(&self, &pure_analyzer_syntax::AllExpression) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::AllExpression
+pub fn pure_analyzer_syntax::AllExpression::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::AllExpression
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::AllExpression
+pub fn pure_analyzer_syntax::AllExpression::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::AllExpression::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::AllExpression::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::AllExpression::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::AllExpression
+impl core::marker::Send for pure_analyzer_syntax::AllExpression
+impl core::marker::Sync for pure_analyzer_syntax::AllExpression
+impl core::marker::Unpin for pure_analyzer_syntax::AllExpression
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::AllExpression
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::AllExpression
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::AllExpression
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::AllExpression where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::AllExpression::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::AllExpression where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::AllExpression::Error = never
+pub fn pure_analyzer_syntax::AllExpression::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::AllExpression where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::AllExpression::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::AllExpression::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::AllExpression where T: core::clone::Clone
+pub type pure_analyzer_syntax::AllExpression::Owned = T
+pub fn pure_analyzer_syntax::AllExpression::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::AllExpression::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::AllExpression where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::AllExpression::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::AllExpression where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::AllExpression::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::AllExpression where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::AllExpression::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::AllExpression where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::AllExpression::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::AllExpression
+pub fn pure_analyzer_syntax::AllExpression::from(T) -> T
+pub struct pure_analyzer_syntax::ArrowCall(_)
+impl core::clone::Clone for pure_analyzer_syntax::ArrowCall
+pub fn pure_analyzer_syntax::ArrowCall::clone(&self) -> pure_analyzer_syntax::ArrowCall
+impl core::cmp::Eq for pure_analyzer_syntax::ArrowCall
+impl core::cmp::PartialEq for pure_analyzer_syntax::ArrowCall
+pub fn pure_analyzer_syntax::ArrowCall::eq(&self, &pure_analyzer_syntax::ArrowCall) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::ArrowCall
+pub fn pure_analyzer_syntax::ArrowCall::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::ArrowCall
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::ArrowCall
+pub fn pure_analyzer_syntax::ArrowCall::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::ArrowCall::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::ArrowCall::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::ArrowCall::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::ArrowCall
+impl core::marker::Send for pure_analyzer_syntax::ArrowCall
+impl core::marker::Sync for pure_analyzer_syntax::ArrowCall
+impl core::marker::Unpin for pure_analyzer_syntax::ArrowCall
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::ArrowCall
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::ArrowCall
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::ArrowCall
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::ArrowCall where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::ArrowCall::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::ArrowCall where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::ArrowCall::Error = never
+pub fn pure_analyzer_syntax::ArrowCall::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::ArrowCall where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::ArrowCall::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::ArrowCall::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::ArrowCall where T: core::clone::Clone
+pub type pure_analyzer_syntax::ArrowCall::Owned = T
+pub fn pure_analyzer_syntax::ArrowCall::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::ArrowCall::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::ArrowCall where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::ArrowCall::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::ArrowCall where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::ArrowCall::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::ArrowCall where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::ArrowCall::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::ArrowCall where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::ArrowCall::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::ArrowCall
+pub fn pure_analyzer_syntax::ArrowCall::from(T) -> T
 pub struct pure_analyzer_syntax::BinaryExpression(_)
 impl core::clone::Clone for pure_analyzer_syntax::BinaryExpression
 pub fn pure_analyzer_syntax::BinaryExpression::clone(&self) -> pure_analyzer_syntax::BinaryExpression
@@ -295,6 +409,7 @@ impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::BinaryExpression
 pub fn pure_analyzer_syntax::BinaryExpression::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
 pub fn pure_analyzer_syntax::BinaryExpression::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
 pub fn pure_analyzer_syntax::BinaryExpression::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::BinaryExpression::text_range(&self) -> text_size::range::TextRange
 impl core::marker::Freeze for pure_analyzer_syntax::BinaryExpression
 impl core::marker::Send for pure_analyzer_syntax::BinaryExpression
 impl core::marker::Sync for pure_analyzer_syntax::BinaryExpression
@@ -324,6 +439,135 @@ impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::BinaryExpression wh
 pub unsafe fn pure_analyzer_syntax::BinaryExpression::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for pure_analyzer_syntax::BinaryExpression
 pub fn pure_analyzer_syntax::BinaryExpression::from(T) -> T
+pub struct pure_analyzer_syntax::BracketIndex(_)
+impl core::clone::Clone for pure_analyzer_syntax::BracketIndex
+pub fn pure_analyzer_syntax::BracketIndex::clone(&self) -> pure_analyzer_syntax::BracketIndex
+impl core::cmp::Eq for pure_analyzer_syntax::BracketIndex
+impl core::cmp::PartialEq for pure_analyzer_syntax::BracketIndex
+pub fn pure_analyzer_syntax::BracketIndex::eq(&self, &pure_analyzer_syntax::BracketIndex) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::BracketIndex
+pub fn pure_analyzer_syntax::BracketIndex::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::BracketIndex
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::BracketIndex
+pub fn pure_analyzer_syntax::BracketIndex::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::BracketIndex::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::BracketIndex::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::BracketIndex::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::BracketIndex
+impl core::marker::Send for pure_analyzer_syntax::BracketIndex
+impl core::marker::Sync for pure_analyzer_syntax::BracketIndex
+impl core::marker::Unpin for pure_analyzer_syntax::BracketIndex
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::BracketIndex
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::BracketIndex
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::BracketIndex
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::BracketIndex where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::BracketIndex::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::BracketIndex where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::BracketIndex::Error = never
+pub fn pure_analyzer_syntax::BracketIndex::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::BracketIndex where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::BracketIndex::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::BracketIndex::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::BracketIndex where T: core::clone::Clone
+pub type pure_analyzer_syntax::BracketIndex::Owned = T
+pub fn pure_analyzer_syntax::BracketIndex::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::BracketIndex::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::BracketIndex where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::BracketIndex::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::BracketIndex where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::BracketIndex::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::BracketIndex where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::BracketIndex::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::BracketIndex where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::BracketIndex::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::BracketIndex
+pub fn pure_analyzer_syntax::BracketIndex::from(T) -> T
+pub struct pure_analyzer_syntax::CallArguments(_)
+impl core::clone::Clone for pure_analyzer_syntax::CallArguments
+pub fn pure_analyzer_syntax::CallArguments::clone(&self) -> pure_analyzer_syntax::CallArguments
+impl core::cmp::Eq for pure_analyzer_syntax::CallArguments
+impl core::cmp::PartialEq for pure_analyzer_syntax::CallArguments
+pub fn pure_analyzer_syntax::CallArguments::eq(&self, &pure_analyzer_syntax::CallArguments) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::CallArguments
+pub fn pure_analyzer_syntax::CallArguments::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::CallArguments
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::CallArguments
+pub fn pure_analyzer_syntax::CallArguments::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::CallArguments::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::CallArguments::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::CallArguments::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::CallArguments
+impl core::marker::Send for pure_analyzer_syntax::CallArguments
+impl core::marker::Sync for pure_analyzer_syntax::CallArguments
+impl core::marker::Unpin for pure_analyzer_syntax::CallArguments
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::CallArguments
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::CallArguments
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::CallArguments
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::CallArguments where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::CallArguments::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::CallArguments where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::CallArguments::Error = never
+pub fn pure_analyzer_syntax::CallArguments::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::CallArguments where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::CallArguments::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::CallArguments::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::CallArguments where T: core::clone::Clone
+pub type pure_analyzer_syntax::CallArguments::Owned = T
+pub fn pure_analyzer_syntax::CallArguments::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::CallArguments::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::CallArguments where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::CallArguments::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::CallArguments where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::CallArguments::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::CallArguments where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::CallArguments::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::CallArguments where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::CallArguments::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::CallArguments
+pub fn pure_analyzer_syntax::CallArguments::from(T) -> T
+pub struct pure_analyzer_syntax::CastExpression(_)
+impl core::clone::Clone for pure_analyzer_syntax::CastExpression
+pub fn pure_analyzer_syntax::CastExpression::clone(&self) -> pure_analyzer_syntax::CastExpression
+impl core::cmp::Eq for pure_analyzer_syntax::CastExpression
+impl core::cmp::PartialEq for pure_analyzer_syntax::CastExpression
+pub fn pure_analyzer_syntax::CastExpression::eq(&self, &pure_analyzer_syntax::CastExpression) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::CastExpression
+pub fn pure_analyzer_syntax::CastExpression::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::CastExpression
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::CastExpression
+pub fn pure_analyzer_syntax::CastExpression::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::CastExpression::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::CastExpression::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::CastExpression::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::CastExpression
+impl core::marker::Send for pure_analyzer_syntax::CastExpression
+impl core::marker::Sync for pure_analyzer_syntax::CastExpression
+impl core::marker::Unpin for pure_analyzer_syntax::CastExpression
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::CastExpression
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::CastExpression
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::CastExpression
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::CastExpression where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::CastExpression::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::CastExpression where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::CastExpression::Error = never
+pub fn pure_analyzer_syntax::CastExpression::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::CastExpression where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::CastExpression::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::CastExpression::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::CastExpression where T: core::clone::Clone
+pub type pure_analyzer_syntax::CastExpression::Owned = T
+pub fn pure_analyzer_syntax::CastExpression::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::CastExpression::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::CastExpression where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::CastExpression::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::CastExpression where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::CastExpression::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::CastExpression where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::CastExpression::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::CastExpression where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::CastExpression::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::CastExpression
+pub fn pure_analyzer_syntax::CastExpression::from(T) -> T
 pub struct pure_analyzer_syntax::Checkpoint
 impl core::clone::Clone for pure_analyzer_syntax::Checkpoint
 pub fn pure_analyzer_syntax::Checkpoint::clone(&self) -> pure_analyzer_syntax::Checkpoint
@@ -358,6 +602,264 @@ impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::Checkpoint where T:
 pub unsafe fn pure_analyzer_syntax::Checkpoint::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for pure_analyzer_syntax::Checkpoint
 pub fn pure_analyzer_syntax::Checkpoint::from(T) -> T
+pub struct pure_analyzer_syntax::CodeBlock(_)
+impl core::clone::Clone for pure_analyzer_syntax::CodeBlock
+pub fn pure_analyzer_syntax::CodeBlock::clone(&self) -> pure_analyzer_syntax::CodeBlock
+impl core::cmp::Eq for pure_analyzer_syntax::CodeBlock
+impl core::cmp::PartialEq for pure_analyzer_syntax::CodeBlock
+pub fn pure_analyzer_syntax::CodeBlock::eq(&self, &pure_analyzer_syntax::CodeBlock) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::CodeBlock
+pub fn pure_analyzer_syntax::CodeBlock::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::CodeBlock
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::CodeBlock
+pub fn pure_analyzer_syntax::CodeBlock::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::CodeBlock::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::CodeBlock::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::CodeBlock::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::CodeBlock
+impl core::marker::Send for pure_analyzer_syntax::CodeBlock
+impl core::marker::Sync for pure_analyzer_syntax::CodeBlock
+impl core::marker::Unpin for pure_analyzer_syntax::CodeBlock
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::CodeBlock
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::CodeBlock
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::CodeBlock
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::CodeBlock where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::CodeBlock::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::CodeBlock where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::CodeBlock::Error = never
+pub fn pure_analyzer_syntax::CodeBlock::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::CodeBlock where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::CodeBlock::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::CodeBlock::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::CodeBlock where T: core::clone::Clone
+pub type pure_analyzer_syntax::CodeBlock::Owned = T
+pub fn pure_analyzer_syntax::CodeBlock::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::CodeBlock::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::CodeBlock where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::CodeBlock::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::CodeBlock where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::CodeBlock::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::CodeBlock where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::CodeBlock::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::CodeBlock where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::CodeBlock::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::CodeBlock
+pub fn pure_analyzer_syntax::CodeBlock::from(T) -> T
+pub struct pure_analyzer_syntax::ColumnInfo(_)
+impl core::clone::Clone for pure_analyzer_syntax::ColumnInfo
+pub fn pure_analyzer_syntax::ColumnInfo::clone(&self) -> pure_analyzer_syntax::ColumnInfo
+impl core::cmp::Eq for pure_analyzer_syntax::ColumnInfo
+impl core::cmp::PartialEq for pure_analyzer_syntax::ColumnInfo
+pub fn pure_analyzer_syntax::ColumnInfo::eq(&self, &pure_analyzer_syntax::ColumnInfo) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::ColumnInfo
+pub fn pure_analyzer_syntax::ColumnInfo::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::ColumnInfo
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::ColumnInfo
+pub fn pure_analyzer_syntax::ColumnInfo::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::ColumnInfo::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::ColumnInfo::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::ColumnInfo::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::ColumnInfo
+impl core::marker::Send for pure_analyzer_syntax::ColumnInfo
+impl core::marker::Sync for pure_analyzer_syntax::ColumnInfo
+impl core::marker::Unpin for pure_analyzer_syntax::ColumnInfo
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::ColumnInfo
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::ColumnInfo
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::ColumnInfo
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::ColumnInfo where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::ColumnInfo::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::ColumnInfo where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::ColumnInfo::Error = never
+pub fn pure_analyzer_syntax::ColumnInfo::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::ColumnInfo where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::ColumnInfo::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::ColumnInfo::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::ColumnInfo where T: core::clone::Clone
+pub type pure_analyzer_syntax::ColumnInfo::Owned = T
+pub fn pure_analyzer_syntax::ColumnInfo::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::ColumnInfo::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::ColumnInfo where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::ColumnInfo::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::ColumnInfo where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::ColumnInfo::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::ColumnInfo where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::ColumnInfo::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::ColumnInfo where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::ColumnInfo::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::ColumnInfo
+pub fn pure_analyzer_syntax::ColumnInfo::from(T) -> T
+pub struct pure_analyzer_syntax::ColumnSpec(_)
+impl core::clone::Clone for pure_analyzer_syntax::ColumnSpec
+pub fn pure_analyzer_syntax::ColumnSpec::clone(&self) -> pure_analyzer_syntax::ColumnSpec
+impl core::cmp::Eq for pure_analyzer_syntax::ColumnSpec
+impl core::cmp::PartialEq for pure_analyzer_syntax::ColumnSpec
+pub fn pure_analyzer_syntax::ColumnSpec::eq(&self, &pure_analyzer_syntax::ColumnSpec) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::ColumnSpec
+pub fn pure_analyzer_syntax::ColumnSpec::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::ColumnSpec
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::ColumnSpec
+pub fn pure_analyzer_syntax::ColumnSpec::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::ColumnSpec::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::ColumnSpec::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::ColumnSpec::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::ColumnSpec
+impl core::marker::Send for pure_analyzer_syntax::ColumnSpec
+impl core::marker::Sync for pure_analyzer_syntax::ColumnSpec
+impl core::marker::Unpin for pure_analyzer_syntax::ColumnSpec
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::ColumnSpec
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::ColumnSpec
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::ColumnSpec
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::ColumnSpec where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::ColumnSpec::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::ColumnSpec where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::ColumnSpec::Error = never
+pub fn pure_analyzer_syntax::ColumnSpec::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::ColumnSpec where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::ColumnSpec::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::ColumnSpec::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::ColumnSpec where T: core::clone::Clone
+pub type pure_analyzer_syntax::ColumnSpec::Owned = T
+pub fn pure_analyzer_syntax::ColumnSpec::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::ColumnSpec::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::ColumnSpec where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::ColumnSpec::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::ColumnSpec where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::ColumnSpec::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::ColumnSpec where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::ColumnSpec::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::ColumnSpec where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::ColumnSpec::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::ColumnSpec
+pub fn pure_analyzer_syntax::ColumnSpec::from(T) -> T
+pub struct pure_analyzer_syntax::ColumnSpecArray(_)
+impl core::clone::Clone for pure_analyzer_syntax::ColumnSpecArray
+pub fn pure_analyzer_syntax::ColumnSpecArray::clone(&self) -> pure_analyzer_syntax::ColumnSpecArray
+impl core::cmp::Eq for pure_analyzer_syntax::ColumnSpecArray
+impl core::cmp::PartialEq for pure_analyzer_syntax::ColumnSpecArray
+pub fn pure_analyzer_syntax::ColumnSpecArray::eq(&self, &pure_analyzer_syntax::ColumnSpecArray) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::ColumnSpecArray
+pub fn pure_analyzer_syntax::ColumnSpecArray::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::ColumnSpecArray
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::ColumnSpecArray
+pub fn pure_analyzer_syntax::ColumnSpecArray::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::ColumnSpecArray::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::ColumnSpecArray::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::ColumnSpecArray::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::ColumnSpecArray
+impl core::marker::Send for pure_analyzer_syntax::ColumnSpecArray
+impl core::marker::Sync for pure_analyzer_syntax::ColumnSpecArray
+impl core::marker::Unpin for pure_analyzer_syntax::ColumnSpecArray
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::ColumnSpecArray
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::ColumnSpecArray
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::ColumnSpecArray
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::ColumnSpecArray where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::ColumnSpecArray::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::ColumnSpecArray where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::ColumnSpecArray::Error = never
+pub fn pure_analyzer_syntax::ColumnSpecArray::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::ColumnSpecArray where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::ColumnSpecArray::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::ColumnSpecArray::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::ColumnSpecArray where T: core::clone::Clone
+pub type pure_analyzer_syntax::ColumnSpecArray::Owned = T
+pub fn pure_analyzer_syntax::ColumnSpecArray::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::ColumnSpecArray::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::ColumnSpecArray where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::ColumnSpecArray::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::ColumnSpecArray where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::ColumnSpecArray::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::ColumnSpecArray where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::ColumnSpecArray::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::ColumnSpecArray where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::ColumnSpecArray::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::ColumnSpecArray
+pub fn pure_analyzer_syntax::ColumnSpecArray::from(T) -> T
+pub struct pure_analyzer_syntax::ErrorNode(_)
+impl core::clone::Clone for pure_analyzer_syntax::ErrorNode
+pub fn pure_analyzer_syntax::ErrorNode::clone(&self) -> pure_analyzer_syntax::ErrorNode
+impl core::cmp::Eq for pure_analyzer_syntax::ErrorNode
+impl core::cmp::PartialEq for pure_analyzer_syntax::ErrorNode
+pub fn pure_analyzer_syntax::ErrorNode::eq(&self, &pure_analyzer_syntax::ErrorNode) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::ErrorNode
+pub fn pure_analyzer_syntax::ErrorNode::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::ErrorNode
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::ErrorNode
+pub fn pure_analyzer_syntax::ErrorNode::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::ErrorNode::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::ErrorNode::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::ErrorNode::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::ErrorNode
+impl core::marker::Send for pure_analyzer_syntax::ErrorNode
+impl core::marker::Sync for pure_analyzer_syntax::ErrorNode
+impl core::marker::Unpin for pure_analyzer_syntax::ErrorNode
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::ErrorNode
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::ErrorNode
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::ErrorNode
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::ErrorNode where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::ErrorNode::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::ErrorNode where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::ErrorNode::Error = never
+pub fn pure_analyzer_syntax::ErrorNode::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::ErrorNode where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::ErrorNode::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::ErrorNode::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::ErrorNode where T: core::clone::Clone
+pub type pure_analyzer_syntax::ErrorNode::Owned = T
+pub fn pure_analyzer_syntax::ErrorNode::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::ErrorNode::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::ErrorNode where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::ErrorNode::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::ErrorNode where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::ErrorNode::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::ErrorNode where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::ErrorNode::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::ErrorNode where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::ErrorNode::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::ErrorNode
+pub fn pure_analyzer_syntax::ErrorNode::from(T) -> T
+pub struct pure_analyzer_syntax::FunctionCall(_)
+impl core::clone::Clone for pure_analyzer_syntax::FunctionCall
+pub fn pure_analyzer_syntax::FunctionCall::clone(&self) -> pure_analyzer_syntax::FunctionCall
+impl core::cmp::Eq for pure_analyzer_syntax::FunctionCall
+impl core::cmp::PartialEq for pure_analyzer_syntax::FunctionCall
+pub fn pure_analyzer_syntax::FunctionCall::eq(&self, &pure_analyzer_syntax::FunctionCall) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::FunctionCall
+pub fn pure_analyzer_syntax::FunctionCall::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::FunctionCall
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::FunctionCall
+pub fn pure_analyzer_syntax::FunctionCall::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::FunctionCall::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::FunctionCall::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::FunctionCall::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::FunctionCall
+impl core::marker::Send for pure_analyzer_syntax::FunctionCall
+impl core::marker::Sync for pure_analyzer_syntax::FunctionCall
+impl core::marker::Unpin for pure_analyzer_syntax::FunctionCall
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::FunctionCall
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::FunctionCall
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::FunctionCall
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::FunctionCall where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::FunctionCall::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::FunctionCall where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::FunctionCall::Error = never
+pub fn pure_analyzer_syntax::FunctionCall::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::FunctionCall where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::FunctionCall::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::FunctionCall::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::FunctionCall where T: core::clone::Clone
+pub type pure_analyzer_syntax::FunctionCall::Owned = T
+pub fn pure_analyzer_syntax::FunctionCall::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::FunctionCall::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::FunctionCall where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::FunctionCall::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::FunctionCall where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::FunctionCall::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::FunctionCall where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::FunctionCall::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::FunctionCall where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::FunctionCall::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::FunctionCall
+pub fn pure_analyzer_syntax::FunctionCall::from(T) -> T
 pub struct pure_analyzer_syntax::GreenNode(_)
 impl pure_analyzer_syntax::GreenNode
 pub fn pure_analyzer_syntax::GreenNode::children(&self) -> &[pure_analyzer_syntax::GreenElement]
@@ -450,10 +952,9 @@ impl core::clone::Clone for pure_analyzer_syntax::GreenToken
 pub fn pure_analyzer_syntax::GreenToken::clone(&self) -> pure_analyzer_syntax::GreenToken
 impl core::cmp::Eq for pure_analyzer_syntax::GreenToken
 impl core::cmp::PartialEq for pure_analyzer_syntax::GreenToken
-pub fn pure_analyzer_syntax::GreenToken::eq(&self, &pure_analyzer_syntax::GreenToken) -> bool
+pub fn pure_analyzer_syntax::GreenToken::eq(&self, &Self) -> bool
 impl core::fmt::Debug for pure_analyzer_syntax::GreenToken
 pub fn pure_analyzer_syntax::GreenToken::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl core::marker::StructuralPartialEq for pure_analyzer_syntax::GreenToken
 impl core::marker::Freeze for pure_analyzer_syntax::GreenToken
 impl core::marker::Send for pure_analyzer_syntax::GreenToken
 impl core::marker::Sync for pure_analyzer_syntax::GreenToken
@@ -529,6 +1030,565 @@ impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::InvalidRawSyntaxKin
 pub unsafe fn pure_analyzer_syntax::InvalidRawSyntaxKind::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for pure_analyzer_syntax::InvalidRawSyntaxKind
 pub fn pure_analyzer_syntax::InvalidRawSyntaxKind::from(T) -> T
+pub struct pure_analyzer_syntax::Island(_)
+impl core::clone::Clone for pure_analyzer_syntax::Island
+pub fn pure_analyzer_syntax::Island::clone(&self) -> pure_analyzer_syntax::Island
+impl core::cmp::Eq for pure_analyzer_syntax::Island
+impl core::cmp::PartialEq for pure_analyzer_syntax::Island
+pub fn pure_analyzer_syntax::Island::eq(&self, &pure_analyzer_syntax::Island) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::Island
+pub fn pure_analyzer_syntax::Island::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::Island
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::Island
+pub fn pure_analyzer_syntax::Island::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::Island::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::Island::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::Island::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::Island
+impl core::marker::Send for pure_analyzer_syntax::Island
+impl core::marker::Sync for pure_analyzer_syntax::Island
+impl core::marker::Unpin for pure_analyzer_syntax::Island
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::Island
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::Island
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::Island
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::Island where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::Island::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::Island where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::Island::Error = never
+pub fn pure_analyzer_syntax::Island::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::Island where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::Island::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::Island::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::Island where T: core::clone::Clone
+pub type pure_analyzer_syntax::Island::Owned = T
+pub fn pure_analyzer_syntax::Island::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::Island::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::Island where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::Island::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::Island where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::Island::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::Island where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::Island::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::Island where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::Island::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::Island
+pub fn pure_analyzer_syntax::Island::from(T) -> T
+pub struct pure_analyzer_syntax::LambdaExpression(_)
+impl core::clone::Clone for pure_analyzer_syntax::LambdaExpression
+pub fn pure_analyzer_syntax::LambdaExpression::clone(&self) -> pure_analyzer_syntax::LambdaExpression
+impl core::cmp::Eq for pure_analyzer_syntax::LambdaExpression
+impl core::cmp::PartialEq for pure_analyzer_syntax::LambdaExpression
+pub fn pure_analyzer_syntax::LambdaExpression::eq(&self, &pure_analyzer_syntax::LambdaExpression) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::LambdaExpression
+pub fn pure_analyzer_syntax::LambdaExpression::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::LambdaExpression
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::LambdaExpression
+pub fn pure_analyzer_syntax::LambdaExpression::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::LambdaExpression::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::LambdaExpression::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::LambdaExpression::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::LambdaExpression
+impl core::marker::Send for pure_analyzer_syntax::LambdaExpression
+impl core::marker::Sync for pure_analyzer_syntax::LambdaExpression
+impl core::marker::Unpin for pure_analyzer_syntax::LambdaExpression
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::LambdaExpression
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::LambdaExpression
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::LambdaExpression
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::LambdaExpression where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::LambdaExpression::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::LambdaExpression where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::LambdaExpression::Error = never
+pub fn pure_analyzer_syntax::LambdaExpression::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::LambdaExpression where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::LambdaExpression::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::LambdaExpression::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::LambdaExpression where T: core::clone::Clone
+pub type pure_analyzer_syntax::LambdaExpression::Owned = T
+pub fn pure_analyzer_syntax::LambdaExpression::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::LambdaExpression::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::LambdaExpression where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::LambdaExpression::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::LambdaExpression where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::LambdaExpression::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::LambdaExpression where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::LambdaExpression::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::LambdaExpression where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::LambdaExpression::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::LambdaExpression
+pub fn pure_analyzer_syntax::LambdaExpression::from(T) -> T
+pub struct pure_analyzer_syntax::LambdaParameters(_)
+impl core::clone::Clone for pure_analyzer_syntax::LambdaParameters
+pub fn pure_analyzer_syntax::LambdaParameters::clone(&self) -> pure_analyzer_syntax::LambdaParameters
+impl core::cmp::Eq for pure_analyzer_syntax::LambdaParameters
+impl core::cmp::PartialEq for pure_analyzer_syntax::LambdaParameters
+pub fn pure_analyzer_syntax::LambdaParameters::eq(&self, &pure_analyzer_syntax::LambdaParameters) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::LambdaParameters
+pub fn pure_analyzer_syntax::LambdaParameters::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::LambdaParameters
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::LambdaParameters
+pub fn pure_analyzer_syntax::LambdaParameters::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::LambdaParameters::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::LambdaParameters::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::LambdaParameters::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::LambdaParameters
+impl core::marker::Send for pure_analyzer_syntax::LambdaParameters
+impl core::marker::Sync for pure_analyzer_syntax::LambdaParameters
+impl core::marker::Unpin for pure_analyzer_syntax::LambdaParameters
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::LambdaParameters
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::LambdaParameters
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::LambdaParameters
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::LambdaParameters where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::LambdaParameters::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::LambdaParameters where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::LambdaParameters::Error = never
+pub fn pure_analyzer_syntax::LambdaParameters::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::LambdaParameters where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::LambdaParameters::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::LambdaParameters::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::LambdaParameters where T: core::clone::Clone
+pub type pure_analyzer_syntax::LambdaParameters::Owned = T
+pub fn pure_analyzer_syntax::LambdaParameters::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::LambdaParameters::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::LambdaParameters where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::LambdaParameters::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::LambdaParameters where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::LambdaParameters::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::LambdaParameters where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::LambdaParameters::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::LambdaParameters where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::LambdaParameters::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::LambdaParameters
+pub fn pure_analyzer_syntax::LambdaParameters::from(T) -> T
+pub struct pure_analyzer_syntax::LetStatement(_)
+impl core::clone::Clone for pure_analyzer_syntax::LetStatement
+pub fn pure_analyzer_syntax::LetStatement::clone(&self) -> pure_analyzer_syntax::LetStatement
+impl core::cmp::Eq for pure_analyzer_syntax::LetStatement
+impl core::cmp::PartialEq for pure_analyzer_syntax::LetStatement
+pub fn pure_analyzer_syntax::LetStatement::eq(&self, &pure_analyzer_syntax::LetStatement) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::LetStatement
+pub fn pure_analyzer_syntax::LetStatement::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::LetStatement
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::LetStatement
+pub fn pure_analyzer_syntax::LetStatement::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::LetStatement::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::LetStatement::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::LetStatement::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::LetStatement
+impl core::marker::Send for pure_analyzer_syntax::LetStatement
+impl core::marker::Sync for pure_analyzer_syntax::LetStatement
+impl core::marker::Unpin for pure_analyzer_syntax::LetStatement
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::LetStatement
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::LetStatement
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::LetStatement
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::LetStatement where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::LetStatement::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::LetStatement where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::LetStatement::Error = never
+pub fn pure_analyzer_syntax::LetStatement::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::LetStatement where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::LetStatement::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::LetStatement::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::LetStatement where T: core::clone::Clone
+pub type pure_analyzer_syntax::LetStatement::Owned = T
+pub fn pure_analyzer_syntax::LetStatement::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::LetStatement::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::LetStatement where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::LetStatement::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::LetStatement where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::LetStatement::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::LetStatement where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::LetStatement::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::LetStatement where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::LetStatement::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::LetStatement
+pub fn pure_analyzer_syntax::LetStatement::from(T) -> T
+pub struct pure_analyzer_syntax::LiteralExpression(_)
+impl core::clone::Clone for pure_analyzer_syntax::LiteralExpression
+pub fn pure_analyzer_syntax::LiteralExpression::clone(&self) -> pure_analyzer_syntax::LiteralExpression
+impl core::cmp::Eq for pure_analyzer_syntax::LiteralExpression
+impl core::cmp::PartialEq for pure_analyzer_syntax::LiteralExpression
+pub fn pure_analyzer_syntax::LiteralExpression::eq(&self, &pure_analyzer_syntax::LiteralExpression) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::LiteralExpression
+pub fn pure_analyzer_syntax::LiteralExpression::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::LiteralExpression
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::LiteralExpression
+pub fn pure_analyzer_syntax::LiteralExpression::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::LiteralExpression::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::LiteralExpression::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::LiteralExpression::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::LiteralExpression
+impl core::marker::Send for pure_analyzer_syntax::LiteralExpression
+impl core::marker::Sync for pure_analyzer_syntax::LiteralExpression
+impl core::marker::Unpin for pure_analyzer_syntax::LiteralExpression
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::LiteralExpression
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::LiteralExpression
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::LiteralExpression
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::LiteralExpression where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::LiteralExpression::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::LiteralExpression where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::LiteralExpression::Error = never
+pub fn pure_analyzer_syntax::LiteralExpression::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::LiteralExpression where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::LiteralExpression::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::LiteralExpression::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::LiteralExpression where T: core::clone::Clone
+pub type pure_analyzer_syntax::LiteralExpression::Owned = T
+pub fn pure_analyzer_syntax::LiteralExpression::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::LiteralExpression::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::LiteralExpression where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::LiteralExpression::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::LiteralExpression where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::LiteralExpression::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::LiteralExpression where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::LiteralExpression::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::LiteralExpression where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::LiteralExpression::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::LiteralExpression
+pub fn pure_analyzer_syntax::LiteralExpression::from(T) -> T
+pub struct pure_analyzer_syntax::Multiplicity(_)
+impl core::clone::Clone for pure_analyzer_syntax::Multiplicity
+pub fn pure_analyzer_syntax::Multiplicity::clone(&self) -> pure_analyzer_syntax::Multiplicity
+impl core::cmp::Eq for pure_analyzer_syntax::Multiplicity
+impl core::cmp::PartialEq for pure_analyzer_syntax::Multiplicity
+pub fn pure_analyzer_syntax::Multiplicity::eq(&self, &pure_analyzer_syntax::Multiplicity) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::Multiplicity
+pub fn pure_analyzer_syntax::Multiplicity::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::Multiplicity
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::Multiplicity
+pub fn pure_analyzer_syntax::Multiplicity::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::Multiplicity::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::Multiplicity::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::Multiplicity::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::Multiplicity
+impl core::marker::Send for pure_analyzer_syntax::Multiplicity
+impl core::marker::Sync for pure_analyzer_syntax::Multiplicity
+impl core::marker::Unpin for pure_analyzer_syntax::Multiplicity
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::Multiplicity
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::Multiplicity
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::Multiplicity
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::Multiplicity where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::Multiplicity::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::Multiplicity where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::Multiplicity::Error = never
+pub fn pure_analyzer_syntax::Multiplicity::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::Multiplicity where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::Multiplicity::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::Multiplicity::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::Multiplicity where T: core::clone::Clone
+pub type pure_analyzer_syntax::Multiplicity::Owned = T
+pub fn pure_analyzer_syntax::Multiplicity::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::Multiplicity::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::Multiplicity where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::Multiplicity::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::Multiplicity where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::Multiplicity::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::Multiplicity where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::Multiplicity::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::Multiplicity where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::Multiplicity::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::Multiplicity
+pub fn pure_analyzer_syntax::Multiplicity::from(T) -> T
+pub struct pure_analyzer_syntax::NavigationPathIsland(_)
+impl core::clone::Clone for pure_analyzer_syntax::NavigationPathIsland
+pub fn pure_analyzer_syntax::NavigationPathIsland::clone(&self) -> pure_analyzer_syntax::NavigationPathIsland
+impl core::cmp::Eq for pure_analyzer_syntax::NavigationPathIsland
+impl core::cmp::PartialEq for pure_analyzer_syntax::NavigationPathIsland
+pub fn pure_analyzer_syntax::NavigationPathIsland::eq(&self, &pure_analyzer_syntax::NavigationPathIsland) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::NavigationPathIsland
+pub fn pure_analyzer_syntax::NavigationPathIsland::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::NavigationPathIsland
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::NavigationPathIsland
+pub fn pure_analyzer_syntax::NavigationPathIsland::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::NavigationPathIsland::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::NavigationPathIsland::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::NavigationPathIsland::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::NavigationPathIsland
+impl core::marker::Send for pure_analyzer_syntax::NavigationPathIsland
+impl core::marker::Sync for pure_analyzer_syntax::NavigationPathIsland
+impl core::marker::Unpin for pure_analyzer_syntax::NavigationPathIsland
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::NavigationPathIsland
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::NavigationPathIsland
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::NavigationPathIsland
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::NavigationPathIsland where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::NavigationPathIsland::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::NavigationPathIsland where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::NavigationPathIsland::Error = never
+pub fn pure_analyzer_syntax::NavigationPathIsland::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::NavigationPathIsland where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::NavigationPathIsland::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::NavigationPathIsland::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::NavigationPathIsland where T: core::clone::Clone
+pub type pure_analyzer_syntax::NavigationPathIsland::Owned = T
+pub fn pure_analyzer_syntax::NavigationPathIsland::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::NavigationPathIsland::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::NavigationPathIsland where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::NavigationPathIsland::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::NavigationPathIsland where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::NavigationPathIsland::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::NavigationPathIsland where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::NavigationPathIsland::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::NavigationPathIsland where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::NavigationPathIsland::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::NavigationPathIsland
+pub fn pure_analyzer_syntax::NavigationPathIsland::from(T) -> T
+pub struct pure_analyzer_syntax::NewInstanceExpression(_)
+impl core::clone::Clone for pure_analyzer_syntax::NewInstanceExpression
+pub fn pure_analyzer_syntax::NewInstanceExpression::clone(&self) -> pure_analyzer_syntax::NewInstanceExpression
+impl core::cmp::Eq for pure_analyzer_syntax::NewInstanceExpression
+impl core::cmp::PartialEq for pure_analyzer_syntax::NewInstanceExpression
+pub fn pure_analyzer_syntax::NewInstanceExpression::eq(&self, &pure_analyzer_syntax::NewInstanceExpression) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::NewInstanceExpression
+pub fn pure_analyzer_syntax::NewInstanceExpression::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::NewInstanceExpression
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::NewInstanceExpression
+pub fn pure_analyzer_syntax::NewInstanceExpression::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::NewInstanceExpression::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::NewInstanceExpression::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::NewInstanceExpression::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::NewInstanceExpression
+impl core::marker::Send for pure_analyzer_syntax::NewInstanceExpression
+impl core::marker::Sync for pure_analyzer_syntax::NewInstanceExpression
+impl core::marker::Unpin for pure_analyzer_syntax::NewInstanceExpression
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::NewInstanceExpression
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::NewInstanceExpression
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::NewInstanceExpression
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::NewInstanceExpression where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::NewInstanceExpression::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::NewInstanceExpression where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::NewInstanceExpression::Error = never
+pub fn pure_analyzer_syntax::NewInstanceExpression::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::NewInstanceExpression where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::NewInstanceExpression::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::NewInstanceExpression::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::NewInstanceExpression where T: core::clone::Clone
+pub type pure_analyzer_syntax::NewInstanceExpression::Owned = T
+pub fn pure_analyzer_syntax::NewInstanceExpression::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::NewInstanceExpression::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::NewInstanceExpression where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::NewInstanceExpression::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::NewInstanceExpression where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::NewInstanceExpression::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::NewInstanceExpression where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::NewInstanceExpression::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::NewInstanceExpression where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::NewInstanceExpression::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::NewInstanceExpression
+pub fn pure_analyzer_syntax::NewInstanceExpression::from(T) -> T
+pub struct pure_analyzer_syntax::OpaqueIsland(_)
+impl core::clone::Clone for pure_analyzer_syntax::OpaqueIsland
+pub fn pure_analyzer_syntax::OpaqueIsland::clone(&self) -> pure_analyzer_syntax::OpaqueIsland
+impl core::cmp::Eq for pure_analyzer_syntax::OpaqueIsland
+impl core::cmp::PartialEq for pure_analyzer_syntax::OpaqueIsland
+pub fn pure_analyzer_syntax::OpaqueIsland::eq(&self, &pure_analyzer_syntax::OpaqueIsland) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::OpaqueIsland
+pub fn pure_analyzer_syntax::OpaqueIsland::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::OpaqueIsland
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::OpaqueIsland
+pub fn pure_analyzer_syntax::OpaqueIsland::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::OpaqueIsland::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::OpaqueIsland::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::OpaqueIsland::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::OpaqueIsland
+impl core::marker::Send for pure_analyzer_syntax::OpaqueIsland
+impl core::marker::Sync for pure_analyzer_syntax::OpaqueIsland
+impl core::marker::Unpin for pure_analyzer_syntax::OpaqueIsland
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::OpaqueIsland
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::OpaqueIsland
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::OpaqueIsland
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::OpaqueIsland where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::OpaqueIsland::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::OpaqueIsland where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::OpaqueIsland::Error = never
+pub fn pure_analyzer_syntax::OpaqueIsland::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::OpaqueIsland where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::OpaqueIsland::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::OpaqueIsland::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::OpaqueIsland where T: core::clone::Clone
+pub type pure_analyzer_syntax::OpaqueIsland::Owned = T
+pub fn pure_analyzer_syntax::OpaqueIsland::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::OpaqueIsland::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::OpaqueIsland where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::OpaqueIsland::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::OpaqueIsland where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::OpaqueIsland::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::OpaqueIsland where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::OpaqueIsland::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::OpaqueIsland where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::OpaqueIsland::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::OpaqueIsland
+pub fn pure_analyzer_syntax::OpaqueIsland::from(T) -> T
+pub struct pure_analyzer_syntax::ParenthesizedExpression(_)
+impl core::clone::Clone for pure_analyzer_syntax::ParenthesizedExpression
+pub fn pure_analyzer_syntax::ParenthesizedExpression::clone(&self) -> pure_analyzer_syntax::ParenthesizedExpression
+impl core::cmp::Eq for pure_analyzer_syntax::ParenthesizedExpression
+impl core::cmp::PartialEq for pure_analyzer_syntax::ParenthesizedExpression
+pub fn pure_analyzer_syntax::ParenthesizedExpression::eq(&self, &pure_analyzer_syntax::ParenthesizedExpression) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::ParenthesizedExpression
+pub fn pure_analyzer_syntax::ParenthesizedExpression::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::ParenthesizedExpression
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::ParenthesizedExpression
+pub fn pure_analyzer_syntax::ParenthesizedExpression::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::ParenthesizedExpression::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::ParenthesizedExpression::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::ParenthesizedExpression::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::ParenthesizedExpression
+impl core::marker::Send for pure_analyzer_syntax::ParenthesizedExpression
+impl core::marker::Sync for pure_analyzer_syntax::ParenthesizedExpression
+impl core::marker::Unpin for pure_analyzer_syntax::ParenthesizedExpression
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::ParenthesizedExpression
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::ParenthesizedExpression
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::ParenthesizedExpression
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::ParenthesizedExpression where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::ParenthesizedExpression::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::ParenthesizedExpression where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::ParenthesizedExpression::Error = never
+pub fn pure_analyzer_syntax::ParenthesizedExpression::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::ParenthesizedExpression where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::ParenthesizedExpression::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::ParenthesizedExpression::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::ParenthesizedExpression where T: core::clone::Clone
+pub type pure_analyzer_syntax::ParenthesizedExpression::Owned = T
+pub fn pure_analyzer_syntax::ParenthesizedExpression::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::ParenthesizedExpression::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::ParenthesizedExpression where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::ParenthesizedExpression::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::ParenthesizedExpression where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::ParenthesizedExpression::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::ParenthesizedExpression where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::ParenthesizedExpression::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::ParenthesizedExpression where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::ParenthesizedExpression::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::ParenthesizedExpression
+pub fn pure_analyzer_syntax::ParenthesizedExpression::from(T) -> T
+pub struct pure_analyzer_syntax::PropertyNavigation(_)
+impl core::clone::Clone for pure_analyzer_syntax::PropertyNavigation
+pub fn pure_analyzer_syntax::PropertyNavigation::clone(&self) -> pure_analyzer_syntax::PropertyNavigation
+impl core::cmp::Eq for pure_analyzer_syntax::PropertyNavigation
+impl core::cmp::PartialEq for pure_analyzer_syntax::PropertyNavigation
+pub fn pure_analyzer_syntax::PropertyNavigation::eq(&self, &pure_analyzer_syntax::PropertyNavigation) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::PropertyNavigation
+pub fn pure_analyzer_syntax::PropertyNavigation::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::PropertyNavigation
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::PropertyNavigation
+pub fn pure_analyzer_syntax::PropertyNavigation::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::PropertyNavigation::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::PropertyNavigation::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::PropertyNavigation::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::PropertyNavigation
+impl core::marker::Send for pure_analyzer_syntax::PropertyNavigation
+impl core::marker::Sync for pure_analyzer_syntax::PropertyNavigation
+impl core::marker::Unpin for pure_analyzer_syntax::PropertyNavigation
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::PropertyNavigation
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::PropertyNavigation
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::PropertyNavigation
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::PropertyNavigation where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::PropertyNavigation::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::PropertyNavigation where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::PropertyNavigation::Error = never
+pub fn pure_analyzer_syntax::PropertyNavigation::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::PropertyNavigation where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::PropertyNavigation::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::PropertyNavigation::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::PropertyNavigation where T: core::clone::Clone
+pub type pure_analyzer_syntax::PropertyNavigation::Owned = T
+pub fn pure_analyzer_syntax::PropertyNavigation::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::PropertyNavigation::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::PropertyNavigation where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::PropertyNavigation::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::PropertyNavigation where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::PropertyNavigation::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::PropertyNavigation where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::PropertyNavigation::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::PropertyNavigation where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::PropertyNavigation::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::PropertyNavigation
+pub fn pure_analyzer_syntax::PropertyNavigation::from(T) -> T
+pub struct pure_analyzer_syntax::QualifiedName(_)
+impl core::clone::Clone for pure_analyzer_syntax::QualifiedName
+pub fn pure_analyzer_syntax::QualifiedName::clone(&self) -> pure_analyzer_syntax::QualifiedName
+impl core::cmp::Eq for pure_analyzer_syntax::QualifiedName
+impl core::cmp::PartialEq for pure_analyzer_syntax::QualifiedName
+pub fn pure_analyzer_syntax::QualifiedName::eq(&self, &pure_analyzer_syntax::QualifiedName) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::QualifiedName
+pub fn pure_analyzer_syntax::QualifiedName::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::QualifiedName
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::QualifiedName
+pub fn pure_analyzer_syntax::QualifiedName::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::QualifiedName::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::QualifiedName::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::QualifiedName::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::QualifiedName
+impl core::marker::Send for pure_analyzer_syntax::QualifiedName
+impl core::marker::Sync for pure_analyzer_syntax::QualifiedName
+impl core::marker::Unpin for pure_analyzer_syntax::QualifiedName
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::QualifiedName
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::QualifiedName
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::QualifiedName
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::QualifiedName where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::QualifiedName::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::QualifiedName where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::QualifiedName::Error = never
+pub fn pure_analyzer_syntax::QualifiedName::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::QualifiedName where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::QualifiedName::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::QualifiedName::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::QualifiedName where T: core::clone::Clone
+pub type pure_analyzer_syntax::QualifiedName::Owned = T
+pub fn pure_analyzer_syntax::QualifiedName::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::QualifiedName::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::QualifiedName where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::QualifiedName::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::QualifiedName where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::QualifiedName::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::QualifiedName where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::QualifiedName::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::QualifiedName where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::QualifiedName::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::QualifiedName
+pub fn pure_analyzer_syntax::QualifiedName::from(T) -> T
+pub struct pure_analyzer_syntax::QueryExpression(_)
+impl core::clone::Clone for pure_analyzer_syntax::QueryExpression
+pub fn pure_analyzer_syntax::QueryExpression::clone(&self) -> pure_analyzer_syntax::QueryExpression
+impl core::cmp::Eq for pure_analyzer_syntax::QueryExpression
+impl core::cmp::PartialEq for pure_analyzer_syntax::QueryExpression
+pub fn pure_analyzer_syntax::QueryExpression::eq(&self, &pure_analyzer_syntax::QueryExpression) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::QueryExpression
+pub fn pure_analyzer_syntax::QueryExpression::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::QueryExpression
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::QueryExpression
+pub fn pure_analyzer_syntax::QueryExpression::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::QueryExpression::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::QueryExpression::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::QueryExpression::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::QueryExpression
+impl core::marker::Send for pure_analyzer_syntax::QueryExpression
+impl core::marker::Sync for pure_analyzer_syntax::QueryExpression
+impl core::marker::Unpin for pure_analyzer_syntax::QueryExpression
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::QueryExpression
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::QueryExpression
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::QueryExpression
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::QueryExpression where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::QueryExpression::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::QueryExpression where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::QueryExpression::Error = never
+pub fn pure_analyzer_syntax::QueryExpression::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::QueryExpression where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::QueryExpression::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::QueryExpression::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::QueryExpression where T: core::clone::Clone
+pub type pure_analyzer_syntax::QueryExpression::Owned = T
+pub fn pure_analyzer_syntax::QueryExpression::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::QueryExpression::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::QueryExpression where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::QueryExpression::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::QueryExpression where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::QueryExpression::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::QueryExpression where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::QueryExpression::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::QueryExpression where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::QueryExpression::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::QueryExpression
+pub fn pure_analyzer_syntax::QueryExpression::from(T) -> T
 pub struct pure_analyzer_syntax::RawSyntaxKind(_)
 impl pure_analyzer_syntax::RawSyntaxKind
 pub const fn pure_analyzer_syntax::RawSyntaxKind::get(self) -> u16
@@ -580,6 +1640,49 @@ impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::RawSyntaxKind where
 pub unsafe fn pure_analyzer_syntax::RawSyntaxKind::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for pure_analyzer_syntax::RawSyntaxKind
 pub fn pure_analyzer_syntax::RawSyntaxKind::from(T) -> T
+pub struct pure_analyzer_syntax::RelationType(_)
+impl core::clone::Clone for pure_analyzer_syntax::RelationType
+pub fn pure_analyzer_syntax::RelationType::clone(&self) -> pure_analyzer_syntax::RelationType
+impl core::cmp::Eq for pure_analyzer_syntax::RelationType
+impl core::cmp::PartialEq for pure_analyzer_syntax::RelationType
+pub fn pure_analyzer_syntax::RelationType::eq(&self, &pure_analyzer_syntax::RelationType) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::RelationType
+pub fn pure_analyzer_syntax::RelationType::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::RelationType
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::RelationType
+pub fn pure_analyzer_syntax::RelationType::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::RelationType::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::RelationType::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::RelationType::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::RelationType
+impl core::marker::Send for pure_analyzer_syntax::RelationType
+impl core::marker::Sync for pure_analyzer_syntax::RelationType
+impl core::marker::Unpin for pure_analyzer_syntax::RelationType
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::RelationType
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::RelationType
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::RelationType
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::RelationType where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::RelationType::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::RelationType where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::RelationType::Error = never
+pub fn pure_analyzer_syntax::RelationType::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::RelationType where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::RelationType::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::RelationType::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::RelationType where T: core::clone::Clone
+pub type pure_analyzer_syntax::RelationType::Owned = T
+pub fn pure_analyzer_syntax::RelationType::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::RelationType::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::RelationType where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::RelationType::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::RelationType where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::RelationType::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::RelationType where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::RelationType::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::RelationType where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::RelationType::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::RelationType
+pub fn pure_analyzer_syntax::RelationType::from(T) -> T
 pub struct pure_analyzer_syntax::Root(_)
 impl core::clone::Clone for pure_analyzer_syntax::Root
 pub fn pure_analyzer_syntax::Root::clone(&self) -> pure_analyzer_syntax::Root
@@ -593,6 +1696,7 @@ impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::Root
 pub fn pure_analyzer_syntax::Root::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
 pub fn pure_analyzer_syntax::Root::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
 pub fn pure_analyzer_syntax::Root::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::Root::text_range(&self) -> text_size::range::TextRange
 impl core::marker::Freeze for pure_analyzer_syntax::Root
 impl core::marker::Send for pure_analyzer_syntax::Root
 impl core::marker::Sync for pure_analyzer_syntax::Root
@@ -622,6 +1726,49 @@ impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::Root where T: core:
 pub unsafe fn pure_analyzer_syntax::Root::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for pure_analyzer_syntax::Root
 pub fn pure_analyzer_syntax::Root::from(T) -> T
+pub struct pure_analyzer_syntax::StoreTablePointer(_)
+impl core::clone::Clone for pure_analyzer_syntax::StoreTablePointer
+pub fn pure_analyzer_syntax::StoreTablePointer::clone(&self) -> pure_analyzer_syntax::StoreTablePointer
+impl core::cmp::Eq for pure_analyzer_syntax::StoreTablePointer
+impl core::cmp::PartialEq for pure_analyzer_syntax::StoreTablePointer
+pub fn pure_analyzer_syntax::StoreTablePointer::eq(&self, &pure_analyzer_syntax::StoreTablePointer) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::StoreTablePointer
+pub fn pure_analyzer_syntax::StoreTablePointer::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::StoreTablePointer
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::StoreTablePointer
+pub fn pure_analyzer_syntax::StoreTablePointer::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::StoreTablePointer::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::StoreTablePointer::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::StoreTablePointer::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::StoreTablePointer
+impl core::marker::Send for pure_analyzer_syntax::StoreTablePointer
+impl core::marker::Sync for pure_analyzer_syntax::StoreTablePointer
+impl core::marker::Unpin for pure_analyzer_syntax::StoreTablePointer
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::StoreTablePointer
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::StoreTablePointer
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::StoreTablePointer
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::StoreTablePointer where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::StoreTablePointer::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::StoreTablePointer where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::StoreTablePointer::Error = never
+pub fn pure_analyzer_syntax::StoreTablePointer::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::StoreTablePointer where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::StoreTablePointer::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::StoreTablePointer::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::StoreTablePointer where T: core::clone::Clone
+pub type pure_analyzer_syntax::StoreTablePointer::Owned = T
+pub fn pure_analyzer_syntax::StoreTablePointer::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::StoreTablePointer::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::StoreTablePointer where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::StoreTablePointer::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::StoreTablePointer where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::StoreTablePointer::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::StoreTablePointer where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::StoreTablePointer::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::StoreTablePointer where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::StoreTablePointer::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::StoreTablePointer
+pub fn pure_analyzer_syntax::StoreTablePointer::from(T) -> T
 pub struct pure_analyzer_syntax::TokenIter<'tree>
 impl<'tree> core::fmt::Debug for pure_analyzer_syntax::TokenIter<'tree>
 pub fn pure_analyzer_syntax::TokenIter<'tree>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
@@ -655,16 +1802,293 @@ impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::TokenIter<'tree> wh
 pub fn pure_analyzer_syntax::TokenIter<'tree>::borrow_mut(&mut self) -> &mut T
 impl<T> core::convert::From<T> for pure_analyzer_syntax::TokenIter<'tree>
 pub fn pure_analyzer_syntax::TokenIter<'tree>::from(T) -> T
+pub struct pure_analyzer_syntax::TypeReference(_)
+impl core::clone::Clone for pure_analyzer_syntax::TypeReference
+pub fn pure_analyzer_syntax::TypeReference::clone(&self) -> pure_analyzer_syntax::TypeReference
+impl core::cmp::Eq for pure_analyzer_syntax::TypeReference
+impl core::cmp::PartialEq for pure_analyzer_syntax::TypeReference
+pub fn pure_analyzer_syntax::TypeReference::eq(&self, &pure_analyzer_syntax::TypeReference) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::TypeReference
+pub fn pure_analyzer_syntax::TypeReference::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::TypeReference
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::TypeReference
+pub fn pure_analyzer_syntax::TypeReference::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::TypeReference::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::TypeReference::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::TypeReference::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::TypeReference
+impl core::marker::Send for pure_analyzer_syntax::TypeReference
+impl core::marker::Sync for pure_analyzer_syntax::TypeReference
+impl core::marker::Unpin for pure_analyzer_syntax::TypeReference
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::TypeReference
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::TypeReference
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::TypeReference
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::TypeReference where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::TypeReference::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::TypeReference where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::TypeReference::Error = never
+pub fn pure_analyzer_syntax::TypeReference::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::TypeReference where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::TypeReference::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::TypeReference::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::TypeReference where T: core::clone::Clone
+pub type pure_analyzer_syntax::TypeReference::Owned = T
+pub fn pure_analyzer_syntax::TypeReference::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::TypeReference::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::TypeReference where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::TypeReference::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::TypeReference where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::TypeReference::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::TypeReference where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::TypeReference::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::TypeReference where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::TypeReference::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::TypeReference
+pub fn pure_analyzer_syntax::TypeReference::from(T) -> T
+pub struct pure_analyzer_syntax::UnaryExpression(_)
+impl core::clone::Clone for pure_analyzer_syntax::UnaryExpression
+pub fn pure_analyzer_syntax::UnaryExpression::clone(&self) -> pure_analyzer_syntax::UnaryExpression
+impl core::cmp::Eq for pure_analyzer_syntax::UnaryExpression
+impl core::cmp::PartialEq for pure_analyzer_syntax::UnaryExpression
+pub fn pure_analyzer_syntax::UnaryExpression::eq(&self, &pure_analyzer_syntax::UnaryExpression) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::UnaryExpression
+pub fn pure_analyzer_syntax::UnaryExpression::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::UnaryExpression
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::UnaryExpression
+pub fn pure_analyzer_syntax::UnaryExpression::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::UnaryExpression::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::UnaryExpression::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::UnaryExpression::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::UnaryExpression
+impl core::marker::Send for pure_analyzer_syntax::UnaryExpression
+impl core::marker::Sync for pure_analyzer_syntax::UnaryExpression
+impl core::marker::Unpin for pure_analyzer_syntax::UnaryExpression
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::UnaryExpression
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::UnaryExpression
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::UnaryExpression
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::UnaryExpression where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::UnaryExpression::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::UnaryExpression where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::UnaryExpression::Error = never
+pub fn pure_analyzer_syntax::UnaryExpression::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::UnaryExpression where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::UnaryExpression::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::UnaryExpression::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::UnaryExpression where T: core::clone::Clone
+pub type pure_analyzer_syntax::UnaryExpression::Owned = T
+pub fn pure_analyzer_syntax::UnaryExpression::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::UnaryExpression::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::UnaryExpression where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::UnaryExpression::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::UnaryExpression where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::UnaryExpression::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::UnaryExpression where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::UnaryExpression::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::UnaryExpression where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::UnaryExpression::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::UnaryExpression
+pub fn pure_analyzer_syntax::UnaryExpression::from(T) -> T
+pub struct pure_analyzer_syntax::VariableExpression(_)
+impl core::clone::Clone for pure_analyzer_syntax::VariableExpression
+pub fn pure_analyzer_syntax::VariableExpression::clone(&self) -> pure_analyzer_syntax::VariableExpression
+impl core::cmp::Eq for pure_analyzer_syntax::VariableExpression
+impl core::cmp::PartialEq for pure_analyzer_syntax::VariableExpression
+pub fn pure_analyzer_syntax::VariableExpression::eq(&self, &pure_analyzer_syntax::VariableExpression) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::VariableExpression
+pub fn pure_analyzer_syntax::VariableExpression::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::VariableExpression
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::VariableExpression
+pub fn pure_analyzer_syntax::VariableExpression::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::VariableExpression::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::VariableExpression::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::VariableExpression::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::VariableExpression
+impl core::marker::Send for pure_analyzer_syntax::VariableExpression
+impl core::marker::Sync for pure_analyzer_syntax::VariableExpression
+impl core::marker::Unpin for pure_analyzer_syntax::VariableExpression
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::VariableExpression
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::VariableExpression
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::VariableExpression
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::VariableExpression where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::VariableExpression::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::VariableExpression where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::VariableExpression::Error = never
+pub fn pure_analyzer_syntax::VariableExpression::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::VariableExpression where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::VariableExpression::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::VariableExpression::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::VariableExpression where T: core::clone::Clone
+pub type pure_analyzer_syntax::VariableExpression::Owned = T
+pub fn pure_analyzer_syntax::VariableExpression::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::VariableExpression::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::VariableExpression where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::VariableExpression::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::VariableExpression where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::VariableExpression::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::VariableExpression where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::VariableExpression::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::VariableExpression where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::VariableExpression::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::VariableExpression
+pub fn pure_analyzer_syntax::VariableExpression::from(T) -> T
 pub trait pure_analyzer_syntax::AstNode: core::marker::Sized
 pub fn pure_analyzer_syntax::AstNode::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
 pub fn pure_analyzer_syntax::AstNode::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
 pub fn pure_analyzer_syntax::AstNode::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::AstNode::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::AllExpression
+pub fn pure_analyzer_syntax::AllExpression::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::AllExpression::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::AllExpression::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::AllExpression::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::ArrowCall
+pub fn pure_analyzer_syntax::ArrowCall::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::ArrowCall::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::ArrowCall::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::ArrowCall::text_range(&self) -> text_size::range::TextRange
 impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::BinaryExpression
 pub fn pure_analyzer_syntax::BinaryExpression::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
 pub fn pure_analyzer_syntax::BinaryExpression::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
 pub fn pure_analyzer_syntax::BinaryExpression::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::BinaryExpression::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::BracketIndex
+pub fn pure_analyzer_syntax::BracketIndex::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::BracketIndex::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::BracketIndex::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::BracketIndex::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::CallArguments
+pub fn pure_analyzer_syntax::CallArguments::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::CallArguments::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::CallArguments::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::CallArguments::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::CastExpression
+pub fn pure_analyzer_syntax::CastExpression::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::CastExpression::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::CastExpression::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::CastExpression::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::CodeBlock
+pub fn pure_analyzer_syntax::CodeBlock::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::CodeBlock::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::CodeBlock::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::CodeBlock::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::ColumnInfo
+pub fn pure_analyzer_syntax::ColumnInfo::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::ColumnInfo::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::ColumnInfo::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::ColumnInfo::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::ColumnSpec
+pub fn pure_analyzer_syntax::ColumnSpec::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::ColumnSpec::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::ColumnSpec::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::ColumnSpec::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::ColumnSpecArray
+pub fn pure_analyzer_syntax::ColumnSpecArray::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::ColumnSpecArray::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::ColumnSpecArray::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::ColumnSpecArray::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::ErrorNode
+pub fn pure_analyzer_syntax::ErrorNode::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::ErrorNode::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::ErrorNode::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::ErrorNode::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::FunctionCall
+pub fn pure_analyzer_syntax::FunctionCall::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::FunctionCall::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::FunctionCall::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::FunctionCall::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::Island
+pub fn pure_analyzer_syntax::Island::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::Island::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::Island::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::Island::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::LambdaExpression
+pub fn pure_analyzer_syntax::LambdaExpression::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::LambdaExpression::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::LambdaExpression::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::LambdaExpression::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::LambdaParameters
+pub fn pure_analyzer_syntax::LambdaParameters::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::LambdaParameters::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::LambdaParameters::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::LambdaParameters::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::LetStatement
+pub fn pure_analyzer_syntax::LetStatement::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::LetStatement::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::LetStatement::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::LetStatement::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::LiteralExpression
+pub fn pure_analyzer_syntax::LiteralExpression::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::LiteralExpression::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::LiteralExpression::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::LiteralExpression::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::Multiplicity
+pub fn pure_analyzer_syntax::Multiplicity::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::Multiplicity::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::Multiplicity::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::Multiplicity::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::NavigationPathIsland
+pub fn pure_analyzer_syntax::NavigationPathIsland::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::NavigationPathIsland::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::NavigationPathIsland::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::NavigationPathIsland::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::NewInstanceExpression
+pub fn pure_analyzer_syntax::NewInstanceExpression::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::NewInstanceExpression::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::NewInstanceExpression::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::NewInstanceExpression::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::OpaqueIsland
+pub fn pure_analyzer_syntax::OpaqueIsland::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::OpaqueIsland::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::OpaqueIsland::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::OpaqueIsland::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::ParenthesizedExpression
+pub fn pure_analyzer_syntax::ParenthesizedExpression::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::ParenthesizedExpression::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::ParenthesizedExpression::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::ParenthesizedExpression::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::PropertyNavigation
+pub fn pure_analyzer_syntax::PropertyNavigation::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::PropertyNavigation::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::PropertyNavigation::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::PropertyNavigation::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::QualifiedName
+pub fn pure_analyzer_syntax::QualifiedName::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::QualifiedName::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::QualifiedName::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::QualifiedName::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::QueryExpression
+pub fn pure_analyzer_syntax::QueryExpression::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::QueryExpression::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::QueryExpression::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::QueryExpression::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::RelationType
+pub fn pure_analyzer_syntax::RelationType::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::RelationType::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::RelationType::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::RelationType::text_range(&self) -> text_size::range::TextRange
 impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::Root
 pub fn pure_analyzer_syntax::Root::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
 pub fn pure_analyzer_syntax::Root::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
 pub fn pure_analyzer_syntax::Root::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::Root::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::StoreTablePointer
+pub fn pure_analyzer_syntax::StoreTablePointer::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::StoreTablePointer::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::StoreTablePointer::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::StoreTablePointer::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::TypeReference
+pub fn pure_analyzer_syntax::TypeReference::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::TypeReference::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::TypeReference::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::TypeReference::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::UnaryExpression
+pub fn pure_analyzer_syntax::UnaryExpression::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::UnaryExpression::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::UnaryExpression::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::UnaryExpression::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::VariableExpression
+pub fn pure_analyzer_syntax::VariableExpression::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::VariableExpression::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::VariableExpression::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::VariableExpression::text_range(&self) -> text_size::range::TextRange
 pub fn pure_analyzer_syntax::version() -> &'static str

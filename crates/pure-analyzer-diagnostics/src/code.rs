@@ -17,6 +17,9 @@ pub enum DiagCode {
     /// `PUR0102`: the lexer encounters an unrecognized token.
     #[serde(rename = "PUR0102")]
     BadToken,
+    /// `PUR1200`: source tokens do not form a complete supported declaration or expression.
+    #[serde(rename = "PUR1200")]
+    MalformedSyntax,
     /// `PUR1201`: a parenthesized value tuple is admitted only for targeted validation.
     #[serde(rename = "PUR1201")]
     ParenthesizedTuple,
@@ -59,6 +62,7 @@ pub enum DiagCode {
 pub const ALL_DIAG_CODES: &[DiagCode] = &[
     DiagCode::UnterminatedIsland,
     DiagCode::BadToken,
+    DiagCode::MalformedSyntax,
     DiagCode::ParenthesizedTuple,
     DiagCode::IllegalBracketIndex,
     DiagCode::MalformedMilestoningArguments,
@@ -80,6 +84,7 @@ impl DiagCode {
         match self {
             Self::UnterminatedIsland => "PUR0101",
             Self::BadToken => "PUR0102",
+            Self::MalformedSyntax => "PUR1200",
             Self::ParenthesizedTuple => "PUR1201",
             Self::IllegalBracketIndex => "PUR1202",
             Self::MalformedMilestoningArguments => "PUR1204",
@@ -100,7 +105,8 @@ impl DiagCode {
     pub const fn family(self) -> DiagFamily {
         match self {
             Self::UnterminatedIsland | Self::BadToken => DiagFamily::Lexer,
-            Self::ParenthesizedTuple
+            Self::MalformedSyntax
+            | Self::ParenthesizedTuple
             | Self::IllegalBracketIndex
             | Self::MalformedMilestoningArguments
             | Self::UnknownJoinKind => DiagFamily::Parser,
@@ -187,6 +193,7 @@ mod tests {
         let expected = [
             (DiagCode::UnterminatedIsland, "PUR0101", DiagFamily::Lexer),
             (DiagCode::BadToken, "PUR0102", DiagFamily::Lexer),
+            (DiagCode::MalformedSyntax, "PUR1200", DiagFamily::Parser),
             (DiagCode::ParenthesizedTuple, "PUR1201", DiagFamily::Parser),
             (DiagCode::IllegalBracketIndex, "PUR1202", DiagFamily::Parser),
             (

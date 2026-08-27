@@ -6,14 +6,22 @@
 //! The crate translates lexer token kinds exhaustively, validates parser
 //! events before constructing a tree, and exposes typed AST views without an
 //! unchecked raw-kind conversion. Tree data is immutable and cheaply cloned
-//! through [`std::sync::Arc`].
+//! through [`std::sync::Arc`]; every token references its one shared source
+//! allocation by range instead of copying its source text.
 
 mod ast;
 mod builder;
 mod green;
 mod kind;
 
-pub use ast::{AstNode, BinaryExpression, Root};
+pub use ast::{
+    AllExpression, ArrowCall, AstNode, BinaryExpression, BracketIndex, CallArguments,
+    CastExpression, CodeBlock, ColumnInfo, ColumnSpec, ColumnSpecArray, ErrorNode, FunctionCall,
+    Island, LambdaExpression, LambdaParameters, LetStatement, LiteralExpression, Multiplicity,
+    NavigationPathIsland, NewInstanceExpression, OpaqueIsland, ParenthesizedExpression,
+    PropertyNavigation, QualifiedName, QueryExpression, RelationType, Root, StoreTablePointer,
+    TypeReference, UnaryExpression, VariableExpression,
+};
 pub use builder::{BuildError, Checkpoint, Event, GreenNodeBuilder};
 pub use green::{GreenElement, GreenNode, GreenToken, TokenIter};
 pub use kind::{InvalidRawSyntaxKind, RawSyntaxKind, SyntaxKind};

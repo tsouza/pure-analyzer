@@ -3,18 +3,37 @@ use std::{fmt, slice, sync::Arc};
 use crate::{SyntaxKind, TextRange};
 
 /// An immutable terminal token in a concrete syntax tree.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone)]
 pub struct GreenToken {
     kind: SyntaxKind,
-    text: Arc<str>,
+    source: Arc<str>,
     range: TextRange,
 }
 
+impl PartialEq for GreenToken {
+    fn eq(&self, other: &Self) -> bool {
+        self.kind == other.kind && self.range == other.range && self.text() == other.text()
+    }
+}
+
+impl Eq for GreenToken {}
+
+impl fmt::Debug for GreenToken {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("GreenToken")
+            .field("kind", &self.kind)
+            .field("text", &self.text())
+            .field("range", &self.range)
+            .finish()
+    }
+}
+
 impl GreenToken {
-    pub(crate) fn new(kind: SyntaxKind, text: &str, range: TextRange) -> Self {
+    pub(crate) fn new(kind: SyntaxKind, source: Arc<str>, range: TextRange) -> Self {
         Self {
             kind,
-            text: Arc::from(text),
+            source,
             range,
         }
     }
@@ -28,13 +47,82 @@ impl GreenToken {
     /// Returns this token's exact source text.
     #[must_use]
     pub fn text(&self) -> &str {
-        &self.text
+        self.source
+            .get(usize::from(self.range.start())..usize::from(self.range.end()))
+            .unwrap_or_default()
     }
 
     /// Returns this token's byte range in the source.
     #[must_use]
     pub const fn text_range(&self) -> TextRange {
         self.range
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use pure_analyzer_lexer::lex;
+
+    use super::GreenToken;
+    use crate::{GreenNodeBuilder, SyntaxKind};
+
+    #[test]
+    fn builder_tokens_share_one_source_allocation() {
+        let source = "left right";
+        let tokens = lex(source);
+        let mut builder = GreenNodeBuilder::new(source, &tokens);
+        builder.open(SyntaxKind::ROOT);
+        for _ in &tokens {
+            builder.advance();
+        }
+        builder.close();
+        let tree = builder.finish().expect("flat token tree must build");
+        let tokens = tree.tokens().collect::<Vec<_>>();
+
+        assert_eq!(tokens.len(), 3);
+        let left = tokens[0];
+        let right = tokens[2];
+
+        assert!(Arc::ptr_eq(&left.source, &right.source));
+        assert_eq!(left.text(), "left");
+        assert_eq!(right.text(), "right");
+    }
+
+    #[test]
+    fn token_equality_does_not_depend_on_unrelated_source_text() {
+        fn final_token(source: &str) -> GreenToken {
+            let tokens = lex(source);
+            let mut builder = GreenNodeBuilder::new(source, &tokens);
+            builder.open(SyntaxKind::ROOT);
+            for _ in &tokens {
+                builder.advance();
+            }
+            builder.close();
+            builder
+                .finish()
+                .expect("flat token tree must build")
+                .tokens()
+                .last()
+                .expect("fixture must have a final token")
+                .clone()
+        }
+
+        let left = final_token("a x");
+        let right = final_token("b x");
+
+        assert!(!Arc::ptr_eq(&left.source, &right.source));
+        assert_eq!(left, right);
+        let debug = format!("{left:?}");
+        assert_eq!(debug, format!("{right:?}"));
+        assert!(debug.contains("GreenToken"));
+        assert!(debug.contains("kind: IDENT"));
+        assert!(debug.contains("text: \"x\""));
+        assert!(debug.contains("range: 2..3"));
+
+        let different_text = final_token("a y");
+        assert_ne!(left, different_text);
     }
 }
 

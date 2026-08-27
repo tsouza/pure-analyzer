@@ -55,6 +55,7 @@ pub pure_analyzer_diagnostics::DiagCode::DerivedQualifiedProperty
 pub pure_analyzer_diagnostics::DiagCode::EquivalenceVerdict
 pub pure_analyzer_diagnostics::DiagCode::IllegalBracketIndex
 pub pure_analyzer_diagnostics::DiagCode::MalformedMilestoningArguments
+pub pure_analyzer_diagnostics::DiagCode::MalformedSyntax
 pub pure_analyzer_diagnostics::DiagCode::ModelMergeConflict
 pub pure_analyzer_diagnostics::DiagCode::ModelRequired
 pub pure_analyzer_diagnostics::DiagCode::ParenthesizedTuple
