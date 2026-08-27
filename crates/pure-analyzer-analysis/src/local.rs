@@ -136,11 +136,9 @@ impl LocalAnalyzer<'_> {
         environment: &mut impl LocalBindings,
     ) -> LocalValue {
         match node.kind() {
-            SyntaxKind::CODE_BLOCK => self.evaluate_code_block(node, environment),
             SyntaxKind::LAMBDA_EXPR => {
                 self.evaluate_lambda(node, Self::unknown_value(), environment)
             }
-            SyntaxKind::LET_STMT => self.evaluate_let(node, environment),
             _ => self.evaluate_nodes(&direct_nodes(node), environment),
         }
     }
@@ -154,6 +152,11 @@ impl LocalAnalyzer<'_> {
         let mut variable_source = None;
 
         for node in nodes {
+            if is_conservative_unknown(node.kind()) {
+                value = Self::unknown_value();
+                variable_source = None;
+                continue;
+            }
             match node.kind() {
                 SyntaxKind::QUERY_EXPR
                 | SyntaxKind::BINARY_EXPR
@@ -197,10 +200,6 @@ impl LocalAnalyzer<'_> {
                 }
                 SyntaxKind::LET_STMT => {
                     value = self.evaluate_let(node, environment);
-                    variable_source = None;
-                }
-                SyntaxKind::ERROR_NODE | SyntaxKind::ISLAND | SyntaxKind::OPAQUE_ISLAND => {
-                    value = Self::unknown_value();
                     variable_source = None;
                 }
                 _ => {
@@ -385,6 +384,13 @@ impl LocalAnalyzer<'_> {
         }
         value
     }
+}
+
+fn is_conservative_unknown(kind: SyntaxKind) -> bool {
+    matches!(
+        kind,
+        SyntaxKind::ERROR_NODE | SyntaxKind::ISLAND | SyntaxKind::OPAQUE_ISLAND
+    )
 }
 
 fn direct_nodes(node: &GreenNode) -> Vec<GreenNode> {

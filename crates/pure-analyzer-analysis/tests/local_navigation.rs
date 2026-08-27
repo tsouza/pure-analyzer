@@ -46,6 +46,20 @@ fn property(name: &str, target: &str) -> Value {
     })
 }
 
+fn qualified_property(name: &str, target: &str, parameters: &[&str]) -> Value {
+    let parameters = parameters
+        .iter()
+        .map(|parameter| json!({"genericType": {"rawType": parameter, "typeArguments": []}}))
+        .collect::<Vec<_>>();
+    json!({
+        "name": name,
+        "returnGenericType": {"rawType": target, "typeArguments": []},
+        "returnMultiplicity": {"lowerBound": ZERO, "upperBound": ONE},
+        "stereotypes": [],
+        "parameters": parameters,
+    })
+}
+
 fn association(name: &str, first: Value, second: Value) -> Value {
     json!({
         "_type": "association",
@@ -133,6 +147,52 @@ fn restores_outer_lambda_binding_after_nested_shadowing() {
         resolved_owners,
         ["model::Person", "model::Manager", "model::Person"]
     );
+}
+
+#[test]
+fn visits_navigation_inside_regular_function_arguments() {
+    let graph = graph(vec![class("Person", vec![property("name", "String")])]);
+    let source = "audit(model::Person.all()->filter(x| $x.name))";
+    let analysis = analyze(source, &graph);
+    let sites = analysis.sites();
+
+    assert_eq!(sites.len(), 2);
+    assert_eq!(range_text(source, sites[0].span()), "model::Person.all()");
+    assert_eq!(range_text(source, sites[1].span()), ".name");
+    assert!(matches!(
+        sites[1].outcome(),
+        LocalResolution::Navigation(NavigationResolution::Found(chain))
+            if matches!(chain.hops()[0].target(), NavigationTarget::Member(member)
+                if member.owner().path().as_str() == "model::Person")
+    ));
+}
+
+#[test]
+fn resolves_qualified_navigation_calls_with_arguments() {
+    let mut person = class("Person", Vec::new());
+    person["qualifiedProperties"] = json!([qualified_property("byKey", "String", &["Integer"])]);
+    let graph = graph(vec![person]);
+    let source = "model::Person.all()->filter(x| $x.byKey(25))";
+    let analysis = analyze(source, &graph);
+    let navigation = analysis
+        .sites()
+        .iter()
+        .find(|site| range_text(source, site.span()) == ".byKey(25)")
+        .expect("qualified navigation site must be recorded");
+
+    let LocalResolution::Navigation(NavigationResolution::Found(chain)) = navigation.outcome()
+    else {
+        panic!(
+            "expected a resolved qualified navigation, got {:#?}",
+            navigation.outcome()
+        );
+    };
+    assert_eq!(chain.hops()[0].step().argument_count(), 1);
+    assert!(matches!(
+        chain.hops()[0].target(),
+        NavigationTarget::Member(member)
+            if matches!(member.kind(), pure_analyzer_resolve::ResolvedMemberKind::Qualified(_))
+    ));
 }
 
 #[test]
