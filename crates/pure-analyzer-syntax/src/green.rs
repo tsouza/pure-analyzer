@@ -114,7 +114,15 @@ mod tests {
 
         assert!(!Arc::ptr_eq(&left.source, &right.source));
         assert_eq!(left, right);
-        assert_eq!(format!("{left:?}"), format!("{right:?}"));
+        let debug = format!("{left:?}");
+        assert_eq!(debug, format!("{right:?}"));
+        assert!(debug.contains("GreenToken"));
+        assert!(debug.contains("kind: IDENT"));
+        assert!(debug.contains("text: \"x\""));
+        assert!(debug.contains("range: 2..3"));
+
+        let different_text = final_token("a y");
+        assert_ne!(left, different_text);
     }
 }
 
