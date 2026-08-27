@@ -11,8 +11,8 @@ use crate::raw::{
 };
 use crate::{
     AssocInfo, AssociationEndInfo, ClassId, ClassInfo, MODEL_MERGE_CONFLICT, ModelGraph,
-    ModelSourceInfo, Multiplicity, Name, PropInfo, Provenance, QName, QpInfo, QpKind, SourceId,
-    Temporal, TypeRef,
+    ModelSource, ModelSourceInfo, Multiplicity, Name, PropInfo, Provenance, QName, QpInfo, QpKind,
+    SourceId, Temporal, TypeRef,
 };
 
 const DOCUMENT_TYPE: &str = "data";
@@ -56,47 +56,175 @@ impl<'a> PmcdDocument<'a> {
     }
 }
 
+/// Borrowed in-memory Pure Domain source with a stable diagnostic label.
+#[derive(Debug, Clone, Copy)]
+pub struct PureDocument<'a> {
+    label: &'a str,
+    source: &'a str,
+}
+
+impl<'a> PureDocument<'a> {
+    /// Construct an in-memory Pure Domain input.
+    #[must_use]
+    pub const fn new(label: &'a str, source: &'a str) -> Self {
+        Self { label, source }
+    }
+
+    /// Source label used in parser and merge diagnostics.
+    #[must_use]
+    pub const fn label(self) -> &'a str {
+        self.label
+    }
+
+    /// Borrow the Pure Domain source text.
+    #[must_use]
+    pub const fn source(self) -> &'a str {
+        self.source
+    }
+}
+
+/// One borrowed model document in a mixed loading operation.
+#[derive(Debug, Clone, Copy)]
+pub enum ModelDocument<'a> {
+    /// Engine-produced PMCD JSON.
+    Pmcd(PmcdDocument<'a>),
+    /// Engine-free Pure Domain source.
+    Pure(PureDocument<'a>),
+}
+
+impl<'a> From<PmcdDocument<'a>> for ModelDocument<'a> {
+    fn from(document: PmcdDocument<'a>) -> Self {
+        Self::Pmcd(document)
+    }
+}
+
+impl<'a> From<PureDocument<'a>> for ModelDocument<'a> {
+    fn from(document: PureDocument<'a>) -> Self {
+        Self::Pure(document)
+    }
+}
+
+/// Load and merge heterogeneous model files in caller-supplied order.
+///
+/// Later class or association definitions with the same packageable path win,
+/// independent of whether they came from PMCD or Pure source. Each replacement
+/// adds a `PUR9000` warning to [`ModelGraph::diagnostics`].
+///
+/// # Errors
+///
+/// Returns [`ModelError`] for I/O, PMCD validation, parser infrastructure, or
+/// a merged-graph invariant violation.
+pub fn load_model_files(sources: &[ModelSource]) -> Result<ModelGraph, ModelError> {
+    let mut merger = ModelMerger::default();
+    for (index, model_source) in sources.iter().enumerate() {
+        let source = source_id(index)?;
+        let path = model_source.path();
+        let text = std::fs::read_to_string(path).map_err(|error| ModelError::Read {
+            path: path.to_path_buf(),
+            source: error,
+        })?;
+        let label = path.display().to_string();
+        match model_source {
+            ModelSource::PmcdJson(_) => merger.ingest_pmcd(source, label, &text)?,
+            ModelSource::PureModelFile(_) => merger.ingest_pure(source, label, &text)?,
+        }
+    }
+    merger.finish()
+}
+
 /// Load and merge PMCD files in caller-supplied order.
 ///
-/// A later source replaces an earlier class or association with the same
-/// packageable path and adds a `PUR9000` warning to [`ModelGraph::diagnostics`].
-/// Irrelevant element kinds are ignored. Relevant records, association
-/// direction, and every multiplicity are validated before a graph is returned.
+/// This compatibility wrapper is semantically identical to passing
+/// [`ModelSource::PmcdJson`] values to [`load_model_files`].
 ///
 /// # Errors
 ///
 /// Returns [`ModelError`] for I/O, malformed JSON, an invalid class or
 /// association, or a merged-graph invariant violation.
 pub fn load_pmcd_files(paths: &[PathBuf]) -> Result<ModelGraph, ModelError> {
+    let sources = paths
+        .iter()
+        .cloned()
+        .map(ModelSource::PmcdJson)
+        .collect::<Vec<_>>();
+    load_model_files(&sources)
+}
+
+/// Load and merge Pure Domain files in caller-supplied order.
+///
+/// Pure parsing is resilient: confirmed facts are retained while per-class
+/// coverage gaps preserve open-world resolution where the source is incomplete
+/// or declares an association.
+///
+/// # Errors
+///
+/// Returns [`ModelError`] for I/O, parser infrastructure, or a merged-graph
+/// invariant violation.
+pub fn load_pure_files(paths: &[PathBuf]) -> Result<ModelGraph, ModelError> {
+    let sources = paths
+        .iter()
+        .cloned()
+        .map(ModelSource::PureModelFile)
+        .collect::<Vec<_>>();
+    load_model_files(&sources)
+}
+
+/// Load and merge borrowed mixed model documents in caller-supplied order.
+///
+/// This is suitable for LSP hosts, tests, and callers that already own source
+/// text. The loader itself performs no network access.
+///
+/// # Errors
+///
+/// Returns [`ModelError`] for malformed PMCD, parser infrastructure, or a
+/// merged-graph invariant violation.
+pub fn load_model_documents(documents: &[ModelDocument<'_>]) -> Result<ModelGraph, ModelError> {
     let mut merger = ModelMerger::default();
-    for (index, path) in paths.iter().enumerate() {
+    for (index, document) in documents.iter().copied().enumerate() {
         let source = source_id(index)?;
-        let json = std::fs::read_to_string(path).map_err(|error| ModelError::Read {
-            path: path.clone(),
-            source: error,
-        })?;
-        merger.ingest(source, path.display().to_string(), &json)?;
+        match document {
+            ModelDocument::Pmcd(document) => {
+                merger.ingest_pmcd(source, document.label.to_owned(), document.json)?;
+            }
+            ModelDocument::Pure(document) => {
+                merger.ingest_pure(source, document.label.to_owned(), document.source)?;
+            }
+        }
     }
     merger.finish()
 }
 
 /// Load and merge borrowed PMCD documents in caller-supplied order.
 ///
-/// This is semantically identical to [`load_pmcd_files`] and is suitable for
-/// LSP hosts, tests, and callers that fetched PMCD through their own boundary.
-/// The loader itself performs no network access.
+/// This compatibility wrapper is semantically identical to passing
+/// [`ModelDocument::Pmcd`] values to [`load_model_documents`].
 ///
 /// # Errors
 ///
 /// Returns [`ModelError`] for malformed JSON, an invalid class or association,
 /// or a merged-graph invariant violation.
 pub fn load_pmcd_documents(documents: &[PmcdDocument<'_>]) -> Result<ModelGraph, ModelError> {
-    let mut merger = ModelMerger::default();
-    for (index, document) in documents.iter().copied().enumerate() {
-        let source = source_id(index)?;
-        merger.ingest(source, document.label.to_owned(), document.json)?;
-    }
-    merger.finish()
+    let documents = documents
+        .iter()
+        .copied()
+        .map(ModelDocument::from)
+        .collect::<Vec<_>>();
+    load_model_documents(&documents)
+}
+
+/// Load and merge borrowed Pure Domain documents in caller-supplied order.
+///
+/// # Errors
+///
+/// Returns [`ModelError`] for parser infrastructure or a merged-graph
+/// invariant violation.
+pub fn load_pure_documents(documents: &[PureDocument<'_>]) -> Result<ModelGraph, ModelError> {
+    let documents = documents
+        .iter()
+        .copied()
+        .map(ModelDocument::from)
+        .collect::<Vec<_>>();
+    load_model_documents(&documents)
 }
 
 fn source_id(index: usize) -> Result<SourceId, ModelError> {
@@ -106,27 +234,42 @@ fn source_id(index: usize) -> Result<SourceId, ModelError> {
 }
 
 #[derive(Debug)]
-enum FragmentElement {
+pub(super) enum FragmentElement {
     Class(ClassInfo),
     Association(AssocDraft),
 }
 
 impl FragmentElement {
-    const fn source(&self) -> SourceId {
+    pub(super) const fn source(&self) -> SourceId {
         match self {
             Self::Class(class) => class.source(),
             Self::Association(association) => association.source,
         }
     }
+
+    pub(super) fn mark_coverage_gap(&mut self) {
+        if let Self::Class(class) = self {
+            class.mark_coverage_gap();
+        }
+    }
 }
 
 #[derive(Debug)]
-struct AssocDraft {
-    path: QName,
-    first: PropInfo,
-    second: PropInfo,
-    temporal: Option<Temporal>,
-    source: SourceId,
+pub(super) struct AssocDraft {
+    pub(super) path: QName,
+    pub(super) first: PropInfo,
+    pub(super) second: PropInfo,
+    pub(super) temporal: Option<Temporal>,
+    pub(super) provenance: Provenance,
+    pub(super) source: SourceId,
+}
+
+#[derive(Debug)]
+pub(super) struct ModelFragment {
+    pub(super) elements: BTreeMap<QName, FragmentElement>,
+    pub(super) diagnostics: Vec<Diagnostic>,
+    /// Whether this source leaves all loaded class facts open-world.
+    pub(super) coverage_gap: bool,
 }
 
 #[derive(Debug, Default)]
@@ -134,23 +277,66 @@ struct ModelMerger {
     elements: BTreeMap<QName, FragmentElement>,
     sources: Vec<ModelSourceInfo>,
     diagnostics: Vec<Diagnostic>,
+    has_global_coverage_gap: bool,
 }
 
 impl ModelMerger {
-    fn ingest(&mut self, source: SourceId, label: String, json: &str) -> Result<(), ModelError> {
-        let fragment = parse_document(&label, json, source)?;
-        self.sources.push(ModelSourceInfo::new(
-            source,
-            label.clone(),
-            Provenance::Pmcd,
-        ));
-        for (path, replacement) in fragment {
+    fn ingest_pmcd(
+        &mut self,
+        source: SourceId,
+        label: String,
+        json: &str,
+    ) -> Result<(), ModelError> {
+        let fragment = ModelFragment {
+            elements: parse_document(&label, json, source)?,
+            diagnostics: Vec::new(),
+            coverage_gap: false,
+        };
+        self.ingest_fragment(source, label, Provenance::Pmcd, fragment);
+        Ok(())
+    }
+
+    fn ingest_pure(
+        &mut self,
+        source: SourceId,
+        label: String,
+        text: &str,
+    ) -> Result<(), ModelError> {
+        let fragment = crate::pure::parse_pure_document(&label, text, source)?;
+        self.ingest_fragment(source, label, Provenance::PureFile, fragment);
+        Ok(())
+    }
+
+    fn ingest_fragment(
+        &mut self,
+        source: SourceId,
+        label: String,
+        provenance: Provenance,
+        fragment: ModelFragment,
+    ) {
+        let ModelFragment {
+            elements,
+            diagnostics,
+            coverage_gap,
+        } = fragment;
+        self.sources
+            .push(ModelSourceInfo::new(source, label.clone(), provenance));
+        self.diagnostics.extend(diagnostics);
+        self.has_global_coverage_gap |= coverage_gap;
+        if self.has_global_coverage_gap {
+            for element in self.elements.values_mut() {
+                element.mark_coverage_gap();
+            }
+        }
+        for (path, mut replacement) in elements {
+            if self.has_global_coverage_gap {
+                replacement.mark_coverage_gap();
+            }
             if let Some(previous) = self.elements.insert(path.clone(), replacement) {
                 let diagnostic = self.merge_diagnostic(&path, previous.source(), source, &label);
                 self.diagnostics.push(diagnostic);
             }
         }
-        Ok(())
     }
 
     fn merge_diagnostic(
@@ -537,6 +723,7 @@ fn lower_association(raw: RawAssociation, source: SourceId) -> Result<AssocDraft
         first: lower_property(first)?,
         second: lower_property(second)?,
         temporal,
+        provenance: Provenance::Pmcd,
         source,
     })
 }
@@ -568,11 +755,12 @@ fn materialize_associations(
             second.clone(),
             &path,
         )?;
-        materialized.push(AssocInfo::new(
+        materialized.push(AssocInfo::from_source(
             association.path,
             AssociationEndInfo::new(first_owner, first),
             AssociationEndInfo::new(second_owner, second),
             association.temporal,
+            association.provenance,
             association.source,
         ));
     }

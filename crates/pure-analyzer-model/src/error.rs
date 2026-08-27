@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+use pure_analyzer_syntax::BuildError;
+
 use crate::{Name, QName, SourceId};
 
 /// Why a PMCD element could not be normalized.
@@ -84,11 +86,11 @@ pub enum ModelErrorKind {
     },
 }
 
-/// Failure to load or normalize PMCD input.
+/// Failure to load or normalize model input.
 #[derive(Debug, thiserror::Error)]
 pub enum ModelError {
-    /// A PMCD file could not be read as UTF-8 text.
-    #[error("failed to read PMCD file `{path}`: {source}")]
+    /// A model file could not be read as UTF-8 text.
+    #[error("failed to read model file `{path}`: {source}")]
     Read {
         /// File that could not be read.
         path: PathBuf,
@@ -104,6 +106,15 @@ pub enum ModelError {
         /// JSON syntax/deserialization error.
         #[source]
         source: serde_json::Error,
+    },
+    /// A Pure source could not produce a validated concrete syntax tree.
+    #[error("Pure source `{source_name}` could not be parsed: {source}")]
+    PureParse {
+        /// Stable source label supplied by the caller.
+        source_name: String,
+        /// Infrastructure failure while constructing the lossless syntax tree.
+        #[source]
+        source: BuildError,
     },
     /// The PMCD document envelope was malformed.
     #[error("PMCD source `{source_name}` has an invalid document envelope: {message}")]

@@ -14,6 +14,8 @@ workspace = true
 
 [dependencies]
 pure-analyzer-diagnostics.workspace = true
+pure-analyzer-parser.workspace = true
+pure-analyzer-syntax.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
