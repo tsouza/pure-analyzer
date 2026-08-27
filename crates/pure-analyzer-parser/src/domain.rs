@@ -598,6 +598,7 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
         let mut brackets = 0usize;
         let mut braces = 0usize;
         let mut consumed = false;
+        let mut saw_property_colon = false;
 
         while !self.at_eof() {
             if consumed
@@ -606,7 +607,11 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
                 && braces == 0
                 && (self.raw_at(TokenKind::BRACE_CLOSE)
                     || self.member_starts_property()
-                    || self.member_starts_qualified_property()
+                    // A bare `name(` may be part of an unsupported member,
+                    // such as `nativeThing helper(...)`.  It is only a safe
+                    // recovery boundary once this opaque region has already
+                    // looked like a malformed property (`name: Type ...`).
+                    || (saw_property_colon && self.member_starts_qualified_property())
                     || self.declaration_kind().is_some())
             {
                 break;
@@ -616,6 +621,8 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
                 && parentheses == 0
                 && brackets == 0
                 && braces == 0;
+            saw_property_colon |=
+                self.raw_at(TokenKind::COLON) && parentheses == 0 && brackets == 0 && braces == 0;
             self.adjust_delimiter_depths(&mut parentheses, &mut brackets, &mut braces);
             let _ = self.bump();
             consumed = true;

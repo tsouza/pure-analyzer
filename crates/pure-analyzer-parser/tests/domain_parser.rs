@@ -76,6 +76,14 @@ fn assert_only_malformed_declaration(source: &str) {
     assert_lossless(source, &parsed);
 }
 
+fn gap_texts<'source>(source: &'source str, parsed: &DomainParse) -> Vec<&'source str> {
+    parsed
+        .coverage_gaps
+        .iter()
+        .map(|gap| &source[usize::from(gap.span.start())..usize::from(gap.span.end())])
+        .collect()
+}
+
 #[test]
 fn parses_model_facts_with_domain_specific_ast_contracts() {
     let source = r#"
@@ -405,6 +413,241 @@ Class demo::BrokenMembers
             .any(|gap| gap.kind == DomainCoverageGapKind::MalformedDeclaration)
     );
     assert_lossless(source, &parsed);
+}
+
+#[test]
+fn nested_opaque_regions_stop_at_their_real_declaration_and_member_boundaries() {
+    let source = r#"
+Enum demo::Ignored
+{
+  value: { nested: [one, two]; };
+}
+Class demo::Known
+{
+  nativeThing foo({ nested: [a, b] });
+  kept: String[1];
+}
+"#;
+    let parsed = parse(source);
+
+    assert_eq!(
+        parsed
+            .coverage_gaps
+            .iter()
+            .map(|gap| gap.kind)
+            .collect::<Vec<_>>(),
+        vec![
+            DomainCoverageGapKind::UnsupportedTopLevel,
+            DomainCoverageGapKind::UnsupportedMember,
+        ],
+        "{:#?}",
+        gap_texts(source, &parsed),
+    );
+    let gaps = gap_texts(source, &parsed);
+    assert!(gaps[0].trim_end().ends_with('}'));
+    assert!(gaps[0].contains("nested: [one, two]"));
+    assert!(gaps[1].contains("foo({ nested: [a, b] })"));
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::DOMAIN_CLASS_DECL), 1);
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_PROPERTY_DECL),
+        1
+    );
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::DOMAIN_OPAQUE_NODE), 2);
+    assert_lossless(source, &parsed);
+}
+
+#[test]
+fn generic_types_leading_paths_and_double_angle_stereotypes_are_distinct_contracts() {
+    let source = r#"
+Class <<meta::tag>> ::demo::Thing extends ::demo::Base, other::Stamped
+{
+  value: Map<::demo::Key, List<::demo::Value>>[0..*];
+}
+"#;
+    let parsed = parse(source);
+
+    assert!(parsed.diagnostics.is_empty(), "{:#?}", parsed.diagnostics);
+    assert!(
+        parsed.coverage_gaps.is_empty(),
+        "{:#?}",
+        parsed.coverage_gaps
+    );
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_STEREOTYPE_APPLICATIONS),
+        1
+    );
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_EXTENDS_CLAUSE),
+        1
+    );
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::DOMAIN_TYPE_REF), 4);
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_MULTIPLICITY),
+        1
+    );
+    assert_lossless(source, &parsed);
+}
+
+#[test]
+fn profile_tag_lists_keep_nested_multiplicities_before_later_sections() {
+    let source = r#"
+Profile demo::Annotated
+{
+  tags: [owner: Map<String, List<demo::Owner>>[1]];
+  stereotypes: [internal, pii];
+}
+"#;
+    let parsed = parse(source);
+
+    assert!(parsed.diagnostics.is_empty(), "{:#?}", parsed.diagnostics);
+    assert!(
+        parsed.coverage_gaps.is_empty(),
+        "{:#?}",
+        parsed.coverage_gaps
+    );
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_PROFILE_SECTION),
+        2
+    );
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_STEREOTYPE_DECL),
+        2
+    );
+    assert_lossless(source, &parsed);
+}
+
+#[test]
+fn opaque_initializers_with_nested_delimiters_leave_following_properties_intact() {
+    let source = r#"
+Class demo::Computed
+{
+  first: String[1] = call({ nested: [one, two] }, [left, right]);
+  second: Integer[1];
+}
+"#;
+    let parsed = parse(source);
+
+    assert!(parsed.diagnostics.is_empty(), "{:#?}", parsed.diagnostics);
+    assert!(
+        parsed.coverage_gaps.is_empty(),
+        "{:#?}",
+        parsed.coverage_gaps
+    );
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_PROPERTY_DECL),
+        2
+    );
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::DOMAIN_OPAQUE_BODY), 1);
+    assert_lossless(source, &parsed);
+}
+
+#[test]
+fn missing_declaration_body_recovers_at_the_next_declaration() {
+    let source = r#"
+Class demo::MissingBody
+Class demo::After
+{
+  kept: String[1];
+}
+"#;
+    let parsed = parse(source);
+
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::DOMAIN_CLASS_DECL), 2);
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_PROPERTY_DECL),
+        1
+    );
+    assert!(
+        parsed
+            .coverage_gaps
+            .iter()
+            .any(|gap| gap.kind == DomainCoverageGapKind::MalformedDeclaration),
+        "{:#?}",
+        parsed.coverage_gaps
+    );
+    assert_lossless(source, &parsed);
+}
+
+#[test]
+fn malformed_parameter_tail_does_not_swallow_a_following_property() {
+    let source = r#"
+Class demo::BrokenParameters
+{
+  derived(value: String[1],): String[1] { $this; };
+  kept: Integer[1];
+}
+"#;
+    let parsed = parse(source);
+
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_QUALIFIED_PROPERTY_DECL),
+        1
+    );
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_PROPERTY_DECL),
+        1
+    );
+    assert!(
+        parsed
+            .coverage_gaps
+            .iter()
+            .any(|gap| gap.kind == DomainCoverageGapKind::MalformedDeclaration),
+        "{:#?}",
+        parsed.coverage_gaps
+    );
+    assert_lossless(source, &parsed);
+}
+
+#[test]
+fn lexer_errors_are_diagnosed_without_losing_later_supported_members() {
+    let source = r#"
+Class demo::BadToken
+{
+  before: String[1];
+  \u{0}
+  after: Integer[1];
+}
+"#;
+    let parsed = parse(source);
+
+    assert!(
+        parsed
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == DiagCode::BadToken),
+        "{:#?}",
+        parsed.diagnostics
+    );
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_PROPERTY_DECL),
+        2
+    );
+    assert_lossless(source, &parsed);
+}
+
+#[test]
+fn type_nesting_limit_recovers_without_losing_the_input() {
+    let nested = format!("{}String{}", "List<".repeat(257), ">".repeat(257));
+    let source = format!("Class demo::Deep {{ value: {nested}[1]; }}");
+    let parsed = panic::catch_unwind(|| parse(&source)).expect("depth recovery must not panic");
+
+    assert!(
+        parsed
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == DiagCode::MalformedSyntax),
+        "{:#?}",
+        parsed.diagnostics
+    );
+    assert!(
+        parsed
+            .coverage_gaps
+            .iter()
+            .any(|gap| gap.kind == DomainCoverageGapKind::MalformedDeclaration),
+        "{:#?}",
+        parsed.coverage_gaps
+    );
+    assert_lossless(&source, &parsed);
 }
 
 proptest! {
