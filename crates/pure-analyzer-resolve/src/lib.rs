@@ -459,7 +459,7 @@ impl<'model> Resolver<'model> {
             provenance: class.provenance(),
             definition: DefinitionAnchor {
                 source: class.source(),
-                span: None,
+                span: class.declaration_span(),
             },
         })
     }
@@ -503,7 +503,7 @@ impl<'model> Resolver<'model> {
                         class.provenance(),
                         DefinitionAnchor {
                             source: class.source(),
-                            span: None,
+                            span: property.declaration_span(),
                         },
                     ),
                     |item| {
@@ -511,7 +511,7 @@ impl<'model> Resolver<'model> {
                             item.provenance(),
                             DefinitionAnchor {
                                 source: item.source(),
-                                span: None,
+                                span: property.declaration_span(),
                             },
                         )
                     },
@@ -534,7 +534,7 @@ impl<'model> Resolver<'model> {
                 class.provenance(),
                 DefinitionAnchor {
                     source: class.source(),
-                    span: None,
+                    span: property.declaration_span(),
                 },
                 None,
             )
@@ -570,7 +570,7 @@ impl<'model> Resolver<'model> {
             provenance: class.provenance(),
             definition: DefinitionAnchor {
                 source: class.source(),
-                span: None,
+                span: property.declaration_span(),
             },
         }
     }
