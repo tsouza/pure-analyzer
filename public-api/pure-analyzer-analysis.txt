@@ -1,2 +1,126 @@
 pub mod pure_analyzer_analysis
+pub enum pure_analyzer_analysis::LocalResolution
+pub pure_analyzer_analysis::LocalResolution::ClassAll(pure_analyzer_resolve::Resolution<pure_analyzer_resolve::local::LocalValue>)
+pub pure_analyzer_analysis::LocalResolution::Navigation(pure_analyzer_resolve::local::NavigationResolution)
+impl core::clone::Clone for pure_analyzer_analysis::LocalResolution
+pub fn pure_analyzer_analysis::LocalResolution::clone(&self) -> pure_analyzer_analysis::LocalResolution
+impl core::cmp::Eq for pure_analyzer_analysis::LocalResolution
+impl core::cmp::PartialEq for pure_analyzer_analysis::LocalResolution
+pub fn pure_analyzer_analysis::LocalResolution::eq(&self, &pure_analyzer_analysis::LocalResolution) -> bool
+impl core::fmt::Debug for pure_analyzer_analysis::LocalResolution
+pub fn pure_analyzer_analysis::LocalResolution::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::LocalResolution
+impl core::marker::Freeze for pure_analyzer_analysis::LocalResolution
+impl core::marker::Send for pure_analyzer_analysis::LocalResolution
+impl core::marker::Sync for pure_analyzer_analysis::LocalResolution
+impl core::marker::Unpin for pure_analyzer_analysis::LocalResolution
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::LocalResolution
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::LocalResolution
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::LocalResolution
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::LocalResolution where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::LocalResolution::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::LocalResolution where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::LocalResolution::Error = never
+pub fn pure_analyzer_analysis::LocalResolution::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::LocalResolution where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::LocalResolution::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::LocalResolution::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::LocalResolution where T: core::clone::Clone
+pub type pure_analyzer_analysis::LocalResolution::Owned = T
+pub fn pure_analyzer_analysis::LocalResolution::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::LocalResolution::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::LocalResolution where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::LocalResolution::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::LocalResolution where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::LocalResolution::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::LocalResolution where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::LocalResolution::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::LocalResolution where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::LocalResolution::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::LocalResolution
+pub fn pure_analyzer_analysis::LocalResolution::from(T) -> T
+pub struct pure_analyzer_analysis::LocalNavigationAnalysis
+impl pure_analyzer_analysis::LocalNavigationAnalysis
+pub fn pure_analyzer_analysis::LocalNavigationAnalysis::sites(&self) -> &[pure_analyzer_analysis::LocalResolutionSite]
+impl core::clone::Clone for pure_analyzer_analysis::LocalNavigationAnalysis
+pub fn pure_analyzer_analysis::LocalNavigationAnalysis::clone(&self) -> pure_analyzer_analysis::LocalNavigationAnalysis
+impl core::cmp::Eq for pure_analyzer_analysis::LocalNavigationAnalysis
+impl core::cmp::PartialEq for pure_analyzer_analysis::LocalNavigationAnalysis
+pub fn pure_analyzer_analysis::LocalNavigationAnalysis::eq(&self, &pure_analyzer_analysis::LocalNavigationAnalysis) -> bool
+impl core::default::Default for pure_analyzer_analysis::LocalNavigationAnalysis
+pub fn pure_analyzer_analysis::LocalNavigationAnalysis::default() -> pure_analyzer_analysis::LocalNavigationAnalysis
+impl core::fmt::Debug for pure_analyzer_analysis::LocalNavigationAnalysis
+pub fn pure_analyzer_analysis::LocalNavigationAnalysis::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::LocalNavigationAnalysis
+impl core::marker::Freeze for pure_analyzer_analysis::LocalNavigationAnalysis
+impl core::marker::Send for pure_analyzer_analysis::LocalNavigationAnalysis
+impl core::marker::Sync for pure_analyzer_analysis::LocalNavigationAnalysis
+impl core::marker::Unpin for pure_analyzer_analysis::LocalNavigationAnalysis
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::LocalNavigationAnalysis
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::LocalNavigationAnalysis
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::LocalNavigationAnalysis
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::LocalNavigationAnalysis where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::LocalNavigationAnalysis::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::LocalNavigationAnalysis where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::LocalNavigationAnalysis::Error = never
+pub fn pure_analyzer_analysis::LocalNavigationAnalysis::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::LocalNavigationAnalysis where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::LocalNavigationAnalysis::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::LocalNavigationAnalysis::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::LocalNavigationAnalysis where T: core::clone::Clone
+pub type pure_analyzer_analysis::LocalNavigationAnalysis::Owned = T
+pub fn pure_analyzer_analysis::LocalNavigationAnalysis::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::LocalNavigationAnalysis::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::LocalNavigationAnalysis where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::LocalNavigationAnalysis::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::LocalNavigationAnalysis where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::LocalNavigationAnalysis::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::LocalNavigationAnalysis where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::LocalNavigationAnalysis::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::LocalNavigationAnalysis where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::LocalNavigationAnalysis::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::LocalNavigationAnalysis
+pub fn pure_analyzer_analysis::LocalNavigationAnalysis::from(T) -> T
+pub struct pure_analyzer_analysis::LocalResolutionSite
+impl pure_analyzer_analysis::LocalResolutionSite
+pub const fn pure_analyzer_analysis::LocalResolutionSite::outcome(&self) -> &pure_analyzer_analysis::LocalResolution
+pub const fn pure_analyzer_analysis::LocalResolutionSite::span(&self) -> text_size::range::TextRange
+impl core::clone::Clone for pure_analyzer_analysis::LocalResolutionSite
+pub fn pure_analyzer_analysis::LocalResolutionSite::clone(&self) -> pure_analyzer_analysis::LocalResolutionSite
+impl core::cmp::Eq for pure_analyzer_analysis::LocalResolutionSite
+impl core::cmp::PartialEq for pure_analyzer_analysis::LocalResolutionSite
+pub fn pure_analyzer_analysis::LocalResolutionSite::eq(&self, &pure_analyzer_analysis::LocalResolutionSite) -> bool
+impl core::fmt::Debug for pure_analyzer_analysis::LocalResolutionSite
+pub fn pure_analyzer_analysis::LocalResolutionSite::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::LocalResolutionSite
+impl core::marker::Freeze for pure_analyzer_analysis::LocalResolutionSite
+impl core::marker::Send for pure_analyzer_analysis::LocalResolutionSite
+impl core::marker::Sync for pure_analyzer_analysis::LocalResolutionSite
+impl core::marker::Unpin for pure_analyzer_analysis::LocalResolutionSite
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::LocalResolutionSite
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::LocalResolutionSite
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::LocalResolutionSite
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::LocalResolutionSite where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::LocalResolutionSite::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::LocalResolutionSite where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::LocalResolutionSite::Error = never
+pub fn pure_analyzer_analysis::LocalResolutionSite::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::LocalResolutionSite where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::LocalResolutionSite::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::LocalResolutionSite::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::LocalResolutionSite where T: core::clone::Clone
+pub type pure_analyzer_analysis::LocalResolutionSite::Owned = T
+pub fn pure_analyzer_analysis::LocalResolutionSite::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::LocalResolutionSite::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::LocalResolutionSite where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::LocalResolutionSite::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::LocalResolutionSite where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::LocalResolutionSite::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::LocalResolutionSite where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::LocalResolutionSite::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::LocalResolutionSite where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::LocalResolutionSite::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::LocalResolutionSite
+pub fn pure_analyzer_analysis::LocalResolutionSite::from(T) -> T
+pub fn pure_analyzer_analysis::analyze_m3_locals(&pure_analyzer_syntax::green::GreenNode, &pure_analyzer_model::types::ModelGraph) -> pure_analyzer_analysis::LocalNavigationAnalysis
 pub fn pure_analyzer_analysis::version() -> &'static str

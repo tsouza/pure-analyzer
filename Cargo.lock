@@ -1121,6 +1121,14 @@ dependencies = [
 [[package]]
 name = "pure-analyzer-analysis"
 version = "0.1.0"
+dependencies = [
+ "pure-analyzer-diagnostics",
+ "pure-analyzer-model",
+ "pure-analyzer-parser",
+ "pure-analyzer-resolve",
+ "pure-analyzer-syntax",
+ "serde_json",
+]
 
 [[package]]
 name = "pure-analyzer-cli"

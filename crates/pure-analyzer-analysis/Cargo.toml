@@ -12,5 +12,12 @@ publish = false
 [lints]
 workspace = true
 
-# Scaffold only — no dependencies until the first pass (validate) lands.
 [dependencies]
+pure-analyzer-model.workspace = true
+pure-analyzer-resolve.workspace = true
+pure-analyzer-syntax.workspace = true
+
+[dev-dependencies]
+pure-analyzer-diagnostics.workspace = true
+pure-analyzer-parser.workspace = true
+serde_json.workspace = true
