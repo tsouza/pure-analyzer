@@ -64,6 +64,21 @@ mod client {
 
     /// Path of the compile endpoint, relative to the engine API base.
     const COMPILE_PATH: &str = "/pure/v1/compilation/lambdaReturnType";
+    /// Path that parses Pure lambda *text* into protocol JSON.
+    ///
+    /// `dead_code`-allowed: only `live_legend_schema_walk_compile.rs`'s
+    /// compilation unit calls `grammar_to_json_lambda`; `legend_completeness.rs`
+    /// includes this same module via `#[path]` without using it.
+    #[allow(dead_code)]
+    const GRAMMAR_TO_JSON_LAMBDA_PATH: &str = "/pure/v1/grammar/grammarToJson/lambda";
+    /// Path that parses a whole Pure model's *text* (classes, associations, …)
+    /// into a PureModelContextData protocol JSON — distinct from the `/lambda`
+    /// variant above, confirmed via the engine's own `/api/swagger.json`
+    /// (`grammarToJson/lambda` and `grammarToJson/model` are separate routes;
+    /// the bare `/pure/v1/grammar/grammarToJson` used in some docs/scripts is
+    /// not itself a route and 404s).
+    #[allow(dead_code)]
+    const GRAMMAR_TO_JSON_MODEL_PATH: &str = "/pure/v1/grammar/grammarToJson/model";
     /// Path of the engine health endpoint, relative to the base.
     const INFO_PATH: &str = "/server/v1/info";
     /// Delay between health-poll attempts.
@@ -120,6 +135,69 @@ mod client {
                 let remaining = deadline.saturating_duration_since(Instant::now());
                 std::thread::sleep(POLL_INTERVAL.min(remaining));
             }
+        }
+
+        /// Parse Pure lambda `text` into protocol JSON via `grammarToJson/lambda`.
+        ///
+        /// A syntax-error response (`{"status": "error", "message": ...}`,
+        /// HTTP 400) is a hard `Err`, not a classified outcome like
+        /// [`lambda_return_type`](Self::lambda_return_type)'s. This is *not*
+        /// proof the decoder is wrong, though: `docs/spec/grammar.md` §5.10
+        /// documents L1 as a deliberate over-approximation of real Pure syntax
+        /// ("the compiler oracle catches the residue"), so a decoder-emitted,
+        /// L1-complete walk can still fail to parse here — confirmed live by
+        /// `schema_walker.rs`'s `PendingCall`/`would_fuse` fixes, both born
+        /// from exactly this call surfacing real gaps.
+        ///
+        /// # Errors
+        /// Returns an error if the request fails, the body is not JSON, or the
+        /// engine reports a parse error.
+        ///
+        /// `dead_code`-allowed: only `live_legend_schema_walk_compile.rs`'s
+        /// compilation unit calls this; `legend_completeness.rs` includes this
+        /// same module via `#[path]` without using it.
+        #[allow(dead_code)]
+        pub fn grammar_to_json_lambda(&self, text: &str) -> anyhow::Result<Value> {
+            self.grammar_to_json(GRAMMAR_TO_JSON_LAMBDA_PATH, text)
+        }
+
+        /// Parse a whole Pure model's `text` (classes, associations, …) into a
+        /// PureModelContextData protocol JSON via `grammarToJson/model`.
+        ///
+        /// # Errors
+        /// Returns an error if the request fails, the body is not JSON, or the
+        /// engine reports a parse error.
+        #[allow(dead_code)]
+        pub fn grammar_to_json_model(&self, text: &str) -> anyhow::Result<Value> {
+            self.grammar_to_json(GRAMMAR_TO_JSON_MODEL_PATH, text)
+        }
+
+        /// Shared plumbing for [`grammar_to_json_lambda`](Self::grammar_to_json_lambda)
+        /// and [`grammar_to_json_model`](Self::grammar_to_json_model): POST plain
+        /// `text` to a `grammarToJson` variant `path` and return the parsed
+        /// protocol JSON, or an error carrying the engine's own message on a
+        /// non-2xx or error-shaped response.
+        #[allow(dead_code)]
+        fn grammar_to_json(&self, path: &str, text: &str) -> anyhow::Result<Value> {
+            let url = join(&self.base, path);
+            let mut resp = ureq::post(&url)
+                .config()
+                .http_status_as_error(false)
+                .timeout_global(Some(REQUEST_TIMEOUT))
+                .build()
+                .content_type("text/plain")
+                .send(text)?;
+            let status = resp.status();
+            let value: Value = resp.body_mut().read_json()?;
+            if !status.is_success() || value.get("status").and_then(Value::as_str) == Some("error")
+            {
+                let message = value
+                    .get("message")
+                    .and_then(Value::as_str)
+                    .map_or_else(|| value.to_string(), str::to_owned);
+                anyhow::bail!("grammarToJson at {url} failed ({status}): {message}");
+            }
+            Ok(value)
         }
 
         /// POST `{lambda, model}` to `/pure/v1/compilation/lambdaReturnType` and
