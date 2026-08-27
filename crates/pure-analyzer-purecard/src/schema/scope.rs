@@ -1228,6 +1228,24 @@ mod tests {
     }
 
     #[test]
+    fn the_let_keyword_at_a_source_anchor_does_not_arm_source_method_narrowing() {
+        // The mirror image of the value-position guard above: `let` closes at a
+        // genuine source-triggering anchor (`ExpectSource`/`BlockStmt`/
+        // `BlockStmtClose`) — N3's own `source_paths().chain(once(LET_KEYWORD))`
+        // admits it there — but it is not itself a source *path*
+        // (`schema.source_paths()` never yields it), so `source_ident_seen` must
+        // stay false. Without this check, `on_ident` would arm S1 after `let`,
+        // wrongly forcing the block-statement's `$name = …` binder syntax through
+        // a trie that only ever admits `all`.
+        let mut tracker = ScopeTracker::new();
+        tracker.dispatch_token(b"let", State::BlockStmt, &schema());
+        assert!(
+            !tracker.source_ident_seen,
+            "the `let` keyword armed source_ident_seen"
+        );
+    }
+
+    #[test]
     fn a_shadowed_binder_is_restored_when_the_inner_scope_closes() {
         // Soundness (unit-level dual of the arm-R integration test in
         // `tests/l2_precision.rs`): a nested `B` subquery reuses the outer filter's
