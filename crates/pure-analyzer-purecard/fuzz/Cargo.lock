@@ -120,6 +120,14 @@ dependencies = [
  "arbitrary",
  "libfuzzer-sys",
  "pure-analyzer-purecard",
+ "purecard-schema-walker",
+]
+
+[[package]]
+name = "purecard-schema-walker"
+version = "0.1.0"
+dependencies = [
+ "pure-analyzer-purecard",
 ]
 
 [[package]]

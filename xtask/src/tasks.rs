@@ -104,6 +104,7 @@ const PURECARD_FUZZ_TARGETS: &[&str] = &[
     "accept_token",
     "allowed_mask",
     "schema_from_json",
+    "schema_walk_generation",
     "spec_equivalence",
 ];
 /// Directory containing the source file for every registered PureCARD fuzz target.
@@ -1546,6 +1547,12 @@ enum WorkspaceMemberClass {
     Orchestration,
 }
 
+/// PureCARD product crates that are ordinary (non-excluded) workspace
+/// members alongside [`PURECARD_PACKAGE`] itself — e.g. a test/fuzz-support
+/// library shared between PureCARD's own integration tests and the
+/// workspace-excluded `purecard-fuzz` project (issue #59).
+const PURECARD_PRODUCT_PACKAGES: &[&str] = &[PURECARD_PACKAGE, "purecard-schema-walker"];
+
 /// Workspace package allowed to orchestrate both independent products.
 const ORCHESTRATION_PACKAGE: &str = "xtask";
 
@@ -1568,7 +1575,7 @@ const EXCLUDED_PACKAGE_BOUNDARIES: &[(&str, &str, WorkspaceMemberClass)] = &[
 fn workspace_member_class(name: &str) -> Option<WorkspaceMemberClass> {
     if allowed_internal_deps(name).is_some() {
         Some(WorkspaceMemberClass::Analyzer)
-    } else if name == PURECARD_PACKAGE {
+    } else if PURECARD_PRODUCT_PACKAGES.contains(&name) {
         Some(WorkspaceMemberClass::Purecard)
     } else if name == ORCHESTRATION_PACKAGE {
         Some(WorkspaceMemberClass::Orchestration)
@@ -2762,6 +2769,10 @@ missing_docs = \"warn\"
         );
         assert_eq!(
             workspace_member_class("lints"),
+            Some(WorkspaceMemberClass::Purecard)
+        );
+        assert_eq!(
+            workspace_member_class("purecard-schema-walker"),
             Some(WorkspaceMemberClass::Purecard)
         );
         assert_eq!(workspace_member_class("serde"), None);

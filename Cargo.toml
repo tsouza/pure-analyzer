@@ -11,6 +11,7 @@ members = [
     "crates/libpure",
     "crates/pure-analyzer-cli",
     "crates/pure-analyzer-purecard",
+    "crates/pure-analyzer-purecard/schema-walker",
     "xtask",
 ]
 # `fuzz` requires a nightly toolchain and is excluded so a normal stable
