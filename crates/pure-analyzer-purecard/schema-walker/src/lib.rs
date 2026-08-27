@@ -499,32 +499,43 @@ pub fn generate_schema_walks(grammar: &CompiledGrammar, schema: &Schema) -> Vec<
     generate_walks(grammar, schema, BASE_SEED, None, "generate_schema_walks")
 }
 
-/// Whether the shared retry loop in [`generate_walks`] should keep going:
-/// fewer than [`WALK_COUNT`] walks collected so far, and fewer than
-/// [`ATTEMPT_LIMIT`] attempts made — factored out so both boundaries are
-/// directly unit-testable without needing a full grammar/schema fixture.
-fn keep_generating(walks_len: usize, attempts: usize) -> bool {
-    walks_len < WALK_COUNT && attempts < ATTEMPT_LIMIT
+/// Whether the shared retry loop in [`collect_walks`] should keep going
+/// *before* its hard iteration bound is reached: fewer than [`WALK_COUNT`]
+/// walks collected so far — factored out so it is directly unit-testable
+/// without needing a full grammar/schema fixture.
+fn keep_generating(walks_len: usize) -> bool {
+    walks_len < WALK_COUNT
 }
 
 /// Shared retry loop behind both [`generate_schema_walks`] and
 /// [`generate_first_complete_schema_walks`]: gather exactly [`WALK_COUNT`]
 /// accepting walks from `base_seed`'s SplitMix64 stream, retrying (via each
-/// [`attempt`]'s own returned next-seed state) up to [`ATTEMPT_LIMIT`] times.
-/// `label` names the caller in the panic message on shortfall.
-fn generate_walks(
-    grammar: &CompiledGrammar,
-    schema: &Schema,
+/// call to `attempt_fn`'s own returned next-seed state) up to `attempt_limit`
+/// times. `label` names the caller in the panic message on shortfall.
+///
+/// The `for` loop's own range is the *unconditional* bound (mirroring
+/// [`attempt`]'s `for _ in 0..HARD_CAP`): even a broken [`keep_generating`]
+/// can only make this loop run every one of its `attempt_limit` iterations,
+/// never more — a hang here would wedge the whole test binary, since Rust's
+/// test harness has no per-test timeout.
+///
+/// `attempt_fn` is injected (rather than calling [`attempt`] directly)
+/// purely for testability: a test can pass a trivial, always-failing closure
+/// with a small `attempt_limit` to prove the give-up path fires correctly
+/// and quickly, without the cost of an unbounded real generation run.
+fn collect_walks(
     base_seed: u64,
-    grow_target: Option<u64>,
+    attempt_limit: usize,
     label: &str,
+    mut attempt_fn: impl FnMut(u64) -> (Option<Vec<u32>>, u64),
 ) -> Vec<Vec<u32>> {
     let mut walks = Vec::with_capacity(WALK_COUNT);
     let mut seed = base_seed;
-    let mut attempts = 0usize;
-    while keep_generating(walks.len(), attempts) {
-        attempts += 1;
-        let (walk, next_state) = attempt(grammar, schema, seed, grow_target);
+    for _ in 0..attempt_limit {
+        if !keep_generating(walks.len()) {
+            break;
+        }
+        let (walk, next_state) = attempt_fn(seed);
         seed = next_state;
         if let Some(ids) = walk {
             walks.push(ids);
@@ -533,9 +544,23 @@ fn generate_walks(
     assert_eq!(
         walks.len(),
         WALK_COUNT,
-        "{label} fell short of WALK_COUNT within ATTEMPT_LIMIT attempts"
+        "{label} fell short of WALK_COUNT within its attempt limit"
     );
     walks
+}
+
+/// Thin wrapper binding [`collect_walks`] to a real `grammar`/`schema` and
+/// [`ATTEMPT_LIMIT`].
+fn generate_walks(
+    grammar: &CompiledGrammar,
+    schema: &Schema,
+    base_seed: u64,
+    grow_target: Option<u64>,
+    label: &str,
+) -> Vec<Vec<u32>> {
+    collect_walks(base_seed, ATTEMPT_LIMIT, label, |seed| {
+        attempt(grammar, schema, seed, grow_target)
+    })
 }
 
 /// Distinct from [`BASE_SEED`] so the eager stream below never coincides with
@@ -862,39 +887,24 @@ mod tests {
         assert!(!marks_arrow_or_dollar(b"x", b"x"));
     }
 
-    /// A vocabulary with no content past the opening pipe: every attempt
-    /// dies immediately (`cands.is_empty()` right after `|`), so generation
-    /// can never converge — the only way to exercise `ATTEMPT_LIMIT` itself
-    /// (never reached by any real, convergent schema/vocab).
-    fn unconvergeable_vocab() -> Vocab {
-        Vocab::from_byte_tokens(vec![b"|".to_vec()], 1)
+    #[test]
+    fn keep_generating_stops_the_instant_walk_count_is_reached() {
+        assert!(keep_generating(0));
+        assert!(keep_generating(WALK_COUNT - 1));
+        assert!(!keep_generating(WALK_COUNT));
     }
 
     #[test]
     #[should_panic(expected = "fell short of WALK_COUNT")]
-    fn generate_schema_walks_gives_up_after_attempt_limit_when_it_cannot_converge() {
-        let grammar = CompiledGrammar::compile(unconvergeable_vocab());
-        let _ = generate_schema_walks(&grammar, &schema());
-    }
-
-    #[test]
-    #[should_panic(expected = "fell short of WALK_COUNT")]
-    fn generate_first_complete_schema_walks_gives_up_after_attempt_limit_when_it_cannot_converge() {
-        let grammar = CompiledGrammar::compile(unconvergeable_vocab());
-        let _ = generate_first_complete_schema_walks(&grammar, &schema());
-    }
-
-    #[test]
-    fn keep_generating_stops_at_either_boundary() {
-        // Below both boundaries: keep going.
-        assert!(keep_generating(0, 0));
-        assert!(keep_generating(WALK_COUNT - 1, ATTEMPT_LIMIT - 1));
-        // The walk-count boundary: stop the instant it's reached, even with
-        // attempts to spare.
-        assert!(!keep_generating(WALK_COUNT, 0));
-        // The attempt-limit boundary: stop the instant it's reached, even
-        // with walks still short.
-        assert!(!keep_generating(0, ATTEMPT_LIMIT));
+    fn collect_walks_gives_up_within_its_attempt_limit_when_it_never_succeeds() {
+        // A closure that never produces a walk, with a tiny attempt limit,
+        // proves `collect_walks` actually gives up (panics) rather than
+        // spinning forever — the property `attempt_limit` exists for, at a
+        // scale a test can afford. Safe as a plain `#[should_panic]` (no
+        // hang risk even under a broken `keep_generating`/exit condition):
+        // `collect_walks`'s `for _ in 0..attempt_limit` is an *unconditional*
+        // bound on iterations, exactly like `attempt`'s own `HARD_CAP` loop.
+        let _ = collect_walks(0, 5, "test", |seed| (None, seed));
     }
 
     #[test]
