@@ -340,18 +340,19 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
             return false;
         }
 
+        let mut valid = true;
         while !self.at_eof() {
             self.consume_trivia();
             if self.at(TokenKind::BRACE_CLOSE) {
                 let _ = self.bump();
-                return true;
+                return valid;
             }
             if self.declaration_kind().is_some() {
                 self.syntax_error("expected `}` before the next Domain declaration");
                 return false;
             }
             if self.at_keyword("stereotypes") || self.at_keyword("tags") {
-                self.parse_profile_section();
+                valid &= self.parse_profile_section();
                 continue;
             }
             if self.consume_if_raw(TokenKind::SEMICOLON) {
@@ -364,32 +365,42 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
         false
     }
 
-    fn parse_profile_section(&mut self) {
+    fn parse_profile_section(&mut self) -> bool {
         let stereotypes = self.at_keyword("stereotypes");
         self.open(SyntaxKind::DOMAIN_PROFILE_SECTION);
         let _ = self.bump();
         let colon = self.expect(TokenKind::COLON, "`:` after a profile section name");
         let open = self.expect(TokenKind::BRACKET_OPEN, "`[` after a profile section name");
-        if colon && open {
+        let contents = if colon && open {
             if stereotypes {
-                self.parse_stereotype_list();
+                self.parse_stereotype_list()
             } else {
                 self.consume_profile_tag_list();
+                true
             }
-            let _ = self.expect(TokenKind::BRACKET_CLOSE, "`]` after a profile section");
-        }
+        } else {
+            false
+        };
+        let close = if colon && open {
+            self.expect(TokenKind::BRACKET_CLOSE, "`]` after a profile section")
+        } else {
+            false
+        };
         let _ = self.consume_if(TokenKind::SEMICOLON);
         self.close();
+        colon && open && contents && close
     }
 
-    fn parse_stereotype_list(&mut self) {
+    fn parse_stereotype_list(&mut self) -> bool {
         self.consume_trivia();
+        let mut valid = true;
         while !self.at_eof() && !self.at(TokenKind::BRACKET_CLOSE) {
             let before = self.index;
             self.open(SyntaxKind::DOMAIN_STEREOTYPE_DECL);
-            let valid = self.consume_name("a stereotype name");
+            let name = self.consume_name("a stereotype name");
             self.close();
-            if !valid {
+            valid &= name;
+            if !name {
                 self.recover_until(&[TokenKind::COMMA, TokenKind::BRACKET_CLOSE]);
             }
             self.consume_trivia();
@@ -399,13 +410,16 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
             }
             if !self.at(TokenKind::BRACKET_CLOSE) {
                 self.syntax_error("expected `,` or `]` after a stereotype name");
+                valid = false;
                 self.recover_until(&[TokenKind::COMMA, TokenKind::BRACKET_CLOSE]);
                 let _ = self.consume_if_raw(TokenKind::COMMA);
             }
             if self.index == before {
                 self.recover_one();
+                valid = false;
             }
         }
+        valid
     }
 
     fn consume_profile_tag_list(&mut self) {

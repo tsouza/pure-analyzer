@@ -293,6 +293,41 @@ Profile
 }
 
 #[test]
+fn malformed_profile_section_marks_conservative_coverage() {
+    let source = r#"
+Profile demo::P
+{
+  stereotypes: [one two];
+}
+"#;
+    let parsed = parse(source);
+
+    assert!(
+        parsed
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == DiagCode::MalformedSyntax),
+        "{:#?}",
+        parsed.diagnostics
+    );
+    assert_eq!(
+        parsed
+            .coverage_gaps
+            .iter()
+            .map(|gap| gap.kind)
+            .collect::<Vec<_>>(),
+        vec![DomainCoverageGapKind::MalformedDeclaration],
+        "a malformed profile section must conservatively mark coverage: {:#?}",
+        parsed.coverage_gaps
+    );
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_PROFILE_SECTION),
+        1
+    );
+    assert_lossless(source, &parsed);
+}
+
+#[test]
 fn qualified_property_missing_return_colon_marks_malformed_coverage() {
     assert_only_malformed_declaration(
         r#"
