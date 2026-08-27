@@ -219,7 +219,8 @@ fn lower_class(
         properties,
         qualified_properties,
         context.source,
-    );
+    )
+    .with_declaration_span(node.text_range());
     if coverage_gap {
         class.mark_coverage_gap();
     }
@@ -500,6 +501,7 @@ fn lower_association(node: &GreenNode, context: LoweringContext<'_>) -> LoweredA
             temporal: annotations.temporal,
             provenance: Provenance::PureFile,
             source: context.source,
+            declaration_span: Some(node.text_range()),
         }),
         uncertain: false,
     }
@@ -513,7 +515,7 @@ fn lower_property(node: &GreenNode) -> Option<PropInfo> {
     let multiplicity = direct_nodes(node, SyntaxKind::DOMAIN_MULTIPLICITY)
         .next()
         .and_then(multiplicity_from_node)?;
-    Some(PropInfo::declared(name, target, multiplicity))
+    Some(PropInfo::declared(name, target, multiplicity).with_declaration_span(node.text_range()))
 }
 
 fn lower_qualified_property(
@@ -534,7 +536,10 @@ fn lower_qualified_property(
     } else {
         None
     };
-    Some(QpInfo::new(name, target, multiplicity, kind, signature))
+    Some(
+        QpInfo::new(name, target, multiplicity, kind, signature)
+            .with_declaration_span(node.text_range()),
+    )
 }
 
 fn lower_signature(node: &GreenNode, context: LoweringContext<'_>) -> Option<Vec<TypeRef>> {

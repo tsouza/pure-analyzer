@@ -412,6 +412,7 @@ impl<T> core::convert::From<T> for pure_analyzer_model::Temporal
 pub fn pure_analyzer_model::Temporal::from(T) -> T
 pub struct pure_analyzer_model::AssocInfo
 impl pure_analyzer_model::AssocInfo
+pub const fn pure_analyzer_model::AssocInfo::declaration_span(&self) -> core::option::Option<text_size::range::TextRange>
 pub const fn pure_analyzer_model::AssocInfo::end_a(&self) -> &pure_analyzer_model::AssociationEndInfo
 pub const fn pure_analyzer_model::AssocInfo::end_b(&self) -> &pure_analyzer_model::AssociationEndInfo
 pub const fn pure_analyzer_model::AssocInfo::path(&self) -> &pure_analyzer_model::QName
@@ -457,6 +458,7 @@ impl<T> core::convert::From<T> for pure_analyzer_model::AssocInfo
 pub fn pure_analyzer_model::AssocInfo::from(T) -> T
 pub struct pure_analyzer_model::AssociationEndInfo
 impl pure_analyzer_model::AssociationEndInfo
+pub const fn pure_analyzer_model::AssociationEndInfo::declaration_span(&self) -> core::option::Option<text_size::range::TextRange>
 pub const fn pure_analyzer_model::AssociationEndInfo::owner(&self) -> &pure_analyzer_model::QName
 pub const fn pure_analyzer_model::AssociationEndInfo::property(&self) -> &pure_analyzer_model::PropInfo
 impl core::clone::Clone for pure_analyzer_model::AssociationEndInfo
@@ -550,6 +552,7 @@ pub fn pure_analyzer_model::ClassId::from(T) -> T
 pub struct pure_analyzer_model::ClassInfo
 impl pure_analyzer_model::ClassInfo
 pub const fn pure_analyzer_model::ClassInfo::coverage_gap(&self) -> bool
+pub const fn pure_analyzer_model::ClassInfo::declaration_span(&self) -> core::option::Option<text_size::range::TextRange>
 pub const fn pure_analyzer_model::ClassInfo::path(&self) -> &pure_analyzer_model::QName
 pub const fn pure_analyzer_model::ClassInfo::properties(&self) -> &alloc::collections::btree::map::BTreeMap<pure_analyzer_model::Name, pure_analyzer_model::PropInfo>
 pub const fn pure_analyzer_model::ClassInfo::provenance(&self) -> pure_analyzer_model::Provenance
@@ -884,6 +887,7 @@ pub fn pure_analyzer_model::PmcdDocument<'a>::from(T) -> T
 pub struct pure_analyzer_model::PropInfo
 impl pure_analyzer_model::PropInfo
 pub const fn pure_analyzer_model::PropInfo::association(&self) -> core::option::Option<&pure_analyzer_model::QName>
+pub const fn pure_analyzer_model::PropInfo::declaration_span(&self) -> core::option::Option<text_size::range::TextRange>
 pub const fn pure_analyzer_model::PropInfo::from_assoc(&self) -> bool
 pub const fn pure_analyzer_model::PropInfo::multiplicity(&self) -> pure_analyzer_model::Multiplicity
 pub const fn pure_analyzer_model::PropInfo::name(&self) -> &pure_analyzer_model::Name
@@ -1027,6 +1031,7 @@ impl<T> core::convert::From<T> for pure_analyzer_model::QName
 pub fn pure_analyzer_model::QName::from(T) -> T
 pub struct pure_analyzer_model::QpInfo
 impl pure_analyzer_model::QpInfo
+pub const fn pure_analyzer_model::QpInfo::declaration_span(&self) -> core::option::Option<text_size::range::TextRange>
 pub const fn pure_analyzer_model::QpInfo::kind(&self) -> pure_analyzer_model::QpKind
 pub const fn pure_analyzer_model::QpInfo::multiplicity(&self) -> pure_analyzer_model::Multiplicity
 pub const fn pure_analyzer_model::QpInfo::name(&self) -> &pure_analyzer_model::Name
