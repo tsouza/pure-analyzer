@@ -63,6 +63,10 @@ mod client {
     use std::time::{Duration, Instant};
 
     /// Path of the compile endpoint, relative to the engine API base.
+    ///
+    /// `dead_code`-allowed: `legend_infra.rs`'s compilation unit only calls
+    /// `health_wait`/`info`, never `lambda_return_type`.
+    #[allow(dead_code)]
     const COMPILE_PATH: &str = "/pure/v1/compilation/lambdaReturnType";
     /// Path that parses Pure lambda *text* into protocol JSON.
     ///
@@ -135,6 +139,29 @@ mod client {
                 let remaining = deadline.saturating_duration_since(Instant::now());
                 std::thread::sleep(POLL_INTERVAL.min(remaining));
             }
+        }
+
+        /// Fetch the engine's `/server/v1/info` body — used to assert the
+        /// running container is actually the version pinned in
+        /// `corpus/legend-stack/docker-compose.yml` (§2 "latest stable,
+        /// verified" only pins a version at pin time; this proves the
+        /// container that answers requests is that exact pin, not silently
+        /// whatever `:latest`/a stale local image resolved to).
+        ///
+        /// # Errors
+        /// Returns an error if the request fails or the body is not JSON.
+        ///
+        /// `dead_code`-allowed: only `legend_infra.rs`'s compilation unit
+        /// calls `info`; the other legend test files never do.
+        #[allow(dead_code)]
+        pub fn info(&self) -> anyhow::Result<Value> {
+            let url = join(&self.base, INFO_PATH);
+            let mut resp = ureq::get(&url)
+                .config()
+                .timeout_global(Some(REQUEST_TIMEOUT))
+                .build()
+                .call()?;
+            Ok(resp.body_mut().read_json()?)
         }
 
         /// Parse Pure lambda `text` into protocol JSON via `grammarToJson/lambda`.
@@ -210,6 +237,10 @@ mod client {
         ///
         /// # Errors
         /// Returns an error if the request fails or the body is not JSON.
+        ///
+        /// `dead_code`-allowed: `legend_infra.rs`'s compilation unit only
+        /// calls `health_wait`/`info`, never this.
+        #[allow(dead_code)]
         pub fn lambda_return_type(
             &self,
             lambda: &Value,
