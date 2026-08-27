@@ -283,6 +283,47 @@ fn collection_trailing_comma_stops_before_the_closing_delimiter() {
 }
 
 #[test]
+fn malformed_column_array_member_recovers_to_later_quoted_aliases() {
+    let source = "~['first': x| $x 'discarded': y| $y, 'later': z| $z]";
+    let parsed = parse(source);
+    let columns = only_node_of_kind(&parsed.green, SyntaxKind::COLUMN_SPEC_ARRAY);
+
+    assert_eq!(parsed.green.text(), source);
+    assert_eq!(columns.text(), source);
+    assert!(diagnostic_codes(&parsed).contains(&DiagCode::MalformedSyntax));
+    assert_eq!(count_kind(columns, SyntaxKind::COLUMN_NAME), 2);
+    assert_eq!(count_kind(columns, SyntaxKind::ERROR_NODE), 1);
+    assert_ranges_are_valid(source, &parsed);
+}
+
+#[test]
+fn invalid_column_array_member_makes_progress_to_later_quoted_aliases() {
+    let source = "~['first': x| $x, ), 'later': y| $y]";
+    let parsed = parse(source);
+    let columns = only_node_of_kind(&parsed.green, SyntaxKind::COLUMN_SPEC_ARRAY);
+
+    assert_eq!(parsed.green.text(), source);
+    assert_eq!(columns.text(), source);
+    assert!(diagnostic_codes(&parsed).contains(&DiagCode::MalformedSyntax));
+    assert_eq!(count_kind(columns, SyntaxKind::COLUMN_NAME), 2);
+    assert!(count_kind(columns, SyntaxKind::ERROR_NODE) > 0);
+    assert_ranges_are_valid(source, &parsed);
+}
+
+#[test]
+fn empty_column_array_member_makes_progress_to_later_quoted_aliases() {
+    let source = "~['first': x| $x, , 'later': y| $y]";
+    let parsed = parse(source);
+    let columns = only_node_of_kind(&parsed.green, SyntaxKind::COLUMN_SPEC_ARRAY);
+
+    assert_eq!(parsed.green.text(), source);
+    assert_eq!(columns.text(), source);
+    assert!(diagnostic_codes(&parsed).contains(&DiagCode::MalformedSyntax));
+    assert_eq!(count_kind(columns, SyntaxKind::COLUMN_NAME), 2);
+    assert_ranges_are_valid(source, &parsed);
+}
+
+#[test]
 fn incomplete_variables_and_parentheses_propagate_to_outer_recovery() {
     for (source, expected_queries) in [("$); model::Person.all()", 2), ("(a", 1)] {
         let parsed = parse(source);

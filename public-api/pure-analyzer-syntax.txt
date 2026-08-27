@@ -200,6 +200,7 @@ pub pure_analyzer_syntax::SyntaxKind::CODE_BLOCK = 32784
 pub pure_analyzer_syntax::SyntaxKind::COLLECTION_LITERAL = 32799
 pub pure_analyzer_syntax::SyntaxKind::COLON = 13
 pub pure_analyzer_syntax::SyntaxKind::COLUMN_INFO = 32791
+pub pure_analyzer_syntax::SyntaxKind::COLUMN_NAME = 32800
 pub pure_analyzer_syntax::SyntaxKind::COLUMN_SPEC = 32786
 pub pure_analyzer_syntax::SyntaxKind::COLUMN_SPEC_ARRAY = 32787
 pub pure_analyzer_syntax::SyntaxKind::COMMA = 11
@@ -732,6 +733,49 @@ impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::ColumnInfo where T:
 pub unsafe fn pure_analyzer_syntax::ColumnInfo::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for pure_analyzer_syntax::ColumnInfo
 pub fn pure_analyzer_syntax::ColumnInfo::from(T) -> T
+pub struct pure_analyzer_syntax::ColumnName(_)
+impl core::clone::Clone for pure_analyzer_syntax::ColumnName
+pub fn pure_analyzer_syntax::ColumnName::clone(&self) -> pure_analyzer_syntax::ColumnName
+impl core::cmp::Eq for pure_analyzer_syntax::ColumnName
+impl core::cmp::PartialEq for pure_analyzer_syntax::ColumnName
+pub fn pure_analyzer_syntax::ColumnName::eq(&self, &pure_analyzer_syntax::ColumnName) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::ColumnName
+pub fn pure_analyzer_syntax::ColumnName::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::ColumnName
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::ColumnName
+pub fn pure_analyzer_syntax::ColumnName::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::ColumnName::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::ColumnName::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::ColumnName::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::ColumnName
+impl core::marker::Send for pure_analyzer_syntax::ColumnName
+impl core::marker::Sync for pure_analyzer_syntax::ColumnName
+impl core::marker::Unpin for pure_analyzer_syntax::ColumnName
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::ColumnName
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::ColumnName
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::ColumnName
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::ColumnName where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::ColumnName::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::ColumnName where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::ColumnName::Error = never
+pub fn pure_analyzer_syntax::ColumnName::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::ColumnName where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::ColumnName::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::ColumnName::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::ColumnName where T: core::clone::Clone
+pub type pure_analyzer_syntax::ColumnName::Owned = T
+pub fn pure_analyzer_syntax::ColumnName::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::ColumnName::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::ColumnName where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::ColumnName::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::ColumnName where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::ColumnName::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::ColumnName where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::ColumnName::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::ColumnName where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::ColumnName::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::ColumnName
+pub fn pure_analyzer_syntax::ColumnName::from(T) -> T
 pub struct pure_analyzer_syntax::ColumnSpec(_)
 impl core::clone::Clone for pure_analyzer_syntax::ColumnSpec
 pub fn pure_analyzer_syntax::ColumnSpec::clone(&self) -> pure_analyzer_syntax::ColumnSpec
@@ -2025,6 +2069,11 @@ pub fn pure_analyzer_syntax::ColumnInfo::can_cast(pure_analyzer_syntax::SyntaxKi
 pub fn pure_analyzer_syntax::ColumnInfo::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
 pub fn pure_analyzer_syntax::ColumnInfo::syntax(&self) -> &pure_analyzer_syntax::GreenNode
 pub fn pure_analyzer_syntax::ColumnInfo::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::ColumnName
+pub fn pure_analyzer_syntax::ColumnName::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::ColumnName::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::ColumnName::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::ColumnName::text_range(&self) -> text_size::range::TextRange
 impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::ColumnSpec
 pub fn pure_analyzer_syntax::ColumnSpec::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
 pub fn pure_analyzer_syntax::ColumnSpec::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>

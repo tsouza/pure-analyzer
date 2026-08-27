@@ -16,11 +16,11 @@ mod kind;
 
 pub use ast::{
     AllExpression, ArrowCall, AstNode, BinaryExpression, BracketIndex, CallArguments,
-    CastExpression, CodeBlock, CollectionLiteral, ColumnInfo, ColumnSpec, ColumnSpecArray,
-    ErrorNode, FunctionCall, Island, LambdaExpression, LambdaParameters, LetStatement,
-    LiteralExpression, Multiplicity, NavigationPathIsland, NewInstanceExpression, OpaqueIsland,
-    ParenthesizedExpression, PropertyNavigation, QualifiedName, QueryExpression, RelationType,
-    Root, StoreTablePointer, TypeReference, UnaryExpression, VariableExpression,
+    CastExpression, CodeBlock, CollectionLiteral, ColumnInfo, ColumnName, ColumnSpec,
+    ColumnSpecArray, ErrorNode, FunctionCall, Island, LambdaExpression, LambdaParameters,
+    LetStatement, LiteralExpression, Multiplicity, NavigationPathIsland, NewInstanceExpression,
+    OpaqueIsland, ParenthesizedExpression, PropertyNavigation, QualifiedName, QueryExpression,
+    RelationType, Root, StoreTablePointer, TypeReference, UnaryExpression, VariableExpression,
 };
 pub use builder::{BuildError, Checkpoint, Event, GreenNodeBuilder};
 pub use green::{GreenElement, GreenNode, GreenToken, TokenIter};

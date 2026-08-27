@@ -618,19 +618,78 @@ impl<'tokens> Parser<'tokens> {
         self.open(SyntaxKind::COLUMN_SPEC_ARRAY);
         let _ = self.expect(TokenKind::TILDE, "`~` before a column specification");
         let _ = self.expect(TokenKind::BRACKET_OPEN, "`[` after `~`");
-        if !self.at(TokenKind::BRACKET_CLOSE) {
-            loop {
-                let before = self.index;
-                let _ = self.parse_column_spec(false);
-                let has_comma = self.consume_if(TokenKind::COMMA);
-                if self.index == before || !has_comma {
-                    break;
-                }
-            }
-        }
+        self.parse_column_spec_array_items();
         let has_close = self.expect(TokenKind::BRACKET_CLOSE, "`]` after column specifications");
         self.close();
         has_close
+    }
+
+    fn parse_column_spec_array_items(&mut self) {
+        if self.at(TokenKind::BRACKET_CLOSE) {
+            return;
+        }
+
+        loop {
+            let before = self.index;
+            let _ = self.parse_column_spec(false);
+            self.consume_trivia();
+            if self.at(TokenKind::SEMICOLON) {
+                break;
+            }
+
+            let has_comma = self.consume_if(TokenKind::COMMA);
+            if self.index == before {
+                self.recover_until(&[
+                    TokenKind::COMMA,
+                    TokenKind::BRACKET_CLOSE,
+                    TokenKind::SEMICOLON,
+                ]);
+                if self.at(TokenKind::SEMICOLON)
+                    || self.at(TokenKind::BRACKET_CLOSE)
+                    || self.at_eof()
+                {
+                    break;
+                }
+                let recovered_comma = self.consume_if(TokenKind::COMMA);
+                if !recovered_comma && self.index == before {
+                    break;
+                }
+                if self.at(TokenKind::BRACKET_CLOSE) || self.at_eof() {
+                    self.error_current("expected a column specification after `,`");
+                    break;
+                }
+                continue;
+            }
+            if has_comma {
+                if self.at(TokenKind::BRACKET_CLOSE) || self.at_eof() {
+                    self.error_current("expected a column specification after `,`");
+                    break;
+                }
+                continue;
+            }
+            if self.at(TokenKind::BRACKET_CLOSE) || self.at_eof() {
+                break;
+            }
+
+            self.error_current("expected `,` or `]` after a column specification");
+            let recovery_start = self.index;
+            self.recover_until(&[
+                TokenKind::COMMA,
+                TokenKind::BRACKET_CLOSE,
+                TokenKind::SEMICOLON,
+            ]);
+            if self.at(TokenKind::SEMICOLON) || self.at(TokenKind::BRACKET_CLOSE) || self.at_eof() {
+                break;
+            }
+            if self.index == recovery_start {
+                break;
+            }
+            let _ = self.consume_if(TokenKind::COMMA);
+            if self.at(TokenKind::BRACKET_CLOSE) || self.at_eof() {
+                self.error_current("expected a column specification after `,`");
+                break;
+            }
+        }
     }
 
     fn parse_column_spec(&mut self, has_tilde: bool) -> bool {
@@ -638,12 +697,28 @@ impl<'tokens> Parser<'tokens> {
         if has_tilde {
             let _ = self.expect(TokenKind::TILDE, "`~` before a column name");
         }
-        let name = self.consume_name("a column name");
+        let name = self.parse_column_name();
         if self.consume_if(TokenKind::COLON) {
             self.parse_column_spec_body();
         }
         self.close();
         name
+    }
+
+    fn parse_column_name(&mut self) -> bool {
+        self.consume_trivia();
+        let name = self
+            .raw_kind()
+            .is_some_and(|kind| is_name(kind) || kind == TokenKind::STRING);
+        if !name {
+            self.error_current("expected a column name");
+            return false;
+        }
+
+        self.open(SyntaxKind::COLUMN_NAME);
+        let _ = self.bump();
+        self.close();
+        true
     }
 
     fn parse_column_spec_body(&mut self) {

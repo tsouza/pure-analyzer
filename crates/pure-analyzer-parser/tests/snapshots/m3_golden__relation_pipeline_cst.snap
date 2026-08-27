@@ -82,12 +82,14 @@ ROOT 0..204
             PAREN_OPEN 135..136 "("
             COLUMN_SPEC 136..144
               TILDE 136..137 "~"
-              IDENT 137..144 "GROUPID"
+              COLUMN_NAME 137..144
+                IDENT 137..144 "GROUPID"
             COMMA 144..145 ","
             WHITESPACE 145..146 " "
             COLUMN_SPEC 146..153
               TILDE 146..147 "~"
-              IDENT 147..153 "SALARY"
+              COLUMN_NAME 147..153
+                IDENT 147..153 "SALARY"
             ARROW_CALL 153..166
               ARROW 153..155 "->"
               QUALIFIED_NAME 155..164
@@ -102,7 +104,8 @@ ROOT 0..204
           TILDE 169..170 "~"
           BRACKET_OPEN 170..171 "["
           COLUMN_SPEC 171..201
-            IDENT 171..175 "RANK"
+            COLUMN_NAME 171..175
+              IDENT 171..175 "RANK"
             COLON 175..176 ":"
             LAMBDA_EXPR 176..201
               BRACE_OPEN 176..177 "{"

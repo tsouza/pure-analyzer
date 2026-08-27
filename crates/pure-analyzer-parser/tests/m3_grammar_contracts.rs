@@ -120,6 +120,25 @@ fn column_bodies_accept_each_lambda_form() {
 }
 
 #[test]
+fn quoted_column_aliases_are_distinct_from_string_expression_literals() {
+    let source = "~['Total Revenue': item| $item.amount, plain: String[1]]";
+
+    assert_valid(
+        source,
+        &[
+            SyntaxKind::COLUMN_SPEC_ARRAY,
+            SyntaxKind::COLUMN_SPEC,
+            SyntaxKind::COLUMN_NAME,
+            SyntaxKind::LAMBDA_EXPR,
+            SyntaxKind::TYPE_REF,
+        ],
+    );
+    let parsed = parse(source);
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::COLUMN_NAME), 2);
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::LITERAL_EXPR), 0);
+}
+
+#[test]
 fn typed_columns_do_not_take_the_lambda_body_path() {
     let source = "~value:String[1]";
     let parsed = parse(source);
