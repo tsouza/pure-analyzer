@@ -208,6 +208,19 @@ fn test_mutation_workspace(shard: Option<(u32, u32)>) -> Result<()> {
     if let Some((index, total)) = shard {
         args.push("--shard".to_string());
         args.push(format!("{index}/{total}"));
+        // cargo-mutants' default "slice" sharding hands each shard a
+        // contiguous range of mutants in discovery order, which is
+        // effectively grouped by crate/file — verified empirically to badly
+        // imbalance shard runtime here (one shard landing almost entirely in
+        // a small, fast crate finished in ~3 minutes while another loaded
+        // with the largest, slowest crate's mutants was still running 20+
+        // minutes later, on PR #82's own CI run before this fix). Round-robin
+        // interleaves mutant `i` onto shard `i % k`, distributing every
+        // crate's mutants near-evenly across all shards instead — confirmed
+        // empirically to put within one mutant of the same per-crate count
+        // on every shard.
+        args.push("--sharding".to_string());
+        args.push("round-robin".to_string());
     }
     let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
     run("cargo", &arg_refs)
