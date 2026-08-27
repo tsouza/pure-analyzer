@@ -1,2 +1,308 @@
 pub mod pure_analyzer_resolve
+pub enum pure_analyzer_resolve::Resolution<T>
+pub pure_analyzer_resolve::Resolution::Ambiguous(alloc::vec::Vec<T>)
+pub pure_analyzer_resolve::Resolution::Cycle(alloc::vec::Vec<pure_analyzer_model::types::QName>)
+pub pure_analyzer_resolve::Resolution::Found(T)
+pub pure_analyzer_resolve::Resolution::Missing
+pub pure_analyzer_resolve::Resolution::UnderResolved(pure_analyzer_resolve::UnderResolution)
+impl<T: core::clone::Clone> core::clone::Clone for pure_analyzer_resolve::Resolution<T>
+pub fn pure_analyzer_resolve::Resolution<T>::clone(&self) -> pure_analyzer_resolve::Resolution<T>
+impl<T: core::cmp::Eq> core::cmp::Eq for pure_analyzer_resolve::Resolution<T>
+impl<T: core::cmp::PartialEq> core::cmp::PartialEq for pure_analyzer_resolve::Resolution<T>
+pub fn pure_analyzer_resolve::Resolution<T>::eq(&self, &pure_analyzer_resolve::Resolution<T>) -> bool
+impl<T: core::cmp::PartialEq> core::marker::StructuralPartialEq for pure_analyzer_resolve::Resolution<T>
+impl<T: core::fmt::Debug> core::fmt::Debug for pure_analyzer_resolve::Resolution<T>
+pub fn pure_analyzer_resolve::Resolution<T>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl<T> core::marker::Freeze for pure_analyzer_resolve::Resolution<T> where T: core::marker::Freeze, alloc::vec::Vec<T>: core::marker::Freeze
+impl<T> core::marker::Send for pure_analyzer_resolve::Resolution<T> where T: core::marker::Send, alloc::vec::Vec<T>: core::marker::Send
+impl<T> core::marker::Sync for pure_analyzer_resolve::Resolution<T> where T: core::marker::Sync, alloc::vec::Vec<T>: core::marker::Sync
+impl<T> core::marker::Unpin for pure_analyzer_resolve::Resolution<T> where T: core::marker::Unpin, alloc::vec::Vec<T>: core::marker::Unpin
+impl<T> core::marker::UnsafeUnpin for pure_analyzer_resolve::Resolution<T> where T: core::marker::UnsafeUnpin, alloc::vec::Vec<T>: core::marker::UnsafeUnpin
+impl<T> core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_resolve::Resolution<T> where T: core::panic::unwind_safe::RefUnwindSafe, alloc::vec::Vec<T>: core::panic::unwind_safe::RefUnwindSafe
+impl<T> core::panic::unwind_safe::UnwindSafe for pure_analyzer_resolve::Resolution<T> where T: core::panic::unwind_safe::UnwindSafe, alloc::vec::Vec<T>: core::panic::unwind_safe::UnwindSafe
+impl<T, U> core::convert::Into<U> for pure_analyzer_resolve::Resolution<T> where U: core::convert::From<T>
+pub fn pure_analyzer_resolve::Resolution<T>::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_resolve::Resolution<T> where U: core::convert::Into<T>
+pub type pure_analyzer_resolve::Resolution<T>::Error = never
+pub fn pure_analyzer_resolve::Resolution<T>::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_resolve::Resolution<T> where U: core::convert::TryFrom<T>
+pub type pure_analyzer_resolve::Resolution<T>::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_resolve::Resolution<T>::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_resolve::Resolution<T> where T: core::clone::Clone
+pub type pure_analyzer_resolve::Resolution<T>::Owned = T
+pub fn pure_analyzer_resolve::Resolution<T>::clone_into(&self, &mut T)
+pub fn pure_analyzer_resolve::Resolution<T>::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_resolve::Resolution<T> where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_resolve::Resolution<T>::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_resolve::Resolution<T> where T: ?core::marker::Sized
+pub fn pure_analyzer_resolve::Resolution<T>::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_resolve::Resolution<T> where T: ?core::marker::Sized
+pub fn pure_analyzer_resolve::Resolution<T>::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_resolve::Resolution<T> where T: core::clone::Clone
+pub unsafe fn pure_analyzer_resolve::Resolution<T>::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_resolve::Resolution<T>
+pub fn pure_analyzer_resolve::Resolution<T>::from(T) -> T
+pub enum pure_analyzer_resolve::ResolvedMemberKind
+pub pure_analyzer_resolve::ResolvedMemberKind::AssociationEnd
+pub pure_analyzer_resolve::ResolvedMemberKind::AssociationEnd::association: pure_analyzer_model::types::QName
+pub pure_analyzer_resolve::ResolvedMemberKind::Property
+pub pure_analyzer_resolve::ResolvedMemberKind::Qualified(pure_analyzer_model::types::QpKind)
+impl core::clone::Clone for pure_analyzer_resolve::ResolvedMemberKind
+pub fn pure_analyzer_resolve::ResolvedMemberKind::clone(&self) -> pure_analyzer_resolve::ResolvedMemberKind
+impl core::cmp::Eq for pure_analyzer_resolve::ResolvedMemberKind
+impl core::cmp::PartialEq for pure_analyzer_resolve::ResolvedMemberKind
+pub fn pure_analyzer_resolve::ResolvedMemberKind::eq(&self, &pure_analyzer_resolve::ResolvedMemberKind) -> bool
+impl core::fmt::Debug for pure_analyzer_resolve::ResolvedMemberKind
+pub fn pure_analyzer_resolve::ResolvedMemberKind::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_resolve::ResolvedMemberKind
+impl core::marker::Freeze for pure_analyzer_resolve::ResolvedMemberKind
+impl core::marker::Send for pure_analyzer_resolve::ResolvedMemberKind
+impl core::marker::Sync for pure_analyzer_resolve::ResolvedMemberKind
+impl core::marker::Unpin for pure_analyzer_resolve::ResolvedMemberKind
+impl core::marker::UnsafeUnpin for pure_analyzer_resolve::ResolvedMemberKind
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_resolve::ResolvedMemberKind
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_resolve::ResolvedMemberKind
+impl<T, U> core::convert::Into<U> for pure_analyzer_resolve::ResolvedMemberKind where U: core::convert::From<T>
+pub fn pure_analyzer_resolve::ResolvedMemberKind::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_resolve::ResolvedMemberKind where U: core::convert::Into<T>
+pub type pure_analyzer_resolve::ResolvedMemberKind::Error = never
+pub fn pure_analyzer_resolve::ResolvedMemberKind::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_resolve::ResolvedMemberKind where U: core::convert::TryFrom<T>
+pub type pure_analyzer_resolve::ResolvedMemberKind::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_resolve::ResolvedMemberKind::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_resolve::ResolvedMemberKind where T: core::clone::Clone
+pub type pure_analyzer_resolve::ResolvedMemberKind::Owned = T
+pub fn pure_analyzer_resolve::ResolvedMemberKind::clone_into(&self, &mut T)
+pub fn pure_analyzer_resolve::ResolvedMemberKind::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_resolve::ResolvedMemberKind where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_resolve::ResolvedMemberKind::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_resolve::ResolvedMemberKind where T: ?core::marker::Sized
+pub fn pure_analyzer_resolve::ResolvedMemberKind::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_resolve::ResolvedMemberKind where T: ?core::marker::Sized
+pub fn pure_analyzer_resolve::ResolvedMemberKind::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_resolve::ResolvedMemberKind where T: core::clone::Clone
+pub unsafe fn pure_analyzer_resolve::ResolvedMemberKind::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_resolve::ResolvedMemberKind
+pub fn pure_analyzer_resolve::ResolvedMemberKind::from(T) -> T
+pub enum pure_analyzer_resolve::UnderResolution
+pub pure_analyzer_resolve::UnderResolution::GraphInvariant
+pub pure_analyzer_resolve::UnderResolution::GraphInvariant::class: pure_analyzer_model::types::QName
+pub pure_analyzer_resolve::UnderResolution::MissingSupertype
+pub pure_analyzer_resolve::UnderResolution::MissingSupertype::missing: pure_analyzer_model::types::QName
+pub pure_analyzer_resolve::UnderResolution::MissingSupertype::owner: pure_analyzer_model::types::QName
+pub pure_analyzer_resolve::UnderResolution::OpenWorld
+pub pure_analyzer_resolve::UnderResolution::OpenWorld::class: pure_analyzer_model::types::QName
+impl core::clone::Clone for pure_analyzer_resolve::UnderResolution
+pub fn pure_analyzer_resolve::UnderResolution::clone(&self) -> pure_analyzer_resolve::UnderResolution
+impl core::cmp::Eq for pure_analyzer_resolve::UnderResolution
+impl core::cmp::PartialEq for pure_analyzer_resolve::UnderResolution
+pub fn pure_analyzer_resolve::UnderResolution::eq(&self, &pure_analyzer_resolve::UnderResolution) -> bool
+impl core::fmt::Debug for pure_analyzer_resolve::UnderResolution
+pub fn pure_analyzer_resolve::UnderResolution::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_resolve::UnderResolution
+impl core::marker::Freeze for pure_analyzer_resolve::UnderResolution
+impl core::marker::Send for pure_analyzer_resolve::UnderResolution
+impl core::marker::Sync for pure_analyzer_resolve::UnderResolution
+impl core::marker::Unpin for pure_analyzer_resolve::UnderResolution
+impl core::marker::UnsafeUnpin for pure_analyzer_resolve::UnderResolution
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_resolve::UnderResolution
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_resolve::UnderResolution
+impl<T, U> core::convert::Into<U> for pure_analyzer_resolve::UnderResolution where U: core::convert::From<T>
+pub fn pure_analyzer_resolve::UnderResolution::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_resolve::UnderResolution where U: core::convert::Into<T>
+pub type pure_analyzer_resolve::UnderResolution::Error = never
+pub fn pure_analyzer_resolve::UnderResolution::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_resolve::UnderResolution where U: core::convert::TryFrom<T>
+pub type pure_analyzer_resolve::UnderResolution::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_resolve::UnderResolution::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_resolve::UnderResolution where T: core::clone::Clone
+pub type pure_analyzer_resolve::UnderResolution::Owned = T
+pub fn pure_analyzer_resolve::UnderResolution::clone_into(&self, &mut T)
+pub fn pure_analyzer_resolve::UnderResolution::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_resolve::UnderResolution where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_resolve::UnderResolution::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_resolve::UnderResolution where T: ?core::marker::Sized
+pub fn pure_analyzer_resolve::UnderResolution::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_resolve::UnderResolution where T: ?core::marker::Sized
+pub fn pure_analyzer_resolve::UnderResolution::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_resolve::UnderResolution where T: core::clone::Clone
+pub unsafe fn pure_analyzer_resolve::UnderResolution::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_resolve::UnderResolution
+pub fn pure_analyzer_resolve::UnderResolution::from(T) -> T
+pub struct pure_analyzer_resolve::DefinitionAnchor
+impl pure_analyzer_resolve::DefinitionAnchor
+pub const fn pure_analyzer_resolve::DefinitionAnchor::new(pure_analyzer_model::types::SourceId, core::option::Option<text_size::range::TextRange>) -> Self
+pub const fn pure_analyzer_resolve::DefinitionAnchor::source(self) -> pure_analyzer_model::types::SourceId
+pub const fn pure_analyzer_resolve::DefinitionAnchor::span(self) -> core::option::Option<text_size::range::TextRange>
+impl core::clone::Clone for pure_analyzer_resolve::DefinitionAnchor
+pub fn pure_analyzer_resolve::DefinitionAnchor::clone(&self) -> pure_analyzer_resolve::DefinitionAnchor
+impl core::cmp::Eq for pure_analyzer_resolve::DefinitionAnchor
+impl core::cmp::PartialEq for pure_analyzer_resolve::DefinitionAnchor
+pub fn pure_analyzer_resolve::DefinitionAnchor::eq(&self, &pure_analyzer_resolve::DefinitionAnchor) -> bool
+impl core::fmt::Debug for pure_analyzer_resolve::DefinitionAnchor
+pub fn pure_analyzer_resolve::DefinitionAnchor::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for pure_analyzer_resolve::DefinitionAnchor
+impl core::marker::StructuralPartialEq for pure_analyzer_resolve::DefinitionAnchor
+impl core::marker::Freeze for pure_analyzer_resolve::DefinitionAnchor
+impl core::marker::Send for pure_analyzer_resolve::DefinitionAnchor
+impl core::marker::Sync for pure_analyzer_resolve::DefinitionAnchor
+impl core::marker::Unpin for pure_analyzer_resolve::DefinitionAnchor
+impl core::marker::UnsafeUnpin for pure_analyzer_resolve::DefinitionAnchor
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_resolve::DefinitionAnchor
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_resolve::DefinitionAnchor
+impl<T, U> core::convert::Into<U> for pure_analyzer_resolve::DefinitionAnchor where U: core::convert::From<T>
+pub fn pure_analyzer_resolve::DefinitionAnchor::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_resolve::DefinitionAnchor where U: core::convert::Into<T>
+pub type pure_analyzer_resolve::DefinitionAnchor::Error = never
+pub fn pure_analyzer_resolve::DefinitionAnchor::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_resolve::DefinitionAnchor where U: core::convert::TryFrom<T>
+pub type pure_analyzer_resolve::DefinitionAnchor::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_resolve::DefinitionAnchor::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_resolve::DefinitionAnchor where T: core::clone::Clone
+pub type pure_analyzer_resolve::DefinitionAnchor::Owned = T
+pub fn pure_analyzer_resolve::DefinitionAnchor::clone_into(&self, &mut T)
+pub fn pure_analyzer_resolve::DefinitionAnchor::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_resolve::DefinitionAnchor where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_resolve::DefinitionAnchor::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_resolve::DefinitionAnchor where T: ?core::marker::Sized
+pub fn pure_analyzer_resolve::DefinitionAnchor::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_resolve::DefinitionAnchor where T: ?core::marker::Sized
+pub fn pure_analyzer_resolve::DefinitionAnchor::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_resolve::DefinitionAnchor where T: core::clone::Clone
+pub unsafe fn pure_analyzer_resolve::DefinitionAnchor::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_resolve::DefinitionAnchor
+pub fn pure_analyzer_resolve::DefinitionAnchor::from(T) -> T
+pub struct pure_analyzer_resolve::ResolvedClass
+impl pure_analyzer_resolve::ResolvedClass
+pub const fn pure_analyzer_resolve::ResolvedClass::definition(&self) -> pure_analyzer_resolve::DefinitionAnchor
+pub const fn pure_analyzer_resolve::ResolvedClass::id(&self) -> pure_analyzer_model::types::ClassId
+pub const fn pure_analyzer_resolve::ResolvedClass::path(&self) -> &pure_analyzer_model::types::QName
+pub const fn pure_analyzer_resolve::ResolvedClass::provenance(&self) -> pure_analyzer_model::types::Provenance
+pub const fn pure_analyzer_resolve::ResolvedClass::temporal(&self) -> core::option::Option<pure_analyzer_model::types::Temporal>
+impl core::clone::Clone for pure_analyzer_resolve::ResolvedClass
+pub fn pure_analyzer_resolve::ResolvedClass::clone(&self) -> pure_analyzer_resolve::ResolvedClass
+impl core::cmp::Eq for pure_analyzer_resolve::ResolvedClass
+impl core::cmp::PartialEq for pure_analyzer_resolve::ResolvedClass
+pub fn pure_analyzer_resolve::ResolvedClass::eq(&self, &pure_analyzer_resolve::ResolvedClass) -> bool
+impl core::fmt::Debug for pure_analyzer_resolve::ResolvedClass
+pub fn pure_analyzer_resolve::ResolvedClass::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_resolve::ResolvedClass
+impl core::marker::Freeze for pure_analyzer_resolve::ResolvedClass
+impl core::marker::Send for pure_analyzer_resolve::ResolvedClass
+impl core::marker::Sync for pure_analyzer_resolve::ResolvedClass
+impl core::marker::Unpin for pure_analyzer_resolve::ResolvedClass
+impl core::marker::UnsafeUnpin for pure_analyzer_resolve::ResolvedClass
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_resolve::ResolvedClass
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_resolve::ResolvedClass
+impl<T, U> core::convert::Into<U> for pure_analyzer_resolve::ResolvedClass where U: core::convert::From<T>
+pub fn pure_analyzer_resolve::ResolvedClass::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_resolve::ResolvedClass where U: core::convert::Into<T>
+pub type pure_analyzer_resolve::ResolvedClass::Error = never
+pub fn pure_analyzer_resolve::ResolvedClass::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_resolve::ResolvedClass where U: core::convert::TryFrom<T>
+pub type pure_analyzer_resolve::ResolvedClass::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_resolve::ResolvedClass::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_resolve::ResolvedClass where T: core::clone::Clone
+pub type pure_analyzer_resolve::ResolvedClass::Owned = T
+pub fn pure_analyzer_resolve::ResolvedClass::clone_into(&self, &mut T)
+pub fn pure_analyzer_resolve::ResolvedClass::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_resolve::ResolvedClass where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_resolve::ResolvedClass::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_resolve::ResolvedClass where T: ?core::marker::Sized
+pub fn pure_analyzer_resolve::ResolvedClass::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_resolve::ResolvedClass where T: ?core::marker::Sized
+pub fn pure_analyzer_resolve::ResolvedClass::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_resolve::ResolvedClass where T: core::clone::Clone
+pub unsafe fn pure_analyzer_resolve::ResolvedClass::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_resolve::ResolvedClass
+pub fn pure_analyzer_resolve::ResolvedClass::from(T) -> T
+pub struct pure_analyzer_resolve::ResolvedMember
+impl pure_analyzer_resolve::ResolvedMember
+pub const fn pure_analyzer_resolve::ResolvedMember::definition(&self) -> pure_analyzer_resolve::DefinitionAnchor
+pub const fn pure_analyzer_resolve::ResolvedMember::kind(&self) -> &pure_analyzer_resolve::ResolvedMemberKind
+pub const fn pure_analyzer_resolve::ResolvedMember::multiplicity(&self) -> pure_analyzer_model::types::Multiplicity
+pub const fn pure_analyzer_resolve::ResolvedMember::owner(&self) -> &pure_analyzer_resolve::ResolvedClass
+pub const fn pure_analyzer_resolve::ResolvedMember::provenance(&self) -> pure_analyzer_model::types::Provenance
+pub fn pure_analyzer_resolve::ResolvedMember::signature(&self) -> core::option::Option<&[pure_analyzer_model::types::TypeRef]>
+pub const fn pure_analyzer_resolve::ResolvedMember::target(&self) -> &pure_analyzer_model::types::TypeRef
+pub const fn pure_analyzer_resolve::ResolvedMember::target_temporal_arity(&self) -> core::option::Option<u8>
+impl core::clone::Clone for pure_analyzer_resolve::ResolvedMember
+pub fn pure_analyzer_resolve::ResolvedMember::clone(&self) -> pure_analyzer_resolve::ResolvedMember
+impl core::cmp::Eq for pure_analyzer_resolve::ResolvedMember
+impl core::cmp::PartialEq for pure_analyzer_resolve::ResolvedMember
+pub fn pure_analyzer_resolve::ResolvedMember::eq(&self, &pure_analyzer_resolve::ResolvedMember) -> bool
+impl core::fmt::Debug for pure_analyzer_resolve::ResolvedMember
+pub fn pure_analyzer_resolve::ResolvedMember::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_resolve::ResolvedMember
+impl core::marker::Freeze for pure_analyzer_resolve::ResolvedMember
+impl core::marker::Send for pure_analyzer_resolve::ResolvedMember
+impl core::marker::Sync for pure_analyzer_resolve::ResolvedMember
+impl core::marker::Unpin for pure_analyzer_resolve::ResolvedMember
+impl core::marker::UnsafeUnpin for pure_analyzer_resolve::ResolvedMember
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_resolve::ResolvedMember
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_resolve::ResolvedMember
+impl<T, U> core::convert::Into<U> for pure_analyzer_resolve::ResolvedMember where U: core::convert::From<T>
+pub fn pure_analyzer_resolve::ResolvedMember::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_resolve::ResolvedMember where U: core::convert::Into<T>
+pub type pure_analyzer_resolve::ResolvedMember::Error = never
+pub fn pure_analyzer_resolve::ResolvedMember::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_resolve::ResolvedMember where U: core::convert::TryFrom<T>
+pub type pure_analyzer_resolve::ResolvedMember::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_resolve::ResolvedMember::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_resolve::ResolvedMember where T: core::clone::Clone
+pub type pure_analyzer_resolve::ResolvedMember::Owned = T
+pub fn pure_analyzer_resolve::ResolvedMember::clone_into(&self, &mut T)
+pub fn pure_analyzer_resolve::ResolvedMember::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_resolve::ResolvedMember where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_resolve::ResolvedMember::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_resolve::ResolvedMember where T: ?core::marker::Sized
+pub fn pure_analyzer_resolve::ResolvedMember::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_resolve::ResolvedMember where T: ?core::marker::Sized
+pub fn pure_analyzer_resolve::ResolvedMember::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_resolve::ResolvedMember where T: core::clone::Clone
+pub unsafe fn pure_analyzer_resolve::ResolvedMember::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_resolve::ResolvedMember
+pub fn pure_analyzer_resolve::ResolvedMember::from(T) -> T
+pub struct pure_analyzer_resolve::Resolver<'model>
+impl<'model> pure_analyzer_resolve::Resolver<'model>
+pub fn pure_analyzer_resolve::Resolver<'model>::generalizations(&self, &pure_analyzer_model::types::QName) -> pure_analyzer_resolve::Resolution<alloc::vec::Vec<pure_analyzer_resolve::ResolvedClass>>
+pub const fn pure_analyzer_resolve::Resolver<'model>::graph(&self) -> &'model pure_analyzer_model::types::ModelGraph
+pub const fn pure_analyzer_resolve::Resolver<'model>::new(&'model pure_analyzer_model::types::ModelGraph) -> Self
+pub fn pure_analyzer_resolve::Resolver<'model>::resolve_class(&self, &pure_analyzer_model::types::QName) -> pure_analyzer_resolve::Resolution<pure_analyzer_resolve::ResolvedClass>
+pub fn pure_analyzer_resolve::Resolver<'model>::resolve_class_id(&self, pure_analyzer_model::types::ClassId) -> pure_analyzer_resolve::Resolution<pure_analyzer_resolve::ResolvedClass>
+pub fn pure_analyzer_resolve::Resolver<'model>::resolve_member(&self, &pure_analyzer_model::types::QName, &pure_analyzer_model::types::Name) -> pure_analyzer_resolve::Resolution<pure_analyzer_resolve::ResolvedMember>
+impl<'model> core::clone::Clone for pure_analyzer_resolve::Resolver<'model>
+pub fn pure_analyzer_resolve::Resolver<'model>::clone(&self) -> pure_analyzer_resolve::Resolver<'model>
+impl<'model> core::fmt::Debug for pure_analyzer_resolve::Resolver<'model>
+pub fn pure_analyzer_resolve::Resolver<'model>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl<'model> core::marker::Copy for pure_analyzer_resolve::Resolver<'model>
+impl<'model> core::marker::Freeze for pure_analyzer_resolve::Resolver<'model>
+impl<'model> core::marker::Send for pure_analyzer_resolve::Resolver<'model>
+impl<'model> core::marker::Sync for pure_analyzer_resolve::Resolver<'model>
+impl<'model> core::marker::Unpin for pure_analyzer_resolve::Resolver<'model>
+impl<'model> core::marker::UnsafeUnpin for pure_analyzer_resolve::Resolver<'model>
+impl<'model> core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_resolve::Resolver<'model>
+impl<'model> core::panic::unwind_safe::UnwindSafe for pure_analyzer_resolve::Resolver<'model>
+impl<T, U> core::convert::Into<U> for pure_analyzer_resolve::Resolver<'model> where U: core::convert::From<T>
+pub fn pure_analyzer_resolve::Resolver<'model>::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_resolve::Resolver<'model> where U: core::convert::Into<T>
+pub type pure_analyzer_resolve::Resolver<'model>::Error = never
+pub fn pure_analyzer_resolve::Resolver<'model>::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_resolve::Resolver<'model> where U: core::convert::TryFrom<T>
+pub type pure_analyzer_resolve::Resolver<'model>::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_resolve::Resolver<'model>::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_resolve::Resolver<'model> where T: core::clone::Clone
+pub type pure_analyzer_resolve::Resolver<'model>::Owned = T
+pub fn pure_analyzer_resolve::Resolver<'model>::clone_into(&self, &mut T)
+pub fn pure_analyzer_resolve::Resolver<'model>::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_resolve::Resolver<'model> where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_resolve::Resolver<'model>::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_resolve::Resolver<'model> where T: ?core::marker::Sized
+pub fn pure_analyzer_resolve::Resolver<'model>::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_resolve::Resolver<'model> where T: ?core::marker::Sized
+pub fn pure_analyzer_resolve::Resolver<'model>::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_resolve::Resolver<'model> where T: core::clone::Clone
+pub unsafe fn pure_analyzer_resolve::Resolver<'model>::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_resolve::Resolver<'model>
+pub fn pure_analyzer_resolve::Resolver<'model>::from(T) -> T
 pub fn pure_analyzer_resolve::version() -> &'static str

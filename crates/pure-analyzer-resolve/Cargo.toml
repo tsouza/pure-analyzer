@@ -13,3 +13,9 @@ publish = false
 workspace = true
 
 [dependencies]
+pure-analyzer-diagnostics.workspace = true
+pure-analyzer-model.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+serde_json.workspace = true
