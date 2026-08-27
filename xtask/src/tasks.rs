@@ -118,11 +118,26 @@ fn purecard_path(relative: impl AsRef<Path>) -> PathBuf {
     Path::new(PURECARD_ROOT).join(relative)
 }
 
+/// Upper bound, in seconds, `docker compose up --wait` blocks for every
+/// service's own healthcheck to report healthy. Sized to the slower of the
+/// two services' own worst-case healthcheck schedule (`corpus/legend-stack/
+/// docker-compose.yml`'s engine: `start_period` 60s + up to 10 retries at a
+/// 10s interval = 160s), plus headroom.
+const PURECARD_LEGEND_WAIT_TIMEOUT_SECS: &str = "180";
+
 /// Run the opt-in PureCARD Legend lane with guaranteed stack teardown.
 ///
-/// The checked-in stack is brought up before package-scoped tests run. Teardown
-/// is attempted after a failed startup as well as after tests, and the primary
-/// startup or test error is retained if cleanup also fails.
+/// The checked-in stack is brought up before package-scoped tests run,
+/// blocking on `--wait` until every service's own healthcheck reports
+/// healthy — the engine's JVM cold start is otherwise entirely unbounded and
+/// invisible to this function, so without it the cost lands on whichever
+/// test happens to run first and calls its own `health_wait` (confirmed
+/// live: this intermittently timed out a test against nextest's per-test
+/// budget once the `legend-engine` test group serializes every legend test,
+/// concentrating the cold-start cost that used to be diluted across
+/// concurrently-starting tests onto a single one). Teardown is attempted
+/// after a failed startup as well as after tests, and the primary startup or
+/// test error is retained if cleanup also fails.
 ///
 /// # Errors
 ///
@@ -132,7 +147,16 @@ fn purecard_path(relative: impl AsRef<Path>) -> PathBuf {
 pub fn test_legend() -> Result<()> {
     let started = run(
         "docker",
-        &["compose", "-f", PURECARD_LEGEND_COMPOSE, "up", "-d"],
+        &[
+            "compose",
+            "-f",
+            PURECARD_LEGEND_COMPOSE,
+            "up",
+            "-d",
+            "--wait",
+            "--wait-timeout",
+            PURECARD_LEGEND_WAIT_TIMEOUT_SECS,
+        ],
     );
     if let Err(start_err) = started {
         let torn_down = run(
