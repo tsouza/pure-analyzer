@@ -8,15 +8,21 @@
 //! scope machine and mask constrain the walk exactly the way a host's decode
 //! loop would, not just L1 byte admissibility.
 //!
-//! Same shape as `walker`'s algorithm: clone-and-probe from the live session,
-//! grow to a per-walk length target while structure (openers) is favoured,
-//! then disable openers and bias hard toward whichever candidate reaches
-//! `is_complete()`, so every attempt that doesn't die converges to an
-//! accepting walk in bounded steps. The SplitMix64 PRNG is a second copy of
-//! `walker`'s (not shared): the two generators pick among different candidate
-//! spaces (bytes vs. token ids) with different weighting rules, so factoring
-//! out just the RNG would couple two otherwise-independent modules for a
-//! ~20-line, fully-specified algorithm neither module needs from the other.
+//! Same overall shape as `walker`'s algorithm: grow to a per-walk length
+//! target, then bias hard toward whichever candidate looks likely to finish
+//! the walk, so every attempt that doesn't die converges to an accepting
+//! walk in bounded steps. Unlike `walker`, candidates here are read directly
+//! from `allowed_mask()` rather than clone-and-probed: the admissibility
+//! `walker` needs a probe to establish is already guaranteed by the
+//! mask/accept invariant (`mask_properties.rs`), and the completion bias
+//! uses a cheap byte-content heuristic ([`ends_with_closer`]) instead of a
+//! simulated look-ahead, since a vocabulary here can hold hundreds of
+//! lexemes versus `walker`'s 31-byte alphabet — see `attempt`'s docs. The
+//! SplitMix64 PRNG is a second copy of `walker`'s (not shared): the two
+//! generators pick among different candidate spaces with different
+//! weighting rules, so factoring out just the RNG would couple two
+//! otherwise-independent modules for a ~20-line, fully-specified algorithm
+//! neither module needs from the other.
 
 use purecard::{CompiledGrammar, DecoderSession, Schema};
 
@@ -103,6 +109,23 @@ fn weighted_pick(cands: &[(u32, u32)], rng: &mut SplitMix64) -> u32 {
     cands[cands.len() - 1].0
 }
 
+/// Bytes that plausibly end a construct (mirroring
+/// [`walker`](super::walker)'s `is_closer`, extended to the punctuation that
+/// can end a *statement*, not only a bracket) — a token ending in one of
+/// these is weighted toward finishing the walk. This is a cheap heuristic on
+/// the token's own bytes, not a simulated look-ahead: unlike `walker`'s tiny
+/// byte alphabet (31 candidates, cheap to clone-and-probe each one), a
+/// vocabulary here can hold hundreds of lexemes, and probing every candidate
+/// by cloning the whole schema-aware session at every step was the dominant
+/// cost in this generator — correctness never depended on the probe (`attempt`
+/// already re-checks `is_complete()` every iteration), only convergence speed,
+/// so a byte-content heuristic buys the same bias at O(1) instead of O(vocab).
+const CLOSER_BYTES: &[u8] = b")]}";
+
+fn ends_with_closer(bytes: &[u8]) -> bool {
+    bytes.last().is_some_and(|&b| CLOSER_BYTES.contains(&b))
+}
+
 /// Attempt one accepting walk from `seed` over `grammar`/`schema`. Returns the
 /// token-id sequence and the PRNG's final state (so the next walk resumes the
 /// same SplitMix64 stream), or `None` if the attempt did not reach a completed
@@ -112,6 +135,7 @@ fn attempt(grammar: &CompiledGrammar, schema: &Schema, seed: u64) -> (Option<Vec
     let grow_target = GROW_MIN + rng.below(GROW_MAX - GROW_MIN);
     let mut session = DecoderSession::with_schema(grammar, schema.clone())
         .expect("a fixed-engine grammar always accepts a schema overlay");
+    let vocab = grammar.vocab();
     let mut out: Vec<u32> = Vec::new();
 
     for _ in 0..HARD_CAP {
@@ -119,24 +143,29 @@ fn attempt(grammar: &CompiledGrammar, schema: &Schema, seed: u64) -> (Option<Vec
         if !growing && session.is_complete() && out.len() >= MIN_LEN {
             return (Some(out), rng.state);
         }
+        // Every id here comes from `allowed_mask()`, so `accept_token` is
+        // guaranteed to succeed (the mask/accept invariant `mask_properties.rs`
+        // proves) — no per-candidate probe needed to confirm admissibility.
         let ids: Vec<u32> = session.allowed_mask().iter_ones().collect();
-        let eos = grammar.vocab().len() as u32;
+        let eos = vocab.len() as u32;
         let mut cands: Vec<(u32, u32)> = Vec::new();
         for id in ids {
-            if growing && id == eos {
-                // EOS never grows the walk; only offered once closing.
+            if id == eos {
+                // is_complete() is false here (checked above), and EOS is
+                // admissible only when complete, but skip defensively rather
+                // than trust that pairing blindly.
                 continue;
             }
-            let mut probe = session.clone();
-            if probe.accept_token(id).is_ok() {
-                let base = DEFAULT_WEIGHT;
-                let w = if !growing && probe.is_complete() {
-                    base + ACCEPT_BONUS
-                } else {
-                    base
-                };
-                cands.push((id, w));
-            }
+            let base = DEFAULT_WEIGHT;
+            let bytes = vocab
+                .bytes(id)
+                .expect("a non-EOS admissible id is a real token");
+            let w = if !growing && ends_with_closer(bytes) {
+                base + ACCEPT_BONUS
+            } else {
+                base
+            };
+            cands.push((id, w));
         }
         if cands.is_empty() {
             return if session.is_complete() && out.len() >= MIN_LEN {
@@ -146,9 +175,9 @@ fn attempt(grammar: &CompiledGrammar, schema: &Schema, seed: u64) -> (Option<Vec
             };
         }
         let id = weighted_pick(&cands, &mut rng);
-        // The id was chosen from probed-live candidates, so `accept_token` is
-        // expected to succeed; the `Err` arm is a defensive guard that
-        // abandons the attempt rather than trusting the invariant blindly.
+        // The id came from `allowed_mask()`, so `accept_token` is expected to
+        // succeed; the `Err` arm is a defensive guard that abandons the
+        // attempt rather than trusting the invariant blindly.
         if session.accept_token(id).is_err() {
             return (None, rng.state);
         }
