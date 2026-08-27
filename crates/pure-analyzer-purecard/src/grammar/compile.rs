@@ -15,6 +15,16 @@ use super::spec::{
     MAX_STATES, MAX_TOTAL_RULES, SpecError,
 };
 
+/// A generous, fixed upper bound on the number of iterations a graph
+/// traversal over a validated spec's states/rules may take — comfortably
+/// above [`MAX_STATES`] `+` [`MAX_TOTAL_RULES`] (the largest any
+/// `compile_v1`-accepted spec can be), so it is never approached by a
+/// correct traversal regardless of a particular spec's actual (smaller)
+/// size. A single literal rather than a computed sum: the exact value only
+/// needs to be "obviously enough", so there is no arithmetic expression here
+/// for a subtly wrong computation to hide behind.
+const GRAPH_TRAVERSAL_BUDGET: usize = 100_000;
+
 /// The outcome of feeding one byte to [`CompiledAutomaton::step`] — the
 /// runtime analogue of `grammar::pda::Step`, generic over the compiled
 /// automaton's own dense state/frame ids.
@@ -449,6 +459,14 @@ fn check_goto_acyclic(
         InProgress,
         Done,
     }
+    // A correct traversal pops the stack at most once per node-start plus
+    // once per outgoing edge — comfortably under GRAPH_TRAVERSAL_BUDGET for
+    // *any* spec `compile_v1` has already bounded, regardless of this one's
+    // actual (smaller) size. Bounding the loop explicitly (rather than
+    // trusting `next_edge`'s increment alone to make progress) means a
+    // defect here fails fast with a conservative "assume cyclic" verdict
+    // instead of hanging.
+    let iteration_budget = GRAPH_TRAVERSAL_BUDGET;
     let mut marks = vec![Mark::Unvisited; state_ids.len()];
     for start in 0..state_ids.len() as u32 {
         if marks[start as usize] != Mark::Unvisited {
@@ -456,7 +474,12 @@ fn check_goto_acyclic(
         }
         let mut stack = vec![(start, 0usize)];
         marks[start as usize] = Mark::InProgress;
-        while let Some((node, next_edge)) = stack.pop() {
+        let mut exhausted = true;
+        for _ in 0..=iteration_budget {
+            let Some((node, next_edge)) = stack.pop() else {
+                exhausted = false;
+                break;
+            };
             if next_edge >= edges[node as usize].len() {
                 marks[node as usize] = Mark::Done;
                 continue;
@@ -475,6 +498,17 @@ fn check_goto_acyclic(
                 Mark::Done => {}
             }
         }
+        // The iteration budget is a proven upper bound for a traversal that
+        // correctly drains its stack; not draining it within that bound is
+        // itself proof of a defect in this function, not a property any real
+        // spec can trigger — conservatively reported as a cycle rather than
+        // silently accepted, so a regression here fails fast, not by hanging.
+        if exhausted {
+            return Err(SpecError::CyclicGoto {
+                state: v1.start.clone(),
+                rule_index: 0,
+            });
+        }
     }
     Ok(())
 }
@@ -490,7 +524,18 @@ fn check_reachable_accept(
     let mut seen = vec![false; automaton.states.len()];
     let mut stack = vec![automaton.start];
     seen[automaton.start as usize] = true;
-    while let Some(state) = stack.pop() {
+    // A correct traversal pushes each state at most once (guarded by `seen`),
+    // so `MAX_STATES` — the largest state count `compile_v1` ever lets
+    // through, regardless of this automaton's actual (smaller) size — is a
+    // safe, size-independent upper bound on iterations. Bounding the loop
+    // explicitly means a defect here fails fast (conservatively, as "no
+    // reachable accept") instead of hanging on a spec whose reachability
+    // graph has cycles, which real specs routinely do (e.g. a whitespace
+    // self-loop).
+    for _ in 0..=MAX_STATES {
+        let Some(state) = stack.pop() else {
+            break;
+        };
         if automaton.is_accepting_state(state) {
             return Ok(());
         }
