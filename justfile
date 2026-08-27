@@ -120,6 +120,12 @@ test-mutation:
 test-mutation-shard index total:
     cargo xtask test-mutation-shard {{index}} {{total}}
 
+# Run the M3 parser's mutation pass in isolation while evolving parser
+# contracts. This is an inner-loop aid only; the workspace-wide CI matrix
+# remains the authoritative merge gate.
+test-mutation-parser:
+    cargo mutants --package pure-analyzer-parser --file crates/pure-analyzer-parser/src/m3.rs --in-place --output target/mutants-parser
+
 # The feature-gated PureCARD FFI-boundary mutation pass alone (fast; never
 # sharded). Split out of `test-mutation` so CI can run it as its own job
 # alongside the sharded workspace matrix.

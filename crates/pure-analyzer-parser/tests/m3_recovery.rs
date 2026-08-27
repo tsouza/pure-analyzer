@@ -1,6 +1,6 @@
 //! Recovery and arbitrary-input contracts for the M3 parser.
 
-use std::panic;
+use std::{ops::Range, panic};
 
 use proptest::prelude::*;
 use pure_analyzer_diagnostics::{DiagCode, FileId};
@@ -63,6 +63,59 @@ fn max_kind_depth(node: &GreenNode, kind: SyntaxKind) -> usize {
     descendant_depth + usize::from(node.kind() == kind)
 }
 
+fn diagnostic_codes(parsed: &pure_analyzer_parser::Parse) -> Vec<DiagCode> {
+    parsed
+        .diagnostics
+        .iter()
+        .map(|diagnostic| diagnostic.code)
+        .collect()
+}
+
+fn diagnostic_details(
+    parsed: &pure_analyzer_parser::Parse,
+) -> Vec<(DiagCode, String, Range<usize>)> {
+    parsed
+        .diagnostics
+        .iter()
+        .map(|diagnostic| {
+            (
+                diagnostic.code,
+                diagnostic.message.clone(),
+                usize::from(diagnostic.primary.span.start())
+                    ..usize::from(diagnostic.primary.span.end()),
+            )
+        })
+        .collect()
+}
+
+fn nodes_with_kind<'tree>(
+    node: &'tree GreenNode,
+    kind: SyntaxKind,
+    nodes: &mut Vec<&'tree GreenNode>,
+) {
+    if node.kind() == kind {
+        nodes.push(node);
+    }
+    for child in node.children().iter().filter_map(GreenElement::as_node) {
+        nodes_with_kind(child, kind, nodes);
+    }
+}
+
+fn only_node_of_kind(node: &GreenNode, kind: SyntaxKind) -> &GreenNode {
+    let mut nodes = Vec::new();
+    nodes_with_kind(node, kind, &mut nodes);
+    assert_eq!(nodes.len(), 1, "expected one {kind:?}, got {nodes:#?}");
+    nodes[0]
+}
+
+fn syntax_error_count(parsed: &pure_analyzer_parser::Parse) -> usize {
+    parsed
+        .diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code == DiagCode::MalformedSyntax)
+        .count()
+}
+
 #[test]
 fn lexical_errors_are_recovered_without_losing_later_source() {
     let source = "$x \u{0} ->filter(y|$y.name); model::Person.all()";
@@ -97,6 +150,100 @@ fn incomplete_delimiters_return_a_tree_and_structured_diagnostics() {
 }
 
 #[test]
+fn incomplete_braced_lambda_retains_the_recovery_boundary() {
+    let source = "{x| $x";
+    let parsed = parse(source);
+    let syntax_errors = syntax_error_count(&parsed);
+
+    assert_eq!(parsed.green.text(), source);
+    assert_eq!(syntax_errors, 3, "{:#?}", parsed.diagnostics);
+    assert!(count_kind(&parsed.green, SyntaxKind::ERROR_NODE) > 0);
+    assert_ranges_are_valid(source, &parsed);
+}
+
+#[test]
+fn source_separator_recovery_keeps_the_next_query_boundary() {
+    let source = "first second; model::Person.all()";
+    let parsed = parse(source);
+
+    assert_eq!(parsed.green.text(), source);
+    assert_eq!(diagnostic_codes(&parsed), [DiagCode::MalformedSyntax]);
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::QUERY_EXPR), 2);
+    assert!(count_kind(&parsed.green, SyntaxKind::ERROR_NODE) > 0);
+    assert_ranges_are_valid(source, &parsed);
+}
+
+#[test]
+fn bad_tokens_remain_lexical_errors_inside_explicit_error_nodes() {
+    let source = "\0";
+    let parsed = parse(source);
+
+    assert_eq!(parsed.green.text(), source);
+    assert_eq!(diagnostic_codes(&parsed), [DiagCode::BadToken]);
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::ERROR_NODE), 1);
+    assert_ranges_are_valid(source, &parsed);
+}
+
+#[test]
+fn malformed_primary_does_not_become_a_qualified_name() {
+    let source = ")";
+    let parsed = parse(source);
+
+    assert_eq!(parsed.green.text(), source);
+    assert_eq!(
+        diagnostic_codes(&parsed),
+        [DiagCode::MalformedSyntax, DiagCode::MalformedSyntax]
+    );
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::QUALIFIED_NAME), 0);
+    assert!(count_kind(&parsed.green, SyntaxKind::ERROR_NODE) > 0);
+    assert_ranges_are_valid(source, &parsed);
+}
+
+#[test]
+fn incomplete_variables_and_parentheses_propagate_to_outer_recovery() {
+    for (source, expected_queries) in [("$); model::Person.all()", 2), ("(a", 1)] {
+        let parsed = parse(source);
+
+        assert_eq!(parsed.green.text(), source);
+        assert_eq!(
+            syntax_error_count(&parsed),
+            3,
+            "{source}: {:#?}",
+            parsed.diagnostics
+        );
+        assert_eq!(
+            count_kind(&parsed.green, SyntaxKind::QUERY_EXPR),
+            expected_queries,
+            "{source}"
+        );
+        assert!(
+            count_kind(&parsed.green, SyntaxKind::ERROR_NODE) > 0,
+            "{source}"
+        );
+        assert_ranges_are_valid(source, &parsed);
+    }
+}
+
+#[test]
+fn unterminated_islands_are_distinct_from_syntax_recovery() {
+    for source in ["#>{db::Model.table", "#{ TDS", "#unterminated"] {
+        let parsed = parse(source);
+
+        assert_eq!(parsed.green.text(), source);
+        assert!(
+            diagnostic_codes(&parsed).contains(&DiagCode::UnterminatedIsland),
+            "{source}: {:#?}",
+            parsed.diagnostics
+        );
+        assert!(
+            count_kind(&parsed.green, SyntaxKind::ERROR_NODE) > 0,
+            "{source}"
+        );
+        assert_ranges_are_valid(source, &parsed);
+    }
+}
+
+#[test]
 fn malformed_input_recovers_at_a_top_level_semicolon() {
     let source = ") ; model::Person.all()";
     let parsed = parse(source);
@@ -111,6 +258,54 @@ fn malformed_input_recovers_at_a_top_level_semicolon() {
             .iter()
             .any(|diagnostic| diagnostic.code == DiagCode::MalformedSyntax)
     );
+    assert_ranges_are_valid(source, &parsed);
+}
+
+#[test]
+fn malformed_argument_recovers_to_the_next_comma_without_losing_it() {
+    let source = "f(] , a)";
+    let parsed = parse(source);
+
+    assert_eq!(parsed.green.text(), source);
+    assert_eq!(
+        diagnostic_codes(&parsed),
+        [DiagCode::MalformedSyntax, DiagCode::MalformedSyntax]
+    );
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::FUNCTION_CALL), 1);
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::CALL_ARGS), 1);
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::ERROR_NODE), 1);
+    assert_ranges_are_valid(source, &parsed);
+}
+
+#[test]
+fn missing_argument_comma_recovers_inside_the_same_call() {
+    let source = "f(a b, c)";
+    let parsed = parse(source);
+    let arguments = only_node_of_kind(&parsed.green, SyntaxKind::CALL_ARGS);
+
+    assert_eq!(parsed.green.text(), source);
+    assert_eq!(arguments.text(), "(a b, c)");
+    assert_eq!(
+        diagnostic_details(&parsed),
+        vec![
+            (
+                DiagCode::MalformedSyntax,
+                "expected `,` or `)` after an argument".to_owned(),
+                4..5,
+            ),
+            (
+                DiagCode::MalformedSyntax,
+                "expected an operand after a unary operator".to_owned(),
+                5..6,
+            ),
+            (
+                DiagCode::MalformedSyntax,
+                "expected an argument expression".to_owned(),
+                5..6,
+            ),
+        ]
+    );
+    assert_eq!(count_kind(arguments, SyntaxKind::ERROR_NODE), 2);
     assert_ranges_are_valid(source, &parsed);
 }
 

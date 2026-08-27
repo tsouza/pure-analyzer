@@ -21,6 +21,19 @@ fn contains_kind(node: &GreenNode, kind: SyntaxKind) -> bool {
         })
 }
 
+fn nodes_with_kind<'tree>(
+    node: &'tree GreenNode,
+    kind: SyntaxKind,
+    nodes: &mut Vec<&'tree GreenNode>,
+) {
+    if node.kind() == kind {
+        nodes.push(node);
+    }
+    for child in node.children().iter().filter_map(GreenElement::as_node) {
+        nodes_with_kind(child, kind, nodes);
+    }
+}
+
 fn assert_lossless(source: &str) {
     let parsed = parse(source);
     assert_eq!(parsed.green.text(), source);
@@ -33,6 +46,23 @@ fn assert_lossless(source: &str) {
         assert_eq!(token.kind(), (*kind).into());
         assert_eq!(token.text_range(), *range);
     }
+}
+
+fn assert_valid_cst(source: &str, expected_kinds: &[SyntaxKind]) {
+    let parsed = parse(source);
+
+    assert!(
+        parsed.diagnostics.is_empty(),
+        "{source}: {:#?}",
+        parsed.diagnostics
+    );
+    for kind in expected_kinds {
+        assert!(
+            contains_kind(&parsed.green, *kind),
+            "{source}: missing {kind:?}"
+        );
+    }
+    assert_lossless(source);
 }
 
 #[test]
@@ -84,6 +114,197 @@ fn parses_each_supported_primary_and_postfix_family() {
         );
         assert_lossless(source);
     }
+}
+
+#[test]
+fn distinguishes_all_and_parenthesized_expression_nodes() {
+    for (source, expected) in [
+        ("model::Person.all()", SyntaxKind::ALL_EXPR),
+        ("(a + b)", SyntaxKind::PAREN_EXPR),
+    ] {
+        let parsed = parse(source);
+
+        assert!(
+            parsed.diagnostics.is_empty(),
+            "{source}: {:#?}",
+            parsed.diagnostics
+        );
+        assert!(contains_kind(&parsed.green, expected), "{source}");
+        assert_lossless(source);
+    }
+}
+
+#[test]
+fn keeps_expression_grammar_families_structurally_distinct() {
+    for (source, expected_kinds) in [
+        (
+            "model::Person.all()->filter(x| $x.name == 'Ada')",
+            &[
+                SyntaxKind::ALL_EXPR,
+                SyntaxKind::ARROW_CALL,
+                SyntaxKind::CALL_ARGS,
+                SyntaxKind::LAMBDA_EXPR,
+                SyntaxKind::LAMBDA_PARAMS,
+                SyntaxKind::CODE_BLOCK,
+                SyntaxKind::PROPERTY_NAV,
+                SyntaxKind::BINARY_EXPR,
+            ][..],
+        ),
+        (
+            "model::Person.allVersionsInRange(%2020-01-01, $date)",
+            &[
+                SyntaxKind::ALL_EXPR,
+                SyntaxKind::CALL_ARGS,
+                SyntaxKind::LITERAL_EXPR,
+                SyntaxKind::VARIABLE_EXPR,
+            ][..],
+        ),
+        (
+            "$record['name'][0] + 2 * 3",
+            &[
+                SyntaxKind::VARIABLE_EXPR,
+                SyntaxKind::BRACKET_INDEX,
+                SyntaxKind::LITERAL_EXPR,
+                SyntaxKind::BINARY_EXPR,
+            ][..],
+        ),
+        (
+            "f((a + b), 2)",
+            &[
+                SyntaxKind::FUNCTION_CALL,
+                SyntaxKind::CALL_ARGS,
+                SyntaxKind::PAREN_EXPR,
+                SyntaxKind::BINARY_EXPR,
+                SyntaxKind::LITERAL_EXPR,
+            ][..],
+        ),
+        (
+            "(-value)",
+            &[
+                SyntaxKind::PAREN_EXPR,
+                SyntaxKind::UNARY_EXPR,
+                SyntaxKind::QUALIFIED_NAME,
+            ][..],
+        ),
+    ] {
+        assert_valid_cst(source, expected_kinds);
+    }
+}
+
+#[test]
+fn keeps_lambda_and_construct_grammar_families_structurally_distinct() {
+    for (source, expected_kinds) in [
+        (
+            "{x,y| let z = $x; $z.name}",
+            &[
+                SyntaxKind::LAMBDA_EXPR,
+                SyntaxKind::LAMBDA_PARAMS,
+                SyntaxKind::LET_STMT,
+                SyntaxKind::CODE_BLOCK,
+                SyntaxKind::VARIABLE_EXPR,
+                SyntaxKind::PROPERTY_NAV,
+            ][..],
+        ),
+        (
+            "x: Relation<(name:String[1], rank:Integer[0..1])>| $x",
+            &[
+                SyntaxKind::LAMBDA_EXPR,
+                SyntaxKind::LAMBDA_PARAMS,
+                SyntaxKind::TYPE_REF,
+                SyntaxKind::RELATION_TYPE,
+                SyntaxKind::COLUMN_INFO,
+                SyntaxKind::MULTIPLICITY,
+            ][..],
+        ),
+        (
+            "~[rank:Integer[0..1], output:{x| $x}]",
+            &[
+                SyntaxKind::COLUMN_SPEC_ARRAY,
+                SyntaxKind::COLUMN_SPEC,
+                SyntaxKind::TYPE_REF,
+                SyntaxKind::MULTIPLICITY,
+                SyntaxKind::LAMBDA_EXPR,
+            ][..],
+        ),
+        (
+            "~out: x| $x",
+            &[
+                SyntaxKind::COLUMN_SPEC,
+                SyntaxKind::LAMBDA_EXPR,
+                SyntaxKind::LAMBDA_PARAMS,
+                SyntaxKind::CODE_BLOCK,
+            ][..],
+        ),
+        (
+            "^model::Person('Ada')",
+            &[
+                SyntaxKind::NEW_INSTANCE_EXPR,
+                SyntaxKind::QUALIFIED_NAME,
+                SyntaxKind::CALL_ARGS,
+                SyntaxKind::LITERAL_EXPR,
+            ][..],
+        ),
+        (
+            "^$person(name='Ada')",
+            &[
+                SyntaxKind::NEW_INSTANCE_EXPR,
+                SyntaxKind::VARIABLE_EXPR,
+                SyntaxKind::CALL_ARGS,
+                SyntaxKind::LITERAL_EXPR,
+            ][..],
+        ),
+        (
+            "@meta::pure::String",
+            &[
+                SyntaxKind::CAST_EXPR,
+                SyntaxKind::TYPE_REF,
+                SyntaxKind::QUALIFIED_NAME,
+            ][..],
+        ),
+    ] {
+        assert_valid_cst(source, expected_kinds);
+    }
+}
+
+#[test]
+fn keeps_island_grammar_families_structurally_distinct() {
+    for (source, expected_kinds) in [
+        (
+            "#>{db::testDB.personTable}#",
+            &[SyntaxKind::ISLAND, SyntaxKind::STORE_TABLE_POINTER][..],
+        ),
+        (
+            "#/model::Class/property#",
+            &[SyntaxKind::ISLAND, SyntaxKind::NAV_PATH_ISLAND][..],
+        ),
+        (
+            "#{outer #{inner}# tail}#",
+            &[SyntaxKind::ISLAND, SyntaxKind::OPAQUE_ISLAND][..],
+        ),
+        (
+            "#{ { value } }#",
+            &[SyntaxKind::ISLAND, SyntaxKind::OPAQUE_ISLAND][..],
+        ),
+        (
+            "#TDS data#",
+            &[SyntaxKind::ISLAND, SyntaxKind::OPAQUE_ISLAND][..],
+        ),
+    ] {
+        assert_valid_cst(source, expected_kinds);
+    }
+}
+
+#[test]
+fn preserves_binary_precedence_when_the_right_hand_side_is_stronger() {
+    let parsed = parse("a == b + c");
+    let mut binaries = Vec::new();
+
+    assert!(parsed.diagnostics.is_empty(), "{:#?}", parsed.diagnostics);
+    nodes_with_kind(&parsed.green, SyntaxKind::BINARY_EXPR, &mut binaries);
+    assert_eq!(binaries.len(), 2);
+    assert_eq!(binaries[0].text(), "a == b + c");
+    assert_eq!(binaries[1].text(), " b + c");
+    assert_lossless("a == b + c");
 }
 
 #[test]

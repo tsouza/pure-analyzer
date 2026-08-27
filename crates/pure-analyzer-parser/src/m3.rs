@@ -140,18 +140,23 @@ impl<'tokens> Parser<'tokens> {
 
     fn parse_source(&mut self) {
         self.consume_trivia();
-        while !self.at_eof() {
+        while self.index < self.tokens.len() {
+            let before = self.index;
             if self.consume_if(TokenKind::SEMICOLON) {
                 self.consume_trivia();
+                if self.index == before {
+                    break;
+                }
                 continue;
             }
 
-            let before = self.index;
             self.retroactive_wraps = 0;
             self.parse_query_expression();
             self.consume_trivia();
             self.consume_source_separator();
-            self.ensure_progress(before, &[TokenKind::SEMICOLON]);
+            if self.index == before {
+                break;
+            }
             self.consume_trivia();
         }
     }
@@ -194,6 +199,7 @@ impl<'tokens> Parser<'tokens> {
 
         let mut active_binary_precedence = None;
         while let Some(precedence) = self.binary_precedence() {
+            let before = self.index;
             if precedence < minimum_precedence {
                 break;
             }
@@ -209,6 +215,9 @@ impl<'tokens> Parser<'tokens> {
             if !self.parse_expression(precedence.saturating_add(1)) {
                 self.error_current("expected an expression after an operator");
                 self.recover_until(&EXPRESSION_BOUNDARIES);
+            }
+            if self.index == before {
+                break;
             }
         }
         if active_binary_precedence.is_some() {
@@ -252,6 +261,7 @@ impl<'tokens> Parser<'tokens> {
         }
 
         while let Some(kind) = self.significant_kind() {
+            let before = self.index;
             match kind {
                 TokenKind::DOT if self.dot_starts_all_expression() => {
                     if !self.reserve_retroactive_wrap() {
@@ -269,6 +279,9 @@ impl<'tokens> Parser<'tokens> {
                     self.parse_function_call(expression_start);
                 }
                 _ => break,
+            }
+            if self.index == before {
+                break;
             }
         }
         true
@@ -410,6 +423,7 @@ impl<'tokens> Parser<'tokens> {
             return;
         }
         loop {
+            let before = self.index;
             if !self.parse_expression(LOWEST_PRECEDENCE) {
                 self.error_current("expected an expression inside parentheses");
                 self.recover_until(&[
@@ -418,7 +432,8 @@ impl<'tokens> Parser<'tokens> {
                     TokenKind::SEMICOLON,
                 ]);
             }
-            if !self.consume_if(TokenKind::COMMA) {
+            let has_comma = self.consume_if(TokenKind::COMMA);
+            if self.index == before || !has_comma {
                 break;
             }
             if self.at(TokenKind::PAREN_CLOSE) {
@@ -430,25 +445,25 @@ impl<'tokens> Parser<'tokens> {
 
     fn parse_braced_lambda(&mut self) -> bool {
         self.open(SyntaxKind::LAMBDA_EXPR);
-        let has_open = self.expect(TokenKind::BRACE_OPEN, "`{` before a lambda");
+        let _ = self.expect(TokenKind::BRACE_OPEN, "`{` before a lambda");
         self.parse_lambda_parameters();
         let has_pipe = self.expect(TokenKind::PIPE, "`|` after lambda parameters");
         self.parse_code_block();
         let has_close = self.expect(TokenKind::BRACE_CLOSE, "`}` after a lambda body");
         self.close();
-        has_open && has_pipe && has_close
+        has_pipe && has_close
     }
 
     fn parse_short_lambda(&mut self) -> bool {
         self.open(SyntaxKind::LAMBDA_EXPR);
         self.open(SyntaxKind::LAMBDA_PARAMS);
-        let has_parameter = self.consume_name("a lambda parameter");
+        let _ = self.consume_name("a lambda parameter");
         self.parse_optional_parameter_type();
         self.close();
         let has_pipe = self.expect(TokenKind::PIPE, "`|` after a lambda parameter");
         self.parse_code_block();
         self.close();
-        has_parameter && has_pipe
+        has_pipe
     }
 
     fn parse_parameterless_lambda(&mut self) -> bool {
@@ -465,9 +480,14 @@ impl<'tokens> Parser<'tokens> {
         }
         self.open(SyntaxKind::LAMBDA_PARAMS);
         loop {
+            let before = self.index;
             let parsed_parameter = self.consume_name("a lambda parameter");
             self.parse_optional_parameter_type();
-            if !parsed_parameter || !self.consume_if(TokenKind::COMMA) {
+            let has_comma = self.consume_if(TokenKind::COMMA);
+            if self.index == before {
+                break;
+            }
+            if !parsed_parameter || !has_comma {
                 break;
             }
         }
@@ -483,7 +503,6 @@ impl<'tokens> Parser<'tokens> {
 
     fn parse_code_block(&mut self) {
         self.open(SyntaxKind::CODE_BLOCK);
-        let mut parsed_statement = false;
         while !self.at_code_block_boundary() {
             let before = self.index;
             if self.at(TokenKind::LET_KW) {
@@ -491,17 +510,15 @@ impl<'tokens> Parser<'tokens> {
             } else {
                 self.parse_query_expression();
             }
-            parsed_statement = true;
             self.consume_trivia();
-            if !self.consume_if(TokenKind::SEMICOLON) {
-                self.ensure_progress(before, &CODE_BLOCK_BOUNDARIES);
+            let has_separator = self.consume_if(TokenKind::SEMICOLON);
+            if self.index == before {
+                break;
+            }
+            if !has_separator {
                 break;
             }
             self.consume_trivia();
-        }
-        if !parsed_statement && !self.at_code_block_boundary() {
-            self.error_current("expected a lambda body");
-            self.recover_one();
         }
         self.close();
     }
@@ -534,47 +551,45 @@ impl<'tokens> Parser<'tokens> {
 
     fn parse_column_spec_array(&mut self) -> bool {
         self.open(SyntaxKind::COLUMN_SPEC_ARRAY);
-        let has_tilde = self.expect(TokenKind::TILDE, "`~` before a column specification");
-        let has_open = self.expect(TokenKind::BRACKET_OPEN, "`[` after `~`");
+        let _ = self.expect(TokenKind::TILDE, "`~` before a column specification");
+        let _ = self.expect(TokenKind::BRACKET_OPEN, "`[` after `~`");
         if !self.at(TokenKind::BRACKET_CLOSE) {
             loop {
+                let before = self.index;
                 let _ = self.parse_column_spec(false);
-                if !self.consume_if(TokenKind::COMMA) {
+                let has_comma = self.consume_if(TokenKind::COMMA);
+                if self.index == before || !has_comma {
                     break;
                 }
             }
         }
         let has_close = self.expect(TokenKind::BRACKET_CLOSE, "`]` after column specifications");
         self.close();
-        has_tilde && has_open && has_close
+        has_close
     }
 
     fn parse_column_spec(&mut self, has_tilde: bool) -> bool {
         self.open(SyntaxKind::COLUMN_SPEC);
-        let tilde = !has_tilde || self.expect(TokenKind::TILDE, "`~` before a column name");
+        if has_tilde {
+            let _ = self.expect(TokenKind::TILDE, "`~` before a column name");
+        }
         let name = self.consume_name("a column name");
         if self.consume_if(TokenKind::COLON) {
             self.parse_column_spec_body();
         }
         self.close();
-        tilde && name
+        name
     }
 
     fn parse_column_spec_body(&mut self) {
-        if self.at(TokenKind::BRACE_OPEN)
-            || self.at(TokenKind::PIPE)
-            || self.is_short_lambda_start()
-        {
+        if self.is_lambda_body_start() {
             let _ = self.parse_primary_expression();
         } else {
             let _ = self.parse_type_reference();
             self.parse_optional_multiplicity();
         }
         if self.consume_if(TokenKind::COLON) {
-            if self.at(TokenKind::BRACE_OPEN)
-                || self.at(TokenKind::PIPE)
-                || self.is_short_lambda_start()
-            {
+            if self.is_lambda_body_start() {
                 let _ = self.parse_primary_expression();
             } else {
                 self.error_current("expected a lambda after `:` in a column specification");
@@ -584,7 +599,7 @@ impl<'tokens> Parser<'tokens> {
 
     fn parse_new_instance_expression(&mut self) -> bool {
         self.open(SyntaxKind::NEW_INSTANCE_EXPR);
-        let has_marker = self.expect(TokenKind::NEW_SYMBOL, "`^` before an instance type");
+        let _ = self.expect(TokenKind::NEW_SYMBOL, "`^` before an instance type");
         let has_target = if self.at(TokenKind::DOLLAR) {
             self.parse_variable_expression()
         } else {
@@ -594,22 +609,27 @@ impl<'tokens> Parser<'tokens> {
             self.parse_call_arguments(true);
         }
         self.close();
-        has_marker && has_target
+        has_target
     }
 
     fn parse_cast_expression(&mut self) -> bool {
         self.open(SyntaxKind::CAST_EXPR);
-        let has_marker = self.expect(TokenKind::AT, "`@` before a cast type");
+        let _ = self.expect(TokenKind::AT, "`@` before a cast type");
         let has_type = self.parse_type_reference();
         self.close();
-        has_marker && has_type
+        has_type
     }
 
     fn parse_qualified_name(&mut self) -> bool {
         self.open(SyntaxKind::QUALIFIED_NAME);
         let _ = self.consume_if(TokenKind::PATH_SEPARATOR);
         let mut valid = self.consume_name("a name");
-        while self.consume_if(TokenKind::PATH_SEPARATOR) {
+        loop {
+            let before = self.index;
+            let has_separator = self.consume_if(TokenKind::PATH_SEPARATOR);
+            if self.index == before || !has_separator {
+                break;
+            }
             valid = self.consume_name("a name after `::`");
             if !valid {
                 break;
@@ -640,8 +660,10 @@ impl<'tokens> Parser<'tokens> {
             return;
         }
         loop {
+            let before = self.index;
             let _ = self.parse_type_reference();
-            if !self.consume_if(TokenKind::COMMA) {
+            let has_comma = self.consume_if(TokenKind::COMMA);
+            if self.index == before || !has_comma {
                 break;
             }
         }
@@ -652,8 +674,10 @@ impl<'tokens> Parser<'tokens> {
         let _ = self.expect(TokenKind::PAREN_OPEN, "`(` before relation columns");
         if !self.at(TokenKind::PAREN_CLOSE) {
             loop {
+                let before = self.index;
                 self.parse_column_info();
-                if !self.consume_if(TokenKind::COMMA) {
+                let has_comma = self.consume_if(TokenKind::COMMA);
+                if self.index == before || !has_comma {
                     break;
                 }
             }
@@ -716,7 +740,11 @@ impl<'tokens> Parser<'tokens> {
             if self.at(TokenKind::SEMICOLON) {
                 break;
             }
-            if self.consume_if(TokenKind::COMMA) {
+            let has_comma = self.consume_if(TokenKind::COMMA);
+            if self.index == before {
+                break;
+            }
+            if has_comma {
                 if self.at(TokenKind::PAREN_CLOSE) {
                     self.error_current("expected an argument after `,`");
                     break;
@@ -735,14 +763,9 @@ impl<'tokens> Parser<'tokens> {
             if self.at(TokenKind::SEMICOLON) {
                 break;
             }
-            self.ensure_progress(
-                before,
-                &[
-                    TokenKind::COMMA,
-                    TokenKind::PAREN_CLOSE,
-                    TokenKind::SEMICOLON,
-                ],
-            );
+            if self.index == before {
+                break;
+            }
         }
     }
 
@@ -785,7 +808,7 @@ impl<'tokens> Parser<'tokens> {
     fn parse_store_table_pointer(&mut self) -> bool {
         self.open(SyntaxKind::ISLAND);
         self.open(SyntaxKind::STORE_TABLE_POINTER);
-        let has_open = self.expect(TokenKind::HASH_STORE_OPEN, "`#>{` before a table pointer");
+        let _ = self.expect(TokenKind::HASH_STORE_OPEN, "`#>{` before a table pointer");
         let has_path = self.parse_qualified_name();
         let has_dot = self.expect(TokenKind::DOT, "`.` between a database and table name");
         let has_table = self.consume_name("a table name");
@@ -796,7 +819,7 @@ impl<'tokens> Parser<'tokens> {
         }
         self.close();
         self.close();
-        has_open && has_path && has_dot && has_table && has_close
+        has_path && has_dot && has_table && has_close
     }
 
     fn parse_navigation_path_island(&mut self) -> bool {
@@ -813,7 +836,11 @@ impl<'tokens> Parser<'tokens> {
         self.open(SyntaxKind::OPAQUE_ISLAND);
         let _ = self.bump();
         let mut delimiters = vec![OpaqueIslandDelimiter::Island];
-        while !self.at_eof() && self.fuel > 0 {
+        while self.fuel != 0 {
+            if self.at_eof() {
+                break;
+            }
+            let before = self.index;
             match self.raw_kind() {
                 Some(TokenKind::HASH_ISLAND_OPEN | TokenKind::HASH_STORE_OPEN) => {
                     delimiters.push(OpaqueIslandDelimiter::Island);
@@ -844,6 +871,9 @@ impl<'tokens> Parser<'tokens> {
                     let _ = self.bump();
                 }
             }
+            if self.index == before {
+                break;
+            }
         }
         self.unterminated_island();
         self.close();
@@ -855,7 +885,11 @@ impl<'tokens> Parser<'tokens> {
         self.open(SyntaxKind::ISLAND);
         self.open(SyntaxKind::OPAQUE_ISLAND);
         let _ = self.bump();
-        while !self.at_eof() && self.fuel > 0 {
+        while self.fuel != 0 {
+            if self.at_eof() {
+                break;
+            }
+            let before = self.index;
             if self.raw_kind() == Some(TokenKind::HASH)
                 || self.raw_kind() == Some(TokenKind::ISLAND_END)
             {
@@ -865,6 +899,9 @@ impl<'tokens> Parser<'tokens> {
                 return true;
             }
             let _ = self.bump();
+            if self.index == before {
+                break;
+            }
         }
         self.unterminated_island();
         self.close();
@@ -885,7 +922,11 @@ impl<'tokens> Parser<'tokens> {
     fn recover_island_end(&mut self) {
         self.open(SyntaxKind::ERROR_NODE);
         while !self.at_eof() && !self.at_any(&[TokenKind::ISLAND_END, TokenKind::SEMICOLON]) {
+            let before = self.index;
             let _ = self.bump();
+            if self.index == before {
+                break;
+            }
         }
         let _ = self.consume_if(TokenKind::ISLAND_END);
         self.close();
@@ -914,17 +955,6 @@ impl<'tokens> Parser<'tokens> {
         }
     }
 
-    fn ensure_progress(&mut self, before: usize, boundaries: &[TokenKind]) {
-        if self.index != before || self.at_eof() {
-            return;
-        }
-        self.error_current("parser recovery made no progress");
-        self.recover_until(boundaries);
-        if self.index == before {
-            self.recover_one();
-        }
-    }
-
     fn recover_one(&mut self) {
         if self.at_eof() {
             self.open(SyntaxKind::ERROR_NODE);
@@ -938,12 +968,18 @@ impl<'tokens> Parser<'tokens> {
 
     fn recover_until(&mut self, boundaries: &[TokenKind]) {
         self.open(SyntaxKind::ERROR_NODE);
-        let before = self.index;
-        while !self.at_eof() && self.fuel > 0 && !self.at_any(boundaries) {
+        while self.fuel != 0 {
+            if self.at_eof() {
+                break;
+            }
+            if self.at_any(boundaries) {
+                break;
+            }
+            let current = self.index;
             let _ = self.bump();
-        }
-        if self.index == before && !self.at_eof() && !self.at_any(boundaries) {
-            let _ = self.bump();
+            if self.index == current {
+                break;
+            }
         }
         self.close();
     }
@@ -976,7 +1012,11 @@ impl<'tokens> Parser<'tokens> {
 
     fn consume_trivia(&mut self) {
         while self.raw_kind().is_some_and(is_trivia) {
+            let before = self.index;
             if !self.bump() {
+                break;
+            }
+            if self.index == before {
                 break;
             }
         }
@@ -992,7 +1032,10 @@ impl<'tokens> Parser<'tokens> {
     }
 
     fn at_code_block_boundary(&self) -> bool {
-        self.at_eof() || self.at_any(&CODE_BLOCK_BOUNDARIES)
+        if self.at_eof() {
+            return true;
+        }
+        self.at_any(&CODE_BLOCK_BOUNDARIES)
     }
 
     fn next_significant_is(&self, kind: TokenKind) -> bool {
@@ -1028,6 +1071,16 @@ impl<'tokens> Parser<'tokens> {
         }
     }
 
+    fn is_lambda_body_start(&self) -> bool {
+        if matches!(
+            self.significant_kind(),
+            Some(TokenKind::BRACE_OPEN | TokenKind::PIPE)
+        ) {
+            return true;
+        }
+        self.is_short_lambda_start()
+    }
+
     /// Determines whether the type annotation after a single lambda parameter
     /// ends at a top-level pipe without committing parser state. Type grammar
     /// is parsed for real by [`Self::parse_optional_parameter_type`] once this
@@ -1036,22 +1089,17 @@ impl<'tokens> Parser<'tokens> {
     fn typed_short_lambda_has_pipe(&self, start: usize) -> bool {
         let mut index = start;
         let mut angles = 0_usize;
-        let mut parentheses = 0_usize;
         let mut brackets = 0_usize;
 
         while let Some(next) = self.next_significant_index_from(index) {
             let kind = self.tokens[next].0;
-            let at_top_level = angles == 0 && parentheses == 0 && brackets == 0;
+            let at_top_level = angles == 0 && brackets == 0;
             match kind {
                 TokenKind::PIPE if at_top_level => return true,
                 TokenKind::LT => angles = angles.saturating_add(1),
                 TokenKind::GT => angles = angles.saturating_sub(1),
-                TokenKind::PAREN_OPEN => parentheses = parentheses.saturating_add(1),
-                TokenKind::PAREN_CLOSE if parentheses > 0 => {
-                    parentheses = parentheses.saturating_sub(1);
-                }
                 TokenKind::BRACKET_OPEN => brackets = brackets.saturating_add(1),
-                TokenKind::BRACKET_CLOSE if brackets > 0 => {
+                TokenKind::BRACKET_CLOSE if brackets != 0 => {
                     brackets = brackets.saturating_sub(1);
                 }
                 TokenKind::COMMA
@@ -1100,7 +1148,10 @@ impl<'tokens> Parser<'tokens> {
     }
 
     fn bump(&mut self) -> bool {
-        if self.at_eof() || self.fuel == 0 {
+        if self.index >= self.tokens.len() {
+            return false;
+        }
+        if self.fuel == 0 {
             return false;
         }
         if self.raw_kind() == Some(TokenKind::ERROR) {
