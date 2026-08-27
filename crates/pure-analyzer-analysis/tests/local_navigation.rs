@@ -23,12 +23,16 @@ fn graph(elements: Vec<Value>) -> ModelGraph {
 }
 
 fn class(name: &str, properties: Vec<Value>) -> Value {
+    class_with_supertypes(name, &[], properties)
+}
+
+fn class_with_supertypes(name: &str, supertypes: &[&str], properties: Vec<Value>) -> Value {
     json!({
         "_type": "class",
         "package": PACKAGE,
         "name": name,
         "stereotypes": [],
-        "superTypes": [],
+        "superTypes": supertypes,
         "properties": properties,
         "qualifiedProperties": [],
     })
@@ -39,6 +43,16 @@ fn property(name: &str, target: &str) -> Value {
         "name": name,
         "genericType": {"rawType": target, "typeArguments": []},
         "multiplicity": {"lowerBound": ZERO, "upperBound": ONE},
+    })
+}
+
+fn association(name: &str, first: Value, second: Value) -> Value {
+    json!({
+        "_type": "association",
+        "package": PACKAGE,
+        "name": name,
+        "stereotypes": [],
+        "properties": [first, second],
     })
 }
 
@@ -119,6 +133,88 @@ fn restores_outer_lambda_binding_after_nested_shadowing() {
         resolved_owners,
         ["model::Person", "model::Manager", "model::Person"]
     );
+}
+
+#[test]
+fn resolves_inherited_member_navigation_end_to_end() {
+    let graph = graph(vec![
+        class("Base", vec![property("inherited", "String")]),
+        class_with_supertypes("Child", &["model::Base"], Vec::new()),
+    ]);
+    let source = "model::Child.all()->filter(x| $x.inherited)";
+    let analysis = analyze(source, &graph);
+    let navigation = analysis
+        .sites()
+        .iter()
+        .find(|site| range_text(source, site.span()) == ".inherited")
+        .expect("inherited navigation site must be recorded");
+
+    let LocalResolution::Navigation(NavigationResolution::Found(chain)) = navigation.outcome()
+    else {
+        panic!(
+            "expected inherited member navigation, got {:#?}",
+            navigation.outcome()
+        );
+    };
+    assert_eq!(chain.hops().len(), 1);
+    let NavigationTarget::Member(member) = chain.hops()[0].target() else {
+        panic!("expected an inherited model-member navigation");
+    };
+    assert_eq!(member.owner().path().as_str(), "model::Base");
+    assert!(matches!(
+        member.kind(),
+        pure_analyzer_resolve::ResolvedMemberKind::Property
+    ));
+    assert_eq!(chain.hops()[0].definition(), Some(member.definition()));
+}
+
+#[test]
+fn resolves_association_end_navigation_end_to_end() {
+    let graph = graph(vec![
+        class("Person", Vec::new()),
+        class("Manager", vec![property("name", "String")]),
+        association(
+            "Person_Manager",
+            property("manager", "model::Manager"),
+            property("reports", "model::Person"),
+        ),
+    ]);
+    let source = "model::Person.all()->filter(x| $x.manager.name)";
+    let analysis = analyze(source, &graph);
+    let navigations = analysis
+        .sites()
+        .iter()
+        .filter(|site| matches!(site.outcome(), LocalResolution::Navigation(_)))
+        .collect::<Vec<_>>();
+
+    assert_eq!(navigations.len(), 2);
+    assert_eq!(range_text(source, navigations[0].span()), ".manager");
+    let LocalResolution::Navigation(NavigationResolution::Found(chain)) = navigations[0].outcome()
+    else {
+        panic!(
+            "expected association-end navigation, got {:#?}",
+            navigations[0].outcome()
+        );
+    };
+    assert_eq!(chain.hops().len(), 1);
+    let NavigationTarget::Member(member) = chain.hops()[0].target() else {
+        panic!("expected an association-derived model-member navigation");
+    };
+    assert_eq!(member.owner().path().as_str(), "model::Person");
+    assert!(matches!(
+        member.kind(),
+        pure_analyzer_resolve::ResolvedMemberKind::AssociationEnd { association }
+            if association.as_str() == "model::Person_Manager"
+    ));
+    assert_eq!(chain.hops()[0].definition(), Some(member.definition()));
+
+    assert_eq!(range_text(source, navigations[1].span()), ".name");
+    assert!(matches!(
+        navigations[1].outcome(),
+        LocalResolution::Navigation(NavigationResolution::Found(chain))
+            if matches!(chain.hops()[0].target(), NavigationTarget::Member(member)
+                if member.owner().path().as_str() == "model::Manager")
+    ));
 }
 
 #[test]
