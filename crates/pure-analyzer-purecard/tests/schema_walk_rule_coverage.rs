@@ -13,28 +13,42 @@
 //! `schema_walk_construct_coverage.rs`'s substring-on-decoded-text proxy — its
 //! "dot navigation" check turned out to be a false positive matching decimal
 //! points and unrelated over-approximation artifacts, never real `$x.field`
-//! access. `generate_schema_walks` (`schema-walker/src/lib.rs`) was fixed to
-//! bias its exploration — a wider growth budget, a preference for real
-//! classes over the store path at the source position, a preference for real
-//! Pure builtin method names right after `->`, and biasing a lambda binder's
-//! later `$`-reference (and the `.` right after it) toward reusing the exact
-//! name it was declared with. That closed the gap for **`Column`** (N6) —
-//! [`EXPECTED_UNFIRED`] now lists five, not six.
+//! access. `generate_schema_walks` (`schema-walker/src/lib.rs`) was first
+//! fixed (#117) to bias its random exploration — a wider growth budget, a
+//! preference for real classes over the store path at the source position, a
+//! preference for real Pure builtin method names right after `->`, and
+//! biasing a lambda binder's later `$`-reference (and the `.` right after it)
+//! toward reusing the exact name it was declared with. That closed the gap
+//! for **`Column`** (N6) alone — weight tuning could not reliably reach the
+//! rest: reaching `$x.field cmp literal` needs *every* one of several nested
+//! grammar branches to independently land on the specific path toward
+//! navigation, and escalating every bias's weight roughly 25× produced no
+//! change in which rules fired.
 //!
-//! The remaining five (`Member`/N1-N2, `ReValue`/T1, `Comparator`/T2,
-//! `Reducer`/T3, `RelationColumn`/N6) need more than weight tuning can give a
-//! byte-level heuristic walker: reaching `$x.field cmp literal` needs *every*
-//! one of several nested grammar branches (which `filter` argument shape,
-//! which `boolExpr` alternative, which comparator) to independently land on
-//! the specific path toward navigation, and biasing each individual junction
-//! more strongly still didn't move the needle — confirmed live, escalating
-//! every new bias's weight roughly 25× produced no change in which rules
-//! fire. Fully closing this needs a generator that is *grammar-shape-aware*
-//! (knows it is partway down a specific target production and drives the
-//! remaining choices toward completing it), not one that nudges independent
-//! per-token weights — a materially different generator design, filed as
-//! #119 rather than attempted here. `EXPECTED_UNFIRED` documents this so the
-//! gap stays honest and visible, mirroring
+//! **Fix (issue #119): deterministic, schema-parameterized "recipe" walks.**
+//! Rather than nudge independent per-token weights further, `generate_schema_walks`
+//! now builds a handful of walks that commit to a target production shape up
+//! front — `Class.all()->filter(a|$a.<member> < <digit>)` for `Member`/
+//! `Comparator`/`ReValue`, `Class.all()->agg(a|$a.<member>,b:<PrimType>[*]|$b-><reducer>())`
+//! for `Reducer` — substituting real class/member names (and any primitive
+//! type-annotation/reducer name it can find) looked up directly from the
+//! vocabulary, and only falls back to `None` (silently, per db) when no
+//! admissible combination exists. These walks are tried first and included
+//! whenever they succeed, with `attempt`'s random exploration filling the
+//! remainder up to `WALK_COUNT`. That closed all four of the remaining
+//! `filter`-reachable rules.
+//!
+//! **`RelationColumn` (N6, arm-R bare-ident form) stays permanently
+//! unreachable**, for a structural reason no amount of weight tuning or
+//! recipe-building can fix: it needs a bare `~[...]` column-set argument, and
+//! **none of the 8 fixture corpora use arm-R syntax at all** (the same reason
+//! `schema_walk_state_coverage.rs`'s `SawTilde` state is permanently
+//! unreachable there) — there is no real column name to substitute, and
+//! synthesizing one would mean inventing vocabulary content no committed gold
+//! query actually contains. This mirrors N4/T5's existing "no evidence, no
+//! implementation" precedent (`docs/spec/schema.md` §6.5/§6.6) rather than
+//! forcing a walk through content that isn't real. `EXPECTED_UNFIRED`
+//! documents this so the gap stays honest and visible, mirroring
 //! `schema_walk_state_coverage.rs`'s `EXPECTED_UNREACHABLE` convention.
 #![forbid(unsafe_code)]
 
@@ -100,31 +114,19 @@ fn rule_kind(pos: &L2Position) -> Option<&'static str> {
 }
 
 /// Rules [`ALL_RULE_KINDS`] lists that `generate_schema_walks`'s current
-/// exploration never fires, each with the concrete reason — a rule missing
-/// from *both* the fired set and this list is a real coverage regression, not
-/// documented residue. See the module doc comment (issue #117) for the full
-/// investigation and why closing the rest needs a grammar-shape-aware
-/// generator redesign, filed as #119 rather than more weight tuning here.
+/// exploration never fires — a rule missing from *both* the fired set and
+/// this list is a real coverage regression, not documented residue. See the
+/// module doc comment (issues #117/#119) for the full investigation.
 ///
-/// - `Member` (N1/N2): no walk ever completes `$x.field` after a class-bound
-///   lambda binder.
-/// - `ReValue`/`Comparator` (T1/T2): both need a completed `Member` navExpr
-///   immediately to their left; neither can fire without it.
-/// - `Reducer` (T3): needs a `y: <Primitive>[*]|$y-><reducer>()` reduce
-///   lambda inside an `agg(…)` call, itself deep behind a `groupBy(…)` the
-///   walker never reaches.
 /// - `RelationColumn` (N6, arm-R bare-ident form): needs a closed
-///   `groupBy(~[…], …)` establishing op, which the walker never reaches
-///   (unlike the quoted-string `Column` form, reachable via other arm-A
-///   TDS-getter/`project`-string-argument shapes that don't need arm-R at
-///   all — that's the gap this fix closed).
-const EXPECTED_UNFIRED: &[&str] = &[
-    "Member",
-    "ReValue",
-    "Comparator",
-    "Reducer",
-    "RelationColumn",
-];
+///   `groupBy(~[…], …)` establishing op with a bare column-set argument, and
+///   none of the 8 fixture corpora use arm-R syntax at all — there is no real
+///   column name any recipe could substitute (unlike the quoted-string
+///   `Column` form, reachable via arm-A TDS-getter/`project`-string-argument
+///   shapes that don't need arm-R at all). Permanently out of scope, the same
+///   way N4/T5 are (`docs/spec/schema.md` §6.5/§6.6): no evidence, no
+///   implementation.
+const EXPECTED_UNFIRED: &[&str] = &["RelationColumn"];
 
 fn corpus_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("corpus/gold_queries.jsonl")
