@@ -788,6 +788,40 @@ Class demo::Kept
 }
 
 #[test]
+fn double_angle_annotations_must_precede_the_declaration_name() {
+    let source = r#"
+Class Known <<meta::tag>>
+{
+  value: String[1];
+}
+"#;
+    let parsed = parse(source);
+
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_STEREOTYPE_APPLICATIONS),
+        0,
+        "a later `<<...>>` must not be reclassified as a declaration annotation"
+    );
+    assert!(
+        parsed
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == DiagCode::MalformedSyntax),
+        "{:#?}",
+        parsed.diagnostics
+    );
+    assert!(
+        parsed
+            .coverage_gaps
+            .iter()
+            .any(|gap| gap.kind == DomainCoverageGapKind::MalformedDeclaration),
+        "{:#?}",
+        parsed.coverage_gaps
+    );
+    assert_lossless(source, &parsed);
+}
+
+#[test]
 fn opaque_member_without_a_terminator_stops_before_a_supported_property() {
     let source = r#"
 Class demo::Known
@@ -908,6 +942,40 @@ Class demo::After
         vec![DomainCoverageGapKind::MalformedDeclaration],
         "{:#?}",
         gap_texts(source, &parsed)
+    );
+    assert_lossless(source, &parsed);
+}
+
+#[test]
+fn declaration_header_recovery_leaves_a_stray_brace_before_the_next_declaration() {
+    let source = r#"
+Class demo::Broken trailing header tokens
+}
+Class demo::After
+{
+  kept: String[1];
+}
+"#;
+    let parsed = parse(source);
+
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::DOMAIN_CLASS_DECL), 2);
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_PROPERTY_DECL),
+        1
+    );
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::DOMAIN_OPAQUE_NODE), 1);
+    assert_eq!(
+        parsed
+            .coverage_gaps
+            .iter()
+            .map(|gap| gap.kind)
+            .collect::<Vec<_>>(),
+        vec![
+            DomainCoverageGapKind::MalformedDeclaration,
+            DomainCoverageGapKind::UnsupportedTopLevel,
+        ],
+        "the header recovery must leave the brace for top-level recovery: {:#?}",
+        parsed.coverage_gaps
     );
     assert_lossless(source, &parsed);
 }
@@ -1413,6 +1481,101 @@ Class {meta::tag =} demo::Broken
         );
         assert_lossless(source, &parsed);
     }
+}
+
+#[test]
+fn braced_annotations_accept_leading_qualified_paths() {
+    let source = r#"
+Class {::meta::tag = 'value'} demo::Annotated
+{
+  value: String[1];
+}
+"#;
+    let parsed = parse(source);
+
+    assert!(parsed.diagnostics.is_empty(), "{:#?}", parsed.diagnostics);
+    assert!(
+        parsed.coverage_gaps.is_empty(),
+        "{:#?}",
+        parsed.coverage_gaps
+    );
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_STEREOTYPE_APPLICATIONS),
+        1
+    );
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_PROPERTY_DECL),
+        1
+    );
+    assert_lossless(source, &parsed);
+}
+
+#[test]
+fn unclosed_braced_annotations_do_not_close_at_nested_values() {
+    let source = r#"
+Class {meta::tag = { nested: 'value' } demo::Broken
+{
+  value: String[1];
+}
+"#;
+    let parsed = parse(source);
+
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_STEREOTYPE_APPLICATIONS),
+        0,
+        "a nested value cannot close the outer annotation"
+    );
+    assert!(
+        parsed
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == DiagCode::MalformedSyntax),
+        "{:#?}",
+        parsed.diagnostics
+    );
+    assert!(
+        parsed
+            .coverage_gaps
+            .iter()
+            .any(|gap| gap.kind == DomainCoverageGapKind::MalformedDeclaration),
+        "{:#?}",
+        parsed.coverage_gaps
+    );
+    assert_lossless(source, &parsed);
+}
+
+#[test]
+fn braced_annotations_do_not_take_assignments_from_nested_values() {
+    let source = r#"
+Class {meta::tag { nested = 'value' }} demo::Broken
+{
+  value: String[1];
+}
+"#;
+    let parsed = parse(source);
+
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_STEREOTYPE_APPLICATIONS),
+        0,
+        "an inner assignment cannot become the annotation value"
+    );
+    assert!(
+        parsed
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == DiagCode::MalformedSyntax),
+        "{:#?}",
+        parsed.diagnostics
+    );
+    assert!(
+        parsed
+            .coverage_gaps
+            .iter()
+            .any(|gap| gap.kind == DomainCoverageGapKind::MalformedDeclaration),
+        "{:#?}",
+        parsed.coverage_gaps
+    );
+    assert_lossless(source, &parsed);
 }
 
 #[test]

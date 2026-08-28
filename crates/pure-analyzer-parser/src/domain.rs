@@ -110,7 +110,7 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
             if !self.has_remaining_input() {
                 break;
             }
-            if self.consume_if_raw(TokenKind::SEMICOLON) {
+            if self.consume_if_raw(TokenKind::SEMICOLON).is_some() {
                 continue;
             }
 
@@ -202,7 +202,7 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
                 self.syntax_error("expected `}` before the next Domain declaration");
                 return false;
             }
-            if self.consume_if_raw(TokenKind::SEMICOLON) {
+            if self.consume_if_raw(TokenKind::SEMICOLON).is_some() {
                 continue;
             }
 
@@ -309,7 +309,7 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
             valid &= name && colon && ty && multiplicity;
             self.consume_trivia();
 
-            if self.consume_if_raw(TokenKind::COMMA) {
+            if self.consume_if_raw(TokenKind::COMMA).is_some() {
                 self.consume_trivia();
                 if self.at(TokenKind::PAREN_CLOSE) {
                     self.syntax_error("expected a parameter after `,`");
@@ -330,7 +330,7 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
             if self.index == before {
                 return false;
             }
-            if self.consume_if_raw(TokenKind::COMMA) {
+            if self.consume_if_raw(TokenKind::COMMA).is_some() {
                 continue;
             }
             return false;
@@ -374,7 +374,7 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
             let before = self.index;
             if self.at_keyword("stereotypes") || self.at_keyword("tags") {
                 valid &= self.parse_profile_section();
-            } else if self.consume_if_raw(TokenKind::SEMICOLON) {
+            } else if self.consume_if_raw(TokenKind::SEMICOLON).is_some() {
             } else {
                 self.parse_opaque_member();
             }
@@ -430,7 +430,7 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
                 self.recover_until(&[TokenKind::COMMA, TokenKind::BRACKET_CLOSE]);
             }
             self.consume_trivia();
-            if self.consume_if_raw(TokenKind::COMMA) {
+            if self.consume_if_raw(TokenKind::COMMA).is_some() {
                 self.consume_trivia();
                 continue;
             }
@@ -492,7 +492,7 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
             while self.has_remaining_input() && !self.at(TokenKind::GT) {
                 valid &= self.parse_domain_type_reference();
                 self.consume_trivia();
-                if self.consume_if_raw(TokenKind::COMMA) {
+                if self.consume_if_raw(TokenKind::COMMA).is_some() {
                     self.consume_trivia();
                     continue;
                 }
@@ -588,11 +588,14 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
         let mut depth = 1usize;
         let mut assignment = None;
         for (index, (kind, _)) in self.tokens.iter().enumerate().skip(open.saturating_add(1)) {
-            match kind {
-                TokenKind::BRACE_OPEN => depth = depth.saturating_add(1),
-                TokenKind::BRACE_CLOSE => {
+            if *kind == TokenKind::BRACE_OPEN {
+                depth = depth.saturating_add(1);
+                continue;
+            }
+            match (*kind, assignment, depth) {
+                (TokenKind::BRACE_CLOSE, _, _) => {
                     depth = depth.saturating_sub(1);
-                    if depth == 0 {
+                    if let 0 = depth {
                         let Some(assignment) = assignment else {
                             return false;
                         };
@@ -604,11 +607,7 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
                         return false;
                     }
                 }
-                TokenKind::ASSIGN if depth == 1 => {
-                    if assignment.is_none() {
-                        assignment = Some(index);
-                    }
-                }
+                (TokenKind::ASSIGN, None, 1) => assignment = Some(index),
                 _ => {}
             }
         }
@@ -623,10 +622,11 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
         else {
             return false;
         };
-        if self.tokens[first_open].0 != TokenKind::LT || self.tokens[second_open].0 != TokenKind::LT
-        {
+        let (TokenKind::LT, TokenKind::LT) =
+            (self.tokens[first_open].0, self.tokens[second_open].0)
+        else {
             return false;
-        }
+        };
 
         let mut cursor = second_open.saturating_add(1);
         while let Some(first_close) = self.next_significant_index_from(cursor) {
@@ -827,9 +827,9 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
     fn consume_double_angle(&mut self) -> bool {
         let first = self.expect(TokenKind::LT, "first `<` before stereotype applications");
         let second = self.expect(TokenKind::LT, "second `<` before stereotype applications");
-        if !first || !second {
+        let (true, true) = (first, second) else {
             return false;
-        }
+        };
         while self.has_remaining_input() {
             if self.at_double_angle_close() {
                 let _ = self.bump();
@@ -844,7 +844,7 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
 
     fn consume_member_terminator(&mut self) -> bool {
         self.consume_trivia();
-        if self.consume_if_raw(TokenKind::SEMICOLON) {
+        if self.consume_if_raw(TokenKind::SEMICOLON).is_some() {
             return true;
         }
         self.syntax_error("expected `;` after a property declaration");
@@ -857,10 +857,8 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
     fn recover_declaration_header(&mut self) {
         self.open(SyntaxKind::ERROR_NODE);
         while self.has_remaining_input() {
-            match self.raw_kind() {
-                Some(TokenKind::SEMICOLON | TokenKind::BRACE_CLOSE) => break,
-                _ if self.declaration_kind().is_some() => break,
-                _ => {}
+            if self.at_declaration_header_recovery_boundary() {
+                break;
             }
             let before = self.index;
             let _ = self.bump();
@@ -870,6 +868,16 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
         }
         let _ = self.consume_if_raw(TokenKind::SEMICOLON);
         self.close();
+    }
+
+    fn at_declaration_header_recovery_boundary(&self) -> bool {
+        if self.raw_at(TokenKind::SEMICOLON) {
+            return true;
+        }
+        if self.raw_at(TokenKind::BRACE_CLOSE) {
+            return true;
+        }
+        self.declaration_kind().is_some()
     }
 
     fn recover_member_tail(&mut self) {
@@ -958,10 +966,12 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
     }
 
     fn at_double_angle_open(&self) -> bool {
-        self.at(TokenKind::LT)
-            && self.significant_index().is_some_and(|index| {
+        if self.at(TokenKind::LT) {
+            return self.significant_index().is_some_and(|index| {
                 self.next_significant_kind(index.saturating_add(1)) == Some(TokenKind::LT)
-            })
+            });
+        }
+        false
     }
 
     fn at_double_angle_close(&self) -> bool {
@@ -1001,14 +1011,14 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
 
     fn consume_if(&mut self, kind: TokenKind) -> bool {
         self.consume_trivia();
-        self.consume_if_raw(kind)
+        self.consume_if_raw(kind).is_some()
     }
 
-    fn consume_if_raw(&mut self, kind: TokenKind) -> bool {
+    fn consume_if_raw(&mut self, kind: TokenKind) -> Option<()> {
         if self.raw_kind() == Some(kind) {
-            self.bump()
+            self.bump().then_some(())
         } else {
-            false
+            None
         }
     }
 
@@ -1067,24 +1077,27 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
     }
 
     fn has_remaining_input(&self) -> bool {
-        self.fuel > 0 && self.tokens.get(self.index).is_some()
+        if self.fuel == 0 {
+            return false;
+        }
+        self.tokens.get(self.index).is_some()
     }
 
     fn bump(&mut self) -> bool {
-        if !self.has_remaining_input() {
-            return false;
+        if self.has_remaining_input() {
+            if self.raw_kind() == Some(TokenKind::ERROR) {
+                self.push_diagnostic(
+                    DiagCode::BadToken,
+                    self.current_span(),
+                    "unrecognized token",
+                );
+            }
+            self.events.push(Event::Advance);
+            self.index = self.index.saturating_add(1);
+            self.fuel = self.fuel.saturating_sub(1);
+            return true;
         }
-        if self.raw_kind() == Some(TokenKind::ERROR) {
-            self.push_diagnostic(
-                DiagCode::BadToken,
-                self.current_span(),
-                "unrecognized token",
-            );
-        }
-        self.events.push(Event::Advance);
-        self.index = self.index.saturating_add(1);
-        self.fuel = self.fuel.saturating_sub(1);
-        true
+        false
     }
 
     fn enter_parse_depth(&mut self) -> bool {
