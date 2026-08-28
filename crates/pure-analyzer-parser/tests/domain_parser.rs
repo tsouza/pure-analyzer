@@ -730,6 +730,203 @@ fn type_nesting_limit_recovers_without_losing_the_input() {
     assert_lossless(&source, &parsed);
 }
 
+#[test]
+fn dangling_qualified_name_marks_the_declaration_malformed() {
+    let source = r#"
+Class demo::
+{
+  kept: String[1];
+}
+"#;
+    let parsed = parse(source);
+
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::DOMAIN_CLASS_DECL), 1);
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_PROPERTY_DECL),
+        1
+    );
+    assert_eq!(
+        parsed
+            .coverage_gaps
+            .iter()
+            .map(|gap| gap.kind)
+            .collect::<Vec<_>>(),
+        vec![DomainCoverageGapKind::MalformedDeclaration],
+        "{:#?}",
+        parsed.coverage_gaps
+    );
+    assert_lossless(source, &parsed);
+}
+
+#[test]
+fn opaque_top_level_stops_before_a_supported_declaration_without_a_terminator() {
+    let source = r#"
+Enum demo::Skipped
+Class demo::Kept
+{
+  value: String[1];
+}
+"#;
+    let parsed = parse(source);
+
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::DOMAIN_CLASS_DECL), 1);
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_PROPERTY_DECL),
+        1
+    );
+    assert_eq!(
+        parsed
+            .coverage_gaps
+            .iter()
+            .map(|gap| gap.kind)
+            .collect::<Vec<_>>(),
+        vec![DomainCoverageGapKind::UnsupportedTopLevel],
+        "{:#?}",
+        gap_texts(source, &parsed)
+    );
+    assert_lossless(source, &parsed);
+}
+
+#[test]
+fn opaque_member_without_a_terminator_stops_before_a_supported_property() {
+    let source = r#"
+Class demo::Known
+{
+  nativeThing foo
+  kept: String[1];
+}
+"#;
+    let parsed = parse(source);
+
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_PROPERTY_DECL),
+        1
+    );
+    assert_eq!(
+        parsed
+            .coverage_gaps
+            .iter()
+            .map(|gap| gap.kind)
+            .collect::<Vec<_>>(),
+        vec![DomainCoverageGapKind::UnsupportedMember],
+        "{:#?}",
+        gap_texts(source, &parsed)
+    );
+    assert_eq!(gap_texts(source, &parsed)[0].trim(), "nativeThing foo");
+    assert_lossless(source, &parsed);
+}
+
+#[test]
+fn opaque_member_does_not_consume_a_tightly_following_property() {
+    let source = r#"
+Class demo::Known
+{
+  nativeThing foo;kept: String[1];
+}
+"#;
+    let parsed = parse(source);
+
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_PROPERTY_DECL),
+        1
+    );
+    assert_eq!(
+        parsed
+            .coverage_gaps
+            .iter()
+            .map(|gap| gap.kind)
+            .collect::<Vec<_>>(),
+        vec![DomainCoverageGapKind::UnsupportedMember],
+        "{:#?}",
+        gap_texts(source, &parsed)
+    );
+    assert_eq!(gap_texts(source, &parsed)[0].trim(), "nativeThing foo;");
+    assert_lossless(source, &parsed);
+}
+
+#[test]
+fn declaration_header_recovery_consumes_junk_before_the_next_declaration() {
+    let source = r#"
+Class demo::Broken trailing header tokens
+Class demo::After
+{
+  kept: String[1];
+}
+"#;
+    let parsed = parse(source);
+
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::DOMAIN_CLASS_DECL), 2);
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_PROPERTY_DECL),
+        1
+    );
+    assert_eq!(
+        parsed
+            .coverage_gaps
+            .iter()
+            .map(|gap| gap.kind)
+            .collect::<Vec<_>>(),
+        vec![DomainCoverageGapKind::MalformedDeclaration],
+        "{:#?}",
+        gap_texts(source, &parsed)
+    );
+    assert_lossless(source, &parsed);
+}
+
+#[test]
+fn member_tail_recovery_consumes_noise_before_a_property_boundary() {
+    let source = r#"
+Class demo::Broken
+{
+  broken: Foo junk more kept: String[1];
+}
+"#;
+    let parsed = parse(source);
+
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_PROPERTY_DECL),
+        2
+    );
+    assert_eq!(
+        parsed
+            .coverage_gaps
+            .iter()
+            .map(|gap| gap.kind)
+            .collect::<Vec<_>>(),
+        vec![DomainCoverageGapKind::MalformedDeclaration],
+        "{:#?}",
+        gap_texts(source, &parsed)
+    );
+    assert_lossless(source, &parsed);
+}
+
+#[test]
+fn unterminated_body_trailing_trivia_does_not_invent_an_opaque_member() {
+    let source = "Class demo::Broken {\n  ";
+    let parsed = parse(source);
+
+    assert!(
+        parsed
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == DiagCode::MalformedSyntax),
+        "{:#?}",
+        parsed.diagnostics
+    );
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::DOMAIN_OPAQUE_NODE), 0);
+    assert_eq!(
+        parsed
+            .coverage_gaps
+            .iter()
+            .map(|gap| gap.kind)
+            .collect::<Vec<_>>(),
+        vec![DomainCoverageGapKind::MalformedDeclaration],
+        "{:#?}",
+        parsed.coverage_gaps
+    );
+    assert_lossless(source, &parsed);
+}
+
 proptest! {
     #[test]
     fn arbitrary_domain_source_is_lossless_and_recovery_safe(source in ".{0,2048}") {
