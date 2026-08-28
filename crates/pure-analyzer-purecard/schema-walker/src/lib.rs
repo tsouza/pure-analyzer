@@ -1365,6 +1365,93 @@ fn recipe_groupby_having_restrict(
     None
 }
 
+/// Every `(class, member)` pair [`class_member_candidates`] finds whose
+/// member additionally resolves as a [`Schema::member_is_string`] `String`
+/// primitive — needed by [`recipe_filter_project`]'s `==` comparator, which
+/// (like [`recipe_navigation_predicate`]'s `<` before it, issue #122) is
+/// L1/L2-admissible against an association end but not real, compilable Pure
+/// there (`equal` has no overload comparing a class-typed collection to a
+/// `String`).
+fn string_member_candidates(schema: &Schema, vocab: &Vocab) -> Vec<(u32, u32)> {
+    class_member_candidates(schema, vocab, false)
+        .into_iter()
+        .filter(|&(class_id, member_id)| {
+            let Some(class_text) = vocab
+                .bytes(class_id)
+                .and_then(|b| std::str::from_utf8(b).ok())
+            else {
+                return false;
+            };
+            let Some(member_text) = vocab
+                .bytes(member_id)
+                .and_then(|b| std::str::from_utf8(b).ok())
+            else {
+                return false;
+            };
+            schema.member_is_string(class_text, member_text)
+        })
+        .collect()
+}
+
+/// A deterministic, schema-parameterized walk realizing
+/// `Class.all()->filter(a|$a.<stringMember> == '<literal>')
+/// ->project([a|$a.<stringMember>], ['<col>'])` — a real, compilable arm-C
+/// filter-then-project shape (issue #55), mirrored from a real gold-corpus
+/// example (`activity_1`'s own `train_spider:6723`:
+/// `Faculty.all()->filter(x|$x.sex == 'F')->project([x|$x.fname, x|$x.lname,
+/// x|$x.phone], ['Fname','Lname','phone'])`) and confirmed live against a
+/// real PMCD (`Country.all()->filter(a|$a.code == 'GBR')
+/// ->project([a|$a.name], ['name'])` returns `TabularDataSet`).
+///
+/// Uses `==` against a `String` member rather than [`recipe_filter_project`]'s
+/// earlier `>`-against-a-numeric-member design (dropped: confirmed against
+/// `world_1`'s own corpus-derived vocabulary that none of its numeric members
+/// appear there as literal tokens at all, so no numeric-comparator recipe —
+/// including the already-shipped [`recipe_navigation_predicate`] — can ever
+/// fire for it; `world_1` does supply several `String` members as literal
+/// tokens).
+///
+/// `None` when this db's vocabulary has no admissible combination of a real
+/// class with at least one `String` member, the `filter`/`project` step
+/// names, two distinct string-literal tokens (one for the comparator's
+/// literal, one for the column alias), or a whitespace token around `==`.
+fn recipe_filter_project(
+    grammar: &CompiledGrammar,
+    schema: &Schema,
+    vocab: &Vocab,
+) -> Option<Vec<u32>> {
+    let pipe = find_token(vocab, b"|")?;
+    let dot = find_token(vocab, b".")?;
+    let open = find_token(vocab, b"(")?;
+    let close = find_token(vocab, b")")?;
+    let arrow = find_token(vocab, b"->")?;
+    let comma = find_token(vocab, b",")?;
+    let bopen = find_token(vocab, b"[")?;
+    let bclose = find_token(vocab, b"]")?;
+    let filter = find_token(vocab, b"filter")?;
+    let project = find_token(vocab, b"project")?;
+    let binder = find_token(vocab, b"a")?;
+    let dollar = find_token(vocab, b"$")?;
+    let eq = find_token(vocab, b"==")?;
+    let ws = find_whitespace_token(vocab)?;
+    let all = find_token(vocab, SOURCE_METHOD.as_bytes())?;
+    let cols = find_quoted_string_tokens(vocab, 2)?;
+    let (literal, col) = (cols[0], cols[1]);
+    let candidates = string_member_candidates(schema, vocab);
+
+    for &(class_id, member_id) in &candidates {
+        let tokens = [
+            pipe, class_id, dot, all, open, close, arrow, filter, open, binder, pipe, dollar,
+            binder, dot, member_id, ws, eq, ws, literal, close, arrow, project, open, bopen,
+            binder, pipe, dollar, binder, dot, member_id, bclose, comma, bopen, col, bclose, close,
+        ];
+        if let Some(walk) = try_walk(grammar, schema, &tokens) {
+            return Some(walk);
+        }
+    }
+    None
+}
+
 /// A deterministic, schema-parameterized walk realizing
 /// `Class.all()->groupBy([], [agg(a|$a.<member>, b|$b-><reducer1>()),
 /// agg(a|$a.<member>, b|$b-><reducer2>())], ['<col1>', '<col2>'])` — the
@@ -1484,6 +1571,7 @@ fn recipe_walks(
         recipe_groupby_scalar_multi_agg(grammar, schema, vocab),
         recipe_groupby_restrict(grammar, schema, vocab),
         recipe_groupby_having_restrict(grammar, schema, vocab),
+        recipe_filter_project(grammar, schema, vocab),
     ]
     .into_iter()
     .flatten()
@@ -2479,6 +2567,8 @@ mod tests {
             "getInteger",
             ">",
             "restrict",
+            "project",
+            "==",
         ]
         .iter()
         .map(|s| s.as_bytes().to_vec())
@@ -3073,11 +3163,75 @@ mod tests {
     }
 
     #[test]
+    fn string_member_candidates_keeps_only_string_typed_members() {
+        let vocab = vocab_for_recipes();
+        assert_eq!(
+            string_member_candidates(&recipe_schema(), &vocab),
+            vec![(id_of(&vocab, "A"), id_of(&vocab, "label"))]
+        );
+    }
+
+    #[test]
+    fn recipe_filter_project_builds_the_expected_walk_from_a_real_schema() {
+        let grammar = CompiledGrammar::compile(vocab_for_recipes());
+        let vocab = grammar.vocab();
+        let expected: Vec<u32> = [
+            "|", "A", ".", "all", "(", ")", "->", "filter", "(", "a", "|", "$", "a", ".", "label",
+            " ", "==", " ", "'col1'", ")", "->", "project", "(", "[", "a", "|", "$", "a", ".",
+            "label", "]", ",", "[", "'col2'", "]", ")",
+        ]
+        .iter()
+        .map(|s| id_of(vocab, s))
+        .collect();
+        assert_eq!(
+            recipe_filter_project(&grammar, &recipe_schema(), vocab),
+            Some(expected)
+        );
+    }
+
+    #[test]
+    fn recipe_filter_project_is_none_without_the_project_step_name_in_vocab() {
+        let tokens: Vec<Vec<u8>> = [
+            "|", "A", ".", "all", "(", ")", "->", "filter", "a", "$", "label", "==", " ", "[", "]",
+            ",", "'col1'", "'col2'",
+        ]
+        .iter()
+        .map(|s| s.as_bytes().to_vec())
+        .collect();
+        let eos = tokens.len() as u32;
+        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens, eos));
+        assert_eq!(
+            recipe_filter_project(&grammar, &recipe_schema(), grammar.vocab()),
+            None
+        );
+    }
+
+    #[test]
+    fn recipe_filter_project_is_none_without_a_string_member() {
+        // "year" (Integer) is a real member, but not a `String` one — the
+        // shape's `==` comparator against a string literal needs a `String`
+        // member specifically.
+        let tokens: Vec<Vec<u8>> = [
+            "|", "A", ".", "all", "(", ")", "->", "filter", "project", "a", "$", "year", "==", " ",
+            "[", "]", ",", "'col1'", "'col2'",
+        ]
+        .iter()
+        .map(|s| s.as_bytes().to_vec())
+        .collect();
+        let eos = tokens.len() as u32;
+        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens, eos));
+        assert_eq!(
+            recipe_filter_project(&grammar, &recipe_schema(), grammar.vocab()),
+            None
+        );
+    }
+
+    #[test]
     fn recipe_walks_includes_only_the_recipes_that_actually_succeed() {
-        // The full vocabulary with include_reducer: all six recipes succeed.
+        // The full vocabulary with include_reducer: all seven recipes succeed.
         let full = CompiledGrammar::compile(vocab_for_recipes());
-        let all_six = recipe_walks(&full, &recipe_schema(), full.vocab(), true);
-        assert_eq!(all_six.len(), 6);
+        let all_seven = recipe_walks(&full, &recipe_schema(), full.vocab(), true);
+        assert_eq!(all_seven.len(), 7);
 
         // Missing "agg"/"groupBy"/"restrict"/quoted strings: only the
         // navigation-predicate recipe can succeed regardless of
@@ -3096,16 +3250,16 @@ mod tests {
 
     #[test]
     fn recipe_walks_excludes_only_the_reducer_recipe_when_include_reducer_is_false() {
-        // The full vocabulary supports all six recipes, but
+        // The full vocabulary supports all seven recipes, but
         // include_reducer=false (issue #55: the reducer recipe's bare
         // `->agg(...)` step is L1/L2-admissible but not real, compilable
         // Pure) drops only that one — `recipe_groupby`,
-        // `recipe_groupby_scalar_multi_agg`, `recipe_groupby_restrict`, and
-        // `recipe_groupby_having_restrict` (all real, compilable) stay
-        // included.
+        // `recipe_groupby_scalar_multi_agg`, `recipe_groupby_restrict`,
+        // `recipe_groupby_having_restrict`, and `recipe_filter_project` (all
+        // real, compilable) stay included.
         let full = CompiledGrammar::compile(vocab_for_recipes());
-        let five = recipe_walks(&full, &recipe_schema(), full.vocab(), false);
-        assert_eq!(five.len(), 5);
+        let six = recipe_walks(&full, &recipe_schema(), full.vocab(), false);
+        assert_eq!(six.len(), 6);
     }
 
     #[test]

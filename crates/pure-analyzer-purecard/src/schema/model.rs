@@ -424,6 +424,26 @@ impl Schema {
         )
     }
 
+    /// Whether `ident` resolves against `class` as a `String` primitive
+    /// member — an association nav or a non-`String` primitive both report
+    /// `false`. Same rationale and promotion as
+    /// [`member_is_numeric`](Self::member_is_numeric): a recipe comparing a
+    /// member against a string literal (`$a.member == 'x'`) needs a member
+    /// that actually resolves to `String`, not an association end an
+    /// unconstrained `==` comparator would otherwise leave pass-through.
+    ///
+    /// `#[doc(hidden)] pub`, re-exported as
+    /// `crate::schema::Schema::member_is_string`: test-support surface (issue
+    /// #55).
+    #[doc(hidden)]
+    #[must_use]
+    pub fn member_is_string(&self, class: &str, ident: &str) -> bool {
+        matches!(
+            self.resolve(class, ident),
+            Some(Resolved::Primitive { prim, .. }) if prim.type_class() == TypeClass::Str
+        )
+    }
+
     /// Resolve `ident` as a member of `class` (§6.4 S3): a stored/qualified
     /// property, or an association navigation, transitively over super-types.
     /// `None` means the identifier is not a member (a phantom / wrong-direction
@@ -619,6 +639,22 @@ mod tests {
         // A phantom member and an unknown class.
         assert!(!s.member_is_numeric("A", "phantom"));
         assert!(!s.member_is_numeric("Nope", "n"));
+    }
+
+    #[test]
+    fn member_is_string_is_true_only_for_a_string_primitive_member() {
+        let s = sample();
+        // A genuinely `String` primitive member (a qualified property).
+        assert!(s.member_is_string("A", "doubled"));
+        // A non-string primitive (Integer).
+        assert!(!s.member_is_string("A", "n"));
+        // An enum-typed member.
+        assert!(!s.member_is_string("A", "label"));
+        // An association nav (Class-typed, not a value at all).
+        assert!(!s.member_is_string("A", "toB"));
+        // A phantom member and an unknown class.
+        assert!(!s.member_is_string("A", "phantom"));
+        assert!(!s.member_is_string("Nope", "n"));
     }
 
     #[test]
