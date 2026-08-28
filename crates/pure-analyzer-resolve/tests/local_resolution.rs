@@ -4,9 +4,10 @@
 
 use std::collections::BTreeMap;
 
-use pure_analyzer_diagnostics::{DiagCode, ReasonCode};
+use pure_analyzer_diagnostics::{DiagCode, ReasonCode, TextRange};
 use pure_analyzer_model::{
-    ModelGraph, Multiplicity, Name, PmcdDocument, QName, QpKind, TypeRef, load_pmcd_documents,
+    ModelDocument, ModelGraph, Multiplicity, Name, PmcdDocument, PureDocument, QName, QpKind,
+    TypeRef, load_model_documents, load_pmcd_documents,
 };
 use pure_analyzer_resolve::{
     LocalValue, LocalValueKind, NavigationResolution, NavigationResolver, NavigationStep,
@@ -25,6 +26,15 @@ fn graph(elements: Vec<Value>) -> ModelGraph {
     let source = json!({"_type": "data", "elements": elements}).to_string();
     load_pmcd_documents(&[PmcdDocument::new("local-resolution-fixture", &source)])
         .expect("fixture must load")
+}
+
+fn exact_span(source: &str, declaration: &str) -> TextRange {
+    let start = source.find(declaration).expect("declaration occurs once");
+    let end = start + declaration.len();
+    TextRange::new(
+        u32::try_from(start).expect("source fits TextRange").into(),
+        u32::try_from(end).expect("source fits TextRange").into(),
+    )
 }
 
 fn qname(name: &str) -> QName {
@@ -377,6 +387,65 @@ fn navigation_failures_retain_ambiguity_cycle_and_member_arity_metadata() {
     assert!(arity.definition().is_some());
     assert!(arity.failure().completed().hops().is_empty());
     assert_eq!(arity.failure().step().name(), &name("byKey"));
+}
+
+#[test]
+fn wrong_arity_navigation_anchors_the_winning_cross_source_definition() {
+    let pure_member = "query(key: String[1]): String[1] {};";
+    let pure_source = format!("Class model::Source\n{{\n  {pure_member}\n}}");
+    let pmcd = json!({
+        "_type": "data",
+        "elements": [class(
+            "Source",
+            &[],
+            Vec::new(),
+            vec![user_qualified_property("query", "Integer", &["Integer"])],
+        )]
+    })
+    .to_string();
+
+    let pmcd_winner = load_model_documents(&[
+        ModelDocument::Pure(PureDocument::new("first.pure", &pure_source)),
+        ModelDocument::Pmcd(PmcdDocument::new("second.json", &pmcd)),
+    ])
+    .expect("mixed model must load");
+    let pmcd_resolver = NavigationResolver::new(&pmcd_winner);
+    let NavigationResolution::WrongArity(pmcd_mismatch) = pmcd_resolver.resolve(
+        &class_value(&pmcd_resolver, "Source"),
+        &[NavigationStep::property(name("query"))],
+    ) else {
+        panic!("the winning qualified property requires one argument");
+    };
+    assert_eq!(pmcd_mismatch.expected(), ONE_ARGUMENT);
+    assert_eq!(pmcd_mismatch.actual(), NO_ARGUMENTS);
+    let pmcd_anchor = pmcd_mismatch
+        .definition()
+        .expect("a member arity mismatch retains its definition");
+    assert_eq!(pmcd_anchor.source().index(), 1);
+    assert_eq!(pmcd_anchor.span(), None);
+
+    let pure_winner = load_model_documents(&[
+        ModelDocument::Pmcd(PmcdDocument::new("first.json", &pmcd)),
+        ModelDocument::Pure(PureDocument::new("second.pure", &pure_source)),
+    ])
+    .expect("mixed model must load");
+    let pure_resolver = NavigationResolver::new(&pure_winner);
+    let NavigationResolution::WrongArity(pure_mismatch) = pure_resolver.resolve(
+        &class_value(&pure_resolver, "Source"),
+        &[NavigationStep::property(name("query"))],
+    ) else {
+        panic!("the winning qualified property requires one argument");
+    };
+    assert_eq!(pure_mismatch.expected(), ONE_ARGUMENT);
+    assert_eq!(pure_mismatch.actual(), NO_ARGUMENTS);
+    let pure_anchor = pure_mismatch
+        .definition()
+        .expect("a member arity mismatch retains its definition");
+    assert_eq!(pure_anchor.source().index(), 1);
+    assert_eq!(
+        pure_anchor.span(),
+        Some(exact_span(&pure_source, pure_member))
+    );
 }
 
 #[test]
