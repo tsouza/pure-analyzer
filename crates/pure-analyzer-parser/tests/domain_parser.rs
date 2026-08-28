@@ -927,6 +927,430 @@ fn unterminated_body_trailing_trivia_does_not_invent_an_opaque_member() {
     assert_lossless(source, &parsed);
 }
 
+#[test]
+fn valid_extends_prefix_does_not_hide_a_dangling_supertype() {
+    let source = r#"
+Class demo::Broken extends demo::Base,
+{
+  kept: String[1];
+}
+"#;
+    let parsed = parse(source);
+
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_PROPERTY_DECL),
+        1
+    );
+    assert_eq!(
+        parsed
+            .coverage_gaps
+            .iter()
+            .map(|gap| gap.kind)
+            .collect::<Vec<_>>(),
+        vec![DomainCoverageGapKind::MalformedDeclaration],
+        "a later malformed supertype cannot be hidden by a valid prefix: {:#?}",
+        parsed.coverage_gaps
+    );
+    assert_lossless(source, &parsed);
+}
+
+#[test]
+fn a_missing_property_terminator_marks_that_property_malformed() {
+    let source = r#"
+Class demo::Broken
+{
+  value: String[1]
+}
+"#;
+    let parsed = parse(source);
+
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_PROPERTY_DECL),
+        1
+    );
+    assert_eq!(
+        parsed
+            .coverage_gaps
+            .iter()
+            .map(|gap| gap.kind)
+            .collect::<Vec<_>>(),
+        vec![DomainCoverageGapKind::MalformedDeclaration],
+        "a property is only a model fact when every required component is present: {:#?}",
+        parsed.coverage_gaps
+    );
+    assert_lossless(source, &parsed);
+}
+
+#[test]
+fn member_tail_recovery_leaves_the_closing_brace_for_the_class_body() {
+    let source = r#"
+Class demo::Broken
+{
+  broken: Foo junk;
+}
+"#;
+    let parsed = parse(source);
+
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_PROPERTY_DECL),
+        1
+    );
+    assert_eq!(
+        parsed
+            .coverage_gaps
+            .iter()
+            .map(|gap| gap.kind)
+            .collect::<Vec<_>>(),
+        vec![DomainCoverageGapKind::MalformedDeclaration],
+        "recovery must keep the malformed member scoped to its semicolon: {:#?}",
+        parsed.coverage_gaps
+    );
+    assert_eq!(
+        gap_texts(source, &parsed)
+            .iter()
+            .map(|gap| gap.trim())
+            .collect::<Vec<_>>(),
+        vec!["broken: Foo junk;"]
+    );
+    assert_lossless(source, &parsed);
+}
+
+#[test]
+fn malformed_parameter_tails_keep_the_qualified_property_body() {
+    let source = r#"
+Class demo::BrokenParameters
+{
+  derived(value: String[1] noise): String[1] { $this; };
+  kept: Integer[1];
+}
+"#;
+    let parsed = parse(source);
+
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_QUALIFIED_PROPERTY_DECL),
+        1
+    );
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_PROPERTY_DECL),
+        1
+    );
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::DOMAIN_OPAQUE_BODY), 1);
+    assert_eq!(
+        parsed
+            .coverage_gaps
+            .iter()
+            .map(|gap| gap.kind)
+            .collect::<Vec<_>>(),
+        vec![DomainCoverageGapKind::MalformedDeclaration],
+        "parameter recovery must not discard the known qualified-property body: {:#?}",
+        parsed.coverage_gaps
+    );
+    assert_lossless(source, &parsed);
+}
+
+#[test]
+fn generic_type_arguments_require_every_argument() {
+    let source = r#"
+Class demo::Broken
+{
+  value: List<, String>[1];
+}
+"#;
+    let parsed = parse(source);
+
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_PROPERTY_DECL),
+        1
+    );
+    assert_eq!(
+        parsed
+            .coverage_gaps
+            .iter()
+            .map(|gap| gap.kind)
+            .collect::<Vec<_>>(),
+        vec![DomainCoverageGapKind::MalformedDeclaration],
+        "one invalid type argument invalidates the containing model fact: {:#?}",
+        parsed.coverage_gaps
+    );
+    assert_lossless(source, &parsed);
+}
+
+#[test]
+fn multiplicity_requires_a_lower_bound_after_its_opening_bracket() {
+    let source = r#"
+Class demo::Broken
+{
+  value: String[];
+}
+"#;
+    let parsed = parse(source);
+
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_MULTIPLICITY),
+        1
+    );
+    assert_eq!(
+        parsed
+            .coverage_gaps
+            .iter()
+            .map(|gap| gap.kind)
+            .collect::<Vec<_>>(),
+        vec![DomainCoverageGapKind::MalformedDeclaration],
+        "an opening multiplicity bracket alone is not sufficient: {:#?}",
+        parsed.coverage_gaps
+    );
+    assert_lossless(source, &parsed);
+}
+
+#[test]
+fn malformed_profile_headers_do_not_yield_stereotype_facts() {
+    let source = r#"
+Profile demo::Broken
+{
+  stereotypes [sensitive];
+}
+"#;
+    let parsed = parse(source);
+
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_STEREOTYPE_DECL),
+        0,
+        "a section without its required colon must not yield stereotype declarations"
+    );
+    assert!(
+        parsed
+            .coverage_gaps
+            .iter()
+            .any(|gap| gap.kind == DomainCoverageGapKind::MalformedDeclaration),
+        "a profile section requires both its colon and opening bracket: {:#?}",
+        parsed.coverage_gaps
+    );
+    assert_lossless(source, &parsed);
+}
+
+#[test]
+fn a_missing_stereotype_name_invalidates_the_profile_section() {
+    let source = r#"
+Profile demo::Broken
+{
+  stereotypes: [first, , second];
+}
+"#;
+    let parsed = parse(source);
+
+    assert_eq!(
+        parsed
+            .coverage_gaps
+            .iter()
+            .map(|gap| gap.kind)
+            .collect::<Vec<_>>(),
+        vec![DomainCoverageGapKind::MalformedDeclaration],
+        "a valid stereotype before an omitted one cannot make the section valid: {:#?}",
+        parsed.coverage_gaps
+    );
+    assert_lossless(source, &parsed);
+}
+
+#[test]
+fn annotations_require_a_complete_path_and_value() {
+    for source in [
+        r#"
+Class {.meta = 'value'} demo::Broken
+{
+  value: String[1];
+}
+"#,
+        r#"
+Class {meta:: = 'value'} demo::Broken
+{
+  value: String[1];
+}
+"#,
+        r#"
+Class {meta::tag =} demo::Broken
+{
+  value: String[1];
+}
+"#,
+    ] {
+        let parsed = parse(source);
+
+        assert_eq!(
+            count_kind(&parsed.green, SyntaxKind::DOMAIN_STEREOTYPE_APPLICATIONS),
+            0,
+            "malformed annotations cannot become model-bearing applications"
+        );
+        assert!(contains_kind(&parsed.green, SyntaxKind::ERROR_NODE));
+        assert_eq!(
+            parsed
+                .coverage_gaps
+                .iter()
+                .map(|gap| gap.kind)
+                .collect::<Vec<_>>(),
+            vec![DomainCoverageGapKind::MalformedDeclaration],
+            "annotations need a complete path and a nonempty value: {:#?}",
+            parsed.coverage_gaps
+        );
+        assert_lossless(source, &parsed);
+    }
+}
+
+#[test]
+fn opaque_top_level_regions_end_at_semicolons() {
+    let source = r#"
+Enum demo::First;
+Enum demo::Second;
+Class demo::Kept
+{
+  value: String[1];
+}
+"#;
+    let parsed = parse(source);
+
+    assert_eq!(
+        parsed
+            .coverage_gaps
+            .iter()
+            .map(|gap| gap.kind)
+            .collect::<Vec<_>>(),
+        vec![
+            DomainCoverageGapKind::UnsupportedTopLevel,
+            DomainCoverageGapKind::UnsupportedTopLevel,
+        ],
+        "each semicolon-delimited unsupported declaration needs its own gap: {:#?}",
+        parsed.coverage_gaps
+    );
+    assert_eq!(
+        gap_texts(source, &parsed)
+            .iter()
+            .map(|gap| gap.trim())
+            .collect::<Vec<_>>(),
+        vec!["Enum demo::First;", "Enum demo::Second;"]
+    );
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::DOMAIN_CLASS_DECL), 1);
+    assert_lossless(source, &parsed);
+}
+
+#[test]
+fn opaque_top_level_regions_leave_a_stray_closing_brace_for_recovery() {
+    let source = r#"
+Enum demo::Skipped
+}
+Class demo::Kept
+{
+  value: String[1];
+}
+"#;
+    let parsed = parse(source);
+
+    assert_eq!(
+        parsed
+            .coverage_gaps
+            .iter()
+            .map(|gap| gap.kind)
+            .collect::<Vec<_>>(),
+        vec![DomainCoverageGapKind::UnsupportedTopLevel],
+        "adjacent unsupported top-level recovery ranges coalesce: {:#?}",
+        parsed.coverage_gaps
+    );
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_OPAQUE_NODE),
+        2,
+        "the stray closing brace needs its own recovery node"
+    );
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::DOMAIN_CLASS_DECL), 1);
+    assert_lossless(source, &parsed);
+}
+
+#[test]
+fn opaque_member_regions_end_at_semicolons() {
+    let source = r#"
+Class demo::Known
+{
+  nativeThing first;
+  nativeThing second;
+  kept: String[1];
+}
+"#;
+    let parsed = parse(source);
+
+    assert_eq!(
+        parsed
+            .coverage_gaps
+            .iter()
+            .map(|gap| gap.kind)
+            .collect::<Vec<_>>(),
+        vec![
+            DomainCoverageGapKind::UnsupportedMember,
+            DomainCoverageGapKind::UnsupportedMember,
+        ],
+        "each semicolon-delimited unsupported member needs its own gap: {:#?}",
+        parsed.coverage_gaps
+    );
+    assert_eq!(
+        gap_texts(source, &parsed)
+            .iter()
+            .map(|gap| gap.trim())
+            .collect::<Vec<_>>(),
+        vec!["nativeThing first;", "nativeThing second;"]
+    );
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_PROPERTY_DECL),
+        1
+    );
+    assert_lossless(source, &parsed);
+}
+
+#[test]
+fn nested_opaque_member_colons_do_not_start_qualified_properties() {
+    for source in [
+        r#"
+Class demo::Known
+{
+  nativeThing prefix (key: value) derived(): String[1] { $this; };
+  kept: String[1];
+}
+"#,
+        r#"
+Class demo::Known
+{
+  nativeThing prefix [key: value] derived(): String[1] { $this; };
+  kept: String[1];
+}
+"#,
+        r#"
+Class demo::Known
+{
+  nativeThing prefix { key: value } derived(): String[1] { $this; };
+  kept: String[1];
+}
+"#,
+    ] {
+        let parsed = parse(source);
+
+        assert_eq!(
+            count_kind(&parsed.green, SyntaxKind::DOMAIN_QUALIFIED_PROPERTY_DECL),
+            0,
+            "a nested colon belongs to the opaque member, not a following qualified property"
+        );
+        assert_eq!(
+            count_kind(&parsed.green, SyntaxKind::DOMAIN_PROPERTY_DECL),
+            1
+        );
+        assert_eq!(
+            parsed
+                .coverage_gaps
+                .iter()
+                .map(|gap| gap.kind)
+                .collect::<Vec<_>>(),
+            vec![DomainCoverageGapKind::UnsupportedMember],
+            "nested opaque content must remain one unsupported member: {:#?}",
+            parsed.coverage_gaps
+        );
+        assert_lossless(source, &parsed);
+    }
+}
+
 proptest! {
     #[test]
     fn arbitrary_domain_source_is_lossless_and_recovery_safe(source in ".{0,2048}") {
