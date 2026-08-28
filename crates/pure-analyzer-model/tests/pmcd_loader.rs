@@ -496,6 +496,36 @@ fn associations_require_two_known_unoccupied_ends() {
             ..
         }
     ));
+
+    let association_conflict = document(vec![
+        class("demo", "X", vec![]),
+        class("demo", "Y", vec![]),
+        association(
+            "demo",
+            "First",
+            vec![
+                property("firsts", "demo::X", 0, None),
+                property("shared", "demo::Y", 1, Some(1)),
+            ],
+        ),
+        association(
+            "demo",
+            "Second",
+            vec![
+                property("seconds", "demo::X", 0, None),
+                property("shared", "demo::Y", 1, Some(1)),
+            ],
+        ),
+    ]);
+    let error =
+        load_values(&[("bad", association_conflict)]).expect_err("PMCD association-end conflict");
+    assert!(matches!(
+        error,
+        ModelError::InvalidMergedGraph {
+            kind: ModelErrorKind::AssociationPropertyConflict { .. },
+            ..
+        }
+    ));
 }
 
 #[test]

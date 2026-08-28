@@ -874,7 +874,17 @@ fn preflight_association_failures(
         if contributors.len() < 2 {
             continue;
         }
+        let pmcd_contributor_count = contributors
+            .iter()
+            .copied()
+            .filter(|&index| associations[index].provenance == Provenance::Pmcd)
+            .count();
         for index in contributors {
+            // One closed-world PMCD end wins over open-world Pure candidates;
+            // two PMCD ends remain an invalid closed-world graph.
+            if pmcd_contributor_count == 1 && associations[index].provenance == Provenance::Pmcd {
+                continue;
+            }
             let _ = failures[index].get_or_insert_with(|| {
                 ModelErrorKind::AssociationPropertyConflict {
                     association: associations[index].path.clone(),

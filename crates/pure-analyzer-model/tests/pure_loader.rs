@@ -30,6 +30,95 @@ fn empty_pmcd_class(name: &str) -> String {
     .to_string()
 }
 
+const COLLIDING_PURE_ASSOCIATION: &str = r#"
+Association demo::APure
+{
+  others: demo::Left[*];
+  shared: demo::Right[1];
+}
+"#;
+
+fn trusted_pmcd_association() -> String {
+    json!({
+        "_type": "data",
+        "elements": [{
+            "_type": "association",
+            "package": "demo",
+            "name": "ZTrusted",
+            "stereotypes": [],
+            "properties": [
+                {
+                    "name": "lefts",
+                    "genericType": {"rawType": "demo::Left"},
+                    "multiplicity": {"lowerBound": 0, "upperBound": null}
+                },
+                {
+                    "name": "shared",
+                    "genericType": {"rawType": "demo::Right"},
+                    "multiplicity": {"lowerBound": 1, "upperBound": 1}
+                }
+            ]
+        }]
+    })
+    .to_string()
+}
+
+fn mixed_association_collision_graph(pure_first: bool) -> pure_analyzer_model::ModelGraph {
+    let left = empty_pmcd_class("Left");
+    let right = empty_pmcd_class("Right");
+    let trusted = trusted_pmcd_association();
+    let pure = ModelDocument::Pure(PureDocument::new(
+        "colliding.pure",
+        COLLIDING_PURE_ASSOCIATION,
+    ));
+    let left = ModelDocument::Pmcd(PmcdDocument::new("left.pmcd.json", &left));
+    let right = ModelDocument::Pmcd(PmcdDocument::new("right.pmcd.json", &right));
+    let trusted = ModelDocument::Pmcd(PmcdDocument::new("trusted.pmcd.json", &trusted));
+    let documents = if pure_first {
+        [pure, left, right, trusted]
+    } else {
+        [left, right, trusted, pure]
+    };
+    load_model_documents(&documents).expect("Pure uncertainty must not invalidate PMCD")
+}
+
+fn assert_trusted_pmcd_association(graph: &pure_analyzer_model::ModelGraph, trusted_source: u32) {
+    assert_eq!(graph.associations().len(), 1);
+    let trusted = graph.associations().first().expect("trusted association");
+    assert_eq!(trusted.path().as_str(), "demo::ZTrusted");
+    assert_eq!(trusted.provenance(), Provenance::Pmcd);
+    assert_eq!(trusted.source().index(), trusted_source);
+
+    let left = graph.class("demo::Left").expect("left");
+    assert!(left.coverage_gap());
+    assert_eq!(
+        left.properties()["shared"]
+            .association()
+            .expect("PMCD association provenance")
+            .as_str(),
+        "demo::ZTrusted"
+    );
+    let right = graph.class("demo::Right").expect("right");
+    assert!(right.coverage_gap());
+    assert!(!right.properties().contains_key("others"));
+}
+
+fn assert_unresolved_pure_collision(graph: &pure_analyzer_model::ModelGraph, pure_source: u32) {
+    assert_eq!(graph.diagnostics().len(), 1);
+    let diagnostic = &graph.diagnostics()[0];
+    assert_eq!(diagnostic.code, DiagCode::UnresolvedModelAssociation);
+    assert_eq!(diagnostic.severity, Severity::Error);
+    assert_eq!(diagnostic.primary.file.index(), pure_source);
+    assert!(diagnostic.message.contains("demo::APure"));
+    assert!(diagnostic.message.contains("demo::Left.shared"));
+    assert!(
+        graph
+            .diagnostics()
+            .iter()
+            .all(|diagnostic| diagnostic.code != MODEL_MERGE_CONFLICT)
+    );
+}
+
 #[test]
 fn pure_document_accessors_preserve_borrowed_input() {
     let document = PureDocument::new("memory:accessors.pure", "Class demo::Input {}");
@@ -415,6 +504,17 @@ Association demo::Links
             .properties()
             .contains_key("rights")
     );
+}
+
+#[test]
+fn pmcd_association_survives_a_colliding_pure_association_in_either_order() {
+    let pmcd_first = mixed_association_collision_graph(false);
+    assert_trusted_pmcd_association(&pmcd_first, 2);
+    assert_unresolved_pure_collision(&pmcd_first, 3);
+
+    let pure_first = mixed_association_collision_graph(true);
+    assert_trusted_pmcd_association(&pure_first, 3);
+    assert_unresolved_pure_collision(&pure_first, 0);
 }
 
 #[test]
