@@ -200,6 +200,29 @@ Each rule = "at this position, intersect L1's terminal set with this schema-lega
 - **T4 — string-predicate type rule.** `->startsWith(…)`, `->endsWith(…)`, `->contains(…)`, `->toLower()`/`->toUpper()` legal only when the receiver's resolved type is **String**.
 - **T5 — enum-comparison type rule.** A nav expression resolving to `EnumRef(E)` may be compared only against a value of enum `E` (pairs with N4); comparing it to a string/number literal is masked. Because L1 has no enum-literal operand position, this rule is outside the supported overlay.
 - **T6 — multiplicity / collapse rule.** A scalar comparison (`navExpr cmpop operand`), a scalar string/temporal `fn`, or scalar arithmetic requires the navExpr's resolved multiplicity to be **to-one** (`upper == 1`). A navigation whose resolved multiplicity is `[0..1]` or that crosses a to-many association end (e.g. from `Continents` via `fk0DefaultCountries` → `Countries[1..*]`) yields a _non-scalar_; using it scalar-wise is illegal — it must be **collapsed to `[1]` first**. The corpus-attested collapse operators are, in order of frequency: **`->toOne()`** (206 gold occurrences — the canonical `[0..1] → [1]` collapse, e.g. `$x.note->toOne()->contains('East')` and `$x.balance->toOne() + …`), an **aggregate** (`->sum()`/`->count()`/… inside `agg`), or an **existence predicate** (`->exists(lambda)` / `->isEmpty()` / `->isNotEmpty()`, which consume a to-many collection and return a scalar Boolean). L2 treats a `navExpr` immediately followed by any of these as scalar at the enclosing operator position. A scalar comparison applied to an _un-collapsed_ `[0..1]`/`[*]` navExpr is masked. (Optional-to-one `[0..1]` FK navigations DO occur in the pilot corpus and are collapsed with `->toOne()`; strictly-to-one `[1]` ends need no collapse.)
+  **Implementation caveat (2026-08-27, #56 research):** the 206-occurrence
+  `->toOne()` evidence and the `[0..1]` FK claim above are drawn from the
+  broader pilot survey, not the 8 committed `FIXTURE_DBS` schemas L2 rules are
+  actually implemented and soundness-verified against. Against those 8, this
+  rule's literal reading — masking scalar `cmp` on **any** non-to-one navExpr —
+  is **falsified** by the in-scope gold corpus itself: `car_1`'s
+  `$x.year < 1980` is a direct, uncollapsed ordered comparison on a `[0..1]`
+  **primitive** (`year: Integer`) and is part of the 269-query soundness-replay
+  set (`l2_soundness.rs`), so masking it would be a soundness regression. Every
+  `->toOne()` occurrence actually reachable in the 8 fixtures is on a
+  **primitive** property (`horsepower`, `isFullTime`, …), never on a
+  class-typed FK navigation — and every FK association across all 8 fixtures
+  is a strict many-to-one pattern (`[1,1]` in the traversed direction; the
+  reverse, to-many, end is never directly compared scalar-wise in the corpus).
+  So neither reading is implementable-and-verifiable today: the
+  any-multiplicity reading is directly falsified, and the
+  class-typed-navigation-only reading (the one consistent with `year < 1980`
+  staying legal) has zero exercisable positive-or-negative evidence in the
+  current fixture set. Implementing either without a new fixture schema
+  containing a genuinely optional/to-many-only FK association — or new
+  corpus cases sourced from beyond the current 8 — would violate the
+  corpus-evidence discipline (constitution §4: "do not invent constraints the
+  corpus does not exercise").
 - **T7 — projection/key lambda return-shape.** `colLambda`/`keyLambda` bodies must resolve to a **scalar** (`upper == 1`) primitive/enum value (a TDS column is scalar); a body left at a class or a to-many collection is masked. (Prevents `project([x|$x.fk0DefaultCountries], …)` — projecting a whole to-many navigation instead of one of its columns.)
 
 ### 6.7 Rule count
