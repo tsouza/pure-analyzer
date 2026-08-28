@@ -217,6 +217,49 @@ fused-tokenizers-run:
 fused-tokenizers-write: fused-tokenizers-fetch
     QWEN_TOKENIZER_JSON={{ quote(purecard_qwen_tokenizer) }} GPT4_TOKENIZER_JSON={{ quote(purecard_gpt4_tokenizer) }} WRITE_FUSED_FIXTURE=1 cargo test -p pure-analyzer-purecard --features fused-extract --test fused_tokenizer_extract -- --nocapture
 
+# ---------------------------------------------------------------------------
+# PureCARD real-model inference (issue #58)
+# ---------------------------------------------------------------------------
+
+# Pinned real-inference model (issue #58): Qwen2.5-Coder-0.5B-Instruct ships
+# tokenizer.json byte-identical to the 7B revision already pinned above
+# (verified at pin time), so every byte-vocab helper the Qwen tokenizer lanes
+# already use carries over unchanged. Apache-2.0; the 0.5B size (~1 GiB) fits
+# this project's CPU-only compute/CI budget — a larger sibling shares the same
+# tokenizer but would need its own revision pin and budget review.
+purecard_qwen_infer_model := "Qwen/Qwen2.5-Coder-0.5B-Instruct"
+purecard_qwen_infer_revision := "ea3f2471cf1b1f0db85067f1ef93848e38e88c25"
+purecard_qwen_infer_dir := justfile_directory() + "/target/purecard/qwen-infer"
+
+# Fetch the pinned real-inference model weights + tokenizer into a local,
+# gitignored cache (never committed — constitution §2's model-artifact rule).
+[working-directory('crates/pure-analyzer-purecard')]
+qwen-infer-model-fetch:
+    uv run --locked --python 3.12 --no-managed-python --group real-model hf download {{ quote(purecard_qwen_infer_model) }} --revision {{ quote(purecard_qwen_infer_revision) }} --local-dir {{ quote(purecard_qwen_infer_dir) }}
+
+# Drive real-model Python inference through PureCARD (issue #58): fetch the
+# pinned weights, then run the harness alone (no Legend compile-check). Not
+# part of `just test-python` / `just ci` — heavy and network-fed, like the
+# Qwen tokenizer oracles above.
+real-model-infer: qwen-infer-model-fetch
+    just real-model-infer-run
+
+# Run the real-model harness from an already-populated model cache (the
+# CI-friendly entry point).
+[working-directory('crates/pure-analyzer-purecard')]
+real-model-infer-run:
+    PURECARD_QWEN_INFER_DIR={{ quote(purecard_qwen_infer_dir) }} uv run --locked --python 3.12 --no-managed-python --group real-model python -m pytest python/tests/test_real_model_inference.py -v
+
+# Full issue-#58 pipeline: real-model inference, then compile every completed
+# constrained output through the live Legend stack. The harness runs first as
+# a `just` dependency (xtask's shellouts are limited to the vetted
+# cargo/git/buf/ast-grep/bun/docker allowlist — `just`/`uv` are not on it, so
+# this step is sequenced here, not inside xtask); xtask then owns Compose
+# startup, the compile-check invocation, and unconditional teardown (mirrors
+# `test-legend`).
+test-real-model: real-model-infer
+    cargo xtask test-real-model
+
 # Criterion benchmarks. On CI these run under CodSpeed (see ci.yml).
 bench:
     cargo bench --workspace
@@ -318,9 +361,14 @@ wheel:
 
 # Build/install the extension in uv's project-local environment, then run the
 # pinned hermetic Python tests. No pre-activated virtualenv is required.
+# `--ignore`s the real-model harness test (issue #58): it imports `torch`/
+# `transformers`, which the `test` dependency group deliberately excludes to
+# keep this lane network- and heavy-dependency-free, so collecting it here
+# would fail every PR touching PureCARD's Python surface, not just skip it
+# quietly. That file runs only via `just real-model-infer`/`test-real-model`.
 [working-directory('crates/pure-analyzer-purecard')]
 test-python:
-    uv run --locked --python 3.12 --no-managed-python --group test python -m pytest python/tests
+    uv run --locked --python 3.12 --no-managed-python --group test python -m pytest python/tests --ignore=python/tests/test_real_model_inference.py
 
 # ---------------------------------------------------------------------------
 # Structural / hygiene checks

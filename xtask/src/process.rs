@@ -65,3 +65,35 @@ pub fn run_cargo_steps(steps: &[&[&str]]) -> Result<()> {
     }
     Ok(())
 }
+
+/// Run `program` with `args` and `envs` set on the child only (never the
+/// current process — `std::env::set_var` is `unsafe` as of Rust 2024 and this
+/// crate is `#![forbid(unsafe_code)]`), inheriting stdio, and fail if it
+/// exits non-zero.
+///
+/// # Errors
+///
+/// Returns an error if the process cannot be spawned or exits with a non-zero
+/// status (or is killed by a signal).
+pub fn run_with_env(program: &str, args: &[&str], envs: &[(&str, &str)]) -> Result<()> {
+    let prefix = envs
+        .iter()
+        .map(|(key, value)| format!("{key}={value}"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    eprintln!("+ {prefix} {program} {}", args.join(" "));
+
+    let status = Command::new(program)
+        .args(args)
+        .envs(envs.iter().copied())
+        .status()
+        .with_context(|| format!("failed to spawn `{program}` (is it installed and on PATH?)"))?;
+
+    if !status.success() {
+        match status.code() {
+            Some(code) => bail!("`{program}` exited with status {code}"),
+            None => bail!("`{program}` was terminated by a signal"),
+        }
+    }
+    Ok(())
+}

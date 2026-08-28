@@ -32,6 +32,8 @@ enum Command {
     Sweep,
     /// Bring up the Legend stack, test only PureCARD, and always tear down.
     TestLegend,
+    /// Run the real-model harness, compile its output against Legend, and always tear down.
+    TestRealModel,
     /// Verify the frozen Legend parser corpus; `--refresh` also checks its live oracle.
     ParserDifferential {
         /// Refresh from the exact version-pinned Legend grammar endpoint before replaying.
@@ -91,6 +93,7 @@ fn main() -> Result<()> {
         Command::Ci => tasks::ci(),
         Command::Sweep => tasks::sweep(),
         Command::TestLegend => tasks::test_legend(),
+        Command::TestRealModel => tasks::test_real_model(),
         Command::ParserDifferential { refresh } => tasks::parser_differential(refresh),
         Command::TestMutation => tasks::test_mutation(),
         Command::TestMutationShard { index, total } => tasks::test_mutation_shard(index, total),

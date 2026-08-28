@@ -11,6 +11,7 @@ grammar/masking semantics themselves are the Rust suite's job; this asserts the
 import pytest
 
 import purecard
+from support.mask_bits import bit_set as _bit_set
 
 # A whole-token vocabulary mirroring the Rust `token_vocab` fixture: a complete
 # source expression, a step opener, a digit, a closer, and the empty token. Token
@@ -21,11 +22,6 @@ EOS_ID = 4
 VOCAB_LEN = len(VOCAB)
 # "|X.all()->take(1)" as a token-id stream: source, step, digit, closer.
 GOLD_QUERY = [0, 1, 2, 3]
-
-
-def _bit_set(mask: bytes, idx: int) -> bool:
-    """Whether bit ``idx`` is set in the little-endian packed mask."""
-    return bool((int.from_bytes(mask, "little") >> idx) & 1)
 
 
 @pytest.fixture

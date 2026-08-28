@@ -23,14 +23,15 @@ mod l2;
 mod legend;
 #[path = "support/lex.rs"]
 mod lex;
-#[path = "support/store_grammar.rs"]
-mod store_grammar;
+#[path = "support/schema_context.rs"]
+mod schema_context;
 
 use corpus::load_gold;
 use fixture_dbs::FIXTURE_DBS;
 use l2::{TokenVocab, load_schema};
 use legend::{LegendClient, ReturnTypeOutcome};
 use purecard::CompiledGrammar;
+use schema_context::{first_class_path, full_model_text, pure_model_text};
 use schema_walker::generate_first_complete_schema_walks;
 
 const ENGINE_BASE: &str = "http://localhost:6300/api";
@@ -39,87 +40,6 @@ const STRUCTURAL_BYTES: &[u8] = b"abXY1_ |{}()[].,;:$%'-><=!&+*/";
 
 fn corpus_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("corpus/gold_queries.jsonl")
-}
-
-/// `db_id`'s full Pure model text: the committed Class/Association grammar
-/// (`pure_model_text`) plus the derived Database/Mapping/Connection/Runtime
-/// grammar (`store_grammar::store_grammar_text`) arm-A's
-/// `Db->tableReference(...)->tableToTDS()` shape needs and a class-anchored
-/// query's own execution coordinates (`ClassRt`/`DbMapping`) name. Assembled
-/// the same way for every caller in this file, so a PMCD built from it always
-/// carries the complete, documented coordinate set.
-fn full_model_text(db_id: &str) -> String {
-    format!(
-        "{}\n{}",
-        pure_model_text(db_id),
-        store_grammar::store_grammar_text(db_id)
-    )
-}
-
-/// The `corpus/schemas/*.md` context-file basename for `db_id` — the first
-/// five [`FIXTURE_DBS`] are arm-C pilot contexts, the last three are
-/// out-of-sample (`fixture_dbs.rs`'s own doc comment: "five arm-C pilot
-/// contexts plus the three out-of-sample (OOS) held-out schemas").
-fn schema_context_file(db_id: &str) -> PathBuf {
-    let prefix = match db_id {
-        "dog_kennels" | "student_transcripts_tracking" | "world_1" => "oos_ctx",
-        _ => "armC_ctx",
-    };
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("corpus/schemas")
-        .join(format!("{prefix}_{db_id}.md"))
-}
-
-/// Extract the fenced ```pure code block under the `## Pure model` heading of
-/// `db_id`'s committed schema-context file — the model text `run_pilot`
-/// itself parses via `grammarToJson` (per that file's own "Assemble from
-/// grammar" note), reproduced here rather than fetched from a live SDLC
-/// workspace so this test is hermetic and CI-reproducible.
-fn pure_model_text(db_id: &str) -> String {
-    let path = schema_context_file(db_id);
-    let text = std::fs::read_to_string(&path)
-        .unwrap_or_else(|err| panic!("read schema context {}: {err}", path.display()));
-    let heading = "## Pure model";
-    let heading_at = text
-        .find(heading)
-        .unwrap_or_else(|| panic!("{} has no `{heading}` section", path.display()));
-    let after_heading = &text[heading_at..];
-    let fence_open = after_heading
-        .find("```pure\n")
-        .unwrap_or_else(|| panic!("{} has no ```pure fence after {heading}", path.display()));
-    let body_start = fence_open + "```pure\n".len();
-    let body = &after_heading[body_start..];
-    let fence_close = body
-        .find("```")
-        .unwrap_or_else(|| panic!("{} has an unterminated ```pure fence", path.display()));
-    body[..fence_close].to_string()
-}
-
-/// The first `classes:` entry from `db_id`'s `## Execution coordinates`
-/// section — every schema-context file lists at least one, so a bare
-/// `Class.all()` lambda is always constructible without per-class knowledge.
-fn first_class_path(db_id: &str) -> String {
-    let path = schema_context_file(db_id);
-    let text = std::fs::read_to_string(&path)
-        .unwrap_or_else(|err| panic!("read schema context {}: {err}", path.display()));
-    let line = text
-        .lines()
-        .find(|line| line.starts_with("- classes:"))
-        .unwrap_or_else(|| panic!("{} has no `- classes:` line", path.display()));
-    let first_backtick = line.find('`').unwrap_or_else(|| {
-        panic!(
-            "{} `- classes:` line has no backtick-quoted class",
-            path.display()
-        )
-    });
-    let rest = &line[first_backtick + 1..];
-    let end = rest.find('`').unwrap_or_else(|| {
-        panic!(
-            "{} `- classes:` line has an unterminated backtick",
-            path.display()
-        )
-    });
-    rest[..end].to_string()
 }
 
 /// The full, real, execution-verified gold corpus — arm-A

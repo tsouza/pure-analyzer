@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
-use crate::process::{run, run_cargo_steps, run_stdout};
+use crate::process::{run, run_cargo_steps, run_stdout, run_with_env};
 
 /// Reject empty names and path-escaping input (`/`, `\`, `..`) before it's
 /// interpolated into a filesystem or worktree path.
@@ -234,6 +234,110 @@ pub fn test_legend() -> Result<()> {
         (Err(test_err), Err(teardown_err)) => Err(test_err.context(format!(
             "PureCARD Legend tests failed and stack teardown failed; containers may remain: \
              {teardown_err:#}"
+        ))),
+        (Err(test_err), Ok(())) => Err(test_err),
+        (Ok(()), teardown) => teardown,
+    }
+}
+
+/// Path to the JSONL file the real-model Python harness writes
+/// (`write_generated_queries_jsonl`, `python/tests/support/real_model.py`),
+/// relative to the workspace root, consumed by
+/// `tests/real_model_legend_compile.rs`.
+const PURECARD_REAL_MODEL_QUERIES: &str = "target/purecard/real-model/generated_queries.jsonl";
+
+/// Absolute form of [`PURECARD_REAL_MODEL_QUERIES`]. `cargo nextest` runs
+/// each test binary with its *package* directory as the working directory,
+/// not the workspace root `xtask` itself runs from — a relative path here
+/// would resolve against the wrong directory, exactly the pitfall
+/// `QWEN_TOKENIZER_JSON`'s own absolute-path convention (`justfile`'s
+/// `justfile_directory()`-rooted vars) already avoids.
+///
+/// # Errors
+///
+/// Returns an error if the current working directory cannot be read.
+fn purecard_real_model_queries_abs() -> Result<String> {
+    let cwd = std::env::current_dir().context("read current working directory")?;
+    join_abs(&cwd, PURECARD_REAL_MODEL_QUERIES)
+}
+
+/// Join `base` with `relative` and render as UTF-8, split out from
+/// [`purecard_real_model_queries_abs`] so the joining logic is unit-testable
+/// without an environment-dependent `current_dir()` call.
+///
+/// # Errors
+///
+/// Returns an error if the joined path is not valid UTF-8.
+fn join_abs(base: &Path, relative: &str) -> Result<String> {
+    let joined = base.join(relative);
+    Ok(joined
+        .to_str()
+        .context("workspace path is not valid UTF-8")?
+        .to_owned())
+}
+
+/// Run the Legend half of the issue-#58 pipeline: bring up the Legend stack,
+/// compile-check the real-model Python harness's already-produced output
+/// (`just test-real-model` runs the harness first, as a `just` dependency —
+/// `just`/`uv` are not on the vetted external-tool allowlist `xtask` shells
+/// out through, so the harness step is sequenced in `just`, not here), and
+/// always tear down — the same shape as [`test_legend`].
+///
+/// # Errors
+///
+/// Returns the startup, test, or teardown failure. If the primary operation
+/// and cleanup both fail, cleanup is attached as context to the primary error.
+pub fn test_real_model() -> Result<()> {
+    let queries_path = purecard_real_model_queries_abs()?;
+
+    let started = run(
+        "docker",
+        &[
+            "compose",
+            "-f",
+            PURECARD_LEGEND_COMPOSE,
+            "up",
+            "-d",
+            "--wait",
+            "--wait-timeout",
+            PURECARD_LEGEND_WAIT_TIMEOUT_SECS,
+        ],
+    );
+    if let Err(start_err) = started {
+        let torn_down = run(
+            "docker",
+            &["compose", "-f", PURECARD_LEGEND_COMPOSE, "down"],
+        );
+        return match torn_down {
+            Ok(()) => Err(start_err),
+            Err(teardown_err) => Err(start_err.context(format!(
+                "PureCARD Legend stack startup failed and cleanup failed; containers may remain: \
+                 {teardown_err:#}"
+            ))),
+        };
+    }
+    let tested = run_with_env(
+        "cargo",
+        &[
+            "nextest",
+            "run",
+            "-p",
+            PURECARD_PACKAGE,
+            "--features",
+            "legend",
+            "--test",
+            "real_model_legend_compile",
+        ],
+        &[("PURECARD_REAL_MODEL_QUERIES", queries_path.as_str())],
+    );
+    let torn_down = run(
+        "docker",
+        &["compose", "-f", PURECARD_LEGEND_COMPOSE, "down"],
+    );
+    match (tested, torn_down) {
+        (Err(test_err), Err(teardown_err)) => Err(test_err.context(format!(
+            "PureCARD real-model Legend compile-check failed and stack teardown failed; \
+             containers may remain: {teardown_err:#}"
         ))),
         (Err(test_err), Ok(())) => Err(test_err),
         (Ok(()), teardown) => teardown,
@@ -3095,5 +3199,18 @@ decoder.workspace = true
             }
         }
         assert!(checked > 0, "expected at least one `just` invocation in CI");
+    }
+
+    #[test]
+    fn join_abs_renders_a_utf8_joined_path() {
+        let joined = join_abs(
+            Path::new("/workspace/root"),
+            "target/purecard/real-model/generated_queries.jsonl",
+        )
+        .expect("valid UTF-8 join");
+        assert_eq!(
+            joined,
+            "/workspace/root/target/purecard/real-model/generated_queries.jsonl"
+        );
     }
 }
