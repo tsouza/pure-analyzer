@@ -1053,6 +1053,44 @@ Profile demo::First
 }
 
 #[test]
+fn opaque_profile_members_leave_later_sections_intact() {
+    let source = r#"
+Profile demo::Known
+{
+  nativeThing custom;
+  stereotypes: [sensitive];
+}
+"#;
+    let parsed = parse(source);
+
+    assert!(parsed.diagnostics.is_empty(), "{:#?}", parsed.diagnostics);
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_PROFILE_DECL),
+        1
+    );
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::DOMAIN_OPAQUE_NODE), 1);
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_PROFILE_SECTION),
+        1
+    );
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_STEREOTYPE_DECL),
+        1
+    );
+    assert_eq!(
+        parsed
+            .coverage_gaps
+            .iter()
+            .map(|gap| gap.kind)
+            .collect::<Vec<_>>(),
+        vec![DomainCoverageGapKind::UnsupportedMember],
+        "the unsupported member must not suppress later profile facts: {:#?}",
+        parsed.coverage_gaps
+    );
+    assert_lossless(source, &parsed);
+}
+
+#[test]
 fn a_missing_property_terminator_marks_that_property_malformed() {
     let source = r#"
 Class demo::Broken
@@ -1143,6 +1181,51 @@ Class demo::BrokenParameters
         "parameter recovery must not discard the known qualified-property body: {:#?}",
         parsed.coverage_gaps
     );
+    assert_lossless(source, &parsed);
+}
+
+#[test]
+fn parameter_recovery_advances_to_later_parameters() {
+    let source = r#"
+Class demo::RecoveredParameters
+{
+  derived(first: String[1] junk, second: Integer[1]): String[1] { $this; };
+  kept: Boolean[1];
+}
+"#;
+    let parsed = parse(source);
+
+    assert!(
+        parsed
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == DiagCode::MalformedSyntax),
+        "{:#?}",
+        parsed.diagnostics
+    );
+    assert_eq!(
+        parsed
+            .coverage_gaps
+            .iter()
+            .map(|gap| gap.kind)
+            .collect::<Vec<_>>(),
+        vec![DomainCoverageGapKind::MalformedDeclaration],
+        "parameter recovery must keep the qualified-property conservatively covered: {:#?}",
+        parsed.coverage_gaps
+    );
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_QUALIFIED_PROPERTY_DECL),
+        1
+    );
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_PARAMETER_DECL),
+        2
+    );
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_PROPERTY_DECL),
+        1
+    );
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::DOMAIN_OPAQUE_BODY), 1);
     assert_lossless(source, &parsed);
 }
 

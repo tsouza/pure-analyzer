@@ -246,7 +246,8 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
             self.parse_opaque_expression();
         }
         let terminator = self.consume_member_terminator();
-        if !name || !colon || !ty || !multiplicity || !terminator {
+        let malformed = [name, colon, ty, multiplicity, terminator].contains(&false);
+        if malformed {
             self.mark_gap_from(start, DomainCoverageGapKind::MalformedDeclaration);
         }
         self.close();
@@ -320,6 +321,7 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
                 return valid;
             }
             self.syntax_error("expected `,` or `)` after a qualified-property parameter");
+            valid = false;
             self.recover_until(&[
                 TokenKind::COMMA,
                 TokenKind::PAREN_CLOSE,
@@ -372,7 +374,8 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
             let before = self.index;
             if self.at_keyword("stereotypes") || self.at_keyword("tags") {
                 valid &= self.parse_profile_section();
-            } else if !self.consume_if_raw(TokenKind::SEMICOLON) {
+            } else if self.consume_if_raw(TokenKind::SEMICOLON) {
+            } else {
                 self.parse_opaque_member();
             }
             if self.index == before {
