@@ -35,6 +35,7 @@
 //! RNG would couple two otherwise-independent modules for a ~20-line,
 //! fully-specified algorithm neither needs from the other.
 
+use purecard::grammar::pda::{Pda, State};
 use purecard::{CompiledGrammar, DecoderSession, Schema, Vocab};
 
 /// The single name a pipeline-source dot is ever narrowed to (`SOURCE_METHOD`
@@ -66,18 +67,46 @@ const MIN_LEN: usize = 1;
 /// closes toward completion. Tokens are whole lexemes (often several bytes),
 /// so this target is smaller than a byte-count target for a comparably shaped
 /// walk.
-const GROW_MIN: u64 = 2;
-const GROW_MAX: u64 = 12;
+///
+/// Widened from the original `[2, 12)` (issue #117): a minimal
+/// `Class.all()->filter(x|$x.field == 'literal')` continuation alone needs
+/// ~18 tokens (`->`, `filter`, `(`, binder, `|`, `$`, binder-ref, `.`, field
+/// name, `==`, literal, `)`, on top of the source/`.all()` prefix), so `12`
+/// was mathematically below the shortest real class-navigation predicate —
+/// confirmed live: across 512 generated walks (64 × 8 fixture schemas) under
+/// the original range, `schema_walk_rule_coverage.rs` found N1/N2/T1/T2/T3/N6
+/// never fired even once. `HARD_CAP` leaves `HARD_CAP - GROW_MAX = 24` tokens
+/// of closing-phase budget past the new ceiling, comfortably more than a
+/// filter clause's own closing sequence needs.
+const GROW_MIN: u64 = 20;
+const GROW_MAX: u64 = 60;
 
 /// Hard cap on emitted tokens per attempt — a safety bound so a pathological
-/// walk terminates rather than spins.
-const HARD_CAP: usize = 64;
+/// walk terminates rather than spins. Widened alongside `GROW_MAX` (issue
+/// #117) so the closing phase past a deep growth target still has a
+/// comfortable budget (`HARD_CAP - GROW_MAX = 68` tokens) to actually close
+/// out a filter/aggregation clause's own nested brackets.
+const HARD_CAP: usize = 128;
 
 /// Weight added, in the closing phase, to a candidate whose result is a
 /// completed session — biases each closing step toward finishing the walk.
 const ACCEPT_BONUS: u32 = 10;
 
-/// Uniform per-candidate weight outside the accept bonus.
+/// Weight added, at the pipeline-source position only, to a candidate that
+/// names a real schema class — biasing exploration toward `Class.all()->…`
+/// (arm-C) over the store path's own equally N3-legal but far less
+/// grammatically constrained arm-A/relational territory (issue #117).
+/// Widening [`GROW_MIN`]/[`GROW_MAX`] alone did not fix #117's finding
+/// (confirmed live: even at `GROW_MAX = 60`/`HARD_CAP = 128`, walks reached
+/// 127 tokens without ever completing real class-member navigation) — the
+/// store path's generic value-expression grammar has a combinatorially larger
+/// branching factor than a class's own well-typed navigation, so uniform
+/// random selection gets diluted away from it long before growth budget runs
+/// out. A store-path walk is still reachable (this only *biases*, unlike
+/// `MustOpen`'s hard override), preserving arm-A/relational coverage.
+const CLASS_SOURCE_BONUS: u32 = 200;
+
+/// Uniform per-candidate weight outside the accept/class-source bonuses.
 const DEFAULT_WEIGHT: u32 = 1;
 
 /// SplitMix64 — see the module docs for why this is its own copy rather than
@@ -166,6 +195,111 @@ fn ends_with_closer(bytes: &[u8]) -> bool {
 /// token.
 const ARROW_BYTES: &[u8] = b"->";
 
+/// Every keyword name `docs/spec/grammar.md` §5.2–§5.3 (plus its arm-R
+/// extension, §7's `relFnGroupBy`/`relProject`/`relSort`/`relExtendWindow`/
+/// `relRename`) admits right after a `->` arrow: `step`, `reducer`,
+/// `boolPred`, `collapse`, and `fn`'s productions, plus the two
+/// `relationalSource` method names and the two nested helper calls
+/// (`colRename`'s `pair`, `colDef`'s `col`). Deliberately excludes
+/// `tdsGetter`'s names (`getInteger`/…) — `colAccess` dot-calls those, they
+/// never follow an arrow.
+///
+/// Biases [`build_candidates`]'s arrow-method-name choice toward these
+/// (issue #117): nothing in this overlay narrows that position at all (it
+/// isn't a schema member lookup, so N1/N2/N6 don't apply, and no rule
+/// enforces "this identifier names a real Pure builtin" — left to the
+/// compiler oracle per the grammar's own over-approximation). Left
+/// unconstrained, the position draws uniformly from the *entire* vocabulary,
+/// which is dominated by schema property/association/column names (never
+/// legal there) — confirmed live: walks like
+/// `Db->fk2DefaultCarMakers('avg'==…)` treat an association name as an
+/// arrow-called method. A property name is essentially never *also* one of
+/// these ~40 fixed keywords, so this bias reliably steers exploration toward
+/// a real pipeline step instead.
+const ARROW_METHOD_NAMES: &[&str] = &[
+    // step (§5.2)
+    "filter",
+    "project",
+    "groupBy",
+    "olapGroupBy",
+    "restrict",
+    "sort",
+    "take",
+    "distinct",
+    "renameColumns",
+    "extend",
+    "join",
+    "limit",
+    "agg",
+    // nested helper calls (colRename, colDef)
+    "pair",
+    "col",
+    // reducer (§5.3)
+    "count",
+    "sum",
+    "average",
+    "min",
+    "max",
+    "size",
+    "rowNumber",
+    // boolPred (§5.3)
+    "exists",
+    "contains",
+    "startsWith",
+    "endsWith",
+    "isEmpty",
+    "isNotEmpty",
+    "between",
+    // collapse (§5.3, T6)
+    "toOne",
+    // fn (§5.3)
+    "parseFloat",
+    "parseInteger",
+    "toString",
+    "toLower",
+    "toUpper",
+    "substring",
+    "year",
+    "at",
+    "cast",
+    "first",
+    "concatenate",
+    // relationalSource (§5.2)
+    "tableReference",
+    "tableToTDS",
+    // arm-R extension (§7)
+    "over",
+    "rename",
+];
+
+/// Weight added, right after a `->` arrow (`PendingCall::JustArrowed`), to a
+/// candidate whose bytes exactly match one of [`ARROW_METHOD_NAMES`] — see
+/// that constant's doc comment for why this position needs the bias.
+const ARROW_METHOD_BONUS: u32 = 200;
+
+/// Weight added, right after a `$` (`State::AfterDollar`), to a candidate
+/// exactly matching `attempt`'s tracked `known_binder` — the identifier a
+/// lambda pipe (`x|…`) was most recently opened with. Nothing in this
+/// overlay narrows a refVar's own name to the currently-bound identifiers
+/// (`$`+any identifier is admissible, real or not — a residue left to the
+/// compiler oracle), so without this bias the walker draws the post-`$`
+/// identifier independently and uniformly at random, essentially never
+/// reusing the exact binder name — meaning `$x.field` almost never actually
+/// resolves against the class `x` was bound to, even once `filter(x|…)`
+/// itself is reached (issue #117).
+const KNOWN_BINDER_BONUS: u32 = 500;
+
+/// Weight added, right after a `$known_binder` reference just completed
+/// (`attempt`'s `just_referenced_binder`), to the `.` candidate — continuing
+/// straight into member navigation rather than diluting across the many
+/// other legal continuations of a completed term (`->`, a comparator,
+/// arithmetic, a closer, `&&`/`||`, …). Reaching `$known_binder` at all is
+/// already the rarer event this bias chain exists for (issue #117); left
+/// unbiased here, that reuse alone still overwhelmingly does *not* continue
+/// into `.field` (confirmed live: `$b||…`, `$m>=…` — every legal term
+/// continuation competing equally).
+const NAVIGATION_DOT_BONUS: u32 = 200;
+
 /// Whether the token just emitted (`bytes`) is a bound-variable reference
 /// (`$`), or completes a `->` arrow hop (`emitted`, the full byte run so
 /// far, ends in [`ARROW_BYTES`]) — either marks that the pipeline's source
@@ -178,6 +312,34 @@ fn marks_arrow_or_dollar(bytes: &[u8], emitted: &[u8]) -> bool {
 /// A byte that can continue a bare identifier or number lexeme.
 fn is_word_byte(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'_'
+}
+
+/// Whether `bytes` is shaped like a plain identifier (a legal `binderVar`) —
+/// starts with a letter/underscore, every byte is a word byte. Used to
+/// recognize a lambda binder name (see `attempt`'s `known_binder` tracking).
+fn looks_like_ident(bytes: &[u8]) -> bool {
+    matches!(bytes.first(), Some(&b) if b.is_ascii_alphabetic() || b == b'_')
+        && bytes.iter().all(|&b| is_word_byte(b))
+}
+
+/// Whether the token just accepted (`bytes`) opens the lambda of the
+/// identifier before it (`last_token`) — a bare `|` immediately after
+/// something identifier-shaped (`binderVar "|" …`, the grammar's only use of
+/// a bare `|` past the query-opening one, which has no preceding token to
+/// match this) — factored out of `attempt` so the exact condition is directly
+/// unit-testable without needing a full grammar/schema/session fixture (see
+/// `attempt`'s `known_binder` tracking).
+fn opens_binder_lambda(bytes: &[u8], last_token: &[u8]) -> bool {
+    bytes == b"|" && looks_like_ident(last_token)
+}
+
+/// Whether the token just accepted (`last_token`) is itself a reference to
+/// the tracked lambda binder (`known_binder`) — factored out of `attempt` so
+/// the exact condition (an empty `last_token` never counts, even against a
+/// `known_binder` of `None`) is directly unit-testable (see `attempt`'s
+/// `just_referenced_binder`, which biases the *following* step toward `.`).
+fn is_binder_reference(last_token: &[u8], known_binder: Option<&[u8]>) -> bool {
+    !last_token.is_empty() && known_binder == Some(last_token)
 }
 
 /// Whether appending a token starting with `next_first` right after one
@@ -312,6 +474,8 @@ fn attempt(
     let mut emitted: Vec<u8> = Vec::new();
     let mut pending = PendingCall::None;
     let mut last_byte: Option<u8> = None;
+    let mut last_token: Vec<u8> = Vec::new();
+    let mut known_binder: Option<Vec<u8>> = None;
     let mut seen_arrow_or_dollar = false;
     let mut pending_source_method = false;
     let mut source_method_progress: Vec<u8> = Vec::new();
@@ -321,7 +485,21 @@ fn attempt(
         if !growing && attempt_may_stop(pending_source_method, &pending, &session, out.len()) {
             return (Some(out), rng.state);
         }
-        let cands = build_candidates(&mut session, vocab, &pending, growing, last_byte);
+        // Whether the token just emitted was itself a reference to the known
+        // binder (`$x` completing) — biases the *following* step toward `.`,
+        // continuing straight into member navigation (see
+        // `build_candidates`'s `JUST_REFERENCED_BINDER_DOT_BONUS`).
+        let just_referenced_binder = is_binder_reference(&last_token, known_binder.as_deref());
+        let cands = build_candidates(
+            &mut session,
+            schema,
+            vocab,
+            &pending,
+            growing,
+            last_byte,
+            known_binder.as_deref(),
+            just_referenced_binder,
+        );
         if cands.is_empty() {
             // Under `MustOpen`, an empty `cands` means `(` was not
             // admissible here despite every `->name` production requiring
@@ -355,6 +533,20 @@ fn attempt(
             return (None, rng.state);
         };
         emitted.extend_from_slice(bytes);
+        if opens_binder_lambda(bytes, &last_token) {
+            // A `|` right after a plain identifier opens *that* identifier's
+            // lambda (`binderVar "|" …` — the grammar's only use of a bare
+            // `|` past the query-opening one, which has no preceding token to
+            // match this). Remember it so a later `$`-reference can be
+            // biased toward reusing it (see `build_candidates`'s
+            // `known_binder` — without this, the walker draws the
+            // post-`$` identifier independently and uniformly at random,
+            // essentially never reusing the exact binder name, so N1/N2
+            // member navigation almost never fires despite `filter(x|…)`
+            // itself being reached).
+            known_binder = Some(last_token.clone());
+        }
+        last_token = bytes.to_vec();
         pending = match pending {
             PendingCall::MustOpen => PendingCall::None, // the forced `(` just landed.
             PendingCall::JustArrowed => PendingCall::MustOpen, // the fn name just landed.
@@ -427,19 +619,35 @@ fn walk_is_done(pending: &PendingCall, session: &DecoderSession, out_len: usize)
 }
 
 /// Build this step's weighted candidate set, applying (in order) the
-/// `MustOpen` hard override, the fusion exclusion, and the closing-phase
-/// bias — see [`attempt`]'s docs for what each guards against. Every id here
-/// comes from `allowed_mask()`, so a later `accept_token` is guaranteed to
-/// succeed (the mask/accept invariant proves) — no per-candidate probe needed
-/// to confirm admissibility.
+/// `MustOpen` hard override, the fusion exclusion, the source-position
+/// class bias, and the closing-phase bias — see [`attempt`]'s docs for what
+/// each guards against. Every id here comes from `allowed_mask()`, so a later
+/// `accept_token` is guaranteed to succeed (the mask/accept invariant
+/// proves) — no per-candidate probe needed to confirm admissibility.
+// Each argument is a distinct, documented input to the per-step bias (the
+// live session, schema, vocab, in-flight call state, growth phase, fusion
+// guard, and the two binder-tracking signals issue #117 added); bundling
+// them into a context struct would add indirection to the hot path for no
+// clarity gain, so the count is accepted here rather than silenced globally
+// (mirrors `pure-analyzer-purecard::schema::narrow::narrow_into`'s identical
+// precedent).
+#[allow(clippy::too_many_arguments)]
 fn build_candidates(
     session: &mut DecoderSession,
+    schema: &Schema,
     vocab: &Vocab,
     pending: &PendingCall,
     growing: bool,
     last_byte: Option<u8>,
+    known_binder: Option<&[u8]>,
+    just_referenced_binder: bool,
 ) -> Vec<(u32, u32)> {
     let ids: Vec<u32> = session.allowed_mask().iter_ones().collect();
+    // `allowed_mask()`'s exclusive borrow of `session` ends with the
+    // `collect()` above, so this immutable read is free to follow it.
+    let state = session.pda().map(Pda::state);
+    let at_source = state == Some(State::ExpectSource);
+    let at_dollar = state == Some(State::AfterDollar);
     let eos = vocab.len() as u32;
     let mut cands: Vec<(u32, u32)> = Vec::new();
     for id in ids {
@@ -470,8 +678,22 @@ fn build_candidates(
             // `attempt`'s doc comment above.
             continue;
         }
+        let is_class_source =
+            at_source && std::str::from_utf8(bytes).is_ok_and(|text| schema.has_class(text));
+        let is_arrow_method = matches!(pending, PendingCall::JustArrowed)
+            && std::str::from_utf8(bytes).is_ok_and(|text| ARROW_METHOD_NAMES.contains(&text));
+        let is_known_binder_ref = at_dollar && known_binder.is_some_and(|b| b == bytes);
+        let is_navigation_dot = just_referenced_binder && bytes == b".";
         let w = if !growing && ends_with_closer(bytes) {
             DEFAULT_WEIGHT + ACCEPT_BONUS
+        } else if is_class_source {
+            DEFAULT_WEIGHT + CLASS_SOURCE_BONUS
+        } else if is_arrow_method {
+            DEFAULT_WEIGHT + ARROW_METHOD_BONUS
+        } else if is_known_binder_ref {
+            DEFAULT_WEIGHT + KNOWN_BINDER_BONUS
+        } else if is_navigation_dot {
+            DEFAULT_WEIGHT + NAVIGATION_DOT_BONUS
         } else {
             DEFAULT_WEIGHT
         };
@@ -719,18 +941,227 @@ mod tests {
         };
 
         // Still growing: no candidate gets the closing bonus, including `)`.
-        let growing = build_candidates(&mut session, vocab, &pending, true, Some(b'('));
+        let growing = build_candidates(
+            &mut session,
+            &schema(),
+            vocab,
+            &pending,
+            true,
+            Some(b'('),
+            None,
+            false,
+        );
         assert_eq!(weight_of(&growing, ")"), Some(DEFAULT_WEIGHT));
         assert_eq!(weight_of(&growing, "\n  "), Some(DEFAULT_WEIGHT));
 
         // Done growing: only the closer `)` gets the bonus; a non-closer
         // candidate (the whitespace token) stays at the default weight.
-        let closing = build_candidates(&mut session, vocab, &pending, false, Some(b'('));
+        let closing = build_candidates(
+            &mut session,
+            &schema(),
+            vocab,
+            &pending,
+            false,
+            Some(b'('),
+            None,
+            false,
+        );
         assert_eq!(
             weight_of(&closing, ")"),
             Some(DEFAULT_WEIGHT + ACCEPT_BONUS)
         );
         assert_eq!(weight_of(&closing, "\n  "), Some(DEFAULT_WEIGHT));
+    }
+
+    /// A source-position vocabulary offering both a real schema class (`A`)
+    /// and the store's own, equally N3-legal db path (`spider::d::Db`) as
+    /// alternatives — lets a test see the class-source bias's contrast
+    /// directly (see [`CLASS_SOURCE_BONUS`]).
+    fn vocab_with_source_alternatives() -> Vocab {
+        let tokens: Vec<Vec<u8>> = ["|", "A", "spider::d::Db"]
+            .iter()
+            .map(|s| s.as_bytes().to_vec())
+            .collect();
+        let eos = tokens.len() as u32;
+        Vocab::from_byte_tokens(tokens, eos)
+    }
+
+    #[test]
+    fn build_candidates_biases_a_real_class_over_the_store_path_at_the_source_position() {
+        let grammar = CompiledGrammar::compile(vocab_with_source_alternatives());
+        let mut session = DecoderSession::with_schema(&grammar, schema()).expect("valid overlay");
+        let vocab = grammar.vocab();
+        drive(&mut session, vocab, &["|"]);
+        let pending = PendingCall::None;
+
+        let weight_of = |cands: &[(u32, u32)], piece: &str| {
+            cands
+                .iter()
+                .find(|&&(id, _)| vocab.bytes(id) == Some(piece.as_bytes()))
+                .map(|&(_, w)| w)
+        };
+
+        let cands = build_candidates(
+            &mut session,
+            &schema(),
+            vocab,
+            &pending,
+            true,
+            Some(b'|'),
+            None,
+            false,
+        );
+        assert_eq!(
+            weight_of(&cands, "A"),
+            Some(DEFAULT_WEIGHT + CLASS_SOURCE_BONUS)
+        );
+        assert_eq!(weight_of(&cands, "spider::d::Db"), Some(DEFAULT_WEIGHT));
+    }
+
+    /// A post-arrow vocabulary offering both a real Pure builtin
+    /// ([`ARROW_METHOD_NAMES`]'s `count`) and an arbitrary identifier
+    /// (`zzz`, not a builtin) — both equally admissible right after `->`,
+    /// since nothing in the L2 overlay narrows that position (see
+    /// [`ARROW_METHOD_NAMES`]'s doc comment).
+    fn vocab_with_arrow_alternatives() -> Vocab {
+        let tokens: Vec<Vec<u8>> = ["|", "A", ".", "all", "(", ")", "-", ">", "count", "zzz"]
+            .iter()
+            .map(|s| s.as_bytes().to_vec())
+            .collect();
+        let eos = tokens.len() as u32;
+        Vocab::from_byte_tokens(tokens, eos)
+    }
+
+    #[test]
+    fn build_candidates_biases_a_known_pure_builtin_name_right_after_an_arrow() {
+        let grammar = CompiledGrammar::compile(vocab_with_arrow_alternatives());
+        let mut session = DecoderSession::with_schema(&grammar, schema()).expect("valid overlay");
+        let vocab = grammar.vocab();
+        drive(
+            &mut session,
+            vocab,
+            &["|", "A", ".", "all", "(", ")", "-", ">"],
+        );
+        let pending = PendingCall::JustArrowed;
+
+        let weight_of = |cands: &[(u32, u32)], piece: &str| {
+            cands
+                .iter()
+                .find(|&&(id, _)| vocab.bytes(id) == Some(piece.as_bytes()))
+                .map(|&(_, w)| w)
+        };
+
+        let cands = build_candidates(
+            &mut session,
+            &schema(),
+            vocab,
+            &pending,
+            true,
+            Some(b'>'),
+            None,
+            false,
+        );
+        assert_eq!(
+            weight_of(&cands, "count"),
+            Some(DEFAULT_WEIGHT + ARROW_METHOD_BONUS)
+        );
+        assert_eq!(weight_of(&cands, "zzz"), Some(DEFAULT_WEIGHT));
+    }
+
+    /// A vocabulary reaching a `filter(x|$…)` lambda's binder reference, so a
+    /// test can drive a real session to [`State::AfterDollar`] and to the
+    /// value boundary right after `$x` completes — the two spots
+    /// [`KNOWN_BINDER_BONUS`]/[`NAVIGATION_DOT_BONUS`] bias.
+    fn vocab_with_dollar_reference() -> Vocab {
+        let tokens: Vec<Vec<u8>> = [
+            "|", "A", ".", "all", "(", ")", "-", ">", "filter", "x", "$", "y", ".",
+        ]
+        .iter()
+        .map(|s| s.as_bytes().to_vec())
+        .collect();
+        let eos = tokens.len() as u32;
+        Vocab::from_byte_tokens(tokens, eos)
+    }
+
+    #[test]
+    fn build_candidates_biases_the_known_binder_at_a_dollar_reference() {
+        let grammar = CompiledGrammar::compile(vocab_with_dollar_reference());
+        let mut session = DecoderSession::with_schema(&grammar, schema()).expect("valid overlay");
+        let vocab = grammar.vocab();
+        drive(
+            &mut session,
+            vocab,
+            &[
+                "|", "A", ".", "all", "(", ")", "-", ">", "filter", "(", "x", "|", "$",
+            ],
+        );
+        let pending = PendingCall::None;
+
+        let weight_of = |cands: &[(u32, u32)], piece: &str| {
+            cands
+                .iter()
+                .find(|&&(id, _)| vocab.bytes(id) == Some(piece.as_bytes()))
+                .map(|&(_, w)| w)
+        };
+
+        let cands = build_candidates(
+            &mut session,
+            &schema(),
+            vocab,
+            &pending,
+            true,
+            Some(b'$'),
+            Some(b"x"),
+            false,
+        );
+        assert_eq!(
+            weight_of(&cands, "x"),
+            Some(DEFAULT_WEIGHT + KNOWN_BINDER_BONUS)
+        );
+        assert_eq!(weight_of(&cands, "y"), Some(DEFAULT_WEIGHT));
+    }
+
+    #[test]
+    fn build_candidates_biases_the_dot_right_after_a_binder_reference_completes() {
+        let grammar = CompiledGrammar::compile(vocab_with_dollar_reference());
+        let mut session = DecoderSession::with_schema(&grammar, schema()).expect("valid overlay");
+        let vocab = grammar.vocab();
+        drive(
+            &mut session,
+            vocab,
+            &[
+                "|", "A", ".", "all", "(", ")", "-", ">", "filter", "(", "x", "|", "$", "x",
+            ],
+        );
+        let pending = PendingCall::None;
+
+        let weight_of = |cands: &[(u32, u32)], piece: &str| {
+            cands
+                .iter()
+                .find(|&&(id, _)| vocab.bytes(id) == Some(piece.as_bytes()))
+                .map(|&(_, w)| w)
+        };
+
+        // `just_referenced_binder = true`, passed directly (this signal is
+        // computed by `attempt`, not by session state) — biases `.`, an
+        // ordinary, already-admissible property-navigation continuation
+        // here, over any other legal continuation (`-`, starting a further
+        // arrow hop).
+        let cands = build_candidates(
+            &mut session,
+            &schema(),
+            vocab,
+            &pending,
+            true,
+            Some(b'x'),
+            None,
+            true,
+        );
+        assert_eq!(
+            weight_of(&cands, "."),
+            Some(DEFAULT_WEIGHT + NAVIGATION_DOT_BONUS)
+        );
+        assert_eq!(weight_of(&cands, "-"), Some(DEFAULT_WEIGHT));
     }
 
     /// Adds a `->count()` step's tokens (`-`, `>`, `count`) to the
@@ -885,6 +1316,51 @@ mod tests {
         assert!(marks_arrow_or_dollar(b">", b"->"));
         // Neither: doesn't mark.
         assert!(!marks_arrow_or_dollar(b"x", b"x"));
+    }
+
+    #[test]
+    fn looks_like_ident_requires_a_letter_or_underscore_start_and_all_word_bytes() {
+        assert!(looks_like_ident(b"x"));
+        assert!(looks_like_ident(b"_x1"));
+        assert!(looks_like_ident(b"camelCase2"));
+        // Empty: no first byte to check, not identifier-shaped. Also the
+        // case that distinguishes the `&&` from a `||`: `bytes.iter().all()`
+        // on an empty slice is vacuously `true`, so only the first-byte
+        // check being `false` (and `&&` propagating it) keeps this `false`.
+        assert!(!looks_like_ident(b""));
+        // Digit-first: not a legal `binderVar` start.
+        assert!(!looks_like_ident(b"1x"));
+        // A non-word byte anywhere disqualifies it, even after a good start.
+        assert!(!looks_like_ident(b"x.y"));
+    }
+
+    #[test]
+    fn opens_binder_lambda_requires_a_bare_pipe_after_an_identifier_shaped_token() {
+        // Both halves true: opens.
+        assert!(opens_binder_lambda(b"|", b"x"));
+        // Right byte, wrong preceding shape: doesn't open.
+        assert!(!opens_binder_lambda(b"|", b"1x"));
+        // Right preceding shape, wrong byte: doesn't open.
+        assert!(!opens_binder_lambda(b".", b"x"));
+    }
+
+    #[test]
+    fn is_binder_reference_requires_a_nonempty_exact_match() {
+        // Exact match against a tracked binder: a reference.
+        assert!(is_binder_reference(b"x", Some(b"x")));
+        // Different identifier: not a reference.
+        assert!(!is_binder_reference(b"y", Some(b"x")));
+        // No binder tracked at all: never a reference.
+        assert!(!is_binder_reference(b"x", None));
+        // An empty `last_token` never counts, even against a `None` binder
+        // (mirrors `Some(b"") == None` being trivially false, but pins the
+        // intent explicitly rather than relying on that coincidence).
+        assert!(!is_binder_reference(b"", None));
+        // An empty `last_token` never counts even against an *equal*, also-
+        // empty tracked binder — the only case that actually distinguishes
+        // the emptiness guard from the equality check (both halves agree
+        // whenever `known_binder` isn't itself `Some(b"")`).
+        assert!(!is_binder_reference(b"", Some(b"")));
     }
 
     #[test]

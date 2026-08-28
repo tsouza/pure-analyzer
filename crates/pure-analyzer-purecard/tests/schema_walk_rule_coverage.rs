@@ -8,21 +8,34 @@
 //! across the whole generated corpus, mirroring
 //! `schema_walk_state_coverage.rs`'s state-coverage pattern exactly.
 //!
-//! **Finding (2026-08-28): six rules are currently unreachable through this
-//! generator** — see [`EXPECTED_UNFIRED`]. Writing this test (rather than
-//! `schema_walk_construct_coverage.rs`'s substring-on-decoded-text proxy) is
-//! what surfaced it: `generate_schema_walks`'s random exploration essentially
-//! never produces a `Class.all()->filter(x|$x.field …)`-shaped walk deep
-//! enough to reach class-member navigation at all, across all 512 walks
-//! (64 × 8 `FIXTURE_DBS`). That also means `schema_walk_construct_coverage.rs`'s
-//! "dot navigation" construct check has always been a false positive — every
-//! literal `.` its 512-walk corpus contains is either a decimal point or an
-//! unrelated over-approximation artifact (confirmed by direct inspection), not
-//! real `$x.field` access. Filed as #117 for the walker's own
-//! generation-bias fix; this file stays honest and green against the
-//! generator's *current* behavior in the meantime, per the same
-//! `EXPECTED_UNREACHABLE` convention `schema_walk_state_coverage.rs`
-//! established for PDA states.
+//! **Finding (2026-08-28, issue #117): six rules were unreachable through this
+//! generator**, confirmed by writing this test rather than trusting
+//! `schema_walk_construct_coverage.rs`'s substring-on-decoded-text proxy — its
+//! "dot navigation" check turned out to be a false positive matching decimal
+//! points and unrelated over-approximation artifacts, never real `$x.field`
+//! access. `generate_schema_walks` (`schema-walker/src/lib.rs`) was fixed to
+//! bias its exploration — a wider growth budget, a preference for real
+//! classes over the store path at the source position, a preference for real
+//! Pure builtin method names right after `->`, and biasing a lambda binder's
+//! later `$`-reference (and the `.` right after it) toward reusing the exact
+//! name it was declared with. That closed the gap for **`Column`** (N6) —
+//! [`EXPECTED_UNFIRED`] now lists five, not six.
+//!
+//! The remaining five (`Member`/N1-N2, `ReValue`/T1, `Comparator`/T2,
+//! `Reducer`/T3, `RelationColumn`/N6) need more than weight tuning can give a
+//! byte-level heuristic walker: reaching `$x.field cmp literal` needs *every*
+//! one of several nested grammar branches (which `filter` argument shape,
+//! which `boolExpr` alternative, which comparator) to independently land on
+//! the specific path toward navigation, and biasing each individual junction
+//! more strongly still didn't move the needle — confirmed live, escalating
+//! every new bias's weight roughly 25× produced no change in which rules
+//! fire. Fully closing this needs a generator that is *grammar-shape-aware*
+//! (knows it is partway down a specific target production and drives the
+//! remaining choices toward completing it), not one that nudges independent
+//! per-token weights — a materially different generator design, filed as
+//! #119 rather than attempted here. `EXPECTED_UNFIRED` documents this so the
+//! gap stays honest and visible, mirroring
+//! `schema_walk_state_coverage.rs`'s `EXPECTED_UNREACHABLE` convention.
 #![forbid(unsafe_code)]
 
 use std::collections::HashSet;
@@ -89,19 +102,9 @@ fn rule_kind(pos: &L2Position) -> Option<&'static str> {
 /// Rules [`ALL_RULE_KINDS`] lists that `generate_schema_walks`'s current
 /// exploration never fires, each with the concrete reason — a rule missing
 /// from *both* the fired set and this list is a real coverage regression, not
-/// documented residue.
-///
-/// All six require the walker to build a `Class.all()->filter(x|$x.field …)`
-/// (or `->groupBy`/`agg(…)`) shaped walk deep enough to reach class-member
-/// navigation, an aggregation, or a comparison after one. Across all 512
-/// walks (64 × 8 `FIXTURE_DBS`), it never does: direct inspection of the
-/// decoded corpus shows every walk either stays at `.all()` (closing
-/// immediately) or wanders into unrelated arm-A/relational shapes (a store
-/// path, a bare method call) without ever completing a bound-variable member
-/// access. This is a real gap in the *generator's* own exploration bias, not
-/// a gap in what the shipped rules cover — filed as a follow-up, not fixed
-/// here (fixing it means changing `schema-walker`'s own candidate weighting,
-/// out of #59's "expose per-rule coverage" scope).
+/// documented residue. See the module doc comment (issue #117) for the full
+/// investigation and why closing the rest needs a grammar-shape-aware
+/// generator redesign, filed as #119 rather than more weight tuning here.
 ///
 /// - `Member` (N1/N2): no walk ever completes `$x.field` after a class-bound
 ///   lambda binder.
@@ -110,14 +113,16 @@ fn rule_kind(pos: &L2Position) -> Option<&'static str> {
 /// - `Reducer` (T3): needs a `y: <Primitive>[*]|$y-><reducer>()` reduce
 ///   lambda inside an `agg(…)` call, itself deep behind a `groupBy(…)` the
 ///   walker never reaches.
-/// - `Column`/`RelationColumn` (N6): need a closed `project`/`groupBy`
-///   establishing op (arm-R), which the walker also never reaches.
+/// - `RelationColumn` (N6, arm-R bare-ident form): needs a closed
+///   `groupBy(~[…], …)` establishing op, which the walker never reaches
+///   (unlike the quoted-string `Column` form, reachable via other arm-A
+///   TDS-getter/`project`-string-argument shapes that don't need arm-R at
+///   all — that's the gap this fix closed).
 const EXPECTED_UNFIRED: &[&str] = &[
     "Member",
     "ReValue",
     "Comparator",
     "Reducer",
-    "Column",
     "RelationColumn",
 ];
 

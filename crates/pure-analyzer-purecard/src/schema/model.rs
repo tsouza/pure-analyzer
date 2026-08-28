@@ -321,7 +321,21 @@ impl Schema {
     }
 
     /// Whether `path` is a real class of this schema (§6.5 N3).
-    pub(crate) fn has_class(&self, path: &str) -> bool {
+    ///
+    /// `#[doc(hidden)] pub`, re-exported as `crate::schema::Schema::has_class`
+    /// via the type's own existing `pub use`: test-support surface (issue
+    /// #117) so `purecard-schema-walker` can bias its source-position
+    /// candidate choice toward a real class over the (also N3-legal, but far
+    /// less grammatically constrained) store path, without which schema-aware
+    /// random exploration gets lost in the store path's much larger
+    /// arm-A/relational expression space and essentially never reaches
+    /// class-member navigation at all. Not part of the crate's documented
+    /// public contract (excluded from the `cargo public-api` snapshot) — a
+    /// plain `pub(crate)` cannot cross the crate boundary a separate
+    /// workspace member compiles behind (mirrors `grammar::pda::ALL_STATES`'s
+    /// own promotion for the same reason).
+    #[doc(hidden)]
+    pub fn has_class(&self, path: &str) -> bool {
         self.classes.contains_key(path)
     }
 
