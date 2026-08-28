@@ -397,6 +397,33 @@ impl Schema {
         }
     }
 
+    /// Whether `ident` resolves against `class` as a numeric primitive member
+    /// (`Integer`/`Float`/`Decimal`/`Number`) — an association nav or a
+    /// non-numeric primitive both report `false`.
+    ///
+    /// `#[doc(hidden)] pub`, re-exported as
+    /// `crate::schema::Schema::member_is_numeric` via the type's own existing
+    /// `pub use`: test-support surface (issue #55) so `purecard-schema-walker`
+    /// can pick a member an ordered numeric-literal comparator recipe can
+    /// safely target. Without this, a recipe built purely from
+    /// [`member_names`](Self::member_names) (name-only, no type check) can
+    /// pick an association end — confirmed live: `Class.all()->filter(a|$a.toManyAssoc
+    /// < 1)` is L1/L2-admissible (T2's `Comparator` rule only narrows when a
+    /// primitive navExpr resolved, so a non-primitive member leaves the
+    /// position unconstrained pass-through) but rejected by the real Legend
+    /// compiler (`lessThan` has no overload for a class-typed collection). Not
+    /// part of the crate's documented public contract (excluded from the
+    /// `cargo public-api` snapshot) — mirrors [`has_class`](Self::has_class)'s
+    /// own promotion for the same reason.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn member_is_numeric(&self, class: &str, ident: &str) -> bool {
+        matches!(
+            self.resolve(class, ident),
+            Some(Resolved::Primitive { prim, .. }) if prim.type_class() == TypeClass::Numeric
+        )
+    }
+
     /// Resolve `ident` as a member of `class` (§6.4 S3): a stored/qualified
     /// property, or an association navigation, transitively over super-types.
     /// `None` means the identifier is not a member (a phantom / wrong-direction
@@ -576,6 +603,22 @@ mod tests {
         ));
         assert_eq!(s.resolve("A", "phantom"), None);
         assert_eq!(s.resolve("Nope", "n"), None);
+    }
+
+    #[test]
+    fn member_is_numeric_is_true_only_for_a_numeric_primitive_member() {
+        let s = sample();
+        // A genuinely numeric primitive member.
+        assert!(s.member_is_numeric("A", "n"));
+        // A non-numeric primitive (String).
+        assert!(!s.member_is_numeric("A", "doubled"));
+        // An enum-typed member.
+        assert!(!s.member_is_numeric("A", "label"));
+        // An association nav (Class-typed, not a value at all).
+        assert!(!s.member_is_numeric("A", "toB"));
+        // A phantom member and an unknown class.
+        assert!(!s.member_is_numeric("A", "phantom"));
+        assert!(!s.member_is_numeric("Nope", "n"));
     }
 
     #[test]
