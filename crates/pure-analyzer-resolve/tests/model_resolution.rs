@@ -365,6 +365,39 @@ fn pure_association_ends_use_the_association_source_and_end_span() {
 }
 
 #[test]
+fn association_ends_retain_the_association_provenance_when_classes_are_pmcd() {
+    let pmcd = json!({
+        "_type": "data",
+        "elements": [
+            class("Left", &[], Vec::new(), Vec::new()),
+            class("Right", &[], Vec::new(), Vec::new()),
+        ]
+    })
+    .to_string();
+    let association_declaration =
+        "Association model::Link\n{\n  toLeft: model::Left[1];\n  toRight: model::Right[1];\n}";
+    let graph = load_model_documents(&[
+        ModelDocument::Pmcd(PmcdDocument::new("classes.json", &pmcd)),
+        ModelDocument::Pure(PureDocument::new("links.pure", association_declaration)),
+    ])
+    .expect("mixed association graph");
+    let member = found_member(&Resolver::new(&graph), "Left", "toRight");
+
+    assert_eq!(member.owner().provenance(), Provenance::Pmcd);
+    assert_eq!(member.owner().definition().source().index(), 0);
+    assert_eq!(member.owner().definition().span(), None);
+    assert_eq!(member.provenance(), Provenance::PureFile);
+    assert_eq!(member.definition().source().index(), 1);
+    assert_eq!(
+        member.definition().span(),
+        Some(exact_span(
+            association_declaration,
+            "toRight: model::Right[1];"
+        ))
+    );
+}
+
+#[test]
 fn ordered_replacement_exposes_only_the_winning_pure_definition_span() {
     let pmcd = json!({
         "_type": "data",
@@ -396,6 +429,40 @@ fn ordered_replacement_exposes_only_the_winning_pure_definition_span() {
         winner.definition().span(),
         Some(exact_span(pure_source, pure_source))
     );
+}
+
+#[test]
+fn ordered_replacement_exposes_only_the_winning_pmcd_definition_metadata() {
+    let pure_source = "Class model::Winner\n{\n  value: String[0..1];\n}";
+    let pmcd = json!({
+        "_type": "data",
+        "elements": [class(
+            "Winner",
+            &[],
+            vec![property("value", "Integer")],
+            Vec::new(),
+        )]
+    })
+    .to_string();
+    let graph = load_model_documents(&[
+        ModelDocument::Pure(PureDocument::new("first.pure", pure_source)),
+        ModelDocument::Pmcd(PmcdDocument::new("second.json", &pmcd)),
+    ])
+    .expect("ordered replacement");
+    let resolver = Resolver::new(&graph);
+    let winner = match resolver.resolve_class(&qname("Winner")) {
+        Resolution::Found(class) => class,
+        outcome => panic!("expected winner, got {outcome:#?}"),
+    };
+
+    assert_eq!(winner.provenance(), Provenance::Pmcd);
+    assert_eq!(winner.definition().source().index(), 1);
+    assert_eq!(winner.definition().span(), None);
+
+    let value = found_member(&resolver, "Winner", "value");
+    assert_eq!(value.provenance(), Provenance::Pmcd);
+    assert_eq!(value.definition().source().index(), 1);
+    assert_eq!(value.definition().span(), None);
 }
 
 #[test]
