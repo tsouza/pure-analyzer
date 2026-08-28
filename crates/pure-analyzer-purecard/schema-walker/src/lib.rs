@@ -706,7 +706,7 @@ fn build_candidates(
 /// declare (`docs/spec/schema.md` §6.2.2; mirrors the schema crate's own
 /// unexposed `PrimName`, which cannot itself cross the crate boundary without
 /// growing the public surface for no reason beyond this one lookup) —
-/// [`recipe_reducer`] tries each in turn against the vocabulary, since it
+/// `recipe_reducer` tries each in turn against the vocabulary, since it
 /// cannot assume any one of them appears literally in a given db's
 /// corpus-derived vocabulary.
 const PRIM_TYPE_NAMES: &[&str] = &[
@@ -724,7 +724,7 @@ const PRIM_TYPE_NAMES: &[&str] = &[
 /// Reducer names T3 never masks regardless of the reduce-lambda's declared
 /// element type (`min`/`max`/`count` — see [`ARROW_METHOD_NAMES`]'s own
 /// reducer entries and `pure-analyzer-purecard::schema::narrow::keeps_reducer`'s
-/// corpus evidence) — the only names [`recipe_reducer`] can pair with an
+/// corpus evidence) — the only names `recipe_reducer` can pair with an
 /// arbitrarily-found [`PRIM_TYPE_NAMES`] entry without risking rejection by
 /// T3's own mask (`sum`/`average` are legal only for a numeric element type).
 const UNCONSTRAINED_REDUCER_NAMES: &[&str] = &["count", "min", "max"];
@@ -775,9 +775,18 @@ fn find_whitespace_token(vocab: &Vocab) -> Option<u32> {
 /// vocabulary tokens, in vocabulary id order. Not every schema class/property
 /// is guaranteed to appear literally in a given db's corpus-derived
 /// vocabulary — an arm-A-only corpus may supply none at all (issue #119) — so
-/// [`recipe_navigation_predicate`]/[`recipe_reducer`] try every candidate this
+/// [`recipe_navigation_predicate`]/`recipe_reducer` try every candidate this
 /// returns rather than assume the first is admissible.
-fn class_member_candidates(schema: &Schema, vocab: &Vocab) -> Vec<(u32, u32)> {
+///
+/// `numeric_only` restricts to members [`Schema::member_is_numeric`] confirms
+/// are a numeric primitive — needed by [`recipe_navigation_predicate`]
+/// (issue #55): without it, an association end can be picked for its `<`
+/// comparator target, which is L1/L2-admissible (T2 only narrows when a
+/// primitive navExpr resolved, so a non-primitive member leaves the position
+/// unconstrained pass-through) but rejected by the real Legend compiler —
+/// confirmed live. `recipe_reducer`'s key-lambda member is never compared,
+/// so it passes `false`.
+fn class_member_candidates(schema: &Schema, vocab: &Vocab, numeric_only: bool) -> Vec<(u32, u32)> {
     let mut out = Vec::new();
     for class_id in 0..vocab.len() as u32 {
         let Some(class_bytes) = vocab.bytes(class_id) else {
@@ -790,6 +799,9 @@ fn class_member_candidates(schema: &Schema, vocab: &Vocab) -> Vec<(u32, u32)> {
             continue;
         }
         for member in schema.member_names(class_text) {
+            if numeric_only && !schema.member_is_numeric(class_text, &member) {
+                continue;
+            }
             if let Some(member_id) = find_token(vocab, member.as_bytes()) {
                 out.push((class_id, member_id));
             }
@@ -854,7 +866,7 @@ fn recipe_navigation_predicate(
     let digit = find_digit_token(vocab)?;
     let ws = find_whitespace_token(vocab)?;
     let all = find_token(vocab, SOURCE_METHOD.as_bytes())?;
-    for (class_id, member_id) in class_member_candidates(schema, vocab) {
+    for (class_id, member_id) in class_member_candidates(schema, vocab, true) {
         let tokens = [
             pipe, class_id, dot, all, open, close, arrow, filter, open, binder, pipe, dollar,
             binder, dot, member_id, ws, lt, ws, digit, close,
@@ -896,7 +908,7 @@ fn recipe_reducer(grammar: &CompiledGrammar, schema: &Schema, vocab: &Vocab) -> 
     let val_binder = find_token(vocab, b"b")?;
     let dollar = find_token(vocab, b"$")?;
     let all = find_token(vocab, SOURCE_METHOD.as_bytes())?;
-    let candidates = class_member_candidates(schema, vocab);
+    let candidates = class_member_candidates(schema, vocab, false);
 
     for &prim_name in PRIM_TYPE_NAMES {
         let Some(prim_id) = find_token(vocab, prim_name.as_bytes()) else {
@@ -921,30 +933,54 @@ fn recipe_reducer(grammar: &CompiledGrammar, schema: &Schema, vocab: &Vocab) -> 
     None
 }
 
-/// Every recipe walk (issue #119) [`generate_schema_walks`] tries to include
-/// ahead of its random exploration, in order. A recipe that found no
-/// admissible vocabulary/schema combination is dropped rather than padded, so
-/// a db missing one shape simply gets fewer recipe walks and more random
-/// ones, never a placeholder.
-fn recipe_walks(grammar: &CompiledGrammar, schema: &Schema, vocab: &Vocab) -> Vec<Vec<u32>> {
-    [
-        recipe_navigation_predicate(grammar, schema, vocab),
-        recipe_reducer(grammar, schema, vocab),
-    ]
-    .into_iter()
-    .flatten()
-    .collect()
+/// Every recipe walk (issue #119) a caller tries to include ahead of its
+/// random exploration, in order. A recipe that found no admissible
+/// vocabulary/schema combination is dropped rather than padded, so a db
+/// missing one shape simply gets fewer recipe walks and more random ones,
+/// never a placeholder.
+///
+/// `include_reducer` gates `recipe_reducer` specifically (issue #55):
+/// confirmed live against a real PMCD that its bare `->agg(...)` step,
+/// while L1/L2-admissible, is not real, compilable Pure on its own (Legend
+/// rejects it outside a `groupBy(...)` wrapper this recipe does not build) —
+/// [`generate_schema_walks`] still wants it (its own scope is L1/L2 rule
+/// coverage, not live compilability, and the recipe does fire T3's
+/// `Reducer`), but [`generate_first_complete_schema_walks`] (issue #55's own
+/// live-compile-rate target) should not spend one of its walk slots on a
+/// construct known not to compile.
+fn recipe_walks(
+    grammar: &CompiledGrammar,
+    schema: &Schema,
+    vocab: &Vocab,
+    include_reducer: bool,
+) -> Vec<Vec<u32>> {
+    let mut walks: Vec<Vec<u32>> = recipe_navigation_predicate(grammar, schema, vocab)
+        .into_iter()
+        .collect();
+    if include_reducer {
+        walks.extend(recipe_reducer(grammar, schema, vocab));
+    }
+    walks
 }
 
-/// Generate exactly [`WALK_COUNT`] deterministic accepting walks (as token-id
-/// sequences) over `grammar` under `schema`'s L2 overlay: `recipe_walks`'s
-/// deterministic, schema-parameterized walks first (issue #119 — reaching the
+/// Shared implementation behind both [`generate_schema_walks`] and
+/// [`generate_first_complete_schema_walks`]: `recipe_walks`'s deterministic,
+/// schema-parameterized walks first (issue #119 — reaching the
 /// class-member-navigation shapes those target needs *every* one of several
 /// nested-grammar choices to align, which per-token random weighting alone
 /// could not reliably reach, per issue #117's investigation), padded out to
-/// [`WALK_COUNT`] by `attempt`'s random exploration. Each random attempt
-/// resumes the previous one's final PRNG state, so successful and failed
-/// attempts alike form one reproducible SplitMix64 stream.
+/// [`WALK_COUNT`] by `attempt`'s random exploration (seeded from
+/// `base_seed`, growing per `grow_target`). Each random attempt resumes the
+/// previous one's final PRNG state, so successful and failed attempts alike
+/// form one reproducible SplitMix64 stream.
+///
+/// Recipe walks are included in *both* callers, not only the forced-growth
+/// one: a recipe walk is already a minimal, complete construct (issue #55 —
+/// `generate_first_complete_schema_walks`'s own eager mode never grows past
+/// the first accepting configuration, so it needs realistic *complete*
+/// navigation/aggregation shapes offered to it directly, not grown into;
+/// nothing about the recipe/eager split makes one recipe walk's shape
+/// invalid for the other's proof).
 ///
 /// The count is a guarantee, not a target: the random-exploration loop runs
 /// until enough walks are collected to reach [`WALK_COUNT`] in total, bounded
@@ -956,21 +992,44 @@ fn recipe_walks(grammar: &CompiledGrammar, schema: &Schema, vocab: &Vocab) -> Ve
 ///
 /// Panics if fewer than [`WALK_COUNT`] walks are collected in total within
 /// the internal attempt limit.
-#[must_use]
-pub fn generate_schema_walks(grammar: &CompiledGrammar, schema: &Schema) -> Vec<Vec<u32>> {
+fn walks_with_recipes(
+    grammar: &CompiledGrammar,
+    schema: &Schema,
+    base_seed: u64,
+    grow_target: Option<u64>,
+    include_reducer: bool,
+    label: &str,
+) -> Vec<Vec<u32>> {
     let vocab = grammar.vocab();
-    let mut walks = recipe_walks(grammar, schema, vocab);
+    let mut walks = recipe_walks(grammar, schema, vocab, include_reducer);
     walks.truncate(WALK_COUNT);
     let target = WALK_COUNT - walks.len();
-    let random = collect_walks(
-        target,
-        BASE_SEED,
-        ATTEMPT_LIMIT,
-        "generate_schema_walks",
-        |seed| attempt(grammar, schema, seed, None),
-    );
+    let random = collect_walks(target, base_seed, ATTEMPT_LIMIT, label, |seed| {
+        attempt(grammar, schema, seed, grow_target)
+    });
     walks.extend(random);
     walks
+}
+
+/// Generate exactly [`WALK_COUNT`] deterministic accepting walks (as
+/// token-id sequences) over `grammar` under `schema`'s L2 overlay, forcing
+/// growth to a varied length before closing — see `walks_with_recipes` for
+/// the shared recipe-then-random mechanics.
+///
+/// # Panics
+///
+/// Panics if fewer than [`WALK_COUNT`] walks are collected in total within
+/// the internal attempt limit.
+#[must_use]
+pub fn generate_schema_walks(grammar: &CompiledGrammar, schema: &Schema) -> Vec<Vec<u32>> {
+    walks_with_recipes(
+        grammar,
+        schema,
+        BASE_SEED,
+        None,
+        true,
+        "generate_schema_walks",
+    )
 }
 
 /// Whether the shared retry loop in [`collect_walks`] should keep going
@@ -1029,28 +1088,15 @@ fn collect_walks(
     walks
 }
 
-/// Thin wrapper binding [`collect_walks`] to a real `grammar`/`schema`,
-/// [`WALK_COUNT`] as its target, and [`ATTEMPT_LIMIT`].
-fn generate_walks(
-    grammar: &CompiledGrammar,
-    schema: &Schema,
-    base_seed: u64,
-    grow_target: Option<u64>,
-    label: &str,
-) -> Vec<Vec<u32>> {
-    collect_walks(WALK_COUNT, base_seed, ATTEMPT_LIMIT, label, |seed| {
-        attempt(grammar, schema, seed, grow_target)
-    })
-}
-
 /// Distinct from [`BASE_SEED`] so the eager stream below never coincides with
 /// the varied-length one.
 const EAGER_BASE_SEED: u64 = 0x4561_6765_7257_616B; // "EagerWak" as ASCII bytes.
 
-/// Generate exactly [`WALK_COUNT`] deterministic accepting walks that stop at
-/// the *first* point the schema-aware session is genuinely complete
-/// (`grow_target = 0`, `MIN_LEN = 1`), rather than [`generate_schema_walks`]'s
-/// forced further growth.
+/// Generate exactly [`WALK_COUNT`] deterministic accepting walks:
+/// `recipe_walks`'s walks first (see `walks_with_recipes`), then random
+/// exploration that stops at the *first* point the schema-aware session is
+/// genuinely complete (`grow_target = 0`, `MIN_LEN = 1`), rather than
+/// [`generate_schema_walks`]'s forced further growth.
 ///
 /// Built for the live-engine compile-rate proof (issue #55), not as a
 /// replacement for [`generate_schema_walks`]'s broader mask/L2-coverage role.
@@ -1065,13 +1111,21 @@ const EAGER_BASE_SEED: u64 = 0x4561_6765_7257_616B; // "EagerWak" as ASCII bytes
 /// "is this token position semantically a predicate" is not a structural,
 /// bracket-balance fact L1 can decide). Stopping at first completion is also
 /// the only mode a *real* decode loop ever exercises: an actual sampler stops
-/// the moment `is_complete()` admits EOS and it's sampled, so this walk set
-/// is a closer proxy for real decode behavior than [`generate_schema_walks`]'s
-/// forced-growth one — though not, on its own, sufficient to reach issue
-/// #55's 100% compile-rate target for every construct shape: replaying it
-/// live can still surface residue this generator has no way to close (e.g.
-/// missing L2 property-narrowing coverage, bare-class-vs-instance-typed
-/// navigation).
+/// the moment `is_complete()` admits EOS and it's sampled, so this random
+/// portion is a closer proxy for real decode behavior than
+/// [`generate_schema_walks`]'s forced-growth one — though not, on its own,
+/// sufficient to reach issue #55's 100% compile-rate target for every
+/// construct shape: replaying it live can still surface residue this
+/// generator has no way to close (e.g. missing L2 property-narrowing
+/// coverage, bare-class-vs-instance-typed navigation). The recipe walks this
+/// function now also includes (issue #55) close part of that gap directly:
+/// they are already complete, realistic navigation/aggregation constructs
+/// the eager random loop essentially never grows into on its own (it stops
+/// at the *first* accepting configuration, which is almost always a bare
+/// `Class.all()`) — confirmed live to actually compile against a real
+/// PMCD (`live_legend_schema_walk_compile.rs`), not merely L1/L2-admissible,
+/// for the navigation-predicate shape once its member selection was made
+/// type-aware (see `class_member_candidates`'s `numeric_only`).
 ///
 /// # Panics
 ///
@@ -1082,11 +1136,12 @@ pub fn generate_first_complete_schema_walks(
     grammar: &CompiledGrammar,
     schema: &Schema,
 ) -> Vec<Vec<u32>> {
-    generate_walks(
+    walks_with_recipes(
         grammar,
         schema,
         EAGER_BASE_SEED,
         Some(0),
+        false,
         "generate_first_complete_schema_walks",
     )
 }
@@ -1676,7 +1731,10 @@ mod tests {
     const RECIPE_SAMPLE: &str = r#"{
       "db_id": "r", "db_path": "spider::r::Db",
       "classes": { "A": { "simple_name": "A",
-        "properties": [ {"name": "year", "type": {"kind": "primitive", "name": "Integer"}, "mult": {"lower": 1, "upper": 1}} ],
+        "properties": [
+          {"name": "year", "type": {"kind": "primitive", "name": "Integer"}, "mult": {"lower": 1, "upper": 1}},
+          {"name": "label", "type": {"kind": "primitive", "name": "String"}, "mult": {"lower": 1, "upper": 1}}
+        ],
         "qualified_properties": [], "super_types": [] } },
       "associations": [], "enums": {}
     }"#;
@@ -1690,8 +1748,8 @@ mod tests {
     /// recipe shape requires.
     fn vocab_for_recipes() -> Vocab {
         let tokens: Vec<Vec<u8>> = [
-            "|", "A", ".", "all", "(", ")", "->", "filter", "a", "$", "year", "<", " ", "1", "agg",
-            "b", ",", ":", "Integer", "[", "*", "]", "count",
+            "|", "A", ".", "all", "(", ")", "->", "filter", "a", "$", "year", "label", "<", " ",
+            "1", "agg", "b", ",", ":", "Integer", "[", "*", "]", "count",
         ]
         .iter()
         .map(|s| s.as_bytes().to_vec())
@@ -1730,7 +1788,20 @@ mod tests {
     #[test]
     fn class_member_candidates_pairs_real_classes_with_members_present_in_vocab() {
         let vocab = vocab_for_recipes();
-        let candidates = class_member_candidates(&recipe_schema(), &vocab);
+        let candidates = class_member_candidates(&recipe_schema(), &vocab, false);
+        assert_eq!(
+            candidates,
+            vec![
+                (id_of(&vocab, "A"), id_of(&vocab, "year")),
+                (id_of(&vocab, "A"), id_of(&vocab, "label")),
+            ]
+        );
+    }
+
+    #[test]
+    fn class_member_candidates_excludes_non_numeric_members_when_numeric_only() {
+        let vocab = vocab_for_recipes();
+        let candidates = class_member_candidates(&recipe_schema(), &vocab, true);
         assert_eq!(
             candidates,
             vec![(id_of(&vocab, "A"), id_of(&vocab, "year"))]
@@ -1741,14 +1812,14 @@ mod tests {
     fn class_member_candidates_is_empty_when_no_class_name_is_a_vocab_token() {
         // "year" is a real member name, but no real class name appears.
         let vocab = Vocab::from_byte_tokens(vec![b"year".to_vec()], 1);
-        assert!(class_member_candidates(&recipe_schema(), &vocab).is_empty());
+        assert!(class_member_candidates(&recipe_schema(), &vocab, false).is_empty());
     }
 
     #[test]
     fn class_member_candidates_skips_a_member_absent_from_the_vocab() {
         // "A" is a real class, but its only member ("year") has no token.
         let vocab = Vocab::from_byte_tokens(vec![b"A".to_vec()], 1);
-        assert!(class_member_candidates(&recipe_schema(), &vocab).is_empty());
+        assert!(class_member_candidates(&recipe_schema(), &vocab, false).is_empty());
     }
 
     #[test]
@@ -1871,12 +1942,13 @@ mod tests {
 
     #[test]
     fn recipe_walks_includes_only_the_recipes_that_actually_succeed() {
-        // The full vocabulary: both recipes succeed.
+        // The full vocabulary with include_reducer: both recipes succeed.
         let full = CompiledGrammar::compile(vocab_for_recipes());
-        let both = recipe_walks(&full, &recipe_schema(), full.vocab());
+        let both = recipe_walks(&full, &recipe_schema(), full.vocab(), true);
         assert_eq!(both.len(), 2);
 
-        // Missing "agg": only the navigation-predicate recipe can succeed.
+        // Missing "agg": only the navigation-predicate recipe can succeed
+        // regardless of include_reducer.
         let tokens: Vec<Vec<u8>> = [
             "|", "A", ".", "all", "(", ")", "->", "filter", "a", "$", "year", "<", " ", "1",
         ]
@@ -1885,8 +1957,18 @@ mod tests {
         .collect();
         let eos = tokens.len() as u32;
         let partial = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens, eos));
-        let one = recipe_walks(&partial, &recipe_schema(), partial.vocab());
+        let one = recipe_walks(&partial, &recipe_schema(), partial.vocab(), true);
         assert_eq!(one.len(), 1);
+    }
+
+    #[test]
+    fn recipe_walks_excludes_the_reducer_recipe_when_include_reducer_is_false() {
+        // The full vocabulary supports both recipes, but include_reducer=false
+        // (issue #55: the reducer recipe's bare `->agg(...)` step is
+        // L1/L2-admissible but not real, compilable Pure) drops it.
+        let full = CompiledGrammar::compile(vocab_for_recipes());
+        let only_navigation = recipe_walks(&full, &recipe_schema(), full.vocab(), false);
+        assert_eq!(only_navigation.len(), 1);
     }
 
     #[test]
@@ -1894,5 +1976,25 @@ mod tests {
         let grammar = CompiledGrammar::compile(vocab_for_recipes());
         let walks = generate_schema_walks(&grammar, &recipe_schema());
         assert_eq!(walks.len(), WALK_COUNT);
+    }
+
+    #[test]
+    fn generate_first_complete_schema_walks_totals_exactly_walk_count_and_includes_the_navigation_recipe()
+     {
+        let grammar = CompiledGrammar::compile(vocab_for_recipes());
+        let walks = generate_first_complete_schema_walks(&grammar, &recipe_schema());
+        assert_eq!(walks.len(), WALK_COUNT);
+        let vocab = grammar.vocab();
+        let expected_recipe: Vec<u32> = [
+            "|", "A", ".", "all", "(", ")", "->", "filter", "(", "a", "|", "$", "a", ".", "year",
+            " ", "<", " ", "1", ")",
+        ]
+        .iter()
+        .map(|s| id_of(vocab, s))
+        .collect();
+        assert!(
+            walks.contains(&expected_recipe),
+            "expected the navigation-predicate recipe walk to be included"
+        );
     }
 }
