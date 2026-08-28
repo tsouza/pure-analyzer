@@ -771,6 +771,29 @@ fn find_whitespace_token(vocab: &Vocab) -> Option<u32> {
     })
 }
 
+/// The vocabulary ids of the first `count` distinct tokens shaped like a
+/// complete single-quoted string literal (starts and ends with `'`), in
+/// vocabulary id order, or `None` if fewer than `count` exist.
+/// [`recipe_groupby`] needs two such tokens for `groupBy`'s output
+/// column-name list — content never matters for L1/L2 admissibility, only
+/// the shape, so any two real string-literal tokens from the vocabulary
+/// serve equally well as placeholders.
+fn find_quoted_string_tokens(vocab: &Vocab, count: usize) -> Option<Vec<u32>> {
+    let mut found = Vec::new();
+    for id in 0..vocab.len() as u32 {
+        if vocab
+            .bytes(id)
+            .is_some_and(|b| b.len() >= 2 && b.first() == Some(&b'\'') && b.last() == Some(&b'\''))
+        {
+            found.push(id);
+            if found.len() == count {
+                return Some(found);
+            }
+        }
+    }
+    None
+}
+
 /// Every `(class, member)` id pair whose class and member names are both real
 /// vocabulary tokens, in vocabulary id order. Not every schema class/property
 /// is guaranteed to appear literally in a given db's corpus-derived
@@ -933,6 +956,67 @@ fn recipe_reducer(grammar: &CompiledGrammar, schema: &Schema, vocab: &Vocab) -> 
     None
 }
 
+/// A deterministic, schema-parameterized walk realizing
+/// `Class.all()->groupBy([a|$a.<keyMember>], [agg(a|$a.<valMember>,
+/// b|$b-><reducer>())], ['<col1>', '<col2>'])` — a real, compilable arm-C
+/// class-level aggregation shape (issue #55), confirmed live against a real
+/// PMCD (`Country.all()->groupBy([a|$a.continent], [agg(a|$a.population,
+/// b|$b->count())], ['continent', 'cnt'])` returns `TabularDataSet`),
+/// mirrored from real gold-corpus examples (e.g. `world_1`'s own
+/// `dev:792`). Unlike [`recipe_reducer`]'s bare `->agg(...)` step, this
+/// wraps it in the `groupBy(...)` real Pure requires.
+///
+/// Untyped (`b|$b->count()`, no `PrimName` annotation), so it never arms T3
+/// and does not fire `Reducer` — its purpose is raising the live compile
+/// rate (issue #55), not L2 rule coverage (issue #119's `recipe_reducer`
+/// already covers `Reducer`). `None` when this db's vocabulary has no
+/// admissible combination of a real class with at least one member, an
+/// unconstrained reducer name, and two distinct string-literal tokens for
+/// the output column names.
+fn recipe_groupby(grammar: &CompiledGrammar, schema: &Schema, vocab: &Vocab) -> Option<Vec<u32>> {
+    let pipe = find_token(vocab, b"|")?;
+    let dot = find_token(vocab, b".")?;
+    let open = find_token(vocab, b"(")?;
+    let close = find_token(vocab, b")")?;
+    let arrow = find_token(vocab, b"->")?;
+    let comma = find_token(vocab, b",")?;
+    let bopen = find_token(vocab, b"[")?;
+    let bclose = find_token(vocab, b"]")?;
+    let group_by = find_token(vocab, b"groupBy")?;
+    let agg = find_token(vocab, b"agg")?;
+    let key_binder = find_token(vocab, b"a")?;
+    let val_binder = find_token(vocab, b"b")?;
+    let dollar = find_token(vocab, b"$")?;
+    let all = find_token(vocab, SOURCE_METHOD.as_bytes())?;
+    let cols = find_quoted_string_tokens(vocab, 2)?;
+    let (col1, col2) = (cols[0], cols[1]);
+    let candidates = class_member_candidates(schema, vocab, false);
+
+    for &reducer_name in UNCONSTRAINED_REDUCER_NAMES {
+        let Some(reducer_id) = find_token(vocab, reducer_name.as_bytes()) else {
+            continue;
+        };
+        for &(key_class, key_member) in &candidates {
+            for &(val_class, val_member) in &candidates {
+                if val_class != key_class {
+                    continue;
+                }
+                let tokens = [
+                    pipe, key_class, dot, all, open, close, arrow, group_by, open, bopen,
+                    key_binder, pipe, dollar, key_binder, dot, key_member, bclose, comma, bopen,
+                    agg, open, key_binder, pipe, dollar, key_binder, dot, val_member, comma,
+                    val_binder, pipe, dollar, val_binder, arrow, reducer_id, open, close, close,
+                    bclose, comma, bopen, col1, comma, col2, bclose, close,
+                ];
+                if let Some(walk) = try_walk(grammar, schema, &tokens) {
+                    return Some(walk);
+                }
+            }
+        }
+    }
+    None
+}
+
 /// Every recipe walk (issue #119) a caller tries to include ahead of its
 /// random exploration, in order. A recipe that found no admissible
 /// vocabulary/schema combination is dropped rather than padded, so a db
@@ -954,9 +1038,13 @@ fn recipe_walks(
     vocab: &Vocab,
     include_reducer: bool,
 ) -> Vec<Vec<u32>> {
-    let mut walks: Vec<Vec<u32>> = recipe_navigation_predicate(grammar, schema, vocab)
-        .into_iter()
-        .collect();
+    let mut walks: Vec<Vec<u32>> = [
+        recipe_navigation_predicate(grammar, schema, vocab),
+        recipe_groupby(grammar, schema, vocab),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
     if include_reducer {
         walks.extend(recipe_reducer(grammar, schema, vocab));
     }
@@ -1749,7 +1837,8 @@ mod tests {
     fn vocab_for_recipes() -> Vocab {
         let tokens: Vec<Vec<u8>> = [
             "|", "A", ".", "all", "(", ")", "->", "filter", "a", "$", "year", "label", "<", " ",
-            "1", "agg", "b", ",", ":", "Integer", "[", "*", "]", "count",
+            "1", "agg", "b", ",", ":", "Integer", "[", "*", "]", "count", "groupBy", "'col1'",
+            "'col2'",
         ]
         .iter()
         .map(|s| s.as_bytes().to_vec())
@@ -1783,6 +1872,33 @@ mod tests {
         assert_eq!(find_whitespace_token(&vocab), Some(id_of(&vocab, " ")));
         let no_ws = Vocab::from_byte_tokens(vec![b"a".to_vec(), b"ab".to_vec()], 2);
         assert_eq!(find_whitespace_token(&no_ws), None);
+    }
+
+    #[test]
+    fn find_quoted_string_tokens_locates_n_distinct_tokens_or_none() {
+        let vocab = vocab_for_recipes();
+        assert_eq!(
+            find_quoted_string_tokens(&vocab, 2),
+            Some(vec![id_of(&vocab, "'col1'"), id_of(&vocab, "'col2'")])
+        );
+        // Only one quoted-string token exists: asking for two fails entirely,
+        // even though one alone would succeed.
+        let one_quote = Vocab::from_byte_tokens(vec![b"'x'".to_vec()], 1);
+        assert_eq!(find_quoted_string_tokens(&one_quote, 2), None);
+        assert_eq!(
+            find_quoted_string_tokens(&one_quote, 1),
+            Some(vec![id_of(&one_quote, "'x'")])
+        );
+        // A single quote byte alone isn't a *complete* string literal shape.
+        let bare_quote = Vocab::from_byte_tokens(vec![b"'".to_vec()], 1);
+        assert_eq!(find_quoted_string_tokens(&bare_quote, 1), None);
+        // An empty quoted string (exactly the two quote bytes) is the
+        // shortest *complete* shape and does count.
+        let empty_quote = Vocab::from_byte_tokens(vec![b"''".to_vec()], 1);
+        assert_eq!(
+            find_quoted_string_tokens(&empty_quote, 1),
+            Some(vec![id_of(&empty_quote, "''")])
+        );
     }
 
     #[test]
@@ -1941,14 +2057,66 @@ mod tests {
     }
 
     #[test]
-    fn recipe_walks_includes_only_the_recipes_that_actually_succeed() {
-        // The full vocabulary with include_reducer: both recipes succeed.
-        let full = CompiledGrammar::compile(vocab_for_recipes());
-        let both = recipe_walks(&full, &recipe_schema(), full.vocab(), true);
-        assert_eq!(both.len(), 2);
+    fn recipe_groupby_builds_the_expected_walk_from_a_real_schema() {
+        let grammar = CompiledGrammar::compile(vocab_for_recipes());
+        let vocab = grammar.vocab();
+        let expected: Vec<u32> = [
+            "|", "A", ".", "all", "(", ")", "->", "groupBy", "(", "[", "a", "|", "$", "a", ".",
+            "year", "]", ",", "[", "agg", "(", "a", "|", "$", "a", ".", "year", ",", "b", "|", "$",
+            "b", "->", "count", "(", ")", ")", "]", ",", "[", "'col1'", ",", "'col2'", "]", ")",
+        ]
+        .iter()
+        .map(|s| id_of(vocab, s))
+        .collect();
+        assert_eq!(
+            recipe_groupby(&grammar, &recipe_schema(), vocab),
+            Some(expected)
+        );
+    }
 
-        // Missing "agg": only the navigation-predicate recipe can succeed
-        // regardless of include_reducer.
+    #[test]
+    fn recipe_groupby_is_none_without_the_groupby_step_name_in_vocab() {
+        let tokens: Vec<Vec<u8>> = [
+            "|", "A", ".", "all", "(", ")", "->", "agg", "a", "b", "$", "year", "count", "[", "]",
+            ",", "'col1'", "'col2'",
+        ]
+        .iter()
+        .map(|s| s.as_bytes().to_vec())
+        .collect();
+        let eos = tokens.len() as u32;
+        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens, eos));
+        assert_eq!(
+            recipe_groupby(&grammar, &recipe_schema(), grammar.vocab()),
+            None
+        );
+    }
+
+    #[test]
+    fn recipe_groupby_is_none_without_two_distinct_quoted_string_tokens() {
+        let tokens: Vec<Vec<u8>> = [
+            "|", "A", ".", "all", "(", ")", "->", "groupBy", "agg", "a", "b", "$", "year", "count",
+            "[", "]", ",",
+        ]
+        .iter()
+        .map(|s| s.as_bytes().to_vec())
+        .collect();
+        let eos = tokens.len() as u32;
+        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens, eos));
+        assert_eq!(
+            recipe_groupby(&grammar, &recipe_schema(), grammar.vocab()),
+            None
+        );
+    }
+
+    #[test]
+    fn recipe_walks_includes_only_the_recipes_that_actually_succeed() {
+        // The full vocabulary with include_reducer: all three recipes succeed.
+        let full = CompiledGrammar::compile(vocab_for_recipes());
+        let all_three = recipe_walks(&full, &recipe_schema(), full.vocab(), true);
+        assert_eq!(all_three.len(), 3);
+
+        // Missing "agg"/"groupBy"/quoted strings: only the navigation-predicate
+        // recipe can succeed regardless of include_reducer.
         let tokens: Vec<Vec<u8>> = [
             "|", "A", ".", "all", "(", ")", "->", "filter", "a", "$", "year", "<", " ", "1",
         ]
@@ -1962,13 +2130,15 @@ mod tests {
     }
 
     #[test]
-    fn recipe_walks_excludes_the_reducer_recipe_when_include_reducer_is_false() {
-        // The full vocabulary supports both recipes, but include_reducer=false
-        // (issue #55: the reducer recipe's bare `->agg(...)` step is
-        // L1/L2-admissible but not real, compilable Pure) drops it.
+    fn recipe_walks_excludes_only_the_reducer_recipe_when_include_reducer_is_false() {
+        // The full vocabulary supports all three recipes, but
+        // include_reducer=false (issue #55: the reducer recipe's bare
+        // `->agg(...)` step is L1/L2-admissible but not real, compilable
+        // Pure) drops only that one — `recipe_groupby` (real, compilable)
+        // stays included.
         let full = CompiledGrammar::compile(vocab_for_recipes());
-        let only_navigation = recipe_walks(&full, &recipe_schema(), full.vocab(), false);
-        assert_eq!(only_navigation.len(), 1);
+        let two = recipe_walks(&full, &recipe_schema(), full.vocab(), false);
+        assert_eq!(two.len(), 2);
     }
 
     #[test]
