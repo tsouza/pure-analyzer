@@ -9,6 +9,8 @@ use pure_analyzer_syntax::{GreenElement, GreenNode};
 const INDENT: &str = "  ";
 const COLLECTION_LITERAL_CST: &str =
     include_str!("snapshots/m3_golden__collection_literal_cst.snap");
+const QUOTED_COLUMN_ALIAS_CST: &str =
+    include_str!("snapshots/m3_golden__quoted_column_alias_cst.snap");
 const RELATION_PIPELINE_CST: &str = include_str!("snapshots/m3_golden__relation_pipeline_cst.snap");
 
 fn test_file() -> FileId {
@@ -62,4 +64,15 @@ fn collection_literal_cst_is_stable() {
     assert!(parsed.diagnostics.is_empty(), "{:#?}", parsed.diagnostics);
     render_tree(&parsed.green, 0, &mut rendered);
     assert_eq!(rendered, golden_body(COLLECTION_LITERAL_CST));
+}
+
+#[test]
+fn quoted_column_alias_cst_is_stable() {
+    let source = "~['Total': x| $x.amount]";
+    let parsed = parse_query(source, test_file()).expect("fixture must build a tree");
+    let mut rendered = String::new();
+
+    assert!(parsed.diagnostics.is_empty(), "{:#?}", parsed.diagnostics);
+    render_tree(&parsed.green, 0, &mut rendered);
+    assert_eq!(rendered, golden_body(QUOTED_COLUMN_ALIAS_CST));
 }

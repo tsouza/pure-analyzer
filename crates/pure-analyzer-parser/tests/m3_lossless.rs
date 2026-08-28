@@ -4,7 +4,7 @@ use pure_analyzer_diagnostics::FileId;
 use pure_analyzer_lexer::lex;
 use pure_analyzer_parser::parse_query;
 use pure_analyzer_syntax::{
-    AstNode, CollectionLiteral, GreenElement, GreenNode, QueryExpression, SyntaxKind,
+    AstNode, CollectionLiteral, ColumnName, GreenElement, GreenNode, QueryExpression, SyntaxKind,
 };
 
 fn test_file() -> FileId {
@@ -166,6 +166,22 @@ fn parses_collection_literals_in_relation_expressions() {
 
     assert_eq!(collection.syntax().text(), "[a, b]");
     assert_eq!(collection.text_range(), collection.syntax().text_range());
+}
+
+#[test]
+fn quoted_column_aliases_are_typed_and_lossless() {
+    let source = "~[ 'Total Revenue' : x | $x.amount, plain: String[1] ]";
+    let parsed = parse(source);
+    let mut names = Vec::new();
+
+    assert!(parsed.diagnostics.is_empty(), "{:#?}", parsed.diagnostics);
+    nodes_with_kind(&parsed.green, SyntaxKind::COLUMN_NAME, &mut names);
+    assert_eq!(names.len(), 2, "{names:#?}");
+
+    let quoted = ColumnName::cast(names[0].clone()).expect("column name should have a typed view");
+    assert_eq!(quoted.syntax().text(), "'Total Revenue'");
+    assert_eq!(quoted.text_range(), quoted.syntax().text_range());
+    assert_lossless(source);
 }
 
 #[test]

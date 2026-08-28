@@ -133,6 +133,11 @@ ast_node!(
     "A typed view of an array of relation column specifications."
 );
 ast_node!(
+    ColumnName,
+    COLUMN_NAME,
+    "A typed view of a relation column name."
+);
+ast_node!(
     NewInstanceExpression,
     NEW_INSTANCE_EXPR,
     "A typed view of a new-instance expression."

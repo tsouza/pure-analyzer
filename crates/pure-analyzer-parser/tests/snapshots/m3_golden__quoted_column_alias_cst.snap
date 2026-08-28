@@ -1,0 +1,25 @@
+---
+ROOT 0..24
+  QUERY_EXPR 0..24
+    COLUMN_SPEC_ARRAY 0..24
+      TILDE 0..1 "~"
+      BRACKET_OPEN 1..2 "["
+      COLUMN_SPEC 2..23
+        COLUMN_NAME 2..9
+          STRING 2..9 "'Total'"
+        COLON 9..10 ":"
+        WHITESPACE 10..11 " "
+        LAMBDA_EXPR 11..23
+          LAMBDA_PARAMS 11..12
+            IDENT 11..12 "x"
+          PIPE 12..13 "|"
+          CODE_BLOCK 13..23
+            QUERY_EXPR 13..23
+              WHITESPACE 13..14 " "
+              VARIABLE_EXPR 14..16
+                DOLLAR 14..15 "$"
+                IDENT 15..16 "x"
+              PROPERTY_NAV 16..23
+                DOT 16..17 "."
+                IDENT 17..23 "amount"
+      BRACKET_CLOSE 23..24 "]"
