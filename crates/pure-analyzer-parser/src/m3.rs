@@ -648,12 +648,6 @@ impl<'tokens> Parser<'tokens> {
                     TokenKind::BRACKET_CLOSE,
                     TokenKind::SEMICOLON,
                 ]);
-                if self.at(TokenKind::SEMICOLON)
-                    || self.at(TokenKind::BRACKET_CLOSE)
-                    || self.at_eof()
-                {
-                    break;
-                }
                 // `recover_until` deliberately leaves its boundary in place.
                 // Only a comma starts another member; every other boundary
                 // belongs to the enclosing grammar.
