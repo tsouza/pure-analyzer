@@ -7,7 +7,8 @@ use pure_analyzer_model::{
     PureDocument, QName, QpKind, TypeRef, load_model_documents,
 };
 use pure_analyzer_resolve::{
-    Resolution, ResolvedMember, ResolvedMemberKind, Resolver, UnderResolution,
+    NavigationResolution, NavigationResolver, NavigationStep, NavigationTarget, Resolution,
+    ResolvedMember, ResolvedMemberKind, Resolver, UnderResolution,
 };
 use serde_json::{Value, json};
 
@@ -183,6 +184,36 @@ fn found_member(graph: &ModelGraph, class: &str, member: &str) -> ResolvedMember
     }
 }
 
+fn found_navigation_member(
+    graph: &ModelGraph,
+    class: &str,
+    member: &str,
+    argument_count: usize,
+) -> ResolvedMember {
+    let resolver = NavigationResolver::new(graph);
+    let source = match resolver.class_all(&qname(class)) {
+        Resolution::Found(value) => value,
+        outcome => panic!("expected class value, got {outcome:#?}"),
+    };
+    let step = if argument_count == 0 {
+        NavigationStep::property(member_name(member))
+    } else {
+        NavigationStep::call(member_name(member), argument_count)
+    };
+    let chain = match resolver.resolve(&source, &[step]) {
+        NavigationResolution::Found(chain) => chain,
+        outcome => panic!("expected navigation hop, got {outcome:#?}"),
+    };
+    let [hop] = chain.hops() else {
+        panic!("expected exactly one navigation hop");
+    };
+    let NavigationTarget::Member(member) = hop.target() else {
+        panic!("expected a model-member navigation target");
+    };
+    assert_eq!(hop.definition(), Some(member.definition()));
+    member.clone()
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct MemberFacts {
     owner: QName,
@@ -337,6 +368,20 @@ Class model::Holder
             expected_lower,
             expected_upper,
         );
+    }
+
+    for (name, argument_count) in [
+        ("plain", 0),
+        ("point", 2),
+        ("pointAllVersions", 0),
+        ("pointAllVersionsInRange", 2),
+        ("pointEdge", 2),
+        ("userAllVersions", 2),
+    ] {
+        let pmcd_member = found_navigation_member(&pmcd, "Holder", name, argument_count);
+        let pure_member = found_navigation_member(&pure, "Holder", name, argument_count);
+
+        assert_fact_parity(&pmcd_member, &pure_member);
     }
 }
 
