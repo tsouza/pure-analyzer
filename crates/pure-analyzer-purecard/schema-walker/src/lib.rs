@@ -702,38 +702,295 @@ fn build_candidates(
     cands
 }
 
-/// Generate exactly [`WALK_COUNT`] deterministic accepting walks (as token-id
-/// sequences) over `grammar` under `schema`'s L2 overlay. Each attempt resumes
-/// the previous one's final PRNG state, so successful and failed attempts
-/// alike form one reproducible SplitMix64 stream.
+/// Every Pure primitive type-annotation name a typed reduce-lambda binder may
+/// declare (`docs/spec/schema.md` §6.2.2; mirrors the schema crate's own
+/// unexposed `PrimName`, which cannot itself cross the crate boundary without
+/// growing the public surface for no reason beyond this one lookup) —
+/// [`recipe_reducer`] tries each in turn against the vocabulary, since it
+/// cannot assume any one of them appears literally in a given db's
+/// corpus-derived vocabulary.
+const PRIM_TYPE_NAMES: &[&str] = &[
+    "Integer",
+    "Number",
+    "Float",
+    "Decimal",
+    "String",
+    "Boolean",
+    "Date",
+    "StrictDate",
+    "DateTime",
+];
+
+/// Reducer names T3 never masks regardless of the reduce-lambda's declared
+/// element type (`min`/`max`/`count` — see [`ARROW_METHOD_NAMES`]'s own
+/// reducer entries and `pure-analyzer-purecard::schema::narrow::keeps_reducer`'s
+/// corpus evidence) — the only names [`recipe_reducer`] can pair with an
+/// arbitrarily-found [`PRIM_TYPE_NAMES`] entry without risking rejection by
+/// T3's own mask (`sum`/`average` are legal only for a numeric element type).
+const UNCONSTRAINED_REDUCER_NAMES: &[&str] = &["count", "min", "max"];
+
+/// The vocabulary id of the token spelled exactly `text`, if any.
+fn find_token(vocab: &Vocab, text: &[u8]) -> Option<u32> {
+    (0..vocab.len() as u32).find(|&id| vocab.bytes(id) == Some(text))
+}
+
+/// The vocabulary id of a single-byte ASCII-digit token, if any. A recipe's
+/// numeric-literal RHS never needs a *specific* digit, only one admissible
+/// under T1's `ReValue(Numeric)` narrowing.
+fn find_digit_token(vocab: &Vocab) -> Option<u32> {
+    (0..vocab.len() as u32).find(|&id| {
+        vocab
+            .bytes(id)
+            .is_some_and(|b| matches!(b, [d] if d.is_ascii_digit()))
+    })
+}
+
+/// The vocabulary id of a single-byte ASCII-whitespace token, if any.
 ///
-/// The count is a guarantee, not a target: the loop runs until [`WALK_COUNT`]
-/// walks are collected, bounded by an internal attempt limit purely so a bug
-/// can never spin forever, and a final assertion turns any shortfall into a
-/// failure at this source rather than a confusing mismatch downstream.
+/// [`recipe_navigation_predicate`] needs one right after the member
+/// identifier: an identifier has no self-terminating byte, so closing it
+/// with a byte that is itself *semantically loaded* (an ordered comparator
+/// like `<`) drives the byte-PDA straight through `AfterValue` into the
+/// comparator's own state in one step, without `AfterValue` ever becoming
+/// externally observable — confirmed empirically (issue #119) that checking
+/// [`DecoderSession::active_l2_position`] right after such a token reads
+/// `None`, not [`L2Position::Comparator`](purecard::schema::L2Position::Comparator),
+/// even though the comparator itself is correctly narrowed and admitted. An
+/// inert whitespace byte closes the identifier without itself opening
+/// anything, landing cleanly on the anchor state and letting `Comparator`'s
+/// position read through. The same gap applies to reading `ReValue` right
+/// after a single-byte ordered comparator (`<`/`>`, as opposed to a
+/// multi-byte token like `==`, which is not itself split by this gap) —
+/// [`recipe_navigation_predicate`] uses one whitespace token after *both*
+/// the member and the comparator for exactly this reason.
+fn find_whitespace_token(vocab: &Vocab) -> Option<u32> {
+    (0..vocab.len() as u32).find(|&id| {
+        vocab
+            .bytes(id)
+            .is_some_and(|b| matches!(b, [w] if w.is_ascii_whitespace()))
+    })
+}
+
+/// Every `(class, member)` id pair whose class and member names are both real
+/// vocabulary tokens, in vocabulary id order. Not every schema class/property
+/// is guaranteed to appear literally in a given db's corpus-derived
+/// vocabulary — an arm-A-only corpus may supply none at all (issue #119) — so
+/// [`recipe_navigation_predicate`]/[`recipe_reducer`] try every candidate this
+/// returns rather than assume the first is admissible.
+fn class_member_candidates(schema: &Schema, vocab: &Vocab) -> Vec<(u32, u32)> {
+    let mut out = Vec::new();
+    for class_id in 0..vocab.len() as u32 {
+        let Some(class_bytes) = vocab.bytes(class_id) else {
+            continue;
+        };
+        let Ok(class_text) = std::str::from_utf8(class_bytes) else {
+            continue;
+        };
+        if !schema.has_class(class_text) {
+            continue;
+        }
+        for member in schema.member_names(class_text) {
+            if let Some(member_id) = find_token(vocab, member.as_bytes()) {
+                out.push((class_id, member_id));
+            }
+        }
+    }
+    out
+}
+
+/// Try `tokens` against a fresh session over `grammar`/`schema`, returning
+/// them back as a walk only if every one is L2-admissible in sequence *and*
+/// the session is genuinely complete afterward — the same acceptance bar
+/// [`attempt`]'s own random exploration holds every walk to.
+///
+/// Checks [`allowed_mask`](DecoderSession::allowed_mask) before *every*
+/// `accept_token`, rather than trusting `accept_token`'s own `Ok` result:
+/// `accept_token` only enforces L1 grammar-legality, not the L2 schema
+/// narrow, by design (`session.rs`'s own doc comment: "do not treat
+/// `accept_token` as a schema-validation backstop"). A recipe's
+/// hand-constructed sequence is exactly the case that doc comment warns
+/// about — confirmed live (issue #119): a first version of this function
+/// skipped the mask check and let a walk through whose `<` comparator was
+/// L1-legal but not L2-admissible for the resolved member's type, caught by
+/// `schema_walk_completeness.rs`'s L1/L2 subset proof.
+fn try_walk(grammar: &CompiledGrammar, schema: &Schema, tokens: &[u32]) -> Option<Vec<u32>> {
+    let Ok(mut session) = DecoderSession::with_schema(grammar, schema.clone()) else {
+        return None;
+    };
+    for &id in tokens {
+        if !session.allowed_mask().test(id) {
+            return None;
+        }
+        session.accept_token(id).ok()?;
+    }
+    session.is_complete().then(|| tokens.to_vec())
+}
+
+/// A deterministic, schema-parameterized walk realizing
+/// `Class.all()->filter(a|$a.<member> < <digit>)` — the shape that fires N1/N2
+/// (`Member`), T2 (`Comparator`), and T1 (`ReValue`) together, none of which
+/// issue #117's per-token weight biases alone could reliably reach (reaching
+/// `$x.field cmp literal` needs several independent nested-grammar branches
+/// to land on the specific path toward navigation in sequence — see that
+/// issue and #119 for the full investigation). `None` when this db's
+/// vocabulary has no admissible `(class, member)` pair reaching the shape —
+/// an arm-A-only corpus with no bare-ident class-member access at all is a
+/// documented residual (`schema_walk_rule_coverage.rs`'s `EXPECTED_UNFIRED`),
+/// not a bug.
+fn recipe_navigation_predicate(
+    grammar: &CompiledGrammar,
+    schema: &Schema,
+    vocab: &Vocab,
+) -> Option<Vec<u32>> {
+    let pipe = find_token(vocab, b"|")?;
+    let dot = find_token(vocab, b".")?;
+    let open = find_token(vocab, b"(")?;
+    let close = find_token(vocab, b")")?;
+    let arrow = find_token(vocab, b"->")?;
+    let filter = find_token(vocab, b"filter")?;
+    let binder = find_token(vocab, b"a")?;
+    let dollar = find_token(vocab, b"$")?;
+    let lt = find_token(vocab, b"<")?;
+    let digit = find_digit_token(vocab)?;
+    let ws = find_whitespace_token(vocab)?;
+    let all = find_token(vocab, SOURCE_METHOD.as_bytes())?;
+    for (class_id, member_id) in class_member_candidates(schema, vocab) {
+        let tokens = [
+            pipe, class_id, dot, all, open, close, arrow, filter, open, binder, pipe, dollar,
+            binder, dot, member_id, ws, lt, ws, digit, close,
+        ];
+        if let Some(walk) = try_walk(grammar, schema, &tokens) {
+            return Some(walk);
+        }
+    }
+    None
+}
+
+/// A deterministic, schema-parameterized walk realizing
+/// `Class.all()->agg(a|$a.<member>,b:<PrimType>[*]|$b-><reducer>())` — the
+/// shape that fires T3 (`Reducer`), which issue #117's per-token weight
+/// biases alone could not reliably reach (the walker never got deep enough to
+/// exercise an `agg` aggregation at all). Uses a bare `->agg(...)` step
+/// rather than wrapping it in `groupBy(~[...], ...)`: `agg` is already one of
+/// [`ARROW_METHOD_NAMES`]'s own step names, and none of the 8 fixture
+/// corpora use arm-R's `~[...]` column-set syntax at all (confirmed live —
+/// `schema_walk_state_coverage.rs`'s `SawTilde` residual), so a recipe built
+/// on it would find no vocabulary token for `~` in any of them and never
+/// fire at all. `None` when this db's vocabulary has no admissible
+/// combination of a real member, a primitive type-annotation name, and an
+/// unconstrained reducer name — a documented residual
+/// (`schema_walk_rule_coverage.rs`'s `EXPECTED_UNFIRED`), not a bug.
+fn recipe_reducer(grammar: &CompiledGrammar, schema: &Schema, vocab: &Vocab) -> Option<Vec<u32>> {
+    let pipe = find_token(vocab, b"|")?;
+    let dot = find_token(vocab, b".")?;
+    let open = find_token(vocab, b"(")?;
+    let close = find_token(vocab, b")")?;
+    let arrow = find_token(vocab, b"->")?;
+    let comma = find_token(vocab, b",")?;
+    let colon = find_token(vocab, b":")?;
+    let star = find_token(vocab, b"*")?;
+    let bopen = find_token(vocab, b"[")?;
+    let bclose = find_token(vocab, b"]")?;
+    let agg = find_token(vocab, b"agg")?;
+    let key_binder = find_token(vocab, b"a")?;
+    let val_binder = find_token(vocab, b"b")?;
+    let dollar = find_token(vocab, b"$")?;
+    let all = find_token(vocab, SOURCE_METHOD.as_bytes())?;
+    let candidates = class_member_candidates(schema, vocab);
+
+    for &prim_name in PRIM_TYPE_NAMES {
+        let Some(prim_id) = find_token(vocab, prim_name.as_bytes()) else {
+            continue;
+        };
+        for &reducer_name in UNCONSTRAINED_REDUCER_NAMES {
+            let Some(reducer_id) = find_token(vocab, reducer_name.as_bytes()) else {
+                continue;
+            };
+            for &(class_id, member_id) in &candidates {
+                let tokens = [
+                    pipe, class_id, dot, all, open, close, arrow, agg, open, key_binder, pipe,
+                    dollar, key_binder, dot, member_id, comma, val_binder, colon, prim_id, bopen,
+                    star, bclose, pipe, dollar, val_binder, arrow, reducer_id, open, close, close,
+                ];
+                if let Some(walk) = try_walk(grammar, schema, &tokens) {
+                    return Some(walk);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Every recipe walk (issue #119) [`generate_schema_walks`] tries to include
+/// ahead of its random exploration, in order. A recipe that found no
+/// admissible vocabulary/schema combination is dropped rather than padded, so
+/// a db missing one shape simply gets fewer recipe walks and more random
+/// ones, never a placeholder.
+fn recipe_walks(grammar: &CompiledGrammar, schema: &Schema, vocab: &Vocab) -> Vec<Vec<u32>> {
+    [
+        recipe_navigation_predicate(grammar, schema, vocab),
+        recipe_reducer(grammar, schema, vocab),
+    ]
+    .into_iter()
+    .flatten()
+    .collect()
+}
+
+/// Generate exactly [`WALK_COUNT`] deterministic accepting walks (as token-id
+/// sequences) over `grammar` under `schema`'s L2 overlay: `recipe_walks`'s
+/// deterministic, schema-parameterized walks first (issue #119 — reaching the
+/// class-member-navigation shapes those target needs *every* one of several
+/// nested-grammar choices to align, which per-token random weighting alone
+/// could not reliably reach, per issue #117's investigation), padded out to
+/// [`WALK_COUNT`] by `attempt`'s random exploration. Each random attempt
+/// resumes the previous one's final PRNG state, so successful and failed
+/// attempts alike form one reproducible SplitMix64 stream.
+///
+/// The count is a guarantee, not a target: the random-exploration loop runs
+/// until enough walks are collected to reach [`WALK_COUNT`] in total, bounded
+/// by an internal attempt limit purely so a bug can never spin forever, and a
+/// final assertion turns any shortfall into a failure at this source rather
+/// than a confusing mismatch downstream.
 ///
 /// # Panics
 ///
-/// Panics if fewer than [`WALK_COUNT`] walks are collected within the
-/// internal attempt limit.
+/// Panics if fewer than [`WALK_COUNT`] walks are collected in total within
+/// the internal attempt limit.
 #[must_use]
 pub fn generate_schema_walks(grammar: &CompiledGrammar, schema: &Schema) -> Vec<Vec<u32>> {
-    generate_walks(grammar, schema, BASE_SEED, None, "generate_schema_walks")
+    let vocab = grammar.vocab();
+    let mut walks = recipe_walks(grammar, schema, vocab);
+    walks.truncate(WALK_COUNT);
+    let target = WALK_COUNT - walks.len();
+    let random = collect_walks(
+        target,
+        BASE_SEED,
+        ATTEMPT_LIMIT,
+        "generate_schema_walks",
+        |seed| attempt(grammar, schema, seed, None),
+    );
+    walks.extend(random);
+    walks
 }
 
 /// Whether the shared retry loop in [`collect_walks`] should keep going
-/// *before* its hard iteration bound is reached: fewer than [`WALK_COUNT`]
-/// walks collected so far — factored out so it is directly unit-testable
-/// without needing a full grammar/schema fixture.
-fn keep_generating(walks_len: usize) -> bool {
-    walks_len < WALK_COUNT
+/// *before* its hard iteration bound is reached: fewer than `target` walks
+/// collected so far — factored out so it is directly unit-testable without
+/// needing a full grammar/schema fixture.
+fn keep_generating(walks_len: usize, target: usize) -> bool {
+    walks_len < target
 }
 
 /// Shared retry loop behind both [`generate_schema_walks`] and
-/// [`generate_first_complete_schema_walks`]: gather exactly [`WALK_COUNT`]
+/// [`generate_first_complete_schema_walks`]: gather exactly `target`
 /// accepting walks from `base_seed`'s SplitMix64 stream, retrying (via each
 /// call to `attempt_fn`'s own returned next-seed state) up to `attempt_limit`
 /// times. `label` names the caller in the panic message on shortfall.
+///
+/// `target` is a parameter rather than always [`WALK_COUNT`] because
+/// [`generate_schema_walks`] (issue #119) fills in its recipe walks first and
+/// asks this loop for only the remainder, so the two together still sum to
+/// exactly [`WALK_COUNT`].
 ///
 /// The `for` loop's own range is the *unconditional* bound (mirroring
 /// [`attempt`]'s `for _ in 0..HARD_CAP`): even a broken [`keep_generating`]
@@ -746,15 +1003,16 @@ fn keep_generating(walks_len: usize) -> bool {
 /// with a small `attempt_limit` to prove the give-up path fires correctly
 /// and quickly, without the cost of an unbounded real generation run.
 fn collect_walks(
+    target: usize,
     base_seed: u64,
     attempt_limit: usize,
     label: &str,
     mut attempt_fn: impl FnMut(u64) -> (Option<Vec<u32>>, u64),
 ) -> Vec<Vec<u32>> {
-    let mut walks = Vec::with_capacity(WALK_COUNT);
+    let mut walks = Vec::with_capacity(target);
     let mut seed = base_seed;
     for _ in 0..attempt_limit {
-        if !keep_generating(walks.len()) {
+        if !keep_generating(walks.len(), target) {
             break;
         }
         let (walk, next_state) = attempt_fn(seed);
@@ -765,14 +1023,14 @@ fn collect_walks(
     }
     assert_eq!(
         walks.len(),
-        WALK_COUNT,
-        "{label} fell short of WALK_COUNT within its attempt limit"
+        target,
+        "{label} fell short of its target walk count within its attempt limit"
     );
     walks
 }
 
-/// Thin wrapper binding [`collect_walks`] to a real `grammar`/`schema` and
-/// [`ATTEMPT_LIMIT`].
+/// Thin wrapper binding [`collect_walks`] to a real `grammar`/`schema`,
+/// [`WALK_COUNT`] as its target, and [`ATTEMPT_LIMIT`].
 fn generate_walks(
     grammar: &CompiledGrammar,
     schema: &Schema,
@@ -780,7 +1038,7 @@ fn generate_walks(
     grow_target: Option<u64>,
     label: &str,
 ) -> Vec<Vec<u32>> {
-    collect_walks(base_seed, ATTEMPT_LIMIT, label, |seed| {
+    collect_walks(WALK_COUNT, base_seed, ATTEMPT_LIMIT, label, |seed| {
         attempt(grammar, schema, seed, grow_target)
     })
 }
@@ -1364,14 +1622,14 @@ mod tests {
     }
 
     #[test]
-    fn keep_generating_stops_the_instant_walk_count_is_reached() {
-        assert!(keep_generating(0));
-        assert!(keep_generating(WALK_COUNT - 1));
-        assert!(!keep_generating(WALK_COUNT));
+    fn keep_generating_stops_the_instant_the_target_is_reached() {
+        assert!(keep_generating(0, 3));
+        assert!(keep_generating(2, 3));
+        assert!(!keep_generating(3, 3));
     }
 
     #[test]
-    #[should_panic(expected = "fell short of WALK_COUNT")]
+    #[should_panic(expected = "fell short of its target walk count")]
     fn collect_walks_gives_up_within_its_attempt_limit_when_it_never_succeeds() {
         // A closure that never produces a walk, with a tiny attempt limit,
         // proves `collect_walks` actually gives up (panics) rather than
@@ -1380,7 +1638,7 @@ mod tests {
         // hang risk even under a broken `keep_generating`/exit condition):
         // `collect_walks`'s `for _ in 0..attempt_limit` is an *unconditional*
         // bound on iterations, exactly like `attempt`'s own `HARD_CAP` loop.
-        let _ = collect_walks(0, 5, "test", |seed| (None, seed));
+        let _ = collect_walks(3, 0, 5, "test", |seed| (None, seed));
     }
 
     #[test]
@@ -1410,5 +1668,231 @@ mod tests {
             saw_max_minus_one,
             "never observed the maximum grow target over 2000 seeds"
         );
+    }
+
+    /// A schema with one real, primitive-typed member — [`RECIPE_SAMPLE`]'s
+    /// own class `A` (from the outer [`SAMPLE`]) has no properties at all, so
+    /// the recipe machinery needs its own fixture with something to navigate.
+    const RECIPE_SAMPLE: &str = r#"{
+      "db_id": "r", "db_path": "spider::r::Db",
+      "classes": { "A": { "simple_name": "A",
+        "properties": [ {"name": "year", "type": {"kind": "primitive", "name": "Integer"}, "mult": {"lower": 1, "upper": 1}} ],
+        "qualified_properties": [], "super_types": [] } },
+      "associations": [], "enums": {}
+    }"#;
+
+    fn recipe_schema() -> Schema {
+        Schema::from_json(RECIPE_SAMPLE).expect("parses")
+    }
+
+    /// Every token both recipes need against [`recipe_schema`]: a real class
+    /// (`A`), a real member (`year`), and every structural lexeme each
+    /// recipe shape requires.
+    fn vocab_for_recipes() -> Vocab {
+        let tokens: Vec<Vec<u8>> = [
+            "|", "A", ".", "all", "(", ")", "->", "filter", "a", "$", "year", "<", " ", "1", "agg",
+            "b", ",", ":", "Integer", "[", "*", "]", "count",
+        ]
+        .iter()
+        .map(|s| s.as_bytes().to_vec())
+        .collect();
+        let eos = tokens.len() as u32;
+        Vocab::from_byte_tokens(tokens, eos)
+    }
+
+    fn id_of(vocab: &Vocab, text: &str) -> u32 {
+        find_token(vocab, text.as_bytes()).unwrap_or_else(|| panic!("token {text:?} not in vocab"))
+    }
+
+    #[test]
+    fn find_token_locates_the_exact_byte_match_or_none() {
+        let vocab = vocab_for_recipes();
+        assert_eq!(find_token(&vocab, b"->"), Some(id_of(&vocab, "->")));
+        assert_eq!(find_token(&vocab, b"nope"), None);
+    }
+
+    #[test]
+    fn find_digit_token_locates_a_single_ascii_digit_or_none() {
+        let vocab = vocab_for_recipes();
+        assert_eq!(find_digit_token(&vocab), Some(id_of(&vocab, "1")));
+        let no_digits = Vocab::from_byte_tokens(vec![b"a".to_vec(), b"ab".to_vec()], 2);
+        assert_eq!(find_digit_token(&no_digits), None);
+    }
+
+    #[test]
+    fn find_whitespace_token_locates_a_single_byte_whitespace_or_none() {
+        let vocab = vocab_for_recipes();
+        assert_eq!(find_whitespace_token(&vocab), Some(id_of(&vocab, " ")));
+        let no_ws = Vocab::from_byte_tokens(vec![b"a".to_vec(), b"ab".to_vec()], 2);
+        assert_eq!(find_whitespace_token(&no_ws), None);
+    }
+
+    #[test]
+    fn class_member_candidates_pairs_real_classes_with_members_present_in_vocab() {
+        let vocab = vocab_for_recipes();
+        let candidates = class_member_candidates(&recipe_schema(), &vocab);
+        assert_eq!(
+            candidates,
+            vec![(id_of(&vocab, "A"), id_of(&vocab, "year"))]
+        );
+    }
+
+    #[test]
+    fn class_member_candidates_is_empty_when_no_class_name_is_a_vocab_token() {
+        // "year" is a real member name, but no real class name appears.
+        let vocab = Vocab::from_byte_tokens(vec![b"year".to_vec()], 1);
+        assert!(class_member_candidates(&recipe_schema(), &vocab).is_empty());
+    }
+
+    #[test]
+    fn class_member_candidates_skips_a_member_absent_from_the_vocab() {
+        // "A" is a real class, but its only member ("year") has no token.
+        let vocab = Vocab::from_byte_tokens(vec![b"A".to_vec()], 1);
+        assert!(class_member_candidates(&recipe_schema(), &vocab).is_empty());
+    }
+
+    #[test]
+    fn try_walk_succeeds_only_when_every_token_is_l2_admissible_and_the_walk_completes() {
+        let grammar = CompiledGrammar::compile(vocab_for_recipes());
+        let vocab = grammar.vocab();
+        let ids: Vec<u32> = ["|", "A", ".", "all", "(", ")"]
+            .iter()
+            .map(|s| id_of(vocab, s))
+            .collect();
+        assert_eq!(
+            try_walk(&grammar, &recipe_schema(), &ids),
+            Some(ids.clone())
+        );
+        // The same prefix, minus its closing paren: never reaches completion.
+        assert_eq!(
+            try_walk(&grammar, &recipe_schema(), &ids[..ids.len() - 1]),
+            None
+        );
+    }
+
+    #[test]
+    fn try_walk_rejects_a_token_l1_admits_but_the_l2_mask_excludes() {
+        // A garbage classpath-shaped identifier: L1 admits any identifier at
+        // the source position, but N3's mask only ever admits a real class
+        // or the store path (`Schema::has_class`) — `accept_token` alone
+        // would not catch this (its own doc comment: it enforces only L1,
+        // never the L2 schema mask), which is exactly the root cause a first
+        // version of `try_walk` hit live (issue #119): it let an L1-legal,
+        // L2-inadmissible token through, caught only by
+        // `schema_walk_completeness.rs`'s separate L1/L2 subset proof. This
+        // pins the mask-check as a real defense, not vestigial.
+        let vocab = Vocab::from_byte_tokens(vec![b"|".to_vec(), b"Nope".to_vec()], 2);
+        let grammar = CompiledGrammar::compile(vocab);
+        assert_eq!(try_walk(&grammar, &recipe_schema(), &[0, 1]), None);
+    }
+
+    #[test]
+    fn recipe_navigation_predicate_builds_the_expected_walk_from_a_real_schema() {
+        let grammar = CompiledGrammar::compile(vocab_for_recipes());
+        let vocab = grammar.vocab();
+        let expected: Vec<u32> = [
+            "|", "A", ".", "all", "(", ")", "->", "filter", "(", "a", "|", "$", "a", ".", "year",
+            " ", "<", " ", "1", ")",
+        ]
+        .iter()
+        .map(|s| id_of(vocab, s))
+        .collect();
+        assert_eq!(
+            recipe_navigation_predicate(&grammar, &recipe_schema(), vocab),
+            Some(expected)
+        );
+    }
+
+    #[test]
+    fn recipe_navigation_predicate_is_none_without_a_qualifying_class_member_pair() {
+        // Every structural token the shape needs, but no real class or
+        // member name at all.
+        let tokens: Vec<Vec<u8>> = [
+            "|", ".", "all", "(", ")", "->", "filter", "a", "$", "<", " ", "1",
+        ]
+        .iter()
+        .map(|s| s.as_bytes().to_vec())
+        .collect();
+        let eos = tokens.len() as u32;
+        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens, eos));
+        assert_eq!(
+            recipe_navigation_predicate(&grammar, &recipe_schema(), grammar.vocab()),
+            None
+        );
+    }
+
+    #[test]
+    fn recipe_navigation_predicate_is_none_when_a_needed_structural_token_is_missing() {
+        // No "filter" token anywhere in the vocabulary.
+        let tokens: Vec<Vec<u8>> = [
+            "|", "A", ".", "all", "(", ")", "->", "year", "$", "<", " ", "1",
+        ]
+        .iter()
+        .map(|s| s.as_bytes().to_vec())
+        .collect();
+        let eos = tokens.len() as u32;
+        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens, eos));
+        assert_eq!(
+            recipe_navigation_predicate(&grammar, &recipe_schema(), grammar.vocab()),
+            None
+        );
+    }
+
+    #[test]
+    fn recipe_reducer_builds_the_expected_walk_from_a_real_schema() {
+        let grammar = CompiledGrammar::compile(vocab_for_recipes());
+        let vocab = grammar.vocab();
+        let expected: Vec<u32> = [
+            "|", "A", ".", "all", "(", ")", "->", "agg", "(", "a", "|", "$", "a", ".", "year", ",",
+            "b", ":", "Integer", "[", "*", "]", "|", "$", "b", "->", "count", "(", ")", ")",
+        ]
+        .iter()
+        .map(|s| id_of(vocab, s))
+        .collect();
+        assert_eq!(
+            recipe_reducer(&grammar, &recipe_schema(), vocab),
+            Some(expected)
+        );
+    }
+
+    #[test]
+    fn recipe_reducer_is_none_without_the_agg_step_name_in_vocab() {
+        let tokens: Vec<Vec<u8>> = ["|", "A", ".", "all", "(", ")", "->"]
+            .iter()
+            .map(|s| s.as_bytes().to_vec())
+            .collect();
+        let eos = tokens.len() as u32;
+        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens, eos));
+        assert_eq!(
+            recipe_reducer(&grammar, &recipe_schema(), grammar.vocab()),
+            None
+        );
+    }
+
+    #[test]
+    fn recipe_walks_includes_only_the_recipes_that_actually_succeed() {
+        // The full vocabulary: both recipes succeed.
+        let full = CompiledGrammar::compile(vocab_for_recipes());
+        let both = recipe_walks(&full, &recipe_schema(), full.vocab());
+        assert_eq!(both.len(), 2);
+
+        // Missing "agg": only the navigation-predicate recipe can succeed.
+        let tokens: Vec<Vec<u8>> = [
+            "|", "A", ".", "all", "(", ")", "->", "filter", "a", "$", "year", "<", " ", "1",
+        ]
+        .iter()
+        .map(|s| s.as_bytes().to_vec())
+        .collect();
+        let eos = tokens.len() as u32;
+        let partial = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens, eos));
+        let one = recipe_walks(&partial, &recipe_schema(), partial.vocab());
+        assert_eq!(one.len(), 1);
+    }
+
+    #[test]
+    fn generate_schema_walks_totals_exactly_walk_count_even_with_recipe_walks_included() {
+        let grammar = CompiledGrammar::compile(vocab_for_recipes());
+        let walks = generate_schema_walks(&grammar, &recipe_schema());
+        assert_eq!(walks.len(), WALK_COUNT);
     }
 }

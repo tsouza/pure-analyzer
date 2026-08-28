@@ -353,7 +353,21 @@ impl Schema {
     /// The full member-name set of a class (§6.5 N1): its stored properties,
     /// qualified properties, and navigable ends, unioned transitively over its
     /// super-types. Nothing else may legally follow `$var.` when bound to it.
-    pub(crate) fn member_names(&self, class: &str) -> Vec<String> {
+    ///
+    /// `#[doc(hidden)] pub`, re-exported as `crate::schema::Schema::member_names`
+    /// via the type's own existing `pub use`: test-support surface (issue
+    /// #119) so `purecard-schema-walker` can look up a real member name to
+    /// drive a schema-parameterized recipe walk (`Class.all()->filter(x|$x.
+    /// <member> ...)`), without which the walker has no way to know which
+    /// bare identifiers are legal navigation targets and has to rely on
+    /// per-token weight bias alone — confirmed insufficient by issue #117 to
+    /// reliably reach `Member`/`ReValue`/`Comparator`/`Reducer`. Not part of
+    /// the crate's documented public contract (excluded from the `cargo
+    /// public-api` snapshot) — a plain `pub(crate)` cannot cross the crate
+    /// boundary a separate workspace member compiles behind (mirrors
+    /// [`has_class`](Self::has_class)'s own promotion for the same reason).
+    #[doc(hidden)]
+    pub fn member_names(&self, class: &str) -> Vec<String> {
         let mut names = Vec::new();
         let mut visited = Vec::new();
         self.collect_members(class, &mut names, &mut visited);
