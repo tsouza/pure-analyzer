@@ -16,7 +16,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::grammar::pda::{Frame, LexKind, Pda, State, Step, is_ident_start, is_ident_tail, step};
-use crate::schema::model::{Resolved, Schema, TypeClass};
+use crate::schema::model::{PrimName, Resolved, Schema, TypeClass};
 
 /// Whether `a`, `b` begin one of the two-byte operators the grammar recognises
 /// (`-> == != <= >= && ||`). A structural-gap walk munches these whole so an
@@ -177,6 +177,10 @@ pub(crate) enum L2Position {
     /// T2: an ordered comparator (`< > <= >=`) is legal only when the completed
     /// navExpr just left of it is numeric or temporal.
     Comparator(TypeClass),
+    /// T3: `sum`/`average` are legal only when the reduce lambda's declared
+    /// element type is numeric; `min`/`max`/`count` are unconstrained (see
+    /// `narrow::keeps_reducer`'s doc comment for the corpus evidence).
+    Reducer(TypeClass),
     /// N6: a relation-column string reference must name an emitted column.
     Column,
     /// N6 (arm-R): a *bare-ident* column access `$row.<Col>` on a relation row
@@ -250,6 +254,7 @@ struct BinderSave {
     name: String,
     prev_class: Option<Option<String>>,
     prev_relation_row: bool,
+    prev_reducer_type: Option<TypeClass>,
 }
 
 /// The enclosing pipeline's state, snapshotted at a lambda body's binder pipe and
@@ -299,6 +304,19 @@ pub(crate) struct ScopeTracker {
     last_nav_class: Option<String>,
     /// T1 is armed: the next operand position expects a literal of this class.
     cmp_pending: Option<TypeClass>,
+    /// Lambda variable → its declared primitive element type (`y: Integer[*]|…`),
+    /// for T3's aggregation-reducer legality check. Distinct from [`var_class`](Self::var_class),
+    /// which only ever holds a *schema class* binding.
+    var_reducer_type: HashMap<String, TypeClass>,
+    /// A binder name paired with its colon-typed primitive annotation
+    /// (`("y", Numeric)` for `y: Integer[*]|…`), captured together at the type
+    /// identifier itself (see the field's use site) and awaiting that binder's
+    /// own `|` to bind the pair into [`var_reducer_type`](Self::var_reducer_type).
+    pending_binder_element: Option<(String, TypeClass)>,
+    /// T3 is armed: a `->` was just seen right after a bare refVar bound to a
+    /// primitive element type, so the next identifier is a reducer-method name
+    /// legal only for that type.
+    awaiting_reducer: Option<TypeClass>,
     /// The first identifier of the current lambda argument (its binder name).
     lambda_first_ident: Option<String>,
     /// Receiver class captured at a `->`, awaiting the method's `(` to become the
@@ -567,6 +585,9 @@ impl ScopeTracker {
         // The operand of an armed comparison consumes the T1 arming (position()
         // has already been read for this token before it was accepted).
         let was_cmp = matches!(lex, Lexeme::Cmp);
+        // T3's reducer-name arming lives exactly one token past the arrow that
+        // sets it (see `on_arrow`); every other token clears it.
+        let was_arrow = matches!(lex, Lexeme::Arrow);
         let mut resolved_now: Option<TypeClass> = None;
 
         match &lex {
@@ -584,6 +605,7 @@ impl ScopeTracker {
             Lexeme::Comma => {
                 self.lambda_first_ident = None;
                 self.last_ident = None;
+                self.pending_binder_element = None;
             }
             Lexeme::Str(content) => {
                 self.emitted_strings.push(content.clone());
@@ -607,6 +629,11 @@ impl ScopeTracker {
         // clears the arming.
         if !was_cmp {
             self.cmp_pending = None;
+        }
+        // The reducer-name identifier (any non-arrow token after an armed arrow)
+        // consumes T3's arming.
+        if !was_arrow {
+            self.awaiting_reducer = None;
         }
     }
 
@@ -656,9 +683,22 @@ impl ScopeTracker {
             // it to, and N1 unsoundly masks a projected column. A *class-named*
             // identifier here is instead the type of a typed binder
             // (`row: Person[1]|…`), whose true binder precedes the colon; leaving the
-            // pre-colon candidate in place keeps that narrowing intact.
-            State::AfterColon | State::AfterColonWs if !schema.has_class(text) => {
-                self.lambda_first_ident = Some(text.to_owned());
+            // pre-colon candidate in place keeps that narrowing intact. Likewise a
+            // *primitive*-named identifier (`y: Integer[*]|…`, T3's aggregation-reduce
+            // binder) is a type annotation, not the binder. Its multiplicity brackets
+            // (`[*]`) still lie ahead, and `on_open` unconditionally clears
+            // `lambda_first_ident` on every opening delimiter (a defensive reset for a
+            // *fresh* argument list, which a multiplicity annotation is not) — so the
+            // binder name is read and stashed together with the `TypeClass` *now*,
+            // rather than trusted to survive in `lambda_first_ident` until `on_pipe`.
+            State::AfterColon | State::AfterColonWs => {
+                if let Some(prim) = PrimName::from_ident(text) {
+                    if let Some(binder) = &self.lambda_first_ident {
+                        self.pending_binder_element = Some((binder.clone(), prim.type_class()));
+                    }
+                } else if !schema.has_class(text) {
+                    self.lambda_first_ident = Some(text.to_owned());
+                }
             }
             _ => {}
         }
@@ -748,6 +788,15 @@ impl ScopeTracker {
     }
 
     fn on_arrow(&mut self) {
+        // T3: a bare `$y->` (no intervening dot — `pending_refvar` still names the
+        // just-dispatched refVar) where `y` is bound to a primitive element type
+        // arms the reducer-name position (`opening_position` reads this one token
+        // later, at the identifier that follows).
+        if let Some(var) = &self.pending_refvar
+            && let Some(tc) = self.var_reducer_type.get(var)
+        {
+            self.awaiting_reducer = Some(*tc);
+        }
         // The arrow ends the current navExpr; capture the receiver for a possible
         // following method lambda, then reset the nav cursor.
         let receiver = self
@@ -786,6 +835,7 @@ impl ScopeTracker {
                 name: name.clone(),
                 prev_class: self.var_class.get(&name).cloned(),
                 prev_relation_row: self.relation_row_vars.contains(&name),
+                prev_reducer_type: self.var_reducer_type.get(&name).copied(),
             });
             let receiver = self.paren_receiver.last().cloned().flatten();
             if receiver.is_none() && self.rel_explicit && self.saw_tilde_bracket {
@@ -794,11 +844,36 @@ impl ScopeTracker {
                 // column access. Track it apart from the class map so on_dot narrows
                 // to the column universe instead of degrading to pass-through.
                 self.var_class.remove(&name);
-                self.relation_row_vars.insert(name);
+                self.relation_row_vars.insert(name.clone());
             } else {
                 self.relation_row_vars.remove(&name);
-                self.var_class.insert(name, receiver);
+                self.var_class.insert(name.clone(), receiver);
             }
+            match self.pending_binder_element.take() {
+                Some((_, tc)) => {
+                    self.var_reducer_type.insert(name, tc);
+                }
+                None => {
+                    self.var_reducer_type.remove(&name);
+                }
+            }
+        } else if let Some((name, tc)) = self.pending_binder_element.take() {
+            // T3: a primitive-typed binder's own multiplicity brackets
+            // (`Integer[*]` in `y: Integer[*]|…`) reach `on_open`, which
+            // unconditionally clears `lambda_first_ident` on every opening
+            // delimiter (a defensive reset for a *fresh* argument list, which a
+            // multiplicity annotation is not) — so by the time this pipe is
+            // reached, `lambda_first_ident` is already gone. The (name,
+            // `TypeClass`) pair `on_ident` stashed at the type identifier itself
+            // survives that clear; bind it here instead.
+            self.binder_saves.push(BinderSave {
+                depth: self.depth,
+                name: name.clone(),
+                prev_class: None,
+                prev_relation_row: false,
+                prev_reducer_type: self.var_reducer_type.get(&name).copied(),
+            });
+            self.var_reducer_type.insert(name, tc);
         }
     }
 
@@ -867,9 +942,17 @@ impl ScopeTracker {
                 }
             }
             if save.prev_relation_row {
-                self.relation_row_vars.insert(save.name);
+                self.relation_row_vars.insert(save.name.clone());
             } else {
                 self.relation_row_vars.remove(&save.name);
+            }
+            match save.prev_reducer_type {
+                Some(tc) => {
+                    self.var_reducer_type.insert(save.name, tc);
+                }
+                None => {
+                    self.var_reducer_type.remove(&save.name);
+                }
             }
         }
         // Restore the enclosing pipeline's class + arm/relation state for lambda
@@ -967,6 +1050,12 @@ impl ScopeTracker {
             }
             State::AfterValue => match self.last_resolved {
                 Some(tc) => L2Position::Comparator(tc),
+                None => L2Position::None,
+            },
+            // A method-name identifier right after `->` opens here (distinct from
+            // `ExpectValue`/`ExpectValueReq`, which a value/lambda term opens at).
+            State::AfterArrow => match self.awaiting_reducer {
+                Some(tc) => L2Position::Reducer(tc),
                 None => L2Position::None,
             },
             _ => L2Position::None,

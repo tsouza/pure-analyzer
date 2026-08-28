@@ -52,6 +52,25 @@ pub(crate) enum TypeClass {
 }
 
 impl PrimName {
+    /// Parse a bare identifier as a primitive type name (§6.2.2), or `None` when
+    /// `text` names something else (a schema class, a builtin like `TDSRow`). Used
+    /// to recognize a typed lambda binder's element type (`y: Integer[*]|…`, T3)
+    /// from raw source text, independent of the JSON `Schema` ingress.
+    pub(crate) fn from_ident(text: &str) -> Option<Self> {
+        match text {
+            "Integer" => Some(Self::Integer),
+            "Float" => Some(Self::Float),
+            "Decimal" => Some(Self::Decimal),
+            "Number" => Some(Self::Number),
+            "String" => Some(Self::String),
+            "Boolean" => Some(Self::Boolean),
+            "Date" => Some(Self::Date),
+            "StrictDate" => Some(Self::StrictDate),
+            "DateTime" => Some(Self::DateTime),
+            _ => None,
+        }
+    }
+
     /// The [`TypeClass`] this primitive belongs to (§6.2.2).
     pub(crate) fn type_class(self) -> TypeClass {
         match self {
@@ -532,6 +551,27 @@ mod tests {
         assert_eq!(PrimName::Date.type_class(), TypeClass::Temporal);
         assert_eq!(PrimName::StrictDate.type_class(), TypeClass::Temporal);
         assert_eq!(PrimName::DateTime.type_class(), TypeClass::Temporal);
+    }
+
+    #[test]
+    fn from_ident_recognizes_every_primitive_name_and_nothing_else() {
+        assert_eq!(PrimName::from_ident("Integer"), Some(PrimName::Integer));
+        assert_eq!(PrimName::from_ident("Float"), Some(PrimName::Float));
+        assert_eq!(PrimName::from_ident("Decimal"), Some(PrimName::Decimal));
+        assert_eq!(PrimName::from_ident("Number"), Some(PrimName::Number));
+        assert_eq!(PrimName::from_ident("String"), Some(PrimName::String));
+        assert_eq!(PrimName::from_ident("Boolean"), Some(PrimName::Boolean));
+        assert_eq!(PrimName::from_ident("Date"), Some(PrimName::Date));
+        assert_eq!(
+            PrimName::from_ident("StrictDate"),
+            Some(PrimName::StrictDate)
+        );
+        assert_eq!(PrimName::from_ident("DateTime"), Some(PrimName::DateTime));
+        // A schema class, a builtin (`TDSRow`), and a lowercase/near-miss spelling
+        // are all not primitive type names.
+        assert_eq!(PrimName::from_ident("Person"), None);
+        assert_eq!(PrimName::from_ident("TDSRow"), None);
+        assert_eq!(PrimName::from_ident("integer"), None);
     }
 
     #[test]

@@ -13,11 +13,12 @@
 //! *extend some* legal name from the bytes emitted since the anchor (a
 //! [`Trie`] walk). This is what makes the overlay sound under byte-level BPE,
 //! where a schema identifier arrives in fragments (adversarial-review B1). The
-//! type rules (T1, T2) narrow by literal/operator class, which BPE does not
-//! fragment.
+//! type rules (T1, T2, T3) narrow by literal/operator/reducer class, which BPE
+//! does not fragment.
 //!
-//! Only the shipped rules build a constraining mask (N3, N1/N2, N6, T1, T2).
-//! Every other position returns [`None`] — the mask passes through unchanged.
+//! Only the shipped rules build a constraining mask (N3, N1/N2, N6, T1, T2,
+//! T3). Every other position returns [`None`] — the mask passes through
+//! unchanged.
 
 use std::collections::HashMap;
 
@@ -79,6 +80,8 @@ enum CacheKey {
     ReValue(TypeClass),
     /// T2 comparator class — the ordered-comparator lever (cursor-independent).
     Comparator(TypeClass),
+    /// T3 reducer class — the aggregation-reducer lever (cursor-independent).
+    Reducer(TypeClass),
     /// N6 column set at a given emitted-column count (monotonic within a stream,
     /// so the count pins the set exactly).
     Column(usize),
@@ -160,6 +163,13 @@ pub(crate) fn narrow_into(
             let masked_by = *tc;
             with_cache(dst, cache, CacheKey::Comparator(masked_by), |dst| {
                 fill_comparator(dst, vocab, eos_bit, masked_by);
+            });
+            true
+        }
+        L2Position::Reducer(tc) => {
+            let masked_by = *tc;
+            with_cache(dst, cache, CacheKey::Reducer(masked_by), |dst| {
+                fill_reducer(dst, vocab, eos_bit, masked_by);
             });
             true
         }
@@ -480,6 +490,31 @@ fn fill_comparator(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32, masked_by: Ty
     for id in 0..vocab.len() as u32 {
         let bytes = vocab.bytes(id).unwrap_or(&[]);
         if keeps_comparator(bytes, masked_by) {
+            dst.set(id);
+        }
+    }
+    dst.set(eos_bit);
+}
+
+/// Whether a reducer-method-name token is kept under a T3 constraint with
+/// element class `tc` (§6.6 T3). `sum`/`average` are legal only on a numeric
+/// element — corpus-confirmed exclusively numeric, and arithmetically
+/// meaningless otherwise. `min`/`max`/`count` are left unconstrained: `count`
+/// is legal on any collection by definition, and a gold `car_1` query uses
+/// `->min()` on a `String[*]` element (lexicographic ordering), which
+/// falsifies a numeric/temporal-only reading of the ordered reducers — with no
+/// counter-evidence to mask any type instead, the safe default is to admit all
+/// (§4, "do not invent constraints the corpus does not exercise").
+fn keeps_reducer(bytes: &[u8], tc: TypeClass) -> bool {
+    !matches!(bytes, b"sum" | b"average") || matches!(tc, TypeClass::Numeric)
+}
+
+/// Refill `dst` with the T3 reducer set for element class `masked_by`, plus EOS.
+fn fill_reducer(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32, masked_by: TypeClass) {
+    dst.clear_all();
+    for id in 0..vocab.len() as u32 {
+        let bytes = vocab.bytes(id).unwrap_or(&[]);
+        if keeps_reducer(bytes, masked_by) {
             dst.set(id);
         }
     }

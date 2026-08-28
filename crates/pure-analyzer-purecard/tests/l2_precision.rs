@@ -283,6 +283,25 @@ fn t2_masks_an_ordered_comparator_on_a_non_ordered_operand() {
 }
 
 #[test]
+fn t3_masks_a_type_mismatched_aggregation_reducer() {
+    // `getInteger('Cylinders')` types the reduce lambda's `y: Integer[*]`
+    // element as numeric: every reducer, including `sum`, stays admissible.
+    let numeric = "|spider::car_1::model::default::CarsData.all()->groupBy([], \
+        [agg('X', row: meta::pure::tds::TDSRow[1]|$row.getInteger('Cylinders'), \
+        y: Integer[*]|$y->";
+    assert_precision("car_1", numeric, b"sum", b")");
+    // `getString('Horsepower')` types the reduce lambda's `y: String[*]`
+    // element as String: `sum` (numeric-only) is masked. `min` stays
+    // admissible — a real gold query uses `->min()` on a `String[*]` element
+    // (lexicographic ordering), so `min`/`max`/`count` are deliberately left
+    // unconstrained (see `narrow::keeps_reducer`'s doc comment).
+    let string = "|spider::car_1::model::default::CarsData.all()->groupBy([], \
+        [agg('X', row: meta::pure::tds::TDSRow[1]|$row.getString('Horsepower'), \
+        y: String[*]|$y->";
+    assert_precision("car_1", string, b"min", b"sum");
+}
+
+#[test]
 fn n6_masks_an_unemitted_relation_column() {
     // After `project(...,['Name','Result'])` the relation columns are exactly
     // those names; a getInteger of an emitted name is admissible, of an unemitted
