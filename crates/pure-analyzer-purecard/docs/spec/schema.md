@@ -118,7 +118,7 @@ The decoder never calls Legend; the host builds `Schema` once, at session init, 
 How the PMCD / MCP tools are queried to _populate_ the contract is host-side. This spec defines the contract's _shape and semantics_, not the extraction, and the decoder ingests `Schema` from JSON at session init (`Schema::from_json`, §9).
 
 **L2 enforcement is mask-first.** `allowed_mask()` is the _sole_ point that
-enforces the supported L2 rules (§6.7 — N1/N2/N3/N5/N6, T2, and part of T1): with a
+enforces the supported L2 rules (§6.7 — N1/N2/N3/N5/N6, T2, T3, and part of T1): with a
 schema set it intersects the syntactic (L1) mask with that schema-legal set,
 clearing tokens illegal under a covered rule. `accept_token`/`accept_byte` enforce
 only the **grammar** — a schema-masked token that is grammar-legal is still
@@ -196,7 +196,16 @@ Each rule = "at this position, intersect L1's terminal set with this schema-lega
 
 - **T1 — comparison operand-type compatibility.** At `navExpr cmpop operand`, the `operand`'s literal type must match the navExpr's resolved type class (§6.2.2): string prop ↔ single-quoted literal; numeric prop ↔ number literal; boolean prop ↔ `true`/`false`; temporal prop ↔ date literal. (Also admits `navExpr cmpop navExpr` when both resolved types share a type class — e.g. the gold `$x.continent == $x.fk0DefaultContinents.contId`, numeric ↔ numeric.)
 - **T2 — ordered-comparator restriction.** `< > <= >=` are legal only when the resolved type is **numeric or temporal**; `== !=` additionally legal for string/boolean/enum. (Masks `boolProp > 3`.)
-- **T3 — aggregation-reducer type rule.** In `agg(mapLambda, reduceLambda)`: `->sum()` and `->average()` legal only if the mapLambda's resolved element type is **numeric**; `->min()`/`->max()` legal on numeric or temporal (ordered); `->count()` legal on any collection. (The gold corpus uses exactly `count/average/min/max/sum`.)
+- **T3 — aggregation-reducer type rule.** In `agg(mapLambda, reduceLambda)`: `->sum()` and `->average()` legal only if the reduce lambda's declared element type is **numeric**; `->min()`/`->max()`/`->count()` are unconstrained. (The gold corpus uses exactly `count/average/min/max/sum`.)
+  **Implementation note (2026-08-28, #56):** the reduce lambda's own type
+  annotation (`y: Integer[*]|$y->sum()`) is read directly — no cross-lambda
+  threading from the map lambda's body is needed. `min`/`max` were originally
+  scoped to "numeric or temporal (ordered)" per the pilot survey, but a real
+  `car_1` gold query uses `->min()` on a `String[*]` element (lexicographic
+  ordering, matching SQL's `MIN`/`MAX`), falsifying that narrower reading
+  against the 8 committed `FIXTURE_DBS`. With no counter-evidence to mask any
+  type for `min`/`max` instead, they ship unconstrained (§4's corpus-evidence
+  discipline: admit rather than invent).
 - **T4 — string-predicate type rule.** `->startsWith(…)`, `->endsWith(…)`, `->contains(…)`, `->toLower()`/`->toUpper()` legal only when the receiver's resolved type is **String**.
 - **T5 — enum-comparison type rule.** A nav expression resolving to `EnumRef(E)` may be compared only against a value of enum `E` (pairs with N4); comparing it to a string/number literal is masked. Because L1 has no enum-literal operand position, this rule is outside the supported overlay.
 - **T6 — multiplicity / collapse rule.** A scalar comparison (`navExpr cmpop operand`), a scalar string/temporal `fn`, or scalar arithmetic requires the navExpr's resolved multiplicity to be **to-one** (`upper == 1`). A navigation whose resolved multiplicity is `[0..1]` or that crosses a to-many association end (e.g. from `Continents` via `fk0DefaultCountries` → `Countries[1..*]`) yields a _non-scalar_; using it scalar-wise is illegal — it must be **collapsed to `[1]` first**. The corpus-attested collapse operators are, in order of frequency: **`->toOne()`** (206 gold occurrences — the canonical `[0..1] → [1]` collapse, e.g. `$x.note->toOne()->contains('East')` and `$x.balance->toOne() + …`), an **aggregate** (`->sum()`/`->count()`/… inside `agg`), or an **existence predicate** (`->exists(lambda)` / `->isEmpty()` / `->isNotEmpty()`, which consume a to-many collection and return a scalar Boolean). L2 treats a `navExpr` immediately followed by any of these as scalar at the enclosing operator position. A scalar comparison applied to an _un-collapsed_ `[0..1]`/`[*]` navExpr is masked. (Optional-to-one `[0..1]` FK navigations DO occur in the pilot corpus and are collapsed with `->toOne()`; strictly-to-one `[1]` ends need no collapse.)
@@ -236,10 +245,12 @@ they are not constraints themselves.
 The schema overlay constrains **N3** (source class/store), **N1/N2**
 (property/navigation), **N5** (association direction through N1 member lookup),
 **N6** (relation columns), the numeric/string portion of **T1** (comparison
-operand type), and **T2** (ordered-comparator restriction, numeric/temporal only —
-boolean/string/enum operands mask `< > <= >=` and keep `== !=`). The other named
-categories are outside the supported overlay and pass through without schema
-narrowing. `src/schema/narrow.rs` is authoritative for the executable boundary.
+operand type), **T2** (ordered-comparator restriction, numeric/temporal only —
+boolean/string/enum operands mask `< > <= >=` and keep `== !=`), and **T3**
+(aggregation-reducer type — `sum`/`average` numeric-only; `min`/`max`/`count`
+unconstrained). The other named categories are outside the supported overlay and
+pass through without schema narrowing. `src/schema/narrow.rs` is authoritative
+for the executable boundary.
 
 ---
 
