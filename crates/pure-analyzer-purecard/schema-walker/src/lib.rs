@@ -1039,6 +1039,109 @@ fn recipe_reducer(grammar: &CompiledGrammar, schema: &Schema, vocab: &Vocab) -> 
     None
 }
 
+/// Structural token ids the `groupBy([a|$a.<key>], [agg(a|$a.<val>,
+/// b|$b-><reducer>())], ['<col1>', '<col2>'])` shape needs, gathered once so
+/// [`recipe_groupby`] and [`recipe_groupby_having_restrict`] share both the
+/// vocabulary lookups and the token-building logic rather than duplicating
+/// either.
+struct GroupbyTokens {
+    pipe: u32,
+    dot: u32,
+    open: u32,
+    close: u32,
+    arrow: u32,
+    comma: u32,
+    bopen: u32,
+    bclose: u32,
+    group_by: u32,
+    agg: u32,
+    key_binder: u32,
+    val_binder: u32,
+    dollar: u32,
+    all: u32,
+}
+
+impl GroupbyTokens {
+    fn find(vocab: &Vocab) -> Option<Self> {
+        Some(Self {
+            pipe: find_token(vocab, b"|")?,
+            dot: find_token(vocab, b".")?,
+            open: find_token(vocab, b"(")?,
+            close: find_token(vocab, b")")?,
+            arrow: find_token(vocab, b"->")?,
+            comma: find_token(vocab, b",")?,
+            bopen: find_token(vocab, b"[")?,
+            bclose: find_token(vocab, b"]")?,
+            group_by: find_token(vocab, b"groupBy")?,
+            agg: find_token(vocab, b"agg")?,
+            key_binder: find_token(vocab, b"a")?,
+            val_binder: find_token(vocab, b"b")?,
+            dollar: find_token(vocab, b"$")?,
+            all: find_token(vocab, SOURCE_METHOD.as_bytes())?,
+        })
+    }
+
+    /// `|<class>.all()->groupBy([a|$a.<key>], [agg(a|$a.<val>,
+    /// b|$b-><reducer>())], ['<col1>', '<col2>'])`.
+    fn tokens(
+        &self,
+        key_class: u32,
+        key_member: u32,
+        val_member: u32,
+        reducer_id: u32,
+        cols: (u32, u32),
+    ) -> Vec<u32> {
+        let (col1, col2) = cols;
+        vec![
+            self.pipe,
+            key_class,
+            self.dot,
+            self.all,
+            self.open,
+            self.close,
+            self.arrow,
+            self.group_by,
+            self.open,
+            self.bopen,
+            self.key_binder,
+            self.pipe,
+            self.dollar,
+            self.key_binder,
+            self.dot,
+            key_member,
+            self.bclose,
+            self.comma,
+            self.bopen,
+            self.agg,
+            self.open,
+            self.key_binder,
+            self.pipe,
+            self.dollar,
+            self.key_binder,
+            self.dot,
+            val_member,
+            self.comma,
+            self.val_binder,
+            self.pipe,
+            self.dollar,
+            self.val_binder,
+            self.arrow,
+            reducer_id,
+            self.open,
+            self.close,
+            self.close,
+            self.bclose,
+            self.comma,
+            self.bopen,
+            col1,
+            self.comma,
+            col2,
+            self.bclose,
+            self.close,
+        ]
+    }
+}
+
 /// A deterministic, schema-parameterized walk realizing
 /// `Class.all()->groupBy([a|$a.<keyMember>], [agg(a|$a.<valMember>,
 /// b|$b-><reducer>())], ['<col1>', '<col2>'])` — a real, compilable arm-C
@@ -1057,20 +1160,7 @@ fn recipe_reducer(grammar: &CompiledGrammar, schema: &Schema, vocab: &Vocab) -> 
 /// unconstrained reducer name, and two distinct string-literal tokens for
 /// the output column names.
 fn recipe_groupby(grammar: &CompiledGrammar, schema: &Schema, vocab: &Vocab) -> Option<Vec<u32>> {
-    let pipe = find_token(vocab, b"|")?;
-    let dot = find_token(vocab, b".")?;
-    let open = find_token(vocab, b"(")?;
-    let close = find_token(vocab, b")")?;
-    let arrow = find_token(vocab, b"->")?;
-    let comma = find_token(vocab, b",")?;
-    let bopen = find_token(vocab, b"[")?;
-    let bclose = find_token(vocab, b"]")?;
-    let group_by = find_token(vocab, b"groupBy")?;
-    let agg = find_token(vocab, b"agg")?;
-    let key_binder = find_token(vocab, b"a")?;
-    let val_binder = find_token(vocab, b"b")?;
-    let dollar = find_token(vocab, b"$")?;
-    let all = find_token(vocab, SOURCE_METHOD.as_bytes())?;
+    let ids = GroupbyTokens::find(vocab)?;
     let cols = find_quoted_string_tokens(vocab, 2)?;
     let (col1, col2) = (cols[0], cols[1]);
     let candidates = class_member_candidates(schema, vocab, false);
@@ -1084,13 +1174,118 @@ fn recipe_groupby(grammar: &CompiledGrammar, schema: &Schema, vocab: &Vocab) -> 
                 if val_class != key_class {
                     continue;
                 }
-                let tokens = [
-                    pipe, key_class, dot, all, open, close, arrow, group_by, open, bopen,
-                    key_binder, pipe, dollar, key_binder, dot, key_member, bclose, comma, bopen,
-                    agg, open, key_binder, pipe, dollar, key_binder, dot, val_member, comma,
-                    val_binder, pipe, dollar, val_binder, arrow, reducer_id, open, close, close,
-                    bclose, comma, bopen, col1, comma, col2, bclose, close,
-                ];
+                let tokens =
+                    ids.tokens(key_class, key_member, val_member, reducer_id, (col1, col2));
+                if let Some(walk) = try_walk(grammar, schema, &tokens) {
+                    return Some(walk);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Structural token ids the HAVING+restrict tail
+/// `->filter(r|$r.getInteger('<col>') > <digit>)->restrict(['<col2>',
+/// '<col1>'])` needs, on top of [`GroupbyTokens`]'s groupBy-prefix ids.
+struct HavingRestrictTokens {
+    having_binder: u32,
+    filter: u32,
+    get_integer: u32,
+    gt: u32,
+    restrict: u32,
+    digit: u32,
+    ws: u32,
+}
+
+impl HavingRestrictTokens {
+    fn find(vocab: &Vocab) -> Option<Self> {
+        Some(Self {
+            having_binder: find_token(vocab, b"r")?,
+            filter: find_token(vocab, b"filter")?,
+            get_integer: find_token(vocab, b"getInteger")?,
+            gt: find_token(vocab, b">")?,
+            restrict: find_token(vocab, b"restrict")?,
+            digit: find_digit_token(vocab)?,
+            ws: find_whitespace_token(vocab)?,
+        })
+    }
+
+    /// `->filter(r|$r.getInteger('<col2>') > <digit>)->restrict(['<col2>',
+    /// '<col1>'])`.
+    fn tail(&self, groupby: &GroupbyTokens, col1: u32, col2: u32) -> Vec<u32> {
+        vec![
+            groupby.arrow,
+            self.filter,
+            groupby.open,
+            self.having_binder,
+            groupby.pipe,
+            groupby.dollar,
+            self.having_binder,
+            groupby.dot,
+            self.get_integer,
+            groupby.open,
+            col2,
+            groupby.close,
+            self.ws,
+            self.gt,
+            self.ws,
+            self.digit,
+            groupby.close,
+            groupby.arrow,
+            self.restrict,
+            groupby.open,
+            groupby.bopen,
+            col2,
+            groupby.comma,
+            col1,
+            groupby.bclose,
+            groupby.close,
+        ]
+    }
+}
+
+/// A deterministic, schema-parameterized walk realizing
+/// `Class.all()->groupBy([a|$a.<keyMember>], [agg(a|$a.<valMember>,
+/// b|$b-><reducer>())], ['<col1>', '<col2>'])->filter(r|$r.getInteger('<col2>')
+/// (greater-than) <digit>)->restrict(['<col2>', '<col1>'])` —
+/// [`recipe_groupby`]'s shape with the HAVING+restrict tail `world_1`'s own
+/// gold-corpus `dev:792` chains onto it, confirmed live against a real PMCD
+/// (`Country.all()->groupBy([a|$a.continent], [agg(a|$a.population,
+/// b|$b->count())], ['continent', 'cnt'])->filter(r|$r.getInteger('cnt')
+/// (greater-than) 2)->restrict(['cnt', 'continent'])` returns
+/// `TabularDataSet`). Reuses the aggregation output column (`col2`) as both
+/// the `getInteger` lookup and a `restrict` member, matching `dev:792`'s own
+/// reuse of `'cnt'` for both.
+///
+/// `None` when this db's vocabulary has no admissible combination of a real
+/// class with at least one member, an unconstrained reducer name, two
+/// distinct string-literal tokens for the output column names, the
+/// `filter`/`getInteger`/`restrict` step/method names, a digit token for the
+/// HAVING threshold, or a whitespace token around the comparator.
+fn recipe_groupby_having_restrict(
+    grammar: &CompiledGrammar,
+    schema: &Schema,
+    vocab: &Vocab,
+) -> Option<Vec<u32>> {
+    let ids = GroupbyTokens::find(vocab)?;
+    let having = HavingRestrictTokens::find(vocab)?;
+    let cols = find_quoted_string_tokens(vocab, 2)?;
+    let (col1, col2) = (cols[0], cols[1]);
+    let candidates = class_member_candidates(schema, vocab, false);
+
+    for &reducer_name in UNCONSTRAINED_REDUCER_NAMES {
+        let Some(reducer_id) = find_token(vocab, reducer_name.as_bytes()) else {
+            continue;
+        };
+        for &(key_class, key_member) in &candidates {
+            for &(val_class, val_member) in &candidates {
+                if val_class != key_class {
+                    continue;
+                }
+                let mut tokens =
+                    ids.tokens(key_class, key_member, val_member, reducer_id, (col1, col2));
+                tokens.extend(having.tail(&ids, col1, col2));
                 if let Some(walk) = try_walk(grammar, schema, &tokens) {
                     return Some(walk);
                 }
@@ -1217,6 +1412,7 @@ fn recipe_walks(
         recipe_navigation_predicate(grammar, schema, vocab),
         recipe_groupby(grammar, schema, vocab),
         recipe_groupby_scalar_multi_agg(grammar, schema, vocab),
+        recipe_groupby_having_restrict(grammar, schema, vocab),
     ]
     .into_iter()
     .flatten()
@@ -2180,9 +2376,38 @@ mod tests {
     /// `count`.
     fn vocab_for_recipes() -> Vocab {
         let tokens: Vec<Vec<u8>> = [
-            "|", "A", ".", "all", "(", ")", "->", "filter", "a", "$", "year", "label", "<", " ",
-            "1", "agg", "b", ",", ":", "Integer", "[", "*", "]", "count", "min", "groupBy",
-            "'col1'", "'col2'",
+            "|",
+            "A",
+            ".",
+            "all",
+            "(",
+            ")",
+            "->",
+            "filter",
+            "a",
+            "$",
+            "year",
+            "label",
+            "<",
+            " ",
+            "1",
+            "agg",
+            "b",
+            ",",
+            ":",
+            "Integer",
+            "[",
+            "*",
+            "]",
+            "count",
+            "min",
+            "groupBy",
+            "'col1'",
+            "'col2'",
+            "r",
+            "getInteger",
+            ">",
+            "restrict",
         ]
         .iter()
         .map(|s| s.as_bytes().to_vec())
@@ -2553,14 +2778,181 @@ mod tests {
     }
 
     #[test]
-    fn recipe_walks_includes_only_the_recipes_that_actually_succeed() {
-        // The full vocabulary with include_reducer: all four recipes succeed.
-        let full = CompiledGrammar::compile(vocab_for_recipes());
-        let all_four = recipe_walks(&full, &recipe_schema(), full.vocab(), true);
-        assert_eq!(all_four.len(), 4);
+    fn recipe_groupby_having_restrict_builds_the_expected_walk_from_a_real_schema() {
+        let grammar = CompiledGrammar::compile(vocab_for_recipes());
+        let vocab = grammar.vocab();
+        let expected: Vec<u32> = [
+            "|",
+            "A",
+            ".",
+            "all",
+            "(",
+            ")",
+            "->",
+            "groupBy",
+            "(",
+            "[",
+            "a",
+            "|",
+            "$",
+            "a",
+            ".",
+            "year",
+            "]",
+            ",",
+            "[",
+            "agg",
+            "(",
+            "a",
+            "|",
+            "$",
+            "a",
+            ".",
+            "year",
+            ",",
+            "b",
+            "|",
+            "$",
+            "b",
+            "->",
+            "count",
+            "(",
+            ")",
+            ")",
+            "]",
+            ",",
+            "[",
+            "'col1'",
+            ",",
+            "'col2'",
+            "]",
+            ")",
+            "->",
+            "filter",
+            "(",
+            "r",
+            "|",
+            "$",
+            "r",
+            ".",
+            "getInteger",
+            "(",
+            "'col2'",
+            ")",
+            " ",
+            ">",
+            " ",
+            "1",
+            ")",
+            "->",
+            "restrict",
+            "(",
+            "[",
+            "'col2'",
+            ",",
+            "'col1'",
+            "]",
+            ")",
+        ]
+        .iter()
+        .map(|s| id_of(vocab, s))
+        .collect();
+        assert_eq!(
+            recipe_groupby_having_restrict(&grammar, &recipe_schema(), vocab),
+            Some(expected)
+        );
+    }
 
-        // Missing "agg"/"groupBy"/quoted strings: only the navigation-predicate
-        // recipe can succeed regardless of include_reducer.
+    #[test]
+    fn recipe_groupby_having_restrict_is_none_without_the_restrict_step_name_in_vocab() {
+        let tokens: Vec<Vec<u8>> = [
+            "|",
+            "A",
+            ".",
+            "all",
+            "(",
+            ")",
+            "->",
+            "groupBy",
+            "agg",
+            "a",
+            "b",
+            "$",
+            "year",
+            "count",
+            "[",
+            "]",
+            ",",
+            "'col1'",
+            "'col2'",
+            "filter",
+            "r",
+            "getInteger",
+            ">",
+            " ",
+            "1",
+        ]
+        .iter()
+        .map(|s| s.as_bytes().to_vec())
+        .collect();
+        let eos = tokens.len() as u32;
+        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens, eos));
+        assert_eq!(
+            recipe_groupby_having_restrict(&grammar, &recipe_schema(), grammar.vocab()),
+            None
+        );
+    }
+
+    #[test]
+    fn recipe_groupby_having_restrict_is_none_without_a_digit_token() {
+        let tokens: Vec<Vec<u8>> = [
+            "|",
+            "A",
+            ".",
+            "all",
+            "(",
+            ")",
+            "->",
+            "groupBy",
+            "agg",
+            "a",
+            "b",
+            "$",
+            "year",
+            "count",
+            "[",
+            "]",
+            ",",
+            "'col1'",
+            "'col2'",
+            "filter",
+            "restrict",
+            "r",
+            "getInteger",
+            ">",
+            " ",
+        ]
+        .iter()
+        .map(|s| s.as_bytes().to_vec())
+        .collect();
+        let eos = tokens.len() as u32;
+        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens, eos));
+        assert_eq!(
+            recipe_groupby_having_restrict(&grammar, &recipe_schema(), grammar.vocab()),
+            None
+        );
+    }
+
+    #[test]
+    fn recipe_walks_includes_only_the_recipes_that_actually_succeed() {
+        // The full vocabulary with include_reducer: all five recipes succeed.
+        let full = CompiledGrammar::compile(vocab_for_recipes());
+        let all_five = recipe_walks(&full, &recipe_schema(), full.vocab(), true);
+        assert_eq!(all_five.len(), 5);
+
+        // Missing "agg"/"groupBy"/"restrict"/quoted strings: only the
+        // navigation-predicate recipe can succeed regardless of
+        // include_reducer.
         let tokens: Vec<Vec<u8>> = [
             "|", "A", ".", "all", "(", ")", "->", "filter", "a", "$", "year", "<", " ", "1",
         ]
@@ -2578,11 +2970,13 @@ mod tests {
         // The full vocabulary supports all four recipes, but
         // include_reducer=false (issue #55: the reducer recipe's bare
         // `->agg(...)` step is L1/L2-admissible but not real, compilable
-        // Pure) drops only that one — both `groupBy` recipes (real,
-        // compilable) stay included.
+        // Pure) drops only that one — `recipe_groupby`,
+        // `recipe_groupby_scalar_multi_agg`, and
+        // `recipe_groupby_having_restrict` (all real, compilable) stay
+        // included.
         let full = CompiledGrammar::compile(vocab_for_recipes());
-        let three = recipe_walks(&full, &recipe_schema(), full.vocab(), false);
-        assert_eq!(three.len(), 3);
+        let four = recipe_walks(&full, &recipe_schema(), full.vocab(), false);
+        assert_eq!(four.len(), 4);
     }
 
     #[test]
