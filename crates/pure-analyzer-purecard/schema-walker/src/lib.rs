@@ -300,6 +300,21 @@ const KNOWN_BINDER_BONUS: u32 = 500;
 /// continuation competing equally).
 const NAVIGATION_DOT_BONUS: u32 = 200;
 
+/// Weight added, right after `$known_binder.` completes (`attempt`'s
+/// `just_navigated_from_binder`), to a candidate identifier that
+/// [`Schema::member_is_numeric`] confirms is a numeric primitive member of
+/// the binder's own source class. Issue #55, live-verified: without this,
+/// the member-name position draws uniformly from the whole vocabulary
+/// (nothing here narrows to *numeric* members specifically — N1/N2 only
+/// requires *any* real member), so a random walk reaching `$x.` still
+/// overwhelmingly lands on an association end or non-numeric primitive.
+/// Every downstream comparator/reducer recipe this walker's own
+/// `recipe_navigation_predicate` needed a *type-aware* `class_member_candidates`
+/// filter to get right (issue #55/#122: an association end passed to `<`
+/// is L1/L2-admissible but rejected by the real Legend compiler) — this
+/// bonus applies that same lesson to random exploration, not just recipes.
+const MEMBER_NUMERIC_BONUS: u32 = 200;
+
 /// Whether the token just emitted (`bytes`) is a bound-variable reference
 /// (`$`), or completes a `->` arrow hop (`emitted`, the full byte run so
 /// far, ends in [`ARROW_BYTES`]) — either marks that the pipeline's source
@@ -340,6 +355,37 @@ fn opens_binder_lambda(bytes: &[u8], last_token: &[u8]) -> bool {
 /// `just_referenced_binder`, which biases the *following* step toward `.`).
 fn is_binder_reference(last_token: &[u8], known_binder: Option<&[u8]>) -> bool {
     !last_token.is_empty() && known_binder == Some(last_token)
+}
+
+/// Whether `bytes` names a real schema class — shared by `build_candidates`'s
+/// `is_class_source` bias and `attempt`'s `source_class` capture (issue #55),
+/// so "is this token a real class path" has one definition instead of two
+/// copies drifting apart.
+fn is_real_class(schema: &Schema, bytes: &[u8]) -> bool {
+    std::str::from_utf8(bytes).is_ok_and(|text| schema.has_class(text))
+}
+
+/// Whether the token just accepted (`bytes`) landed at a fresh pipeline
+/// source position (`pre_state`, the PDA state *before* this token) and
+/// named a real schema class — the moment `attempt`'s `source_class` should
+/// be captured. Factored out so the exact condition is directly
+/// unit-testable without needing a full grammar/schema/session fixture
+/// (mirrors [`navigated_from_binder`]'s established extraction pattern).
+fn accepted_real_class_source(pre_state: Option<State>, schema: &Schema, bytes: &[u8]) -> bool {
+    pre_state == Some(State::ExpectSource) && is_real_class(schema, bytes)
+}
+
+/// Whether the token just accepted (`bytes`) completes `$known_binder.` — the
+/// token before it was itself a binder reference (`just_referenced_binder`)
+/// and this one is the navigation dot. Factored out of `attempt` so the exact
+/// condition is directly unit-testable without needing a full
+/// grammar/schema/session fixture (mirrors [`opens_binder_lambda`]'s
+/// established extraction pattern). Feeds `attempt`'s
+/// `just_navigated_from_binder`, which biases the *following* step's
+/// identifier choice toward a numeric member of the binder's source class
+/// (issue #55, `MEMBER_NUMERIC_BONUS`).
+fn navigated_from_binder(just_referenced_binder: bool, bytes: &[u8]) -> bool {
+    just_referenced_binder && bytes == b"."
 }
 
 /// Whether appending a token starting with `next_first` right after one
@@ -476,6 +522,8 @@ fn attempt(
     let mut last_byte: Option<u8> = None;
     let mut last_token: Vec<u8> = Vec::new();
     let mut known_binder: Option<Vec<u8>> = None;
+    let mut source_class: Option<Vec<u8>> = None;
+    let mut just_navigated_from_binder = false;
     let mut seen_arrow_or_dollar = false;
     let mut pending_source_method = false;
     let mut source_method_progress: Vec<u8> = Vec::new();
@@ -485,11 +533,26 @@ fn attempt(
         if !growing && attempt_may_stop(pending_source_method, &pending, &session, out.len()) {
             return (Some(out), rng.state);
         }
+        // The PDA state *before* this step's token lands — read once here so
+        // both `build_candidates`'s own `at_source`/`at_dollar` reads and the
+        // post-accept `source_class` capture below (which needs the
+        // pre-token state, not the post-token one `session.pda()` would give
+        // after `accept_token`) agree on the same snapshot.
+        let pre_state = session.pda().map(Pda::state);
         // Whether the token just emitted was itself a reference to the known
         // binder (`$x` completing) — biases the *following* step toward `.`,
         // continuing straight into member navigation (see
         // `build_candidates`'s `JUST_REFERENCED_BINDER_DOT_BONUS`).
         let just_referenced_binder = is_binder_reference(&last_token, known_binder.as_deref());
+        // `$known_binder.` just completed (issue #55): bias the *following*
+        // step's candidate identifier toward a numeric member of the
+        // binder's own source class, mirroring `class_member_candidates`'s
+        // `numeric_only` filter that `recipe_navigation_predicate` already
+        // needed to avoid a live-verified Legend rejection (an association
+        // end passed to `<`).
+        let member_bias_class = just_navigated_from_binder
+            .then_some(source_class.as_deref())
+            .flatten();
         let cands = build_candidates(
             &mut session,
             schema,
@@ -499,6 +562,7 @@ fn attempt(
             last_byte,
             known_binder.as_deref(),
             just_referenced_binder,
+            member_bias_class,
         );
         if cands.is_empty() {
             // Under `MustOpen`, an empty `cands` means `(` was not
@@ -533,6 +597,16 @@ fn attempt(
             return (None, rng.state);
         };
         emitted.extend_from_slice(bytes);
+        if accepted_real_class_source(pre_state, schema, bytes) {
+            // The source classpath just landed on a real class (as opposed
+            // to the store path, also legal here) — remember it so a later
+            // `$known_binder.` can bias its member-name choice toward one of
+            // *this* class's numeric members (`MEMBER_NUMERIC_BONUS`).
+            source_class = Some(bytes.to_vec());
+        }
+        // `$known_binder.` just completed with *this* token: bias the next
+        // step's identifier choice toward a numeric member of `source_class`.
+        just_navigated_from_binder = navigated_from_binder(just_referenced_binder, bytes);
         if opens_binder_lambda(bytes, &last_token) {
             // A `|` right after a plain identifier opens *that* identifier's
             // lambda (`binderVar "|" …` — the grammar's only use of a bare
@@ -641,6 +715,7 @@ fn build_candidates(
     last_byte: Option<u8>,
     known_binder: Option<&[u8]>,
     just_referenced_binder: bool,
+    member_bias_class: Option<&[u8]>,
 ) -> Vec<(u32, u32)> {
     let ids: Vec<u32> = session.allowed_mask().iter_ones().collect();
     // `allowed_mask()`'s exclusive borrow of `session` ends with the
@@ -678,12 +753,17 @@ fn build_candidates(
             // `attempt`'s doc comment above.
             continue;
         }
-        let is_class_source =
-            at_source && std::str::from_utf8(bytes).is_ok_and(|text| schema.has_class(text));
+        let is_class_source = at_source && is_real_class(schema, bytes);
         let is_arrow_method = matches!(pending, PendingCall::JustArrowed)
             && std::str::from_utf8(bytes).is_ok_and(|text| ARROW_METHOD_NAMES.contains(&text));
         let is_known_binder_ref = at_dollar && known_binder.is_some_and(|b| b == bytes);
-        let is_navigation_dot = just_referenced_binder && bytes == b".";
+        let is_navigation_dot = navigated_from_binder(just_referenced_binder, bytes);
+        let is_numeric_member = member_bias_class.is_some_and(|class| {
+            std::str::from_utf8(class).is_ok_and(|class_text| {
+                std::str::from_utf8(bytes)
+                    .is_ok_and(|member_text| schema.member_is_numeric(class_text, member_text))
+            })
+        });
         let w = if !growing && ends_with_closer(bytes) {
             DEFAULT_WEIGHT + ACCEPT_BONUS
         } else if is_class_source {
@@ -694,6 +774,8 @@ fn build_candidates(
             DEFAULT_WEIGHT + KNOWN_BINDER_BONUS
         } else if is_navigation_dot {
             DEFAULT_WEIGHT + NAVIGATION_DOT_BONUS
+        } else if is_numeric_member {
+            DEFAULT_WEIGHT + MEMBER_NUMERIC_BONUS
         } else {
             DEFAULT_WEIGHT
         };
@@ -1351,6 +1433,7 @@ mod tests {
             Some(b'('),
             None,
             false,
+            None,
         );
         assert_eq!(weight_of(&growing, ")"), Some(DEFAULT_WEIGHT));
         assert_eq!(weight_of(&growing, "\n  "), Some(DEFAULT_WEIGHT));
@@ -1366,6 +1449,7 @@ mod tests {
             Some(b'('),
             None,
             false,
+            None,
         );
         assert_eq!(
             weight_of(&closing, ")"),
@@ -1411,6 +1495,7 @@ mod tests {
             Some(b'|'),
             None,
             false,
+            None,
         );
         assert_eq!(
             weight_of(&cands, "A"),
@@ -1461,6 +1546,7 @@ mod tests {
             Some(b'>'),
             None,
             false,
+            None,
         );
         assert_eq!(
             weight_of(&cands, "count"),
@@ -1514,6 +1600,7 @@ mod tests {
             Some(b'$'),
             Some(b"x"),
             false,
+            None,
         );
         assert_eq!(
             weight_of(&cands, "x"),
@@ -1557,12 +1644,126 @@ mod tests {
             Some(b'x'),
             None,
             true,
+            None,
         );
         assert_eq!(
             weight_of(&cands, "."),
             Some(DEFAULT_WEIGHT + NAVIGATION_DOT_BONUS)
         );
         assert_eq!(weight_of(&cands, "-"), Some(DEFAULT_WEIGHT));
+    }
+
+    /// A schema whose class `A` has one numeric and one non-numeric member,
+    /// both real, so a test can see [`MEMBER_NUMERIC_BONUS`]'s contrast
+    /// directly.
+    const NUMERIC_MEMBER_SAMPLE: &str = r#"{
+      "db_id": "d", "db_path": "spider::d::Db",
+      "classes": { "A": { "simple_name": "A",
+        "properties": [
+          {"name": "n", "type": {"kind": "primitive", "name": "Integer"}, "mult": {"lower": 1, "upper": 1}},
+          {"name": "label", "type": {"kind": "primitive", "name": "String"}, "mult": {"lower": 1, "upper": 1}}
+        ],
+        "qualified_properties": [], "super_types": [] } },
+      "associations": [], "enums": {}
+    }"#;
+
+    fn numeric_member_schema() -> Schema {
+        Schema::from_json(NUMERIC_MEMBER_SAMPLE).expect("parses")
+    }
+
+    fn vocab_with_numeric_and_non_numeric_members() -> Vocab {
+        let tokens: Vec<Vec<u8>> = [
+            "|", "A", ".", "all", "(", ")", "-", ">", "filter", "x", "$", "n", "label",
+        ]
+        .iter()
+        .map(|s| s.as_bytes().to_vec())
+        .collect();
+        let eos = tokens.len() as u32;
+        Vocab::from_byte_tokens(tokens, eos)
+    }
+
+    #[test]
+    fn build_candidates_biases_a_numeric_member_right_after_a_binder_navigation_dot() {
+        let grammar = CompiledGrammar::compile(vocab_with_numeric_and_non_numeric_members());
+        let mut session =
+            DecoderSession::with_schema(&grammar, numeric_member_schema()).expect("valid overlay");
+        let vocab = grammar.vocab();
+        drive(
+            &mut session,
+            vocab,
+            &[
+                "|", "A", ".", "all", "(", ")", "-", ">", "filter", "(", "x", "|", "$", "x", ".",
+            ],
+        );
+        let pending = PendingCall::None;
+
+        let weight_of = |cands: &[(u32, u32)], piece: &str| {
+            cands
+                .iter()
+                .find(|&&(id, _)| vocab.bytes(id) == Some(piece.as_bytes()))
+                .map(|&(_, w)| w)
+        };
+
+        // `member_bias_class = Some(b"A")`, passed directly (this signal is
+        // computed by `attempt`, not by session state) — biases a numeric
+        // member of `A` over a non-numeric one, at the exact position a
+        // `$known_binder.` navigation's member-name choice happens.
+        let cands = build_candidates(
+            &mut session,
+            &numeric_member_schema(),
+            vocab,
+            &pending,
+            true,
+            Some(b'.'),
+            None,
+            false,
+            Some(b"A"),
+        );
+        assert_eq!(
+            weight_of(&cands, "n"),
+            Some(DEFAULT_WEIGHT + MEMBER_NUMERIC_BONUS)
+        );
+        assert_eq!(weight_of(&cands, "label"), Some(DEFAULT_WEIGHT));
+    }
+
+    #[test]
+    fn build_candidates_does_not_bias_a_numeric_member_without_navigation_from_a_binder() {
+        // Same vocabulary/position, but `member_bias_class = None` (the
+        // caller determined this step did *not* follow `$known_binder.`) —
+        // the numeric-member bonus must not fire regardless of the schema.
+        let grammar = CompiledGrammar::compile(vocab_with_numeric_and_non_numeric_members());
+        let mut session =
+            DecoderSession::with_schema(&grammar, numeric_member_schema()).expect("valid overlay");
+        let vocab = grammar.vocab();
+        drive(
+            &mut session,
+            vocab,
+            &[
+                "|", "A", ".", "all", "(", ")", "-", ">", "filter", "(", "x", "|", "$", "x", ".",
+            ],
+        );
+        let pending = PendingCall::None;
+
+        let weight_of = |cands: &[(u32, u32)], piece: &str| {
+            cands
+                .iter()
+                .find(|&&(id, _)| vocab.bytes(id) == Some(piece.as_bytes()))
+                .map(|&(_, w)| w)
+        };
+
+        let cands = build_candidates(
+            &mut session,
+            &numeric_member_schema(),
+            vocab,
+            &pending,
+            true,
+            Some(b'.'),
+            None,
+            false,
+            None,
+        );
+        assert_eq!(weight_of(&cands, "n"), Some(DEFAULT_WEIGHT));
+        assert_eq!(weight_of(&cands, "label"), Some(DEFAULT_WEIGHT));
     }
 
     /// Adds a `->count()` step's tokens (`-`, `>`, `count`) to the
@@ -1762,6 +1963,50 @@ mod tests {
         // the emptiness guard from the equality check (both halves agree
         // whenever `known_binder` isn't itself `Some(b"")`).
         assert!(!is_binder_reference(b"", Some(b"")));
+    }
+
+    #[test]
+    fn is_real_class_matches_only_a_name_the_schema_actually_has() {
+        let s = schema();
+        assert!(is_real_class(&s, b"A"));
+        assert!(!is_real_class(&s, b"Nope"));
+        // Non-UTF-8 bytes never match, rather than panicking.
+        assert!(!is_real_class(&s, &[0xFF, 0xFE]));
+    }
+
+    #[test]
+    fn accepted_real_class_source_requires_both_the_source_position_and_a_real_class() {
+        let s = schema();
+        // Both halves true: a real class landed at the source position.
+        assert!(accepted_real_class_source(
+            Some(State::ExpectSource),
+            &s,
+            b"A"
+        ));
+        // Right position, but not a real class name (e.g. the store path).
+        assert!(!accepted_real_class_source(
+            Some(State::ExpectSource),
+            &s,
+            b"spider::d::Db"
+        ));
+        // A real class name, but not at the source position.
+        assert!(!accepted_real_class_source(
+            Some(State::AfterValue),
+            &s,
+            b"A"
+        ));
+        // Neither.
+        assert!(!accepted_real_class_source(None, &s, b"A"));
+    }
+
+    #[test]
+    fn navigated_from_binder_requires_both_the_prior_reference_and_a_dot() {
+        // Both halves true: just navigated from the binder.
+        assert!(navigated_from_binder(true, b"."));
+        // The prior token wasn't a binder reference: no navigation.
+        assert!(!navigated_from_binder(false, b"."));
+        // The prior token was a reference, but this one isn't a dot.
+        assert!(!navigated_from_binder(true, b"-"));
     }
 
     #[test]
