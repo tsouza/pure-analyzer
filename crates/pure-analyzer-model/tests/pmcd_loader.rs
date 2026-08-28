@@ -49,13 +49,17 @@ fn property(name: &str, target: &str, lower: u32, upper: Option<u32>) -> Value {
     })
 }
 
-fn milestoning_qualified_property(name: &str, stereotype_value: &str) -> Value {
+fn milestoning_qualified_property(
+    name: &str,
+    stereotype_profile: &str,
+    stereotype_value: &str,
+) -> Value {
     json!({
         "name": name,
         "returnGenericType": {"rawType": "model::Quote"},
         "returnMultiplicity": {"lowerBound": 0, "upperBound": null},
         "stereotypes": [{
-            "profile": "meta::pure::profiles::milestoning",
+            "profile": stereotype_profile,
             "value": stereotype_value,
         }],
         "parameters": [],
@@ -143,13 +147,36 @@ fn qualified_properties_preserve_signature_and_classification() {
 fn only_generated_milestoning_annotations_create_all_versions_navigation() {
     let mut holder = class("model", "Holder", vec![]);
     holder["qualifiedProperties"] = json!([
-        milestoning_qualified_property("generatedAllVersions", "generatedmilestoningproperty"),
+        milestoning_qualified_property(
+            "generatedAllVersions",
+            "meta::pure::profiles::milestoning",
+            "generatedmilestoningproperty",
+        ),
         milestoning_qualified_property(
             "generatedAllVersionsInRange",
+            "meta::pure::profiles::milestoning",
             "generatedmilestoningproperty"
         ),
-        milestoning_qualified_property("manualAllVersions", "notgenerated"),
-        milestoning_qualified_property("manualAllVersionsInRange", "notgenerated"),
+        milestoning_qualified_property(
+            "manualAllVersions",
+            "meta::pure::profiles::milestoning",
+            "notgenerated",
+        ),
+        milestoning_qualified_property(
+            "manualAllVersionsInRange",
+            "meta::pure::profiles::milestoning",
+            "notgenerated",
+        ),
+        milestoning_qualified_property(
+            "wrongCaseValueAllVersions",
+            "meta::pure::profiles::milestoning",
+            "GENERATEDMILESTONINGPROPERTY",
+        ),
+        milestoning_qualified_property(
+            "wrongCaseProfileAllVersions",
+            "MILESTONING",
+            "generatedmilestoningproperty",
+        ),
     ]);
     let graph = load_values(&[("milestoning", document(vec![holder]))]).expect("load");
     let properties = graph
@@ -165,7 +192,12 @@ fn only_generated_milestoning_annotations_create_all_versions_navigation() {
         properties["generatedAllVersionsInRange"].kind(),
         QpKind::AllVersionsInRange
     );
-    for name in ["manualAllVersions", "manualAllVersionsInRange"] {
+    for name in [
+        "manualAllVersions",
+        "manualAllVersionsInRange",
+        "wrongCaseValueAllVersions",
+        "wrongCaseProfileAllVersions",
+    ] {
         let property = &properties[name];
         assert_eq!(property.kind(), QpKind::UserQualified, "{name}");
         assert_eq!(

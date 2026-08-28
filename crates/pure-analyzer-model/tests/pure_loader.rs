@@ -571,6 +571,10 @@ Class <<temporal.businesstemporal>> demo::Holder
   manualAllVersions(): demo::Quote[*] {};
   <<milestoning.notgenerated>>
   manualAllVersionsInRange(): demo::Quote[*] {};
+  <<milestoning.GENERATEDMILESTONINGPROPERTY>>
+  wrongCaseValueAllVersions(): demo::Quote[*] {};
+  <<MILESTONING.generatedmilestoningproperty>>
+  wrongCaseProfileAllVersions(): demo::Quote[*] {};
 }
 "#;
     let pure_graph = pure(source);
@@ -594,7 +598,12 @@ Class <<temporal.businesstemporal>> demo::Holder
         "name suffixes alone must not synthesize generated navigation"
     );
     assert!(pure_properties["quotes"].signature().is_none());
-    for name in ["manualAllVersions", "manualAllVersionsInRange"] {
+    for name in [
+        "manualAllVersions",
+        "manualAllVersionsInRange",
+        "wrongCaseValueAllVersions",
+        "wrongCaseProfileAllVersions",
+    ] {
         let property = &pure_properties[name];
         assert_eq!(property.kind(), QpKind::UserQualified, "{name}");
         assert_eq!(
