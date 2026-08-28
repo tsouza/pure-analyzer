@@ -152,12 +152,15 @@ fn every_fixture_class_all_lambda_compiles_against_its_own_pmcd() {
 /// against the now-assembled store grammar (this lane's model text includes
 /// `store_grammar.rs`'s Database/Mapping/Connection/Runtime, closing the gap
 /// the previous revision of this comment documented as separately blocking)
-/// still shows only 1/64 compiling — the missing store grammar was never the
-/// dominant cause here; `every_fixture_gold_corpus_compiles_against_its_assembled_store_grammar`
+/// showed only 1/64 compiling at the time — the missing store grammar was
+/// never the dominant cause here; `every_fixture_gold_corpus_compiles_against_its_assembled_store_grammar`
 /// proves that gap is in fact closed (269/269 *real* gold queries compile
 /// against the same grammar this diagnostic uses). What actually dominates
 /// this walk set's failures, split into two causes neither of which
-/// `schema_walker.rs` can fix by itself —
+/// `schema_walker.rs` can fix by itself — the deterministic recipe walks
+/// (issue #55) have since lifted the measured figure to 9/64, one walk per
+/// recipe that realizes a real, compilable shape, leaving the residue below
+/// unchanged in kind:
 ///
 /// - ~1/3 fail to even *parse*: nested predicate/operator combinations
 ///   (`&&`, `||`, comparisons, arithmetic) that `docs/spec/grammar.md` §5.7
