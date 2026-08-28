@@ -633,6 +633,121 @@ Association <<temporal.bitemporal>> model::Link
 }
 
 #[test]
+fn bitemporal_association_navigation_has_pmcd_pure_parity() {
+    let (pmcd, pure) = paired_graphs(
+        vec![
+            pmcd_class(
+                "Left",
+                &[],
+                None,
+                vec![pmcd_property("label", "String", 1, Some(1))],
+                Vec::new(),
+            ),
+            pmcd_class(
+                "Right",
+                &[],
+                None,
+                vec![pmcd_property("label", "String", 1, Some(1))],
+                Vec::new(),
+            ),
+            pmcd_association(
+                "Link",
+                pmcd_property("left", "model::Left", 1, Some(2)),
+                pmcd_property("rights", "model::Right", 0, None),
+                Some(BITEMPORAL),
+            ),
+        ],
+        r#"
+Class model::Left
+{
+  label: String[1];
+}
+
+Class model::Right
+{
+  label: String[1];
+}
+
+Association <<temporal.bitemporal>> model::Link
+{
+  left: model::Left[1..2];
+  rights: model::Right[*];
+}
+"#,
+    );
+
+    for (class, association_end) in [("Left", "rights"), ("Right", "left")] {
+        let steps = [
+            NavigationStep::property(member_name(association_end)),
+            NavigationStep::property(member_name("label")),
+        ];
+        let pmcd_resolver = NavigationResolver::new(&pmcd);
+        let pure_resolver = NavigationResolver::new(&pure);
+        let pmcd_source = match pmcd_resolver.class_all(&qname(class)) {
+            Resolution::Found(value) => value,
+            outcome => panic!("expected PMCD class value, got {outcome:#?}"),
+        };
+        let pure_source = match pure_resolver.class_all(&qname(class)) {
+            Resolution::Found(value) => value,
+            outcome => panic!("expected Pure class value, got {outcome:#?}"),
+        };
+        let pmcd_chain = match pmcd_resolver.resolve(&pmcd_source, &steps) {
+            NavigationResolution::Found(chain) => chain,
+            outcome => panic!("expected PMCD navigation chain, got {outcome:#?}"),
+        };
+        let pure_chain = match pure_resolver.resolve(&pure_source, &steps) {
+            NavigationResolution::Found(chain) => chain,
+            outcome => panic!("expected Pure navigation chain, got {outcome:#?}"),
+        };
+
+        let [pmcd_association, pmcd_label] = pmcd_chain.hops() else {
+            panic!("expected PMCD association and follow-up hops");
+        };
+        let [pure_association, pure_label] = pure_chain.hops() else {
+            panic!("expected Pure association and follow-up hops");
+        };
+        let NavigationTarget::Member(pmcd_association_member) = pmcd_association.target() else {
+            panic!("expected PMCD association navigation target");
+        };
+        let NavigationTarget::Member(pure_association_member) = pure_association.target() else {
+            panic!("expected Pure association navigation target");
+        };
+        let NavigationTarget::Member(pmcd_label_member) = pmcd_label.target() else {
+            panic!("expected PMCD follow-up navigation target");
+        };
+        let NavigationTarget::Member(pure_label_member) = pure_label.target() else {
+            panic!("expected Pure follow-up navigation target");
+        };
+
+        assert_fact_parity(pmcd_association_member, pure_association_member);
+        assert_fact_parity(pmcd_label_member, pure_label_member);
+        assert_eq!(
+            pmcd_association_member.kind(),
+            &ResolvedMemberKind::AssociationEnd {
+                association: qname("Link"),
+            }
+        );
+        assert_eq!(pmcd_association_member.target_temporal_arity(), Some(2));
+        assert_eq!(
+            pmcd_association.definition(),
+            Some(pmcd_association_member.definition())
+        );
+        assert_eq!(
+            pure_association.definition(),
+            Some(pure_association_member.definition())
+        );
+        assert_eq!(
+            pmcd_label.definition(),
+            Some(pmcd_label_member.definition())
+        );
+        assert_eq!(
+            pure_label.definition(),
+            Some(pure_label_member.definition())
+        );
+    }
+}
+
+#[test]
 fn pure_coverage_gaps_are_open_world_while_pmcd_is_closed_world() {
     let pmcd = pmcd_graph(vec![pmcd_class(
         "Partial",
