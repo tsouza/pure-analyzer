@@ -20,12 +20,13 @@
 //!
 //! This overlay applies the rules the 8 committed schema fixtures exercise and
 //! precise: **N3** (source-class exists), **N1/N2** (member/nav after `.`), **N6**
-//! (relation-column strings), and **T1** (comparison operand type-class — the
-//! `car_1` `horsepower:String` lever). T1 applies its **string/numeric** levers;
-//! Boolean and Temporal operands pass through (see `narrow`). The `ScopeTracker`
-//! (S1–S3) is whole — a partial scope machine is a soundness hazard. N5 as a
-//! distinct rule, T2/T3/T4/T6/T7, and N4/T5 pass through; the `navigable` map is
-//! retained because N1/N2 need it.
+//! (relation-column strings), **T1** (comparison operand type-class — the
+//! `car_1` `horsepower:String` lever), **T2** (ordered-comparator restriction),
+//! and **T3** (aggregation-reducer type). T1 applies its **string/numeric**
+//! levers; Boolean and Temporal operands pass through (see `narrow`). The
+//! `ScopeTracker` (S1–S3) is whole — a partial scope machine is a soundness
+//! hazard. N5 as a distinct rule, T4/T6/T7, and N4/T5 pass through; the
+//! `navigable` map is retained because N1/N2 need it.
 
 pub(crate) mod model;
 pub(crate) mod narrow;
@@ -33,3 +34,13 @@ pub(crate) mod scope;
 pub(crate) mod trie;
 
 pub use model::{Schema, SchemaError};
+// `#[doc(hidden)]`: test-support surface for issue #59's per-named-rule
+// coverage bullet (excluded from the `cargo public-api` snapshot). Re-exported
+// individually, rather than promoting the whole `model`/`scope` modules to
+// `pub`, so no *other* already-public item in either file gains a second,
+// newly-public path — that would be real (if harmless) public-API drift this
+// narrower re-export avoids entirely.
+#[doc(hidden)]
+pub use model::TypeClass;
+#[doc(hidden)]
+pub use scope::L2Position;

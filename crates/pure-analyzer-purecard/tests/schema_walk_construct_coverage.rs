@@ -4,11 +4,12 @@
 //! stable coverage of ... frames, ... tokenization shapes, and output
 //! constructs; fail on uncovered shipped rules."
 //!
-//! The schema's internal `L2Position`/rule classification is private (the L2
-//! overlay's scoping boundary), so — like `schema_walk_completeness.rs`'s own
-//! `schema_narrowing_spans_more_than_one_pda_configuration` — this stays on
-//! externally observable signals: the decoded walk text for *output
-//! constructs*, and the public `Pda::stack_top()` for *frame* coverage.
+//! This file stays on externally observable signals: the decoded walk text
+//! for *output constructs*, and the public `Pda::stack_top()` for *frame*
+//! coverage — like `schema_walk_completeness.rs`'s own
+//! `schema_narrowing_spans_more_than_one_pda_configuration`.
+//! `schema_walk_rule_coverage.rs` is the per-named-rule half this file used to
+//! leave open, once `L2Position` was promoted `#[doc(hidden)] pub` for it.
 //! Generation is fully deterministic (`schema_walker.rs`'s fixed seed), so
 //! there is no run-to-run flakiness in what these tests observe.
 #![forbid(unsafe_code)]

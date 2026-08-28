@@ -39,8 +39,18 @@ pub(crate) enum PrimName {
 
 /// The comparison/operand type-classes primitives collapse into (§6.2.2). L2's
 /// type rules (T1) narrow against these, not the raw primitive.
+///
+/// `#[doc(hidden)] pub`, re-exported as `crate::schema::TypeClass`: test-support
+/// surface for [`L2Position`](crate::schema::L2Position)'s payload, not part
+/// of the crate's documented public contract (excluded from the
+/// `cargo public-api` snapshot) — a plain `pub(crate)` cannot cross the crate
+/// boundary integration tests under `tests/` compile behind (mirrors
+/// `grammar::pda::ALL_STATES`'s own promotion for the same reason; re-exported
+/// individually rather than promoting the whole `model` module, so no other
+/// already-public item in this file gains a second, newly-public path).
+#[doc(hidden)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) enum TypeClass {
+pub enum TypeClass {
     /// `Integer`/`Float`/`Decimal`/`Number` — number literals.
     Numeric,
     /// `String` — single-quoted literals.
