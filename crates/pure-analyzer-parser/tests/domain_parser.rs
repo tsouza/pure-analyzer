@@ -539,7 +539,7 @@ Class demo::Known
 #[test]
 fn generic_types_leading_paths_and_double_angle_stereotypes_are_distinct_contracts() {
     let source = r#"
-Class <<meta::tag>> ::demo::Thing extends ::demo::Base, other::Stamped
+Class <<meta::tag>> ::demo::model::Thing extends ::demo::Base, other::Stamped
 {
   value: Map<::demo::Key, List<::demo::Value>>[0..*];
 }
@@ -813,6 +813,45 @@ Class demo::Known
         gap_texts(source, &parsed)
     );
     assert_eq!(gap_texts(source, &parsed)[0].trim(), "nativeThing foo");
+    assert_lossless(source, &parsed);
+}
+
+#[test]
+fn opaque_member_with_a_top_level_colon_stops_before_a_qualified_property() {
+    let source = r#"
+Class demo::Known
+{
+  nativeThing [legacy]: String[1]
+  derived(value: String[1]): String[1] { $this; };
+  kept: Boolean[1];
+}
+"#;
+    let parsed = parse(source);
+
+    assert!(parsed.diagnostics.is_empty(), "{:#?}", parsed.diagnostics);
+    assert_eq!(
+        parsed
+            .coverage_gaps
+            .iter()
+            .map(|gap| gap.kind)
+            .collect::<Vec<_>>(),
+        vec![DomainCoverageGapKind::UnsupportedMember],
+        "the opaque prefix must not swallow a later qualified property: {:#?}",
+        parsed.coverage_gaps
+    );
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_QUALIFIED_PROPERTY_DECL),
+        1
+    );
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_PARAMETER_DECL),
+        1
+    );
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::DOMAIN_OPAQUE_BODY), 1);
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_PROPERTY_DECL),
+        1
+    );
     assert_lossless(source, &parsed);
 }
 

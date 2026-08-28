@@ -559,6 +559,14 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
                 self.consume_double_angle()
             };
             self.close();
+            if self.index == start {
+                self.syntax_error(
+                    "parser made no progress while reading Domain stereotype applications",
+                );
+                self.open(SyntaxKind::ERROR_NODE);
+                let _ = self.bump();
+                self.close();
+            }
             if !structurally_valid || !closed {
                 if closed {
                     self.syntax_error("malformed Domain stereotype or tagged-value application");
@@ -588,14 +596,18 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
                         let Some(assignment) = assignment else {
                             return false;
                         };
-                        return self.annotation_path_is_valid(open.saturating_add(1), assignment)
-                            && self
+                        if self.annotation_path_is_valid(open.saturating_add(1), assignment) {
+                            return self
                                 .next_significant_index_from(assignment.saturating_add(1))
                                 .is_some_and(|value| value < index);
+                        }
+                        return false;
                     }
                 }
-                TokenKind::ASSIGN if depth == 1 && assignment.is_none() => {
-                    assignment = Some(index);
+                TokenKind::ASSIGN if depth == 1 => {
+                    if assignment.is_none() {
+                        assignment = Some(index);
+                    }
                 }
                 _ => {}
             }
@@ -746,14 +758,7 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
                 && parentheses == 0
                 && brackets == 0
                 && braces == 0
-                && (self.raw_at(TokenKind::BRACE_CLOSE)
-                    || self.member_starts_property()
-                    // A bare `name(` may be part of an unsupported member,
-                    // such as `nativeThing helper(...)`.  It is only a safe
-                    // recovery boundary once this opaque region has already
-                    // looked like a malformed property (`name: Type ...`).
-                    || (saw_property_colon && self.member_starts_qualified_property())
-                    || self.declaration_kind().is_some())
+                && self.at_opaque_member_recovery_boundary(saw_property_colon)
             {
                 break;
             }
@@ -773,6 +778,23 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
         }
         self.close();
         self.mark_gap_from(start, DomainCoverageGapKind::UnsupportedMember);
+    }
+
+    fn at_opaque_member_recovery_boundary(&self, saw_property_colon: bool) -> bool {
+        if self.raw_at(TokenKind::BRACE_CLOSE) {
+            return true;
+        }
+        if self.member_starts_property() {
+            return true;
+        }
+        // A bare `name(` may be part of an unsupported member, such as
+        // `nativeThing helper(...)`. It is a safe recovery boundary only
+        // after this opaque region has already looked like a malformed
+        // property (`name: Type ...`).
+        if saw_property_colon && self.member_starts_qualified_property() {
+            return true;
+        }
+        self.declaration_kind().is_some()
     }
 
     fn consume_balanced_braces(&mut self) -> bool {
@@ -825,26 +847,26 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
         if self.consume_if_raw(TokenKind::SEMICOLON) {
             return true;
         }
-        if self.at(TokenKind::BRACE_CLOSE)
-            || !self.has_remaining_input()
-            || self.declaration_kind().is_some()
-        {
-            self.syntax_error("expected `;` after a property declaration");
-            return false;
-        }
         self.syntax_error("expected `;` after a property declaration");
-        self.recover_member_tail();
+        if self.has_remaining_input() {
+            self.recover_member_tail();
+        }
         false
     }
 
     fn recover_declaration_header(&mut self) {
         self.open(SyntaxKind::ERROR_NODE);
-        while self.has_remaining_input()
-            && !self.at(TokenKind::SEMICOLON)
-            && !self.at(TokenKind::BRACE_CLOSE)
-            && self.declaration_kind().is_none()
-        {
+        while self.has_remaining_input() {
+            match self.raw_kind() {
+                Some(TokenKind::SEMICOLON | TokenKind::BRACE_CLOSE) => break,
+                _ if self.declaration_kind().is_some() => break,
+                _ => {}
+            }
+            let before = self.index;
             let _ = self.bump();
+            if self.index == before {
+                break;
+            }
         }
         let _ = self.consume_if_raw(TokenKind::SEMICOLON);
         self.close();
