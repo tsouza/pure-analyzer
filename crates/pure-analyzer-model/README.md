@@ -61,8 +61,9 @@ element kinds, but rejects a malformed class or association rather than
 returning incomplete resolver facts. Pure ingestion is resilient: it retains
 confirmed facts. Fully confirmed Pure associations add association and
 association-end facts to the graph. Source-wide uncertainty, including
-unsupported top-level source or an incomplete Pure association, marks all
-loaded classes with `coverage_gap`.
+unsupported top-level source, an incomplete Pure association, or an
+unmaterializable Pure association, emits a diagnostic and marks all loaded
+classes with `coverage_gap`.
 
 ## Product boundary
 

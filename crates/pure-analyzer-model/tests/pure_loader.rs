@@ -65,6 +65,13 @@ Association <<temporal.processingtemporal>> demo::Order_Entity
 "#,
     );
 
+    assert_pure_order_class_facts(&graph);
+    assert_pure_entity_association_facts(&graph);
+    assert_pure_association_end_facts(&graph);
+    assert_pure_association_metadata(&graph);
+}
+
+fn assert_pure_order_class_facts(graph: &pure_analyzer_model::ModelGraph) {
     let order = graph.class("demo::Order").expect("order");
     assert_eq!(order.supertypes()[0].as_str(), "demo::Entity");
     assert_eq!(order.provenance(), Provenance::PureFile);
@@ -80,16 +87,41 @@ Association <<temporal.processingtemporal>> demo::Order_Entity
             .as_str(),
         "StrictDate"
     );
+}
 
+fn assert_pure_entity_association_facts(graph: &pure_analyzer_model::ModelGraph) {
+    let order = graph.class("demo::Order").expect("order");
     let entity = graph.class("demo::Entity").expect("entity");
     assert_eq!(entity.temporal(), Some(Temporal::BusinessTemporal));
     let processing = graph.class("demo::Processing").expect("processing");
     assert_eq!(processing.temporal(), Some(Temporal::ProcessingTemporal));
     assert!(entity.properties()["order"].from_assoc());
     assert!(order.properties()["entities"].from_assoc());
+}
+
+fn assert_pure_association_end_facts(graph: &pure_analyzer_model::ModelGraph) {
+    let association = &graph.associations()[0];
+    assert_eq!(association.end_a().owner().as_str(), "demo::Entity");
+    assert_eq!(association.end_a().property().name().as_str(), "order");
+    assert_eq!(
+        association.end_a().property().target().raw_type().as_str(),
+        "demo::Order"
+    );
+    assert_eq!(association.end_a().property().multiplicity().lower(), 1);
+    assert_eq!(association.end_b().owner().as_str(), "demo::Order");
+    assert_eq!(association.end_b().property().name().as_str(), "entities");
+    assert_eq!(
+        association.end_b().property().target().raw_type().as_str(),
+        "demo::Entity"
+    );
+    assert!(association.end_b().property().multiplicity().is_unbounded());
+}
+
+fn assert_pure_association_metadata(graph: &pure_analyzer_model::ModelGraph) {
     let association = &graph.associations()[0];
     assert_eq!(association.temporal(), Some(Temporal::ProcessingTemporal));
     assert_eq!(association.provenance(), Provenance::PureFile);
+    assert_eq!(association.source().index(), 0);
     assert_eq!(graph.sources()[0].provenance(), Provenance::PureFile);
 }
 
@@ -345,7 +377,159 @@ Association demo::Broken
 }
 
 #[test]
-fn pure_associations_open_prior_source_classes_without_a_pure_class() {
+fn confirmed_pure_association_materializes_after_later_sources_supply_its_owners() {
+    let left = empty_pmcd_class("Left");
+    let right = empty_pmcd_class("Right");
+    let graph = load_model_documents(&[
+        ModelDocument::Pure(PureDocument::new(
+            "links.pure",
+            r#"
+Association demo::Links
+{
+  left: demo::Left[1];
+  rights: demo::Right[*];
+}
+"#,
+        )),
+        ModelDocument::Pmcd(PmcdDocument::new("left.pmcd.json", &left)),
+        ModelDocument::Pmcd(PmcdDocument::new("right.pmcd.json", &right)),
+    ])
+    .expect("load mixed model");
+
+    let association = graph.associations().first().expect("association");
+    assert_eq!(association.provenance(), Provenance::PureFile);
+    assert_eq!(association.source().index(), 0);
+    assert_eq!(association.end_a().owner().as_str(), "demo::Right");
+    assert_eq!(association.end_b().owner().as_str(), "demo::Left");
+    assert!(
+        graph
+            .class("demo::Right")
+            .expect("right")
+            .properties()
+            .contains_key("left")
+    );
+    assert!(
+        graph
+            .class("demo::Left")
+            .expect("left")
+            .properties()
+            .contains_key("rights")
+    );
+}
+
+#[test]
+fn pure_association_with_a_missing_owner_is_diagnosed_without_partial_facts() {
+    let graph = pure(
+        r#"
+Class demo::Known
+{
+}
+Association demo::Broken
+{
+  known: demo::Known[1];
+  missing: demo::Missing[1];
+}
+"#,
+    );
+
+    let known = graph.class("demo::Known").expect("known class");
+    assert!(known.coverage_gap());
+    assert!(known.properties().is_empty());
+    assert!(graph.associations().is_empty());
+    let diagnostic = graph
+        .diagnostics()
+        .iter()
+        .find(|diagnostic| diagnostic.code == DiagCode::UnresolvedModelAssociation)
+        .expect("missing owner diagnostic");
+    assert_eq!(diagnostic.severity, Severity::Error);
+    assert_eq!(diagnostic.primary.file.index(), 0);
+    assert!(diagnostic.message.contains("demo::Missing"));
+}
+
+#[test]
+fn pure_association_end_conflicting_with_a_declared_property_is_not_materialized() {
+    let graph = pure(
+        r#"
+Class demo::Left
+{
+  right: String[1];
+}
+Class demo::Right
+{
+}
+Association demo::Broken
+{
+  left: demo::Left[1];
+  right: demo::Right[1];
+}
+"#,
+    );
+
+    let left = graph.class("demo::Left").expect("left class");
+    assert!(left.coverage_gap());
+    assert_eq!(
+        left.properties()["right"].target().raw_type().as_str(),
+        "String"
+    );
+    assert!(!left.properties()["right"].from_assoc());
+    let right = graph.class("demo::Right").expect("right class");
+    assert!(right.coverage_gap());
+    assert!(right.properties().is_empty());
+    assert!(graph.associations().is_empty());
+    assert_eq!(
+        graph
+            .diagnostics()
+            .iter()
+            .filter(|diagnostic| diagnostic.code == DiagCode::UnresolvedModelAssociation)
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn colliding_pure_associations_do_not_choose_a_lexical_winner() {
+    let graph = pure(
+        r#"
+Class demo::Left
+{
+}
+Class demo::Right
+{
+}
+Association demo::First
+{
+  left: demo::Left[1];
+  shared: demo::Right[1];
+}
+Association demo::Second
+{
+  alternate: demo::Left[1];
+  shared: demo::Right[1];
+}
+"#,
+    );
+
+    let left = graph.class("demo::Left").expect("left class");
+    let right = graph.class("demo::Right").expect("right class");
+    assert!(left.coverage_gap());
+    assert!(right.coverage_gap());
+    assert!(left.properties().is_empty());
+    assert!(right.properties().is_empty());
+    assert!(graph.associations().is_empty());
+    let diagnostics = graph
+        .diagnostics()
+        .iter()
+        .filter(|diagnostic| diagnostic.code == DiagCode::UnresolvedModelAssociation)
+        .collect::<Vec<_>>();
+    assert_eq!(diagnostics.len(), 2);
+    assert_eq!(diagnostics[0].severity, Severity::Error);
+    assert_eq!(diagnostics[1].severity, Severity::Error);
+    assert!(diagnostics[0].message.contains("demo::First"));
+    assert!(diagnostics[1].message.contains("demo::Second"));
+}
+
+#[test]
+fn incomplete_pure_association_opens_prior_source_classes_without_a_pure_class() {
     let pmcd = empty_pmcd_class("Existing");
     let graph = load_model_documents(&[
         ModelDocument::Pmcd(PmcdDocument::new("complete.pmcd.json", &pmcd)),

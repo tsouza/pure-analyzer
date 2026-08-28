@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use pure_analyzer_diagnostics::{Diagnostic, Label, Severity, TextRange, TextSize};
+use pure_analyzer_diagnostics::{DiagCode, Diagnostic, Label, Severity, TextRange, TextSize};
 use serde_json::Value;
 
 use crate::error::{ModelError, ModelErrorKind};
@@ -371,7 +371,7 @@ impl ModelMerger {
         .build()
     }
 
-    fn finish(self) -> Result<ModelGraph, ModelError> {
+    fn finish(mut self) -> Result<ModelGraph, ModelError> {
         let mut classes = BTreeMap::new();
         let mut associations = Vec::new();
         for (path, element) in self.elements {
@@ -382,13 +382,23 @@ impl ModelMerger {
                 FragmentElement::Association(association) => associations.push(association),
             }
         }
-        let materialized = materialize_associations(&mut classes, associations)?;
+        let AssociationMaterialization {
+            associations,
+            diagnostics,
+            coverage_gap,
+        } = materialize_associations(&mut classes, associations)?;
+        if coverage_gap {
+            for class in classes.values_mut() {
+                class.mark_coverage_gap();
+            }
+        }
+        self.diagnostics.extend(diagnostics);
         let (by_path, paths_by_id) = index_classes(&classes)?;
         Ok(ModelGraph {
             classes,
             by_path,
             paths_by_id,
-            associations: materialized,
+            associations,
             sources: self.sources,
             diagnostics: self.diagnostics,
         })
@@ -728,43 +738,203 @@ fn lower_association(raw: RawAssociation, source: SourceId) -> Result<AssocDraft
     })
 }
 
+struct AssociationMaterialization {
+    associations: Vec<AssocInfo>,
+    diagnostics: Vec<Diagnostic>,
+    coverage_gap: bool,
+}
+
+struct PreparedAssociation {
+    path: QName,
+    first_owner: QName,
+    second_owner: QName,
+    first: PropInfo,
+    second: PropInfo,
+    temporal: Option<Temporal>,
+    provenance: Provenance,
+    source: SourceId,
+}
+
+impl PreparedAssociation {
+    fn from_draft(association: AssocDraft) -> Self {
+        let AssocDraft {
+            path,
+            first,
+            second,
+            temporal,
+            provenance,
+            source,
+        } = association;
+        let first_owner = second.target().raw_type().clone();
+        let second_owner = first.target().raw_type().clone();
+        let first = first.with_association(path.clone());
+        let second = second.with_association(path.clone());
+        Self {
+            path,
+            first_owner,
+            second_owner,
+            first,
+            second,
+            temporal,
+            provenance,
+            source,
+        }
+    }
+
+    fn ends(&self) -> [(&QName, &PropInfo); 2] {
+        [
+            (&self.first_owner, &self.first),
+            (&self.second_owner, &self.second),
+        ]
+    }
+}
+
 fn materialize_associations(
     classes: &mut BTreeMap<QName, ClassInfo>,
     associations: Vec<AssocDraft>,
-) -> Result<Vec<AssocInfo>, ModelError> {
-    let mut materialized = Vec::with_capacity(associations.len());
-    for association in associations {
-        let path = association.path.clone();
-        let first_owner = association.second.target().raw_type().clone();
-        let second_owner = association.first.target().raw_type().clone();
-        let first = association.first.with_association(association.path.clone());
-        let second = association
-            .second
-            .with_association(association.path.clone());
-        insert_association_end(
-            classes,
-            association.source,
-            &first_owner,
-            first.clone(),
-            &path,
-        )?;
-        insert_association_end(
-            classes,
-            association.source,
-            &second_owner,
-            second.clone(),
-            &path,
-        )?;
-        materialized.push(AssocInfo::from_source(
-            association.path,
-            AssociationEndInfo::new(first_owner, first),
-            AssociationEndInfo::new(second_owner, second),
-            association.temporal,
-            association.provenance,
-            association.source,
-        ));
+) -> Result<AssociationMaterialization, ModelError> {
+    let prepared = associations
+        .into_iter()
+        .map(PreparedAssociation::from_draft)
+        .collect::<Vec<_>>();
+    let failures = preflight_association_failures(classes, &prepared);
+
+    for (association, failure) in prepared.iter().zip(&failures) {
+        if association.provenance == Provenance::Pmcd
+            && let Some(failure) = failure
+        {
+            return Err(merged_graph_error(association.source, failure.clone()));
+        }
     }
-    Ok(materialized)
+
+    let mut materialized = Vec::with_capacity(prepared.len());
+    let mut diagnostics = Vec::new();
+    let mut coverage_gap = false;
+    for (association, failure) in prepared.into_iter().zip(failures) {
+        if let Some(failure) = failure {
+            coverage_gap = true;
+            diagnostics.push(pure_association_materialization_diagnostic(
+                &association,
+                &failure,
+            ));
+            continue;
+        }
+        materialized.push(materialize_prepared_association(classes, association)?);
+    }
+
+    Ok(AssociationMaterialization {
+        associations: materialized,
+        diagnostics,
+        coverage_gap,
+    })
+}
+
+fn preflight_association_failures(
+    classes: &BTreeMap<QName, ClassInfo>,
+    associations: &[PreparedAssociation],
+) -> Vec<Option<ModelErrorKind>> {
+    let mut failures = vec![None; associations.len()];
+    for (index, association) in associations.iter().enumerate() {
+        for (owner, property) in association.ends() {
+            let property_name = property.name().clone();
+            let failure = match classes.get(owner) {
+                None => Some(ModelErrorKind::MissingAssociationOwner {
+                    association: association.path.clone(),
+                    property: property_name,
+                    owner: owner.clone(),
+                }),
+                Some(class) if class.properties().contains_key(&property_name) => {
+                    Some(ModelErrorKind::AssociationPropertyConflict {
+                        association: association.path.clone(),
+                        owner: owner.clone(),
+                        property: property_name,
+                    })
+                }
+                Some(_) => None,
+            };
+            if let Some(failure) = failure {
+                let _ = failures[index].get_or_insert(failure);
+            }
+        }
+    }
+
+    let mut association_ends = BTreeMap::<(QName, Name), Vec<usize>>::new();
+    for (index, association) in associations.iter().enumerate() {
+        if failures[index].is_some() {
+            continue;
+        }
+        for (owner, property) in association.ends() {
+            association_ends
+                .entry((owner.clone(), property.name().clone()))
+                .or_default()
+                .push(index);
+        }
+    }
+    for ((owner, property), contributors) in association_ends {
+        if contributors.len() < 2 {
+            continue;
+        }
+        for index in contributors {
+            let _ = failures[index].get_or_insert_with(|| {
+                ModelErrorKind::AssociationPropertyConflict {
+                    association: associations[index].path.clone(),
+                    owner: owner.clone(),
+                    property: property.clone(),
+                }
+            });
+        }
+    }
+    failures
+}
+
+fn materialize_prepared_association(
+    classes: &mut BTreeMap<QName, ClassInfo>,
+    association: PreparedAssociation,
+) -> Result<AssocInfo, ModelError> {
+    let path = association.path.clone();
+    insert_association_end(
+        classes,
+        association.source,
+        &association.first_owner,
+        association.first.clone(),
+        &path,
+    )?;
+    insert_association_end(
+        classes,
+        association.source,
+        &association.second_owner,
+        association.second.clone(),
+        &path,
+    )?;
+    Ok(AssocInfo::from_source(
+        association.path,
+        AssociationEndInfo::new(association.first_owner, association.first),
+        AssociationEndInfo::new(association.second_owner, association.second),
+        association.temporal,
+        association.provenance,
+        association.source,
+    ))
+}
+
+fn pure_association_materialization_diagnostic(
+    association: &PreparedAssociation,
+    failure: &ModelErrorKind,
+) -> Diagnostic {
+    let span = TextRange::empty(TextSize::new(0));
+    Diagnostic::builder(
+        DiagCode::UnresolvedModelAssociation,
+        Severity::Error,
+        format!(
+            "Pure association `{}` cannot be materialized safely: {failure}",
+            association.path
+        ),
+        Label::with_note(
+            association.source.file_id(),
+            span,
+            "association not materialized",
+        ),
+    )
+    .build()
 }
 
 fn insert_association_end(

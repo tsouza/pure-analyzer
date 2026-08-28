@@ -16,7 +16,7 @@
 //!
 //! [`Provenance::PureFile`] marks facts lowered from the resilient Domain
 //! parser. Its per-class coverage flag keeps incomplete Pure files and
-//! incomplete association declarations open-world.
+//! incomplete or unresolved association declarations open-world.
 
 mod error;
 mod loader;
