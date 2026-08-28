@@ -14,9 +14,10 @@
 //! is installed by [`with_schema`](DecoderSession::with_schema), which takes a
 //! [`Schema`], and [`allowed_mask`](DecoderSession::allowed_mask) intersects the
 //! syntactic L1 mask with the schema-legal set at the identifier and operand
-//! positions covered by the shipped L2 rules (§3.1) — N3, N1/N2, N6, and the
-//! numeric/string levers of T1; other operand-type rules pass through. This is an
-//! additive narrowing that leaves the `schema`-is-`None` (L1-only) path untouched.
+//! positions covered by the shipped L2 rules (§3.1) — N3, N1/N2, N6, T2, T3,
+//! and the numeric/string levers of T1; other operand-type rules pass through.
+//! This is an additive narrowing that leaves the `schema`-is-`None` (L1-only)
+//! path untouched.
 
 use crate::error::DecodeError;
 use crate::grammar::compile::RtnPda;
@@ -26,7 +27,7 @@ use crate::mask::BitMask;
 use crate::recognizer::ByteRecognizer;
 use crate::schema::Schema;
 use crate::schema::narrow::{NarrowCache, narrow_fused_into, narrow_into};
-use crate::schema::scope::ScopeTracker;
+use crate::schema::scope::{L2Position, ScopeTracker};
 
 /// Which automaton a [`DecoderSession`] drives.
 ///
@@ -338,6 +339,26 @@ impl<'g> DecoderSession<'g> {
             }
         }
         &self.mask
+    }
+
+    /// The [`L2Position`] [`allowed_mask`](Self::allowed_mask) would narrow
+    /// against at the current step, or `None` when no schema is attached or no
+    /// covered rule applies here — for coverage-testing purposes only (issue
+    /// #59's per-named-rule/per-scope-transition coverage bullet).
+    ///
+    /// `#[doc(hidden)]`: test-support surface, not part of the crate's
+    /// documented public contract (excluded from the `cargo public-api`
+    /// snapshot). Recomputes the position read-only; it does not affect
+    /// `allowed_mask`'s own hot path.
+    #[doc(hidden)]
+    pub fn active_l2_position(&self) -> Option<L2Position> {
+        let (Some(_), Cursor::Fixed { pda, .. }) = (&self.schema, &self.cursor) else {
+            return None;
+        };
+        match self.tracker.position(pda.state()) {
+            L2Position::None => None,
+            pos => Some(pos),
+        }
     }
 
     /// Advance the session by one whole token, or reject it leaving the session

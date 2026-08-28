@@ -136,8 +136,20 @@ fn unquote(bytes: &[u8]) -> Vec<u8> {
 /// key the narrower ([`narrow_into`](crate::schema::narrow::narrow_into)) builds a legal
 /// set from. [`None`](L2Position::None) means "no L2 constraint here" (the L1
 /// mask passes through unchanged).
+///
+/// `#[doc(hidden)] pub`, re-exported as `crate::schema::L2Position`:
+/// test-support surface (issue #59's per-named-rule coverage bullet), not
+/// part of the crate's documented public contract (excluded from the
+/// `cargo public-api` snapshot) — a plain `pub(crate)` cannot cross the crate
+/// boundary integration tests under `tests/` compile behind (mirrors
+/// `grammar::pda::ALL_STATES`'s own promotion for the same reason;
+/// re-exported individually rather than promoting the whole `scope` module,
+/// so no other already-public item in this file gains a second,
+/// newly-public path). Read via
+/// [`DecoderSession::active_l2_position`](crate::DecoderSession::active_l2_position).
+#[doc(hidden)]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum L2Position {
+pub enum L2Position {
     /// N3: the pipeline source classpath must be a real class (or the store).
     SourceIdent,
     /// S1: the identifier right after a pipeline-source classpath's `.` must be
