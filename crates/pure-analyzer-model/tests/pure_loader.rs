@@ -474,6 +474,11 @@ fn confirmed_pure_declarations_retain_exact_source_spans() {
         association.end_a().declaration_span(),
         "the materialized navigation end retains its source declaration range"
     );
+    assert_eq!(
+        left.properties()["right"].declaration_span(),
+        association.end_b().declaration_span(),
+        "both materialized navigation ends retain their source declaration ranges"
+    );
 }
 
 #[test]
@@ -602,6 +607,14 @@ Class demo::Partial
 
     let partial = graph.class("demo::Partial").expect("partial class");
     assert!(partial.coverage_gap());
+    assert_eq!(
+        partial.declaration_span(),
+        Some(exact_span(
+            source,
+            "Class demo::Partial\n{\n  bad: Foo;\n  good: String[1];\n}"
+        )),
+        "a confirmed class path retains its declaration span despite an open-world coverage gap"
+    );
     assert!(partial.properties().contains_key("good"));
     assert!(partial.qualified_properties().contains_key("query"));
     assert_eq!(
