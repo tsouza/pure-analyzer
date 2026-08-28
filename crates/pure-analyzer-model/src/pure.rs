@@ -565,8 +565,12 @@ fn direct_name(node: &GreenNode) -> Option<Name> {
 }
 
 fn qname_from_node(node: &GreenNode) -> Option<QName> {
-    let text = compact_text(node);
-    is_qualified_name(&text)
+    qname_from_text(&compact_text(node))
+}
+
+fn qname_from_text(text: &str) -> Option<QName> {
+    let text = text.strip_prefix("::").unwrap_or(text);
+    is_qualified_name(text)
         .then(|| QName::new(text).ok())
         .flatten()
 }
@@ -627,10 +631,7 @@ impl<'text> TypeTextParser<'text> {
             self.offset = self.offset.saturating_add(1);
         }
         let path = self.text.get(start..self.offset)?;
-        if !is_qualified_name(path) {
-            return None;
-        }
-        let raw_type = QName::new(path).ok()?;
+        let raw_type = qname_from_text(path)?;
         let mut type_arguments = Vec::new();
         if self.consume(b'<') {
             type_arguments.push(self.parse_type()?);

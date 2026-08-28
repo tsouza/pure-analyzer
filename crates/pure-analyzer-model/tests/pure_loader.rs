@@ -67,6 +67,53 @@ Class demo::Order extends demo::Entity
 }
 
 #[test]
+fn leading_root_paths_lower_to_canonical_model_qnames() {
+    let graph = pure(
+        r#"
+Class ::demo::Thing extends ::demo::Base, other::Stamped
+{
+  value: Map<::demo::Key, List<::demo::Value>>[0..*];
+}
+"#,
+    );
+
+    let thing = graph.class("demo::Thing").expect("canonical class path");
+    assert!(!thing.coverage_gap());
+    assert_eq!(thing.supertypes()[0].as_str(), "demo::Base");
+    assert_eq!(thing.supertypes()[1].as_str(), "other::Stamped");
+
+    let value = &thing.properties()["value"];
+    assert_eq!(value.target().raw_type().as_str(), "Map");
+    assert_eq!(
+        value.target().type_arguments()[0].raw_type().as_str(),
+        "demo::Key"
+    );
+    let list = &value.target().type_arguments()[1];
+    assert_eq!(list.raw_type().as_str(), "List");
+    assert_eq!(list.type_arguments()[0].raw_type().as_str(), "demo::Value");
+}
+
+#[test]
+fn malformed_multiple_root_separators_do_not_lower_model_facts() {
+    let graph = pure(
+        r#"
+Class ::::demo::Malformed
+{
+  value: String[1];
+}
+"#,
+    );
+
+    assert!(graph.class("demo::Malformed").is_none());
+    assert!(
+        graph
+            .diagnostics()
+            .iter()
+            .any(|diagnostic| diagnostic.code == DiagCode::MalformedSyntax)
+    );
+}
+
+#[test]
 fn only_double_angle_applications_confirm_temporal_facts() {
     let graph = pure(
         r#"
