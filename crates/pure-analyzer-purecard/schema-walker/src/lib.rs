@@ -856,7 +856,8 @@ fn find_whitespace_token(vocab: &Vocab) -> Option<u32> {
 /// The vocabulary ids of the first `count` distinct tokens shaped like a
 /// complete single-quoted string literal (starts and ends with `'`), in
 /// vocabulary id order, or `None` if fewer than `count` exist.
-/// [`recipe_groupby`] needs two such tokens for `groupBy`'s output
+/// [`recipe_groupby`] and [`recipe_groupby_scalar_multi_agg`] each need two
+/// such tokens for `groupBy`'s output
 /// column-name list — content never matters for L1/L2 admissibility, only
 /// the shape, so any two real string-literal tokens from the vocabulary
 /// serve equally well as placeholders.
@@ -1099,6 +1100,98 @@ fn recipe_groupby(grammar: &CompiledGrammar, schema: &Schema, vocab: &Vocab) -> 
     None
 }
 
+/// A deterministic, schema-parameterized walk realizing
+/// `Class.all()->groupBy([], [agg(a|$a.<member>, b|$b-><reducer1>()),
+/// agg(a|$a.<member>, b|$b-><reducer2>())], ['<col1>', '<col2>'])` — the
+/// scalar (empty-key) multi-metric aggregation shape (issue #55), mirrored
+/// from a real, Legend-compiled gold example (`pure-lingua`'s
+/// `datasets/legacy-trajectories/1.0.0/train/gold_train_v1.jsonl:85`, db
+/// `concert_singer`: `Stadium.all()->groupBy([], [agg(s|$s.capacity,
+/// x|$x->average()), agg(s|$s.capacity, y|$y->max())], ['avgCapacity',
+/// 'maxCapacity'])`). Confirmed live against a real PMCD — this recipe's own
+/// substituted output for `world_1`,
+/// `|spider::world_1::model::default::Country.all()->groupBy([],[agg(a|$a.code,
+/// b|$b->count()),agg(a|$a.code,b|$b->min())],['default','country'])`, returns
+/// `meta::pure::tds::TabularDataSet` (and likewise for every other fixture db
+/// whose vocabulary realizes the shape).
+///
+/// Differs from [`recipe_groupby`] in the two axes that gold example itself
+/// varies: an *empty* key list, and *two* `agg(...)` entries rather than one.
+/// Both `agg` lambdas reuse the same binders and the same member — each
+/// lambda is independently scoped, and the shape's generality comes from
+/// needing two distinct [`UNCONSTRAINED_REDUCER_NAMES`] entries rather than
+/// two distinct members, which no db's vocabulary is guaranteed to supply.
+/// The gold example's `average` is deliberately *not* used: only
+/// `count`/`min`/`max` are schema-agnostic (see
+/// [`UNCONSTRAINED_REDUCER_NAMES`]).
+///
+/// `None` when this db's vocabulary has no admissible combination of a real
+/// class member, two distinct unconstrained reducer names, and two distinct
+/// string-literal tokens for the output column names.
+fn recipe_groupby_scalar_multi_agg(
+    grammar: &CompiledGrammar,
+    schema: &Schema,
+    vocab: &Vocab,
+) -> Option<Vec<u32>> {
+    let pipe = find_token(vocab, b"|")?;
+    let dot = find_token(vocab, b".")?;
+    let open = find_token(vocab, b"(")?;
+    let close = find_token(vocab, b")")?;
+    let arrow = find_token(vocab, b"->")?;
+    let comma = find_token(vocab, b",")?;
+    let bopen = find_token(vocab, b"[")?;
+    let bclose = find_token(vocab, b"]")?;
+    let group_by = find_token(vocab, b"groupBy")?;
+    let agg = find_token(vocab, b"agg")?;
+    let key_binder = find_token(vocab, b"a")?;
+    let val_binder = find_token(vocab, b"b")?;
+    let dollar = find_token(vocab, b"$")?;
+    let all = find_token(vocab, SOURCE_METHOD.as_bytes())?;
+    let cols = find_quoted_string_tokens(vocab, 2)?;
+    let (col1, col2) = (cols[0], cols[1]);
+    let candidates = class_member_candidates(schema, vocab, false);
+
+    for (first_name, second_name) in reducer_name_pairs() {
+        let (Some(first_id), Some(second_id)) = (
+            find_token(vocab, first_name.as_bytes()),
+            find_token(vocab, second_name.as_bytes()),
+        ) else {
+            continue;
+        };
+        for &(class_id, member_id) in &candidates {
+            let tokens = [
+                pipe, class_id, dot, all, open, close, arrow, group_by, open, bopen, bclose, comma,
+                bopen, agg, open, key_binder, pipe, dollar, key_binder, dot, member_id, comma,
+                val_binder, pipe, dollar, val_binder, arrow, first_id, open, close, close, comma,
+                agg, open, key_binder, pipe, dollar, key_binder, dot, member_id, comma, val_binder,
+                pipe, dollar, val_binder, arrow, second_id, open, close, close, bclose, comma,
+                bopen, col1, comma, col2, bclose, close,
+            ];
+            if let Some(walk) = try_walk(grammar, schema, &tokens) {
+                return Some(walk);
+            }
+        }
+    }
+    None
+}
+
+/// Every unordered pair of *distinct* [`UNCONSTRAINED_REDUCER_NAMES`]
+/// entries, in list order — the reducer choices
+/// [`recipe_groupby_scalar_multi_agg`]'s two aggregations try in turn. Two
+/// distinct names are what make the shape a genuine *multi*-metric
+/// aggregation; a db whose vocabulary supplies fewer than two of the three
+/// cannot realize it at all.
+fn reducer_name_pairs() -> impl Iterator<Item = (&'static str, &'static str)> {
+    UNCONSTRAINED_REDUCER_NAMES
+        .iter()
+        .enumerate()
+        .flat_map(|(index, &first)| {
+            UNCONSTRAINED_REDUCER_NAMES[index + 1..]
+                .iter()
+                .map(move |&second| (first, second))
+        })
+}
+
 /// Every recipe walk (issue #119) a caller tries to include ahead of its
 /// random exploration, in order. A recipe that found no admissible
 /// vocabulary/schema combination is dropped rather than padded, so a db
@@ -1123,6 +1216,7 @@ fn recipe_walks(
     let mut walks: Vec<Vec<u32>> = [
         recipe_navigation_predicate(grammar, schema, vocab),
         recipe_groupby(grammar, schema, vocab),
+        recipe_groupby_scalar_multi_agg(grammar, schema, vocab),
     ]
     .into_iter()
     .flatten()
@@ -2076,14 +2170,19 @@ mod tests {
         Schema::from_json(RECIPE_SAMPLE).expect("parses")
     }
 
-    /// Every token both recipes need against [`recipe_schema`]: a real class
+    /// Every token every recipe needs against [`recipe_schema`]: a real class
     /// (`A`), a real member (`year`), and every structural lexeme each
-    /// recipe shape requires.
+    /// recipe shape requires. Two distinct
+    /// [`UNCONSTRAINED_REDUCER_NAMES`] entries (`count`, `min`) are present
+    /// because [`recipe_groupby_scalar_multi_agg`] needs a *pair*; the
+    /// single-reducer recipes are unaffected, since both scan
+    /// [`UNCONSTRAINED_REDUCER_NAMES`] in list order and still settle on
+    /// `count`.
     fn vocab_for_recipes() -> Vocab {
         let tokens: Vec<Vec<u8>> = [
             "|", "A", ".", "all", "(", ")", "->", "filter", "a", "$", "year", "label", "<", " ",
-            "1", "agg", "b", ",", ":", "Integer", "[", "*", "]", "count", "groupBy", "'col1'",
-            "'col2'",
+            "1", "agg", "b", ",", ":", "Integer", "[", "*", "]", "count", "min", "groupBy",
+            "'col1'", "'col2'",
         ]
         .iter()
         .map(|s| s.as_bytes().to_vec())
@@ -2354,11 +2453,111 @@ mod tests {
     }
 
     #[test]
+    fn reducer_name_pairs_enumerates_every_distinct_pair_in_list_order() {
+        assert_eq!(
+            reducer_name_pairs().collect::<Vec<_>>(),
+            vec![("count", "min"), ("count", "max"), ("min", "max")]
+        );
+    }
+
+    #[test]
+    fn recipe_groupby_scalar_multi_agg_builds_the_expected_walk_from_a_real_schema() {
+        let grammar = CompiledGrammar::compile(vocab_for_recipes());
+        let vocab = grammar.vocab();
+        let expected: Vec<u32> = [
+            "|", "A", ".", "all", "(", ")", "->", "groupBy", "(", "[", "]", ",", "[", "agg", "(",
+            "a", "|", "$", "a", ".", "year", ",", "b", "|", "$", "b", "->", "count", "(", ")", ")",
+            ",", "agg", "(", "a", "|", "$", "a", ".", "year", ",", "b", "|", "$", "b", "->", "min",
+            "(", ")", ")", "]", ",", "[", "'col1'", ",", "'col2'", "]", ")",
+        ]
+        .iter()
+        .map(|s| id_of(vocab, s))
+        .collect();
+        assert_eq!(
+            recipe_groupby_scalar_multi_agg(&grammar, &recipe_schema(), vocab),
+            Some(expected)
+        );
+    }
+
+    #[test]
+    fn recipe_groupby_scalar_multi_agg_is_none_with_only_one_reducer_name_in_vocab() {
+        // Every token the shape needs *except* a second distinct
+        // `UNCONSTRAINED_REDUCER_NAMES` entry: one reducer alone cannot
+        // realize a multi-metric aggregation.
+        let tokens: Vec<Vec<u8>> = [
+            "|", "A", ".", "all", "(", ")", "->", "groupBy", "agg", "a", "b", "$", "year", "count",
+            "[", "]", ",", "'col1'", "'col2'",
+        ]
+        .iter()
+        .map(|s| s.as_bytes().to_vec())
+        .collect();
+        let eos = tokens.len() as u32;
+        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens, eos));
+        assert_eq!(
+            recipe_groupby_scalar_multi_agg(&grammar, &recipe_schema(), grammar.vocab()),
+            None
+        );
+    }
+
+    #[test]
+    fn recipe_groupby_scalar_multi_agg_is_none_without_the_groupby_step_name_in_vocab() {
+        let tokens: Vec<Vec<u8>> = [
+            "|", "A", ".", "all", "(", ")", "->", "agg", "a", "b", "$", "year", "count", "min",
+            "[", "]", ",", "'col1'", "'col2'",
+        ]
+        .iter()
+        .map(|s| s.as_bytes().to_vec())
+        .collect();
+        let eos = tokens.len() as u32;
+        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens, eos));
+        assert_eq!(
+            recipe_groupby_scalar_multi_agg(&grammar, &recipe_schema(), grammar.vocab()),
+            None
+        );
+    }
+
+    #[test]
+    fn recipe_groupby_scalar_multi_agg_is_none_without_two_distinct_quoted_string_tokens() {
+        let tokens: Vec<Vec<u8>> = [
+            "|", "A", ".", "all", "(", ")", "->", "groupBy", "agg", "a", "b", "$", "year", "count",
+            "min", "[", "]", ",",
+        ]
+        .iter()
+        .map(|s| s.as_bytes().to_vec())
+        .collect();
+        let eos = tokens.len() as u32;
+        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens, eos));
+        assert_eq!(
+            recipe_groupby_scalar_multi_agg(&grammar, &recipe_schema(), grammar.vocab()),
+            None
+        );
+    }
+
+    #[test]
+    fn recipe_groupby_scalar_multi_agg_is_none_without_a_real_class_member_pair() {
+        // Every structural token the shape needs, plus two reducer names and
+        // two quoted strings, but no real class or member name at all.
+        let tokens: Vec<Vec<u8>> = [
+            "|", ".", "all", "(", ")", "->", "groupBy", "agg", "a", "b", "$", "count", "min", "[",
+            "]", ",", "'col1'", "'col2'",
+        ]
+        .iter()
+        .map(|s| s.as_bytes().to_vec())
+        .collect();
+        let eos = tokens.len() as u32;
+        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens, eos));
+        assert_eq!(
+            recipe_groupby_scalar_multi_agg(&grammar, &recipe_schema(), grammar.vocab()),
+            None
+        );
+    }
+
+    #[test]
     fn recipe_walks_includes_only_the_recipes_that_actually_succeed() {
-        // The full vocabulary with include_reducer: all three recipes succeed.
+        // The full vocabulary with include_reducer: all four recipes succeed.
         let full = CompiledGrammar::compile(vocab_for_recipes());
-        let all_three = recipe_walks(&full, &recipe_schema(), full.vocab(), true);
-        assert_eq!(all_three.len(), 3);
+        let all_four = recipe_walks(&full, &recipe_schema(), full.vocab(), true);
+        assert_eq!(all_four.len(), 4);
 
         // Missing "agg"/"groupBy"/quoted strings: only the navigation-predicate
         // recipe can succeed regardless of include_reducer.
@@ -2376,14 +2575,14 @@ mod tests {
 
     #[test]
     fn recipe_walks_excludes_only_the_reducer_recipe_when_include_reducer_is_false() {
-        // The full vocabulary supports all three recipes, but
+        // The full vocabulary supports all four recipes, but
         // include_reducer=false (issue #55: the reducer recipe's bare
         // `->agg(...)` step is L1/L2-admissible but not real, compilable
-        // Pure) drops only that one — `recipe_groupby` (real, compilable)
-        // stays included.
+        // Pure) drops only that one — both `groupBy` recipes (real,
+        // compilable) stay included.
         let full = CompiledGrammar::compile(vocab_for_recipes());
-        let two = recipe_walks(&full, &recipe_schema(), full.vocab(), false);
-        assert_eq!(two.len(), 2);
+        let three = recipe_walks(&full, &recipe_schema(), full.vocab(), false);
+        assert_eq!(three.len(), 3);
     }
 
     #[test]
