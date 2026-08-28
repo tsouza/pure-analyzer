@@ -148,7 +148,8 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
             true
         };
         let body = self.parse_declaration_body(DeclarationKind::Class);
-        if !keyword || !name || !extends || !body {
+        let malformed = [keyword, name, extends, body].contains(&false);
+        if malformed {
             self.mark_gap_from(start, DomainCoverageGapKind::MalformedDeclaration);
         }
         self.close();
@@ -161,7 +162,8 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
         self.parse_stereotype_applications();
         let name = self.parse_domain_qualified_name("an association name");
         let body = self.parse_declaration_body(DeclarationKind::Association);
-        if !keyword || !name || !body {
+        let malformed = [keyword, name, body].contains(&false);
+        if malformed {
             self.mark_gap_from(start, DomainCoverageGapKind::MalformedDeclaration);
         }
         self.close();
@@ -174,7 +176,8 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
         self.parse_stereotype_applications();
         let name = self.parse_domain_qualified_name("a profile name");
         let body = self.parse_profile_body();
-        if !keyword || !name || !body {
+        let malformed = [keyword, name, body].contains(&false);
+        if malformed {
             self.mark_gap_from(start, DomainCoverageGapKind::MalformedDeclaration);
         }
         self.close();
@@ -279,7 +282,9 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
             false
         };
         let _ = self.consume_if(TokenKind::SEMICOLON);
-        if !name || !open || !parameters || !close || !colon || !ty || !multiplicity || !body {
+        let malformed =
+            [name, open, parameters, close, colon, ty, multiplicity, body].contains(&false);
+        if malformed {
             self.mark_gap_from(start, DomainCoverageGapKind::MalformedDeclaration);
         }
         self.close();
@@ -384,7 +389,8 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
         let _ = self.bump();
         let colon = self.expect(TokenKind::COLON, "`:` after a profile section name");
         let open = self.expect(TokenKind::BRACKET_OPEN, "`[` after a profile section name");
-        let contents = if colon && open {
+        let header = colon && open;
+        let contents = if header {
             if stereotypes {
                 self.parse_stereotype_list()
             } else {
@@ -394,14 +400,14 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
         } else {
             false
         };
-        let close = if colon && open {
+        let close = if header {
             self.expect(TokenKind::BRACKET_CLOSE, "`]` after a profile section")
         } else {
             false
         };
         let _ = self.consume_if(TokenKind::SEMICOLON);
         self.close();
-        colon && open && contents && close
+        header && contents && close
     }
 
     fn parse_stereotype_list(&mut self) -> bool {
@@ -440,7 +446,7 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
                 }
                 Some(
                     TokenKind::BRACKET_CLOSE | TokenKind::PAREN_CLOSE | TokenKind::BRACE_CLOSE,
-                ) if depth > 0 => {
+                ) => {
                     depth = depth.saturating_sub(1);
                 }
                 _ => {}

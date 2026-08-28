@@ -955,6 +955,73 @@ Class demo::Broken extends demo::Base,
 }
 
 #[test]
+fn association_with_a_missing_name_keeps_its_known_body() {
+    let source = r#"
+Association ::
+{
+  left: demo::Left[1];
+  right: demo::Right[1];
+}
+"#;
+    let parsed = parse(source);
+
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_ASSOCIATION_DECL),
+        1
+    );
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_PROPERTY_DECL),
+        2
+    );
+    assert_eq!(
+        parsed
+            .coverage_gaps
+            .iter()
+            .map(|gap| gap.kind)
+            .collect::<Vec<_>>(),
+        vec![DomainCoverageGapKind::MalformedDeclaration],
+        "a valid association body cannot hide its missing declaration name: {:#?}",
+        parsed.coverage_gaps
+    );
+    assert_lossless(source, &parsed);
+}
+
+#[test]
+fn profile_with_a_missing_name_keeps_its_known_sections() {
+    let source = r#"
+Profile ::
+{
+  stereotypes: [sensitive];
+}
+"#;
+    let parsed = parse(source);
+
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_PROFILE_DECL),
+        1
+    );
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_PROFILE_SECTION),
+        1
+    );
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_STEREOTYPE_DECL),
+        1
+    );
+    assert_eq!(
+        parsed
+            .coverage_gaps
+            .iter()
+            .map(|gap| gap.kind)
+            .collect::<Vec<_>>(),
+        vec![DomainCoverageGapKind::MalformedDeclaration],
+        "a valid profile body cannot hide its missing declaration name: {:#?}",
+        parsed.coverage_gaps
+    );
+    assert_lossless(source, &parsed);
+}
+
+#[test]
 fn a_missing_property_terminator_marks_that_property_malformed() {
     let source = r#"
 Class demo::Broken
@@ -1193,6 +1260,62 @@ Class {meta::tag =} demo::Broken
         );
         assert_lossless(source, &parsed);
     }
+}
+
+#[test]
+fn nested_qualified_property_bodies_remain_balanced() {
+    let source = r#"
+Class demo::Known
+{
+  derived(): String[1] { $this->filter({x: String[1] | true}); };
+  kept: String[1];
+}
+"#;
+    let parsed = parse(source);
+
+    assert!(parsed.diagnostics.is_empty(), "{:#?}", parsed.diagnostics);
+    assert!(
+        parsed.coverage_gaps.is_empty(),
+        "{:#?}",
+        parsed.coverage_gaps
+    );
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_QUALIFIED_PROPERTY_DECL),
+        1
+    );
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_PROPERTY_DECL),
+        1
+    );
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::DOMAIN_OPAQUE_BODY), 1);
+    assert_lossless(source, &parsed);
+}
+
+#[test]
+fn braced_tagged_values_keep_nested_assignments_opaque() {
+    let source = r#"
+Class {meta::tag = { nested = 'value' }} demo::Annotated
+{
+  value: String[1];
+}
+"#;
+    let parsed = parse(source);
+
+    assert!(parsed.diagnostics.is_empty(), "{:#?}", parsed.diagnostics);
+    assert!(
+        parsed.coverage_gaps.is_empty(),
+        "{:#?}",
+        parsed.coverage_gaps
+    );
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_STEREOTYPE_APPLICATIONS),
+        1
+    );
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_PROPERTY_DECL),
+        1
+    );
+    assert_lossless(source, &parsed);
 }
 
 #[test]
