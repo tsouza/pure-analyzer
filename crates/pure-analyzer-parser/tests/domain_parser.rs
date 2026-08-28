@@ -328,6 +328,51 @@ Profile demo::P
 }
 
 #[test]
+fn malformed_stereotype_and_tag_applications_mark_conservative_coverage() {
+    for source in [
+        r#"
+Class {meta::pure::profiles::temporal.bitemporal} demo::Bad
+{
+  value: String[1];
+}
+"#,
+        r#"
+Class <<temporal.bitemporal unexpected>> demo::Bad
+{
+  value: String[1];
+}
+"#,
+    ] {
+        let parsed = parse(source);
+
+        assert!(
+            parsed
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == DiagCode::MalformedSyntax),
+            "{:#?}",
+            parsed.diagnostics
+        );
+        assert_eq!(
+            parsed
+                .coverage_gaps
+                .iter()
+                .map(|gap| gap.kind)
+                .collect::<Vec<_>>(),
+            vec![DomainCoverageGapKind::MalformedDeclaration],
+            "malformed annotation must conservatively mark coverage: {:#?}",
+            parsed.coverage_gaps
+        );
+        assert_eq!(
+            count_kind(&parsed.green, SyntaxKind::DOMAIN_STEREOTYPE_APPLICATIONS),
+            0
+        );
+        assert!(contains_kind(&parsed.green, SyntaxKind::ERROR_NODE));
+        assert_lossless(source, &parsed);
+    }
+}
+
+#[test]
 fn qualified_property_missing_return_colon_marks_malformed_coverage() {
     assert_only_malformed_declaration(
         r#"

@@ -524,15 +524,128 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
     fn parse_stereotype_applications(&mut self) {
         self.consume_trivia();
         while self.at(TokenKind::BRACE_OPEN) || self.at_double_angle_open() {
-            self.open(SyntaxKind::DOMAIN_STEREOTYPE_APPLICATIONS);
-            if self.at(TokenKind::BRACE_OPEN) {
-                let _ = self.consume_balanced_braces();
+            let start = self.index;
+            let braced = self.at(TokenKind::BRACE_OPEN);
+            let structurally_valid = if braced {
+                self.braced_annotation_is_valid()
             } else {
-                let _ = self.consume_double_angle();
-            }
+                self.double_angle_stereotype_is_valid()
+            };
+            self.open(if structurally_valid {
+                SyntaxKind::DOMAIN_STEREOTYPE_APPLICATIONS
+            } else {
+                SyntaxKind::ERROR_NODE
+            });
+            let closed = if braced {
+                self.consume_balanced_braces()
+            } else {
+                self.consume_double_angle()
+            };
             self.close();
+            if !structurally_valid || !closed {
+                if closed {
+                    self.syntax_error("malformed Domain stereotype or tagged-value application");
+                }
+                self.mark_gap_from(start, DomainCoverageGapKind::MalformedDeclaration);
+            }
             self.consume_trivia();
         }
+    }
+
+    fn braced_annotation_is_valid(&self) -> bool {
+        let Some(open) = self.significant_index() else {
+            return false;
+        };
+        if self.tokens[open].0 != TokenKind::BRACE_OPEN {
+            return false;
+        }
+
+        let mut depth = 1usize;
+        let mut assignment = None;
+        for (index, (kind, _)) in self.tokens.iter().enumerate().skip(open.saturating_add(1)) {
+            match kind {
+                TokenKind::BRACE_OPEN => depth = depth.saturating_add(1),
+                TokenKind::BRACE_CLOSE => {
+                    depth = depth.saturating_sub(1);
+                    if depth == 0 {
+                        let Some(assignment) = assignment else {
+                            return false;
+                        };
+                        return self.annotation_path_is_valid(open.saturating_add(1), assignment)
+                            && self
+                                .next_significant_index_from(assignment.saturating_add(1))
+                                .is_some_and(|value| value < index);
+                    }
+                }
+                TokenKind::ASSIGN if depth == 1 && assignment.is_none() => {
+                    assignment = Some(index);
+                }
+                _ => {}
+            }
+        }
+        false
+    }
+
+    fn double_angle_stereotype_is_valid(&self) -> bool {
+        let Some(first_open) = self.significant_index() else {
+            return false;
+        };
+        let Some(second_open) = self.next_significant_index_from(first_open.saturating_add(1))
+        else {
+            return false;
+        };
+        if self.tokens[first_open].0 != TokenKind::LT || self.tokens[second_open].0 != TokenKind::LT
+        {
+            return false;
+        }
+
+        let mut cursor = second_open.saturating_add(1);
+        while let Some(first_close) = self.next_significant_index_from(cursor) {
+            if self.tokens[first_close].0 == TokenKind::GT
+                && self
+                    .next_significant_index_from(first_close.saturating_add(1))
+                    .is_some_and(|second_close| self.tokens[second_close].0 == TokenKind::GT)
+            {
+                return self.annotation_path_is_valid(second_open.saturating_add(1), first_close);
+            }
+            cursor = first_close.saturating_add(1);
+        }
+        false
+    }
+
+    fn annotation_path_is_valid(&self, start: usize, end: usize) -> bool {
+        let mut cursor = start;
+        let mut saw_name = false;
+        let mut expect_name = true;
+        let mut leading_path_separator_allowed = true;
+
+        while let Some(index) = self.next_significant_index_from(cursor) {
+            if index >= end {
+                break;
+            }
+            let kind = self.tokens[index].0;
+            if expect_name {
+                if is_name(kind) {
+                    saw_name = true;
+                    expect_name = false;
+                    leading_path_separator_allowed = false;
+                } else if !saw_name
+                    && leading_path_separator_allowed
+                    && kind == TokenKind::PATH_SEPARATOR
+                {
+                    leading_path_separator_allowed = false;
+                } else {
+                    return false;
+                }
+            } else if matches!(kind, TokenKind::PATH_SEPARATOR | TokenKind::DOT) {
+                expect_name = true;
+            } else {
+                return false;
+            }
+            cursor = index.saturating_add(1);
+        }
+
+        saw_name && !expect_name
     }
 
     fn parse_opaque_body(&mut self) {
@@ -1001,7 +1114,16 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
             }
             None => self.eof_span(),
         };
-        if self
+        if let Some(previous) = self.coverage_gaps.last_mut()
+            && previous.kind == kind
+            && previous.span.end() >= span.start()
+            && span.end() >= previous.span.start()
+        {
+            previous.span = TextRange::new(
+                previous.span.start().min(span.start()),
+                previous.span.end().max(span.end()),
+            );
+        } else if self
             .coverage_gaps
             .last()
             .is_none_or(|gap| gap.span != span || gap.kind != kind)
