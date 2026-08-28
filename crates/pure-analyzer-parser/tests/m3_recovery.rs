@@ -438,6 +438,7 @@ fn malformed_column_arrays_stop_at_source_separators_and_keep_later_queries() {
     assert_eq!(parsed.green.text(), source);
     assert_eq!(columns.text(), "~[)");
     assert!(diagnostic_codes(&parsed).contains(&DiagCode::MalformedSyntax));
+    assert_eq!(syntax_error_count(&parsed), 2, "{:#?}", parsed.diagnostics);
     assert_eq!(count_kind(&parsed.green, SyntaxKind::QUERY_EXPR), 2);
     assert_ranges_are_valid(source, &parsed);
 }

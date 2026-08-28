@@ -643,6 +643,7 @@ impl<'tokens> Parser<'tokens> {
 
             let has_comma = self.consume_if(TokenKind::COMMA);
             if self.index == before {
+                let recovery_start = self.index;
                 self.recover_until(&[
                     TokenKind::COMMA,
                     TokenKind::BRACKET_CLOSE,
@@ -659,6 +660,12 @@ impl<'tokens> Parser<'tokens> {
                 let _ = self.consume_if(TokenKind::COMMA);
                 if self.at(TokenKind::BRACKET_CLOSE) || self.at_eof() {
                     self.error_current("expected a column specification after `,`");
+                    break;
+                }
+                // `recover_until` leaves a separator in place. A comma above
+                // is the only separator that permits another member, so stop
+                // if neither recovery nor comma consumption made progress.
+                if self.index == recovery_start {
                     break;
                 }
                 continue;
