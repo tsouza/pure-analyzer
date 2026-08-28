@@ -1022,6 +1022,37 @@ Profile ::
 }
 
 #[test]
+fn profile_sections_are_complete_and_lossless() {
+    let source = r#"
+Profile demo::First
+{
+  stereotypes: [sensitive];
+}
+"#;
+    let parsed = parse(source);
+
+    assert!(parsed.diagnostics.is_empty(), "{:#?}", parsed.diagnostics);
+    assert!(
+        parsed.coverage_gaps.is_empty(),
+        "{:#?}",
+        parsed.coverage_gaps
+    );
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_PROFILE_DECL),
+        1
+    );
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_PROFILE_SECTION),
+        1
+    );
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_STEREOTYPE_DECL),
+        1
+    );
+    assert_lossless(source, &parsed);
+}
+
+#[test]
 fn a_missing_property_terminator_marks_that_property_malformed() {
     let source = r#"
 Class demo::Broken

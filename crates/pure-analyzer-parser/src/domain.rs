@@ -369,14 +369,19 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
                 self.syntax_error("expected `}` before the next Domain declaration");
                 return false;
             }
+            let before = self.index;
             if self.at_keyword("stereotypes") || self.at_keyword("tags") {
                 valid &= self.parse_profile_section();
-                continue;
+            } else if !self.consume_if_raw(TokenKind::SEMICOLON) {
+                self.parse_opaque_member();
             }
-            if self.consume_if_raw(TokenKind::SEMICOLON) {
-                continue;
+            if self.index == before {
+                self.syntax_error("parser made no progress while reading Domain profile member");
+                self.open(SyntaxKind::ERROR_NODE);
+                let _ = self.bump();
+                self.close();
+                valid = false;
             }
-            self.parse_opaque_member();
         }
 
         self.syntax_error("expected `}` before end of file");
