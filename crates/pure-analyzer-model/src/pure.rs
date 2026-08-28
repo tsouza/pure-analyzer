@@ -519,7 +519,7 @@ impl AnnotationFacts {
 fn annotation_facts(node: &GreenNode) -> AnnotationFacts {
     let text = compact_text(node).to_ascii_lowercase();
     let mut facts = AnnotationFacts::default();
-    for atom in annotation_atoms(&text) {
+    for atom in stereotype_atoms(&text) {
         if let Some(value) = temporal_value(atom) {
             match value {
                 "bitemporal" => facts.note_temporal(Temporal::Bitemporal),
@@ -535,14 +535,14 @@ fn annotation_facts(node: &GreenNode) -> AnnotationFacts {
     facts
 }
 
-fn annotation_atoms(text: &str) -> impl Iterator<Item = &str> {
-    text.split(|character| {
-        matches!(
-            character,
-            '{' | '}' | '<' | '>' | ',' | '=' | '(' | ')' | '[' | ']'
-        )
-    })
-    .filter(|atom| !atom.is_empty())
+fn stereotype_atoms(text: &str) -> impl Iterator<Item = &str> {
+    // Braced applications are tagged values whose values are arbitrary text.
+    // Only the double-angle form carries a semantic stereotype.
+    text.strip_prefix("<<")
+        .and_then(|contents| contents.strip_suffix(">>"))
+        .into_iter()
+        .flat_map(|contents| contents.split(','))
+        .filter(|atom| !atom.is_empty())
 }
 
 fn temporal_value(atom: &str) -> Option<&str> {

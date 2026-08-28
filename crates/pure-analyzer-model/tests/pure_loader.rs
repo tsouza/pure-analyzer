@@ -67,6 +67,37 @@ Class demo::Order extends demo::Entity
 }
 
 #[test]
+fn only_double_angle_applications_confirm_temporal_facts() {
+    let graph = pure(
+        r#"
+Class {meta::pure::profiles::temporal.bitemporal = 'tag value'} demo::Tagged
+{
+  value: String[1];
+}
+
+Class {meta::pure::profiles::temporal.bitemporal} demo::Malformed
+{
+  value: String[1];
+}
+"#,
+    );
+
+    let tagged = graph.class("demo::Tagged").expect("tagged class");
+    assert_eq!(tagged.temporal(), None);
+    assert!(!tagged.coverage_gap());
+
+    let malformed = graph.class("demo::Malformed").expect("malformed class");
+    assert_eq!(malformed.temporal(), None);
+    assert!(malformed.coverage_gap());
+    assert!(
+        graph
+            .diagnostics()
+            .iter()
+            .any(|diagnostic| diagnostic.code == DiagCode::MalformedSyntax)
+    );
+}
+
+#[test]
 fn confirmed_generated_milestoning_qps_are_classified_from_stereotypes() {
     let source = r#"
 Class <<temporal.businesstemporal>> demo::Holder
