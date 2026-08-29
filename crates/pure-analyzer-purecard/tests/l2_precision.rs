@@ -507,6 +507,25 @@ const FROZEN_FAMILIES: &[(&str, &str)] = &[
          every overload wants a receiver a `T[*]` class collection cannot be",
     ),
     (
+        "n3g-receiver-only-arg",
+        "Phase 6 · bucket D — an argument passed to an arrow call whose every \
+         overload takes the receiver and nothing else",
+    ),
+    (
+        "n4a-store-result",
+        "Phase 6 · bucket E — an operator applied to a store method's `Table[1]` \
+         result",
+    ),
+    (
+        "n4b-logical-operand",
+        "Phase 6 · bucket E — a literal operand of `&&`/`||`, which take Boolean \
+         only",
+    ),
+    (
+        "n4c-str-operator",
+        "Phase 6 · bucket E — arithmetic whose left operand is a string literal",
+    ),
+    (
         "n3c-class",
         "Phase 3 · bucket R1 — a method arrowed off the bare `Class<T>[1]` metatype",
     ),
@@ -1026,7 +1045,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
         db: "world_1",
         closer: Closer::L2("ValueIdent"),
         kill: Kill::Walk {
-            walk: "|spider::world_1::model::default::Country.all()->count(tableReference)&&5",
+            walk: "|spider::world_1::model::default::Country.all()->limit(tableReference)&&5",
             closed_by: ")",
         },
     },
@@ -1749,6 +1768,225 @@ static FROZEN_KILLS: &[FrozenKill] = &[
         },
     },
     FrozenKill {
+        fixture: "n3g-receiver-only-arg",
+        db: "world_1",
+        closer: Closer::L2("ReceiverOnlyArg"),
+        kill: Kill::Walk {
+            walk: "{|spider::world_1::model::default::Countrylanguage.all()\
+             ->isEmpty('_v__t0sc0')->renameColumns('Population_T3')}",
+            closed_by: "'_v__t0sc0'",
+        },
+    },
+    FrozenKill {
+        fixture: "n3g-receiver-only-arg",
+        db: "world_1",
+        closer: Closer::L2("ReceiverOnlyArg"),
+        kill: Kill::Walk {
+            walk: "{|spider::world_1::model::default::Country.all()->count('Name')}",
+            closed_by: "'Name'",
+        },
+    },
+    FrozenKill {
+        fixture: "n3g-receiver-only-arg",
+        db: "world_1",
+        closer: Closer::L2("ReceiverOnlyArg"),
+        kill: Kill::Walk {
+            walk: "{|spider::world_1::model::default::Country.all()->isNotEmpty('Name')}",
+            closed_by: "'Name'",
+        },
+    },
+    FrozenKill {
+        fixture: "n3g-receiver-only-arg",
+        db: "world_1",
+        closer: Closer::L2("ReceiverOnlyArg"),
+        kill: Kill::Walk {
+            walk: "{|spider::world_1::model::default::Country.all()->size('Name')}",
+            closed_by: "'Name'",
+        },
+    },
+    FrozenKill {
+        fixture: "n3g-receiver-only-arg",
+        db: "world_1",
+        closer: Closer::L2("ReceiverOnlyArg"),
+        kill: Kill::Walk {
+            walk: "{|spider::world_1::model::default::Country.all()->toOne('Name')}",
+            closed_by: "'Name'",
+        },
+    },
+    FrozenKill {
+        fixture: "n3g-receiver-only-arg",
+        db: "car_1",
+        closer: Closer::L2("ReceiverOnlyArg"),
+        kill: Kill::Walk {
+            walk: "{|spider::car_1::model::default::CarMakers.all()->count('Maker')}",
+            closed_by: "'Maker'",
+        },
+    },
+    FrozenKill {
+        fixture: "n4a-store-result",
+        db: "world_1",
+        closer: Closer::L2("StoreResult"),
+        kill: Kill::Walk {
+            walk: "{|spider::world_1::Db->tableReference('Percentage','Name')\
+             >spider::world_1::model::default::Country}",
+            closed_by: ">",
+        },
+    },
+    FrozenKill {
+        fixture: "n4a-store-result",
+        db: "world_1",
+        closer: Closer::L2("StoreResult"),
+        kill: Kill::Walk {
+            walk: "{|spider::world_1::Db->tableReference('HeadOfState_T1_3','english')\
+             &&'CountryCode_T1_1'}",
+            closed_by: "&&",
+        },
+    },
+    FrozenKill {
+        fixture: "n4a-store-result",
+        db: "world_1",
+        closer: Closer::L2("StoreResult"),
+        kill: Kill::Walk {
+            walk: "{|spider::world_1::Db->tableReference('name','Caribbean')>'CountryCode_T2'}",
+            closed_by: ">",
+        },
+    },
+    FrozenKill {
+        fixture: "n4a-store-result",
+        db: "world_1",
+        closer: Closer::L2("StoreResult"),
+        kill: Kill::Walk {
+            walk: "{|spider::world_1::Db->tableReference('name','Caribbean')-'CountryCode_T2'}",
+            closed_by: "'CountryCode_T2'",
+        },
+    },
+    FrozenKill {
+        fixture: "n4a-store-result",
+        db: "car_1",
+        closer: Closer::L2("StoreResult"),
+        kill: Kill::Walk {
+            walk: "{|spider::car_1::Db->tableReference('Model_t3_5','cnt')>'Edispl_T2_2'}",
+            closed_by: ">",
+        },
+    },
+    FrozenKill {
+        fixture: "n4a-store-result",
+        db: "car_1",
+        closer: Closer::L2("StoreResult"),
+        kill: Kill::Walk {
+            walk: "{|spider::car_1::Db->tableReference('Weight_t1','Id_T2_3')\
+             *'MAX(Accelerate)'}",
+            closed_by: "*",
+        },
+    },
+    // One row per byte of `STORE_RESULT_DENIED_OPENERS` that the walker's own
+    // failures do not already pin (`&`, `>` and `*` are covered above), so no
+    // byte can be dropped from the set without a red test — the standard N3g's
+    // per-name rows set in this same phase. Each was sent through the live engine
+    // on this branch: `||` gives `or(Table[1],Boolean[1])`, `<` gives
+    // `lessThan(Table[1],String[1])`, `+` gives `plus(Any[2])` and `/` gives
+    // `divide(Table[1],Integer[1])`.
+    FrozenKill {
+        fixture: "n4a-store-result",
+        db: "world_1",
+        closer: Closer::L2("StoreResult"),
+        kill: Kill::Walk {
+            walk: "{|spider::world_1::Db->tableReference('default','country')||true}",
+            closed_by: "||",
+        },
+    },
+    FrozenKill {
+        fixture: "n4a-store-result",
+        db: "world_1",
+        closer: Closer::L2("StoreResult"),
+        kill: Kill::Walk {
+            walk: "{|spider::world_1::Db->tableReference('default','country')<'x'}",
+            closed_by: "<",
+        },
+    },
+    FrozenKill {
+        fixture: "n4a-store-result",
+        db: "world_1",
+        closer: Closer::L2("StoreResult"),
+        kill: Kill::Walk {
+            walk: "{|spider::world_1::Db->tableReference('default','country')+1}",
+            closed_by: "+",
+        },
+    },
+    FrozenKill {
+        fixture: "n4a-store-result",
+        db: "world_1",
+        closer: Closer::L2("StoreResult"),
+        kill: Kill::Walk {
+            walk: "{|spider::world_1::Db->tableReference('default','country')/1}",
+            closed_by: "/",
+        },
+    },
+    FrozenKill {
+        fixture: "n4b-logical-operand",
+        db: "world_1",
+        closer: Closer::L2("LogicalOperand"),
+        kill: Kill::Walk {
+            walk: "{|spider::world_1::model::default::Country.all()\
+             ->extend('Percentage_T4_2'=='IndepYear_T1_1'&&'GNP_T1_3')}",
+            closed_by: "'GNP_T1_3'",
+        },
+    },
+    FrozenKill {
+        fixture: "n4b-logical-operand",
+        db: "car_1",
+        closer: Closer::L2("LogicalOperand"),
+        kill: Kill::Walk {
+            walk: "{|spider::car_1::model::default::CarMakers.all()\
+             ->filter(x|$x.country=='usa'||1930)}",
+            closed_by: "1930",
+        },
+    },
+    FrozenKill {
+        fixture: "n4c-str-operator",
+        db: "car_1",
+        closer: Closer::L2("StrOperator"),
+        kill: Kill::Walk {
+            walk: "{|spider::car_1::model::default::ModelList.all()\
+             .fk3DefaultCarNames<='Id_T2'-'Maker_t1_1'}",
+            closed_by: "'Maker_t1_1'",
+        },
+    },
+    FrozenKill {
+        fixture: "n4c-str-operator",
+        db: "world_1",
+        closer: Closer::L2("StrOperator"),
+        kill: Kill::Walk {
+            walk: "{|spider::world_1::model::default::Countrylanguage.all()\
+             ->isEmpty()>'LifeExpectancy'*'Continent_t1'}",
+            closed_by: "*",
+        },
+    },
+    FrozenKill {
+        fixture: "n4c-str-operator",
+        db: "world_1",
+        closer: Closer::L2("StrOperator"),
+        kill: Kill::Walk {
+            walk: "{|spider::world_1::model::default::Country.all()\
+             ->extend('Percentage_T4_2'=='IndepYear_T1_1'/'COUNT(DISTINCT Language)')}",
+            closed_by: "/",
+        },
+    },
+    // The **whitespace-separated** operator, which is the only route to N4c's
+    // arming half: with no gap the rule is read at the byte-PDA's pending-quote
+    // state, and the `awaiting_str_operator` arm at `AfterValue` is never
+    // reached. Live-attested with the space in place (`times(String[2])`).
+    FrozenKill {
+        fixture: "n4c-str-operator",
+        db: "world_1",
+        closer: Closer::L2("StrOperator"),
+        kill: Kill::Walk {
+            walk: "{|spider::world_1::model::default::Countrylanguage.all()\
+             ->isEmpty()>'LifeExpectancy' *'Continent_t1'}",
+            closed_by: "*",
+        },
+    },
+    FrozenKill {
         fixture: "oos-held-out",
         db: "world_1",
         closer: Closer::L2("SourceIdent"),
@@ -2266,19 +2504,27 @@ fn n7_masks_every_dangling_value_identifier_walk() {
 /// ```text
 /// |…::Country.all()->max(language)                        => …element 'language'
 /// |…::Country.all()->filter('SUM(SurfaceArea)'<agg/'…')   => …element 'agg'
-/// |…::Country.all()->count(tableReference)&&5             => …element 'tableReference'
+/// |…::Country.all()->limit(tableReference)&&5             => …element 'tableReference'
 /// |…::Countrylanguage.all()->sort(code    \n!='Name_T2')  => …element 'code'
 /// |…::Country.all()->col(between\n*'District_city')        => …element 'between'
 /// ```
 ///
-/// **Two payloads were re-rooted again in Phase 5** (issue #55), and the
-/// `closed_by` guard is what forced it: both previously arrived through
-/// `->pair(…)`, and N3f now denies `pair` on a class extent, closing the walk at
-/// the call's `(` — one rule taking over another's kill for the fifth time in
-/// the series. They now arrive through `count` and `sort`, which N3f leaves
-/// alone, so N7 is still the rule under test. Both replacements were sent
-/// through the live engine on this branch and rejected on the dangling word
-/// exactly as their predecessors were.
+/// **Two payloads were re-rooted in Phase 5, and a third in Phase 6** (issue
+/// #55); the `closed_by` guard is what forced each. Phase 5's two previously
+/// arrived through `->pair(…)`, which N3f now denies on a class extent, closing
+/// the walk at the call's `(`. Phase 6's arrived through `->count(…)`, whose
+/// argument slot N3g now admits nothing but its closer — so the dangling word
+/// was cleared one token *before* N7's own decision point, and the recorded
+/// closer read back as `tableReference` instead of `)`. Each is one rule taking
+/// over another's kill, the sixth such occurrence in the series and the second
+/// the gate caught on its first run.
+///
+/// The carriers now in use — `max`, `filter`, `limit`, `sort`, `col` — are
+/// governed by neither N3f nor N3g, so N7 is still the rule under test. Every
+/// replacement was sent through the live engine on this branch and rejected on
+/// the dangling word exactly as its predecessor was
+/// (`->limit(tableReference)&&5` → "Can't find the packageable element
+/// 'tableReference'").
 #[test]
 fn n7_masks_a_dangling_value_identifier_behind_a_real_extent() {
     assert_frozen("n7-extent");
@@ -2579,6 +2825,205 @@ fn n3f_still_admits_what_a_class_extent_really_accepts() {
         "|spider::world_1::Db->tableReference('default','country')->tableToTDS()\
          ->restrict('name')",
     );
+}
+
+/// Issue #55 Phase 6 — N3g, the **arity** half of bucket D. N3f decides which
+/// names a class extent's arrow may open; this decides how long the argument list
+/// of one of them may be.
+///
+/// The first walk is the criterion database's own live bucket-D arity failure
+/// (whitespace normalised — the kill lands on the argument literal, which no
+/// whitespace run can move; the normalised string was re-sent through the engine
+/// on this branch and rejected identically to the walker's original). The rest
+/// carry one walk per [`RECEIVER_ONLY_METHODS`] entry plus a generalization-arm
+/// row, so no name in the set can be dropped without a red test:
+///
+/// ```text
+/// {|…::Countrylanguage.all()->isEmpty('_v__t0sc0')->…}  isEmpty(Countrylanguage[*],String[1])
+/// {|…::Country.all()->count('Name')}                    count(Country[*],String[1])
+/// {|…::Country.all()->isNotEmpty('Name')}               isNotEmpty(Country[*],String[1])
+/// {|…::Country.all()->size('Name')}                     size(Country[*],String[1])
+/// {|…::Country.all()->toOne('Name')}                    toOne(Country[*],String[1])
+/// {|…::CarMakers.all()->count('Maker')}                 count(CarMakers[*],String[1])
+/// ```
+///
+/// Each was rejected by the live engine on this branch with the whole candidate
+/// overload set printed back, and every candidate has arity one — the receiver.
+#[test]
+fn n3g_masks_an_argument_to_a_receiver_only_arrow_call() {
+    assert_frozen("n3g-receiver-only-arg");
+}
+
+/// N3g's soundness counterfactuals, in both of the directions the rule could go
+/// wrong in.
+///
+/// **The niladic call itself must stream** — the rule clears the slot's openers,
+/// not its closer, so `->isEmpty()` is exactly as walkable as it was. Without
+/// this the rule could pass its fixtures by masking the whole call.
+///
+/// **The plain-function form must stream**, which is why the rule is stated of
+/// the *arrow* call alone. `count(Any[*])` spends its one parameter on the
+/// receiver either way, so in `|isEmpty($x.name)` the argument *is* that
+/// parameter — live `OK(Boolean)`, against `->isEmpty('x')`'s rejection. A rule
+/// keyed on the name without the call shape would mask a legal query.
+///
+/// **A name outside the set keeps its arguments**: `filter`, `sort` and `take`
+/// all take one, and `sort` is the near miss the set deliberately excludes
+/// (1048 corpus calls, every one with a comparator argument).
+#[test]
+fn n3g_still_admits_the_niladic_call_and_the_plain_function_form() {
+    for query in [
+        "|spider::world_1::model::default::Country.all()->isEmpty()",
+        "|spider::world_1::model::default::Country.all()->count()",
+        "|spider::world_1::model::default::Country.all()->filter(x|isEmpty($x.name))",
+        "|spider::world_1::model::default::Country.all()->filter(x|$x.name->isEmpty())",
+        "|spider::world_1::model::default::Country.all()->take(1)",
+        "|spider::world_1::model::default::Country.all()->filter(x|$x.name == 'Aruba')",
+    ] {
+        assert_streams_soundly_under_l2("world_1", query);
+    }
+}
+
+/// Issue #55 Phase 6 — N4a, the store arm's dual of N3e. N3e stops an operator
+/// being applied to a `Class.all()` extent; this stops one being applied to the
+/// `Table[1]` a store method's call returns.
+///
+/// The criterion and generalization databases' own live bucket-E failures
+/// (whitespace normalised; each normalised string re-sent through the engine on
+/// this branch and rejected identically), plus the split-arrow probe:
+///
+/// ```text
+/// {|…::Db->tableReference('Percentage','Name')>…::Country}   greaterThan(Table[1],Class<Country>[1])
+/// {|…::Db->tableReference('HeadOfState_T1_3','english')&&…}  and(Table[1],String[1])
+/// {|…::Db->tableReference('name','Caribbean')>'CountryCode…} greaterThan(Table[1],String[1])
+/// {|…::Db->tableReference('name','Caribbean')-'CountryCode…} minus(Any[2])
+/// {|…::Db->tableReference('Model_t3_5','cnt')>'Edispl_T2_2'} greaterThan(Table[1],String[1])
+/// {|…::Db->tableReference('Weight_t1','Id_T2_3')*'MAX(Acc…'} times(Any[2])
+/// ```
+///
+/// The fourth is the reassembly guard, and it is the one that lands on a token
+/// other than the operator: the `-` streams, because it may still become the
+/// `->` of `->tableToTDS()`, and the walk dies on the operand behind it.
+///
+/// The last four carry one walk per [`STORE_RESULT_DENIED_OPENERS`] byte the
+/// walker's own failures leave unpinned (`|`, `<`, `+`, `/`), so — exactly as
+/// N3g's per-name rows do for its set — no byte can be dropped from the deny set
+/// without a red test. Each was live-attested on this branch alongside the rest.
+#[test]
+fn n4a_masks_every_operator_applied_to_a_store_methods_table_result() {
+    assert_frozen("n4a-store-result");
+}
+
+/// N4a's soundness counterfactuals, and the reason the rule is subtractive
+/// rather than the permit set N3e gets.
+///
+/// A bare `|…::Db->tableReference('T','S')` compiles live and returns `Table`, so
+/// the *closers* stay; `equal(Any[1],Any[1])` is a real overload, so `==`/`!=`
+/// stay; the corpus's own 8455 store calls all continue `->tableToTDS()`, so the
+/// step arrow stays; and `.name` resolves on the metamodel `Table`, so the
+/// navigation dot stays. Every one of these was sent through the running engine
+/// on this branch before the deny set was written down. Without them the rule
+/// could pass its fixtures by clearing everything after a store call.
+#[test]
+fn n4a_still_admits_what_a_table_result_really_accepts() {
+    for query in [
+        "|spider::world_1::Db->tableReference('default','country')",
+        "|spider::world_1::Db->tableReference('default','country')->tableToTDS()",
+        "|spider::world_1::Db->tableReference('default','country') == 'x'",
+        "|spider::world_1::Db->tableReference('default','country') != 'x'",
+    ] {
+        assert_streams_soundly_under_l2("world_1", query);
+    }
+}
+
+/// Issue #55 Phase 6 — N4b, the logical operator's operand. `and`/`or` have
+/// Boolean-only overloads, so a string, numeric or date literal in the slot one
+/// opens can never match:
+///
+/// ```text
+/// {|…::Country.all()->extend('Percentage_T4_2'=='IndepYear_T1_1'&&'GNP_T1_3')}
+///     => and(Boolean[1],String[1])
+/// {|…::CarMakers.all()->filter(x|$x.country=='usa'||1930)}
+///     => or(Boolean[1],Integer[1])
+/// ```
+#[test]
+fn n4b_masks_a_literal_operand_of_a_logical_operator() {
+    assert_frozen("n4b-logical-operand");
+}
+
+/// N4b's soundness counterfactual: the rule masks *literals* of a mismatched
+/// kind and nothing else, so every shape that can actually be Boolean stays —
+/// a nested comparison, a `$var` navExpr, and a `true`/`false` keyword, which
+/// [`keeps_operand`]'s predicate keeps because they are identifiers rather than
+/// literals. `('a'=='b')&&(1<2)` and `true&&true` both compile live.
+#[test]
+fn n4b_still_admits_every_operand_that_can_be_boolean() {
+    for query in [
+        "|spider::world_1::model::default::Country.all()\
+         ->filter(x|$x.name == 'Aruba' && $x.code == 'ABW')",
+        "|spider::world_1::model::default::Country.all()\
+         ->filter(x|$x.name == 'Aruba' && true)",
+        "|spider::world_1::model::default::Country.all()\
+         ->filter(x|$x.name == 'Aruba' || ($x.population > 1))",
+    ] {
+        assert_streams_soundly_under_l2("world_1", query);
+    }
+}
+
+/// Issue #55 Phase 6 — N4c, the logical operand's mirror image: the operator
+/// half, read from the completed literal on its left. `minus`, `times` and
+/// `divide` have no `String` overload, so none of them can take a string literal
+/// as a left operand:
+///
+/// ```text
+/// {|…::ModelList.all().fk3DefaultCarNames<='Id_T2'-'Maker_t1_1'}      minus(String[2])
+/// {|…::Countrylanguage.all()->isEmpty()>'LifeExpectancy'*'Continent…'} times(String[2])
+/// {|…::Country.all()->extend('Percentage_T4_2'=='IndepYear…'/'COUNT…')} divide(String[1],String[1])
+/// ```
+///
+/// The first is the reassembly guard again, and lands on the operand rather than
+/// the operator: a string literal is arrowed 32309 times across the three
+/// corpora, so the `-` must stream as a possible `->` and die on what follows.
+///
+/// The fourth is the rule's **arming** half, and it needs the space to exist at
+/// all. A string literal is dispatched only once a later token closes it, so an
+/// operator written flush against the closing quote is decided at the byte-PDA's
+/// pending-quote state, inside `position`; only a token that *closes* the literal
+/// first — whitespace here — reaches the `awaiting_str_operator` arm at
+/// `AfterValue`. Without this row that arm has no fixture, and replacing its
+/// guard with `false` is a mutant every other N4c walk survives.
+#[test]
+fn n4c_masks_arithmetic_whose_left_operand_is_a_string_literal() {
+    assert_frozen("n4c-str-operator");
+}
+
+/// N4c's soundness counterfactual, and the reason its deny set is only two bytes
+/// wide.
+///
+/// `+` is string concatenation (`plus(String[*])`, live `OK(String)`). The
+/// ordered comparators have a real `greaterThan(String[1],String[1])` overload,
+/// which is why they survive **this** rule — T2 independently narrows them where
+/// the left operand is a *resolved navExpr* rather than a literal, and N4c
+/// neither extends nor relaxes that.
+/// `&&`/`||` follow a string literal all through the gold corpus while taking the
+/// enclosing *comparison* as their operand — a comparison binds tighter than a
+/// conjunction — which is why the canonical `filter(x|$x.a == 'p' && $x.b == 'q')`
+/// must and does stream. And the step arrow off a literal is the corpus's own
+/// `'FacID'->pair('FacID_T1')` shape.
+#[test]
+fn n4c_still_admits_concatenation_comparison_and_the_step_arrow() {
+    for query in [
+        "|spider::world_1::model::default::Country.all()\
+         ->filter(x|$x.name == 'Aru' + 'ba')",
+        "|spider::world_1::model::default::Country.all()\
+         ->filter(x|'Aru' > 'ba')",
+        "|spider::world_1::model::default::Country.all()\
+         ->filter(x|$x.name == 'Aruba' && $x.code == 'ABW')",
+        "|spider::world_1::model::default::Country.all()\
+         ->filter(x|$x.name == 'Aruba'->toUpper())",
+    ] {
+        assert_streams_soundly_under_l2("world_1", query);
+    }
 }
 
 /// N3f's completion half: a stream may not *end* on a denied whole name either.
