@@ -252,6 +252,14 @@ fn lower_class_members(
         let Some(member) = element.as_node() else {
             continue;
         };
+        if matches!(
+            member.kind(),
+            SyntaxKind::DOMAIN_OPAQUE_NODE | SyntaxKind::ERROR_NODE
+        ) {
+            coverage_gap = true;
+            pending_annotations = AnnotationFacts::default();
+            continue;
+        }
         match member.kind() {
             SyntaxKind::DOMAIN_STEREOTYPE_APPLICATIONS => {
                 pending_annotations.merge(annotation_facts(member));
@@ -272,10 +280,6 @@ fn lower_class_members(
                 ) {
                     coverage_gap = true;
                 }
-                pending_annotations = AnnotationFacts::default();
-            }
-            SyntaxKind::DOMAIN_OPAQUE_NODE | SyntaxKind::ERROR_NODE => {
-                coverage_gap = true;
                 pending_annotations = AnnotationFacts::default();
             }
             _ => {}
@@ -322,7 +326,17 @@ fn insert_property(
     members
         .property_declarations
         .insert(name.clone(), node.text_range());
-    if node_is_unconfirmed(node, context) {
+    if context.gaps.iter().any(|gap| {
+        gap.kind == DomainCoverageGapKind::MalformedDeclaration
+            && range_start(gap.span) == range_start(node.text_range())
+    }) {
+        return false;
+    }
+    if context
+        .parser_diagnostics
+        .iter()
+        .any(|diagnostic| ranges_touch_or_overlap(diagnostic.primary.span, node.text_range()))
+    {
         return false;
     }
     let Some(property) = lower_property(node) else {
@@ -356,7 +370,17 @@ fn insert_qualified_property(
     members
         .qualified_property_declarations
         .insert(name.clone(), node.text_range());
-    if node_is_unconfirmed(node, context) {
+    if context.gaps.iter().any(|gap| {
+        gap.kind == DomainCoverageGapKind::MalformedDeclaration
+            && range_start(gap.span) == range_start(node.text_range())
+    }) {
+        return false;
+    }
+    if context
+        .parser_diagnostics
+        .iter()
+        .any(|diagnostic| ranges_touch_or_overlap(diagnostic.primary.span, node.text_range()))
+    {
         return false;
     }
     let Some(property) = lower_qualified_property(node, annotations, context) else {
@@ -443,7 +467,15 @@ fn lower_qualified_property(
 fn lower_signature(node: &GreenNode, context: LoweringContext<'_>) -> Option<Vec<TypeRef>> {
     let mut signature = Vec::new();
     for parameter in direct_nodes(node, SyntaxKind::DOMAIN_PARAMETER_DECL) {
-        if node_is_unconfirmed(parameter, context) {
+        if context.gaps.iter().any(|gap| {
+            gap.kind == DomainCoverageGapKind::MalformedDeclaration
+                && range_start(gap.span) == range_start(parameter.text_range())
+        }) {
+            return None;
+        }
+        if context.parser_diagnostics.iter().any(|diagnostic| {
+            ranges_touch_or_overlap(diagnostic.primary.span, parameter.text_range())
+        }) {
             return None;
         }
         let ty = direct_nodes(parameter, SyntaxKind::DOMAIN_TYPE_REF)
@@ -716,21 +748,6 @@ fn is_trivia(kind: SyntaxKind) -> bool {
         kind,
         SyntaxKind::WHITESPACE | SyntaxKind::LINE_COMMENT | SyntaxKind::BLOCK_COMMENT
     )
-}
-
-fn node_is_unconfirmed(node: &GreenNode, context: LoweringContext<'_>) -> bool {
-    if context.gaps.iter().any(|gap| match gap.kind {
-        DomainCoverageGapKind::MalformedDeclaration => {
-            range_start(gap.span) == range_start(node.text_range())
-        }
-        _ => false,
-    }) {
-        return true;
-    }
-    context
-        .parser_diagnostics
-        .iter()
-        .any(|diagnostic| ranges_touch_or_overlap(diagnostic.primary.span, node.text_range()))
 }
 
 fn node_has_coverage_gap(node: &GreenNode, context: LoweringContext<'_>) -> bool {
