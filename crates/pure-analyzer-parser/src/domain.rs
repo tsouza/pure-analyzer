@@ -105,9 +105,9 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
         self.open(SyntaxKind::ROOT);
         self.open(SyntaxKind::DOMAIN_FILE);
 
-        while self.has_remaining_input() {
+        while self.raw_kind().is_some() {
             self.consume_trivia();
-            if !self.has_remaining_input() {
+            if self.raw_kind().is_none() {
                 break;
             }
             let semicolon_start = self.index;
@@ -196,9 +196,9 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
             return false;
         }
 
-        while self.has_remaining_input() {
+        while self.raw_kind().is_some() {
             self.consume_trivia();
-            if !self.has_remaining_input() {
+            if self.raw_kind().is_none() {
                 break;
             }
             if self.at(TokenKind::BRACE_CLOSE) {
@@ -239,7 +239,7 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
     fn parse_member(&mut self, kind: DeclarationKind) {
         self.parse_stereotype_applications();
         self.consume_trivia();
-        if !self.has_remaining_input() {
+        if self.raw_kind().is_none() {
             return;
         }
         if self.member_starts_property() {
@@ -341,7 +341,7 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
                 }
                 continue;
             }
-            if self.at(TokenKind::PAREN_CLOSE) || !self.has_remaining_input() {
+            if self.at(TokenKind::PAREN_CLOSE) || self.raw_kind().is_none() {
                 return valid;
             }
             self.syntax_error("expected `,` or `)` after a qualified-property parameter");
@@ -402,9 +402,9 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
         }
 
         let mut valid = true;
-        while self.has_remaining_input() {
+        while self.raw_kind().is_some() {
             self.consume_trivia();
-            if !self.has_remaining_input() {
+            if self.raw_kind().is_none() {
                 break;
             }
             if self.at(TokenKind::BRACE_CLOSE) {
@@ -468,7 +468,7 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
     fn parse_stereotype_list(&mut self) -> bool {
         self.consume_trivia();
         let mut valid = true;
-        while self.has_remaining_input() && !self.at(TokenKind::BRACKET_CLOSE) {
+        while self.raw_kind().is_some() && !self.at(TokenKind::BRACKET_CLOSE) {
             self.open(SyntaxKind::DOMAIN_STEREOTYPE_DECL);
             let name = self.consume_name("a stereotype name");
             self.close();
@@ -499,7 +499,7 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
 
     fn consume_profile_tag_list(&mut self) {
         let mut depth = 0usize;
-        while self.has_remaining_input() {
+        while self.raw_kind().is_some() {
             match self.raw_kind() {
                 Some(TokenKind::BRACKET_CLOSE) if depth == 0 => break,
                 Some(TokenKind::BRACKET_OPEN | TokenKind::PAREN_OPEN | TokenKind::BRACE_OPEN) => {
@@ -542,7 +542,7 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
                 self.syntax_error("expected a type argument after `<`");
                 valid = false;
             }
-            while self.has_remaining_input() && !self.at(TokenKind::GT) {
+            while self.raw_kind().is_some() && !self.at(TokenKind::GT) {
                 let argument_start = self.index;
                 valid &= self.parse_domain_type_reference();
                 self.consume_trivia();
@@ -763,7 +763,7 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
         let mut parentheses = 0usize;
         let mut brackets = 0usize;
         let mut braces = 0usize;
-        while self.has_remaining_input() {
+        while self.raw_kind().is_some() {
             if parentheses == 0
                 && brackets == 0
                 && braces == 0
@@ -785,7 +785,7 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
         let mut braces = 0usize;
         let mut consumed = false;
 
-        while self.has_remaining_input() {
+        while self.raw_kind().is_some() {
             if consumed
                 && parentheses == 0
                 && brackets == 0
@@ -828,7 +828,7 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
         let mut consumed = false;
         let mut saw_property_colon = false;
 
-        while self.has_remaining_input() {
+        while self.raw_kind().is_some() {
             if consumed
                 && parentheses == 0
                 && brackets == 0
@@ -880,7 +880,7 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
             return false;
         }
         let mut depth = 1usize;
-        while self.has_remaining_input() {
+        while self.raw_kind().is_some() {
             match self.raw_kind() {
                 Some(TokenKind::BRACE_OPEN) => depth = depth.saturating_add(1),
                 Some(TokenKind::BRACE_CLOSE) => {
@@ -905,7 +905,7 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
         let (true, true) = (first, second) else {
             return false;
         };
-        while self.has_remaining_input() {
+        while self.raw_kind().is_some() {
             if self.at_double_angle_close() {
                 let _ = self.bump();
                 let _ = self.bump();
@@ -925,7 +925,7 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
             return true;
         }
         self.syntax_error("expected `;` after a property declaration");
-        if self.has_remaining_input() {
+        if self.raw_kind().is_some() {
             self.recover_member_tail();
         }
         false
@@ -933,7 +933,7 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
 
     fn recover_declaration_header(&mut self) {
         self.open(SyntaxKind::ERROR_NODE);
-        while self.has_remaining_input() {
+        while self.raw_kind().is_some() {
             if self.at_declaration_header_recovery_boundary() {
                 break;
             }
@@ -972,7 +972,7 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
         }
 
         self.open(SyntaxKind::ERROR_NODE);
-        while self.has_remaining_input() {
+        while self.raw_kind().is_some() {
             if self.at_member_recovery_boundary() {
                 break;
             }
@@ -1005,7 +1005,7 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
     }
 
     fn recover_until(&mut self, boundaries: &[TokenKind]) {
-        while self.has_remaining_input() && !self.at_any(boundaries) {
+        while self.raw_kind().is_some() && !self.at_any(boundaries) {
             let before = self.index;
             let _ = self.bump();
             if self.index == before {
@@ -1133,7 +1133,7 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
     }
 
     fn consume_trivia(&mut self) {
-        while self.has_remaining_input() && self.raw_kind().is_some_and(is_trivia) {
+        while self.raw_kind().is_some_and(is_trivia) {
             let _ = self.bump();
         }
     }
@@ -1176,28 +1176,24 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
         self.tokens.get(self.index).map(|(kind, _)| *kind)
     }
 
-    fn has_remaining_input(&self) -> bool {
+    fn bump(&mut self) -> bool {
         if self.fuel == 0 {
             return false;
         }
-        self.tokens.get(self.index).is_some()
-    }
-
-    fn bump(&mut self) -> bool {
-        if self.has_remaining_input() {
-            if self.raw_kind() == Some(TokenKind::ERROR) {
-                self.push_diagnostic(
-                    DiagCode::BadToken,
-                    self.current_span(),
-                    "unrecognized token",
-                );
-            }
-            self.events.push(Event::Advance);
-            self.index = self.index.saturating_add(1);
-            self.fuel = self.fuel.saturating_sub(1);
-            return true;
+        let Some(kind) = self.raw_kind() else {
+            return false;
+        };
+        if kind == TokenKind::ERROR {
+            self.push_diagnostic(
+                DiagCode::BadToken,
+                self.current_span(),
+                "unrecognized token",
+            );
         }
-        false
+        self.events.push(Event::Advance);
+        self.index = self.index.saturating_add(1);
+        self.fuel = self.fuel.saturating_sub(1);
+        true
     }
 
     fn enter_parse_depth(&mut self) -> bool {

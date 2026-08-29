@@ -85,6 +85,19 @@ fn gap_texts<'source>(source: &'source str, parsed: &DomainParse) -> Vec<&'sourc
 }
 
 #[test]
+fn empty_domain_file_is_lossless_and_diagnostic_free() {
+    let parsed = parse("");
+
+    assert_lossless("", &parsed);
+    assert!(parsed.diagnostics.is_empty(), "{:#?}", parsed.diagnostics);
+    assert!(
+        parsed.coverage_gaps.is_empty(),
+        "{:#?}",
+        parsed.coverage_gaps
+    );
+}
+
+#[test]
 fn parses_model_facts_with_domain_specific_ast_contracts() {
     let source = r#"
 Class {meta::pure::profiles::doc.doc = 'generated'} demo::Person extends demo::Named, demo::Stamped
