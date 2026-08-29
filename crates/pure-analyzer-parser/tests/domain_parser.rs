@@ -1259,6 +1259,63 @@ Class demo::Broken
 }
 
 #[test]
+fn member_tail_recovery_keeps_a_closing_brace_before_the_next_declaration() {
+    let source = r#"
+Class demo::Broken
+{
+  broken: Foo junk
+}
+Class demo::After
+{
+  kept: String[1];
+}
+"#;
+    let parsed = parse(source);
+
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::DOMAIN_CLASS_DECL), 2);
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_PROPERTY_DECL),
+        2
+    );
+    assert_eq!(
+        parsed
+            .coverage_gaps
+            .iter()
+            .map(|gap| gap.kind)
+            .collect::<Vec<_>>(),
+        vec![DomainCoverageGapKind::MalformedDeclaration],
+        "member recovery must leave the closing brace for the class body: {:#?}",
+        parsed.coverage_gaps
+    );
+    assert_lossless(source, &parsed);
+}
+
+#[test]
+fn top_level_semicolon_is_consumed_before_the_next_declaration() {
+    let source = r#"
+;
+Class demo::After
+{
+  kept: String[1];
+}
+"#;
+    let parsed = parse(source);
+
+    assert!(parsed.diagnostics.is_empty(), "{:#?}", parsed.diagnostics);
+    assert!(
+        parsed.coverage_gaps.is_empty(),
+        "{:#?}",
+        parsed.coverage_gaps
+    );
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::DOMAIN_CLASS_DECL), 1);
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_PROPERTY_DECL),
+        1
+    );
+    assert_lossless(source, &parsed);
+}
+
+#[test]
 fn malformed_parameter_tails_keep_the_qualified_property_body() {
     let source = r#"
 Class demo::BrokenParameters

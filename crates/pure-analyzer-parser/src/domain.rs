@@ -891,8 +891,15 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
         }
 
         self.open(SyntaxKind::ERROR_NODE);
-        while self.has_remaining_input() && !self.at_member_recovery_boundary() {
-            let _ = self.bump();
+        while self.has_remaining_input() {
+            if self.at_member_recovery_boundary() {
+                break;
+            }
+            let before = self.index;
+            self.bump();
+            if self.index == before {
+                break;
+            }
         }
         if self.at(TokenKind::SEMICOLON) {
             let _ = self.consume_if(TokenKind::SEMICOLON);
@@ -901,11 +908,19 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
     }
 
     fn at_member_recovery_boundary(&self) -> bool {
-        self.at(TokenKind::SEMICOLON)
-            || self.at(TokenKind::BRACE_CLOSE)
-            || self.declaration_kind().is_some()
-            || self.member_starts_property()
-            || self.member_starts_qualified_property()
+        if self.at(TokenKind::SEMICOLON) {
+            return true;
+        }
+        if self.at(TokenKind::BRACE_CLOSE) {
+            return true;
+        }
+        if self.declaration_kind().is_some() {
+            return true;
+        }
+        if self.member_starts_property() {
+            return true;
+        }
+        self.member_starts_qualified_property()
     }
 
     fn recover_until(&mut self, boundaries: &[TokenKind]) {
@@ -1014,11 +1029,17 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
         self.consume_if_raw(kind).is_some()
     }
 
-    fn consume_if_raw(&mut self, kind: TokenKind) -> Option<()> {
-        if self.raw_kind() == Some(kind) {
-            self.bump().then_some(())
-        } else {
+    fn consume_if_raw(&mut self, kind: TokenKind) -> Option<TextRange> {
+        if !self.raw_at(kind) {
             None
+        } else {
+            let before = self.index;
+            let consumed_span = self.current_span();
+            self.bump();
+            if self.index == before {
+                return None;
+            }
+            Some(consumed_span)
         }
     }
 
