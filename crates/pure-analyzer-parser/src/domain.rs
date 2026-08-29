@@ -333,6 +333,12 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
                     self.syntax_error("expected a parameter after `,`");
                     return false;
                 }
+                if self.index == before {
+                    self.syntax_error(
+                        "parser made no progress after qualified-property parameter separator",
+                    );
+                    return false;
+                }
                 continue;
             }
             if self.at(TokenKind::PAREN_CLOSE) || !self.has_remaining_input() {
@@ -351,6 +357,12 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
             let comma_start = self.index;
             self.consume_if_raw(TokenKind::COMMA);
             if self.index != comma_start {
+                if self.index == before {
+                    self.syntax_error(
+                        "parser made no progress after qualified-property parameter recovery",
+                    );
+                    return false;
+                }
                 continue;
             }
             return false;
@@ -361,8 +373,19 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
         self.open(SyntaxKind::DOMAIN_EXTENDS_CLAUSE);
         let keyword = self.expect_keyword("extends");
         let mut valid = keyword && self.parse_domain_qualified_name("a supertype after `extends`");
-        while self.consume_if(TokenKind::COMMA) {
+        loop {
+            let comma_start = self.index;
+            self.consume_if_raw(TokenKind::COMMA);
+            if self.index == comma_start {
+                break;
+            }
+
             valid &= self.parse_domain_qualified_name("a supertype after `,`");
+            if self.index == comma_start {
+                self.syntax_error("parser made no progress after Domain extends separator");
+                valid = false;
+                break;
+            }
         }
         if !valid {
             self.syntax_error("expected a valid supertype after `extends`");
@@ -519,12 +542,20 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
                 valid = false;
             }
             while self.has_remaining_input() && !self.at(TokenKind::GT) {
+                let argument_start = self.index;
                 valid &= self.parse_domain_type_reference();
                 self.consume_trivia();
                 let comma_start = self.index;
                 self.consume_if_raw(TokenKind::COMMA);
                 if self.index != comma_start {
                     self.consume_trivia();
+                    if self.index == argument_start {
+                        self.syntax_error(
+                            "parser made no progress after Domain type argument separator",
+                        );
+                        valid = false;
+                        break;
+                    }
                     continue;
                 }
                 if !self.at(TokenKind::GT) {
@@ -536,6 +567,13 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
                         valid = false;
                         break;
                     }
+                }
+                if self.index == argument_start {
+                    self.syntax_error(
+                        "parser made no progress while recovering Domain type arguments",
+                    );
+                    valid = false;
+                    break;
                 }
             }
             valid &= self.expect(TokenKind::GT, "`>` after type arguments");
@@ -967,7 +1005,11 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
 
     fn recover_until(&mut self, boundaries: &[TokenKind]) {
         while self.has_remaining_input() && !self.at_any(boundaries) {
+            let before = self.index;
             let _ = self.bump();
+            if self.index == before {
+                break;
+            }
         }
     }
 
