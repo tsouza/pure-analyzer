@@ -675,6 +675,25 @@ fn eof_diagnostics_anchor_at_the_end_of_domain_source() {
 }
 
 #[test]
+fn token_diagnostics_anchor_at_the_current_domain_token() {
+    let source = "Class : {}";
+    let parsed = parse(source);
+    let start = source.find(':').expect("unexpected token");
+    let end = start + ':'.len_utf8();
+
+    assert!(
+        parsed.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == DiagCode::MalformedSyntax
+                && usize::from(diagnostic.primary.span.start()) == start
+                && usize::from(diagnostic.primary.span.end()) == end
+        }),
+        "missing-name diagnostic must be anchored at the unexpected token: {:#?}",
+        parsed.diagnostics
+    );
+    assert_lossless(source, &parsed);
+}
+
+#[test]
 fn malformed_parameter_tail_does_not_swallow_a_following_property() {
     let source = r#"
 Class demo::BrokenParameters
