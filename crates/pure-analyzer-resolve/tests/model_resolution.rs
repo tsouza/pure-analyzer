@@ -1,11 +1,12 @@
-//! PMCD-backed resolver contracts.
+//! Model-backed resolver contracts.
 
 #![allow(clippy::disallowed_methods)]
 
 use proptest::prelude::*;
 use pure_analyzer_diagnostics::TextRange;
 use pure_analyzer_model::{
-    ModelGraph, PmcdDocument, Provenance, QName, QpKind, Temporal, load_pmcd_documents,
+    ModelGraph, PmcdDocument, Provenance, PureDocument, QName, QpKind, Temporal,
+    load_pmcd_documents, load_pure_documents,
 };
 use pure_analyzer_resolve::{
     DefinitionAnchor, Resolution, ResolvedMemberKind, Resolver, UnderResolution,
@@ -209,6 +210,35 @@ fn found_member(
         Resolution::Found(member) => member,
         outcome => panic!("expected a member, got {outcome:#?}"),
     }
+}
+
+#[test]
+fn incomplete_pure_class_keeps_member_resolution_open_world() {
+    let graph = load_pure_documents(&[PureDocument::new(
+        "resolver-fixture.pure",
+        r#"
+Class model::Partial
+{
+  bad: Foo;
+  good: String[1];
+}
+"#,
+    )])
+    .expect("fixture must load");
+    let resolver = Resolver::new(&graph);
+
+    assert!(
+        graph
+            .class("model::Partial")
+            .expect("partial class")
+            .coverage_gap()
+    );
+    assert_eq!(
+        resolver.resolve_member(&qname("Partial"), &member_name("unknown")),
+        Resolution::UnderResolved(UnderResolution::OpenWorld {
+            class: qname("Partial"),
+        })
+    );
 }
 
 #[test]

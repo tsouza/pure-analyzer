@@ -56,6 +56,9 @@ pub enum DiagCode {
     /// `PUR9001`: a command requires a model but none was supplied.
     #[serde(rename = "PUR9001")]
     ModelRequired,
+    /// `PUR9002`: one model source declares the same fact more than once.
+    #[serde(rename = "PUR9002")]
+    DuplicateModelDeclaration,
 }
 
 /// The complete diagnostic registry in stable numeric order.
@@ -75,6 +78,7 @@ pub const ALL_DIAG_CODES: &[DiagCode] = &[
     DiagCode::EquivalenceVerdict,
     DiagCode::ModelMergeConflict,
     DiagCode::ModelRequired,
+    DiagCode::DuplicateModelDeclaration,
 ];
 
 impl DiagCode {
@@ -97,6 +101,7 @@ impl DiagCode {
             Self::EquivalenceVerdict => "PUR3001",
             Self::ModelMergeConflict => "PUR9000",
             Self::ModelRequired => "PUR9001",
+            Self::DuplicateModelDeclaration => "PUR9002",
         }
     }
 
@@ -116,7 +121,9 @@ impl DiagCode {
             | Self::DerivedQualifiedProperty
             | Self::UnknownSource => DiagFamily::Lint,
             Self::EquivalenceVerdict => DiagFamily::Equivalence,
-            Self::ModelMergeConflict | Self::ModelRequired => DiagFamily::Tool,
+            Self::ModelMergeConflict | Self::ModelRequired | Self::DuplicateModelDeclaration => {
+                DiagFamily::Tool
+            }
         }
     }
 }
@@ -218,6 +225,11 @@ mod tests {
             ),
             (DiagCode::ModelMergeConflict, "PUR9000", DiagFamily::Tool),
             (DiagCode::ModelRequired, "PUR9001", DiagFamily::Tool),
+            (
+                DiagCode::DuplicateModelDeclaration,
+                "PUR9002",
+                DiagFamily::Tool,
+            ),
         ];
         assert_eq!(ALL_DIAG_CODES.len(), expected.len());
         for (&code, &(variant, identifier, family)) in ALL_DIAG_CODES.iter().zip(&expected) {
