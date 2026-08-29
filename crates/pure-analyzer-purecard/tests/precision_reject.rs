@@ -197,6 +197,10 @@ fn a_bracket_off_anything_but_a_binder_type_dies() {
     ] {
         assert!(dies(text), "the recogniser still streams {text:?}");
     }
+    // The whitespace a `::`-bearing path may resume across is a *classpath* gap,
+    // not a name boundary: a second bare name across it is a dead state, live
+    // ("no viable alternative at input '…extend(a:b::cd'").
+    assert!(dies("|X.all()->extend(a:b::c d[1]|1)"));
     // …while the multiplicity itself, spaced or not, still streams.
     assert!(!dies("|X.all()->extend(a:b[1]|1)"));
     assert!(!dies("|X.all()->extend(a:b [1]|1)"));
@@ -212,6 +216,10 @@ fn every_engine_legal_typed_binder_still_streams() {
         "|X.all()->extend(a:b[1]|1)",
         "|X.all()->extend(a:b::c[1]|1)",
         "|X.all()->extend(a:b ::c[1]|1)",
+        // A `::`-bearing path may resume across whitespace at *any* segment, not
+        // only the first — live-attested, as is `row: meta::pure ::tds::TDSRow[1]`.
+        "|X.all()->extend(a:b::c ::d[1]|1)",
+        "|X.all()->filter(row: meta::pure ::tds::TDSRow[1]|$row)",
         "|X.all()->extend(a :b [*]|1)",
         "|X.all()->extend(a:b[ 12 ] | 1)",
         "|X.all()->groupBy(~[a:x|$x.b],~'t':y|$y->sum())",
