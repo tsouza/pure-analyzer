@@ -295,6 +295,80 @@ pub enum L2Position {
         /// must have a multiplicity [1]").
         after_dash: bool,
     },
+    /// N3g: the value slot inside a **receiver-only** builtin's arrow call
+    /// ([`RECEIVER_ONLY_METHODS`]) — right after its `(`, or right after one of
+    /// its commas. The arity half of the treatment
+    /// [`StoreMethodArg`](L2Position::StoreMethodArg) gives the store method,
+    /// applied to the generic collection builtins whose *every* engine overload
+    /// takes the receiver and nothing else: an arrow call has already supplied
+    /// that one parameter, so the slot it opens can only be closed, never filled.
+    ///
+    /// Stated of the **arrow** form alone, because the plain-function form is the
+    /// same overload read the other way round — there the receiver *is* the
+    /// argument, and `|count(…::Country.all())` and `|isEmpty($x.name)` both
+    /// compile live. Both directions are frozen.
+    ReceiverOnlyArg,
+    /// N4a: the position right after a **store method's** own call closed —
+    /// `Db->tableReference('T','S')`, a `Table[1]`. The store-arm dual of
+    /// [`SourceExtent`](L2Position::SourceExtent), and the same argument one type
+    /// over: a `Table` is neither a `Boolean`, a `Number`, a `String` nor a
+    /// `Date`, so every ordered, arithmetic and logical operator the vocabulary
+    /// offers mismatches its overload set by construction (live:
+    /// `and(Table[1],String[1])`, `or(Table[1],String[1])`,
+    /// `greaterThan(Table[1],String[1])`, `lessThanEqual(Table[1],String[1])`,
+    /// `divide(Table[1],String[1])`, `plus(Any[2])`, `minus(Any[2])`,
+    /// `times(Any[2])`).
+    ///
+    /// Deliberately **subtractive**, unlike `SourceExtent`'s permit set: a bare
+    /// `|…::Db->tableReference('T','S')` compiles live and returns `Table`, and
+    /// `=='x'` / `!='x'` compile through `equal(Any[1],Any[1])`, so this rule
+    /// clears the attested operators and leaves every closer, separator, `.`
+    /// navigation and equality comparison alone.
+    StoreResult {
+        /// Whether the `-` that opens the step arrow has already been emitted, so
+        /// only the `>` that completes it may follow — the same reassembly guard
+        /// [`SourceExtent`](L2Position::SourceExtent) needs, for the same reason:
+        /// `->tableToTDS()` is the store result's one real step, and `-` is the
+        /// byte an arithmetic minus shares with it.
+        after_dash: bool,
+    },
+    /// N4c: the position right after a completed **string literal** — the
+    /// operator half of [`LogicalOperand`](L2Position::LogicalOperand)'s
+    /// argument, read from the left instead of the right. `minus`, `times` and
+    /// `divide` have no `String` overload at all (live: `minus(String[2])`,
+    /// `times(String[2])`, `divide(String[1],String[1])`, and `minus(Any[2])` /
+    /// `times(Any[2])` once the operands' classes differ), so `-`, `*` and `/`
+    /// can never take a string literal as their left operand.
+    ///
+    /// Narrow by design, and the narrowness is the rule. `+` stays: `plus(String[*])`
+    /// is string concatenation and compiles live. The *ordered* comparators stay:
+    /// `greaterThan(String[1],String[1])` is a real overload. `&&` and `||` stay,
+    /// and must — a comparison binds tighter than a conjunction, so the `&&` in
+    /// the corpus's canonical `filter(x|$x.a == 'p' && $x.b == 'q')` follows a
+    /// string literal while taking the whole *comparison* as its operand. Only
+    /// the three operators whose left operand really is the literal are cleared.
+    StrOperator {
+        /// Whether the `-` that opens a step arrow has already been emitted.
+        /// A string literal is arrowed all through the corpus — all 32309
+        /// post-literal `-` bytes across the three corpora open a `->`, none an
+        /// arithmetic minus, and `|'a'->toUpper()` compiles live — so the `-` is
+        /// admitted only as the arrow, exactly as
+        /// [`SourceExtent`](L2Position::SourceExtent) admits it.
+        after_dash: bool,
+    },
+    /// N4b: the operand slot a **logical** operator (`&&`, `||`) opens. `and`/`or`
+    /// have Boolean-only overloads (`and(Boolean[1],Boolean[1])`,
+    /// `and(Boolean[*])`), so a string, numeric or date literal in that slot can
+    /// never match — live, on both sides of the operator: `'a'&&true`,
+    /// `true&&'a'`, `true&&1`, `1||true` and `%2020-01-01&&true` all fail, while
+    /// `true&&true` and `('a'=='b')&&(1<2)` compile.
+    ///
+    /// A position of its own rather than a reuse of
+    /// [`ReValue(Boolean)`](L2Position::ReValue), which stays deferred: T1 governs
+    /// a *comparison*'s operand, where `equal(Any[1],Any[1])` keeps a
+    /// type-mismatched literal legal beside a Boolean navExpr. The narrowing is
+    /// nonetheless the same predicate, applied at a position where it does hold.
+    LogicalOperand,
     /// N3f: the method-name identifier right after a class extent's own `->` —
     /// the coarse **receiver-category** position. N3e admits the step arrow off a
     /// closed `Class.all()`; this decides what that arrow may open.
@@ -430,10 +504,47 @@ pub(crate) const EXTENT_INCOMPATIBLE_METHODS: &[&str] = &[
     "year",
 ];
 
+/// N3g's set: the builtins whose **entire** engine overload set is
+/// receiver-only, so an arrow call of one takes no further argument
+/// ([`L2Position::ReceiverOnlyArg`]).
+///
+/// Read off the engine's own registry, exactly as N3f's deny set is. Asked for
+/// one of these names with an argument, the compiler prints back the complete
+/// candidate list it *could* have matched, and every candidate has arity one —
+/// the receiver:
+///
+/// * `count(Any[*]):Integer[1]`;
+/// * `isEmpty(Any[0..1]):Boolean[1]`, `isEmpty(Any[*]):Boolean[1]`;
+/// * `isNotEmpty(Any[0..1]):Boolean[1]`, `isNotEmpty(Any[*]):Boolean[1]`;
+/// * `size(Relation<T>[1]):Integer[1]`, `size(Any[*]):Integer[1]`;
+/// * `toOne(T[*]):T[1]`.
+///
+/// The receiver parameter is `Any`/`T`, so the arity is a fact about the name
+/// alone and not about what it is arrowed off — live-confirmed on a class
+/// extent, a `TableTDS`, a primitive collection and a `filter` result alike. The
+/// corpus agrees and adds nothing: across the 5034 gold queries these names are
+/// called 3048 times and **never** with an argument.
+///
+/// Names the engine would not adjudicate are left out rather than guessed:
+/// `->distinct('x')` answers `RuntimeException: Not possible!` with no candidate
+/// list, so `distinct` is not here (§4 — invent no constraint the oracle does
+/// not state), and `sort` is excluded outright, taking a comparator argument in
+/// all 1048 of its corpus calls.
+///
+/// `pub(crate)` so `narrow.rs` and the tracker share one list.
+pub(crate) const RECEIVER_ONLY_METHODS: &[&str] =
+    &["count", "isEmpty", "isNotEmpty", "size", "toOne"];
+
 /// The lone `-` a vocabulary that splits the step connector offers as its own
 /// token — the one token N3e's extent arming survives (see
 /// [`L2Position::SourceExtent`]).
 const STEP_DASH_TOKEN: &[u8] = b"-";
+
+/// The logical operators whose operand slot N4b narrows
+/// ([`L2Position::LogicalOperand`]). `classify` folds both into
+/// [`Lexeme::Other`] — they carry no other L2 meaning — so the arming reads the
+/// raw token bytes.
+const LOGICAL_OPERATORS: &[&[u8]] = &[b"&&", b"||"];
 
 /// `name`'s declared argument count if it is a [`STORE_METHODS`] entry.
 fn store_method_arity(name: &str) -> Option<usize> {
@@ -679,6 +790,35 @@ pub(crate) struct ScopeTracker {
     /// [`awaiting_store_method`](Self::awaiting_store_method): the arrow sets it
     /// and any following non-whitespace token clears it.
     awaiting_extent_method: bool,
+    /// N4a: a [`STORE_METHODS`] call has just closed, so the next token sits on
+    /// its `Table[1]` result ([`L2Position::StoreResult`]). Set unconditionally
+    /// at every [`on_close`](ScopeTracker::on_close) from whether *that* close
+    /// was the store call's own, which is what keeps an enclosing `)` from
+    /// carrying the arming outward — the same discipline
+    /// [`awaiting_extent_step`](Self::awaiting_extent_step) uses, and cleared on
+    /// the same one-token schedule (a `-` excepted, since a split step arrow
+    /// still owes its `>`).
+    awaiting_store_result: bool,
+    /// N3g: the call just opened via [`on_open`](ScopeTracker::on_open) was a
+    /// [`RECEIVER_ONLY_METHODS`] entry's **arrow** call, so every value slot
+    /// inside it is a [`L2Position::ReceiverOnlyArg`]. Cleared at the matching
+    /// `on_close` for the same reason
+    /// [`store_call_arity`](Self::store_call_arity) is.
+    receiver_only_call: bool,
+    /// Whether the identifier [`last_ident`](Self::last_ident) holds was reached
+    /// straight off a `->`. N3g's arity claim is about the arrow form alone (the
+    /// plain-function form spends the same single parameter on its argument), so
+    /// the call shape has to travel with the name to `on_open`.
+    last_ident_after_arrow: bool,
+    /// N4b: the token just seen was a [`LOGICAL_OPERATORS`] entry, so the operand
+    /// it opens is a [`L2Position::LogicalOperand`]. Lives exactly one
+    /// non-whitespace token, like [`cmp_pending`](Self::cmp_pending).
+    logical_pending: bool,
+    /// N4c: a **string literal** has just completed, so the next token sits on it
+    /// as a left operand ([`L2Position::StrOperator`]). Cleared on the same
+    /// one-token schedule as [`awaiting_store_result`](Self::awaiting_store_result),
+    /// and for the same reason spares the bare `-` of a split step arrow.
+    awaiting_str_operator: bool,
     /// Every column name emitted so far — quoted string literals (arm-A N6,
     /// `~'Gross Credits'`) and arm-R `~`-introduced names (`~Col`, `~[Week, …]`
     /// keys). A superset stored as raw (unquoted) bytes, so a real reference to a
@@ -916,6 +1056,10 @@ impl ScopeTracker {
         // the lone `-` of a step arrow the vocabulary splits.
         let was_close = matches!(lex, Lexeme::Close);
         let was_step_dash = bytes == STEP_DASH_TOKEN;
+        // N4b's arming is set by this token when it is a logical operator, so —
+        // exactly like the comparison arming above — the operator itself must not
+        // consume it.
+        let was_logical = LOGICAL_OPERATORS.contains(&bytes);
         let mut resolved_now: Option<TypeClass> = None;
 
         match &lex {
@@ -941,6 +1085,7 @@ impl ScopeTracker {
             Lexeme::Str(content) => {
                 self.emitted_strings.push(content.clone());
                 self.last_ident = None;
+                self.awaiting_str_operator = true;
             }
             // A `$` sigil, number, date, or other structural byte is not an
             // identifier, so it clears the pending method name. A `$` needs no
@@ -949,6 +1094,7 @@ impl ScopeTracker {
             // `on_dot`'s precedence) rather than any stale `nav_cursor`.
             Lexeme::Dollar | Lexeme::Number | Lexeme::Date | Lexeme::Other => {
                 self.last_ident = None;
+                self.logical_pending |= was_logical;
             }
             Lexeme::Ws => {}
         }
@@ -968,13 +1114,24 @@ impl ScopeTracker {
             self.awaiting_store_method = false;
             self.awaiting_extent_method = false;
         }
-        // N3e's arming likewise lives exactly one non-whitespace token past the
-        // close that set it (a `Lexeme::Ws` returns before reaching here, so
-        // `Class.all() ->step()` keeps the arming across its whitespace) — plus
-        // the bare `-` of a split step arrow, whose `>` the arming still has to
-        // require.
+        // N4b's operand (any non-operator token after an armed logical operator)
+        // clears the arming, exactly as a comparison operand clears T1's.
+        if !was_logical {
+            self.logical_pending = false;
+        }
+        // N3e's and N4a's armings likewise live exactly one non-whitespace token
+        // past the close that set them (a `Lexeme::Ws` returns before reaching
+        // here, so `Class.all() ->step()` keeps the arming across its whitespace)
+        // — plus the bare `-` of a split step arrow, whose `>` both armings still
+        // have to require.
         if !was_close && !was_step_dash {
             self.awaiting_extent_step = false;
+            self.awaiting_store_result = false;
+        }
+        // N4c's arming is set *by* the string literal, so — like the two above —
+        // the literal itself must not consume it, nor may a split arrow's `-`.
+        if !matches!(lex, Lexeme::Str(_)) && !was_step_dash {
+            self.awaiting_str_operator = false;
         }
     }
 
@@ -1074,6 +1231,7 @@ impl ScopeTracker {
             self.emitted_strings.push(text.as_bytes().to_vec());
         }
         self.last_ident = Some(text.to_owned());
+        self.last_ident_after_arrow = pre_state == State::AfterArrow;
     }
 
     fn resolve_member(
@@ -1261,6 +1419,13 @@ impl ScopeTracker {
         // arguments, so arm the argument/separator positions for its whole extent.
         self.store_call_arity = method.as_deref().and_then(store_method_arity);
         self.store_call_commas = 0;
+        // N3g: an arrow call of a receiver-only builtin has already spent the one
+        // parameter its whole overload set declares, so the slot this `(` opens
+        // owes nothing and admits only its closer.
+        self.receiver_only_call = self.last_ident_after_arrow
+            && method
+                .as_deref()
+                .is_some_and(|name| RECEIVER_ONLY_METHODS.contains(&name));
         // A `~[` opens a relation column set: latch the pipeline as arm-R, so an
         // `ExpectValue` key identifier inside it is a column name and a following
         // relation-row binder narrows column access. The flag is pushed for *every*
@@ -1301,7 +1466,13 @@ impl ScopeTracker {
         // was the source method's, so what follows sits on the class extent.
         self.awaiting_extent_step = self.in_source_method_args;
         self.in_source_method_args = false;
+        // N4a reads the store call's close the way N3e reads the source method's:
+        // the call that just closed was the store method's, so what follows sits
+        // on its `Table[1]` result. Assigned rather than or-ed, so an enclosing
+        // `)` — which never has an arity — clears it instead of carrying it out.
+        self.awaiting_store_result = self.store_call_arity.is_some();
         self.store_call_arity = None;
+        self.receiver_only_call = false;
         // Restore every binder introduced at the closing delimiter's depth to what it
         // shadowed, so a lambda's binder never outlives its scope (§6.4). Deeper
         // scopes have already restored and popped, so the depth-matching saves are
@@ -1444,10 +1615,38 @@ impl ScopeTracker {
         // where it actually narrows — a coverage consumer then sees a rule
         // firing rather than a position merely existing, and the narrower needs
         // no second copy of the test.
-        if matches!(pos, L2Position::ValueIdent) && !self.value_ident_narrows() {
-            return L2Position::None;
+        let pos = if matches!(pos, L2Position::ValueIdent) && !self.value_ident_narrows() {
+            L2Position::None
+        } else {
+            pos
+        };
+        // N4c, at the same in-lexeme state N3d needs above and for the same
+        // reason: a string literal sitting on its *pending* closing quote is
+        // already a complete operand, and the token that decides what follows it
+        // is read here rather than at `AfterValue` — the literal itself is only
+        // dispatched once a later token closes it, so the arming
+        // (`awaiting_str_operator`) is still one token away.
+        //
+        // Applied only where no other rule governs the literal, which is what
+        // keeps it out of N6's and T1's way: a quoted column name and a typed
+        // comparison operand carry their own stamped position through this state,
+        // and this rule never displaces one — N7's own stamp is the exception,
+        // since it does not narrow a *string* lexeme at all and has already been
+        // folded to `None` above. Nothing is lost by the deferral: once
+        // whitespace or any other token closes the literal, the arming takes over
+        // at `AfterValue`.
+        if matches!(pos, L2Position::None) && Self::on_pending_str_quote(state) {
+            return L2Position::StrOperator { after_dash: false };
         }
         pos
+    }
+
+    /// Whether `state` is a completed string literal awaiting the byte that
+    /// disambiguates its closing quote ([`State::InStrLit`] with `escaped`) — the
+    /// point at which N4c's operand is complete but its lexeme is not yet
+    /// dispatched.
+    fn on_pending_str_quote(state: State) -> bool {
+        matches!(state, State::InStrLit { escaped: true })
     }
 
     /// Whether N7 narrows at the current point: a bare **identifier** lexeme is
@@ -1500,6 +1699,14 @@ impl ScopeTracker {
             State::SawDash if self.awaiting_extent_step => {
                 L2Position::SourceExtent { after_dash: true }
             }
+            // N4a's and N4c's second halves, for the same reason and by the same
+            // mechanism.
+            State::SawDash if self.awaiting_store_result => {
+                L2Position::StoreResult { after_dash: true }
+            }
+            State::SawDash if self.awaiting_str_operator => {
+                L2Position::StrOperator { after_dash: true }
+            }
             State::SawPipe | State::SawLt | State::SawGt | State::SawDash => L2Position::ValueIdent,
             // T2's comparator lever reads a *completed* term, whichever of the
             // two terminal hubs it landed in — a navExpr ends on its property
@@ -1507,6 +1714,18 @@ impl ScopeTracker {
             // `AfterName`, not `AfterValue`.
             State::AfterValue if self.awaiting_extent_step => {
                 L2Position::SourceExtent { after_dash: false }
+            }
+            // N4a. Mutually exclusive with N3e above — one arming is set by the
+            // source method's close, the other by the store method's — and it
+            // outranks T2's comparator lever, which reads a *primitive* navExpr
+            // and so is never armed on a `Table[1]` anyway.
+            State::AfterValue | State::AfterName if self.awaiting_store_result => {
+                L2Position::StoreResult { after_dash: false }
+            }
+            // N4c. Mutually exclusive with N4a above: a store call's `)` clears
+            // the string arming its last argument set, so only one can hold.
+            State::AfterValue | State::AfterName if self.awaiting_str_operator => {
+                L2Position::StrOperator { after_dash: false }
             }
             State::AfterValue | State::AfterName => match self.last_resolved {
                 Some(tc) => L2Position::Comparator(tc),
@@ -1539,6 +1758,10 @@ impl ScopeTracker {
             L2Position::SourceMethodArg
         } else if self.store_call_arity.is_some() {
             L2Position::StoreMethodArg
+        } else if self.receiver_only_call {
+            L2Position::ReceiverOnlyArg
+        } else if self.logical_pending {
+            L2Position::LogicalOperand
         } else if let Some(tc) = self.cmp_pending {
             L2Position::ReValue(tc)
         } else if self.in_column_arg() {

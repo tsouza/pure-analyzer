@@ -100,6 +100,22 @@ enum CacheKey {
     /// is keyed, but the trie lives in [`EXTENT_DENY`] rather than in a
     /// `RuleCache`, because this rule *clears* names instead of permitting them.
     ExtentMethod(u32),
+    /// N3g's receiver-only argument-slot set — a whole-vocab constant, exactly
+    /// like [`SourceMethodArg`](CacheKey::SourceMethodArg)'s.
+    ReceiverOnlyArg,
+    /// N4a's store-result continuation set, before vs. after the `-` that opens a
+    /// step arrow — two whole-vocab constants, exactly like
+    /// [`SourceExtent`](CacheKey::SourceExtent)'s.
+    StoreResult(bool),
+    /// N4c's string-literal operator set, before vs. after the `-` that opens a
+    /// step arrow — two whole-vocab constants.
+    StrOperator(bool),
+    /// N4b's logical-operand set — a whole-vocab constant. Distinct from
+    /// [`ReValue(Boolean)`](CacheKey::ReValue) even though the two share a fill:
+    /// the T1 memo must stay reachable if `ReValue`'s Boolean arm is ever
+    /// enabled, and one key per rule is what keeps the two independently
+    /// invalidatable.
+    LogicalOperand,
     /// N1/N2 member set of a class — one per class.
     Member(String),
     /// T1 operand class — the literal-class lever (cursor-independent).
@@ -242,6 +258,32 @@ pub(crate) fn narrow_into(
             };
             with_cache(dst, cache, CacheKey::ExtentMethod(cursor), |dst| {
                 fill_extent_method(dst, vocab, eos_bit, cursor);
+            });
+            true
+        }
+        L2Position::ReceiverOnlyArg => {
+            with_cache(dst, cache, CacheKey::ReceiverOnlyArg, |dst| {
+                fill_receiver_only_arg(dst, vocab, eos_bit);
+            });
+            true
+        }
+        L2Position::StoreResult { after_dash } => {
+            let after_dash = *after_dash;
+            with_cache(dst, cache, CacheKey::StoreResult(after_dash), |dst| {
+                fill_store_result(dst, vocab, eos_bit, after_dash);
+            });
+            true
+        }
+        L2Position::StrOperator { after_dash } => {
+            let after_dash = *after_dash;
+            with_cache(dst, cache, CacheKey::StrOperator(after_dash), |dst| {
+                fill_str_operator(dst, vocab, eos_bit, after_dash);
+            });
+            true
+        }
+        L2Position::LogicalOperand => {
+            with_cache(dst, cache, CacheKey::LogicalOperand, |dst| {
+                fill_operand(dst, vocab, eos_bit, TypeClass::Boolean);
             });
             true
         }
@@ -488,6 +530,10 @@ impl<'a> TrieRule<'a> {
             | L2Position::StoreMethodArgSep { .. }
             | L2Position::SourceExtent { .. }
             | L2Position::ExtentMethod
+            | L2Position::ReceiverOnlyArg
+            | L2Position::StoreResult { .. }
+            | L2Position::StrOperator { .. }
+            | L2Position::LogicalOperand
             | L2Position::ReValue(_)
             | L2Position::Comparator(_)
             | L2Position::Reducer(_)
@@ -671,6 +717,10 @@ pub(crate) fn narrow_fused_into(
         | L2Position::StoreMethodArgSep { .. }
         | L2Position::SourceExtent { .. }
         | L2Position::ExtentMethod
+        | L2Position::ReceiverOnlyArg
+        | L2Position::StoreResult { .. }
+        | L2Position::StrOperator { .. }
+        | L2Position::LogicalOperand
         | L2Position::Column
         | L2Position::ReValue(_)
         | L2Position::Comparator(_)
@@ -1134,6 +1184,150 @@ fn keeps_source_extent(bytes: &[u8], after_dash: bool) -> bool {
 /// N3d/N3e fills discriminate on (an empty token keeps nothing).
 fn opens_with(bytes: &[u8], keep: impl Fn(u8) -> bool) -> bool {
     bytes.first().copied().is_some_and(keep)
+}
+
+/// Refill `dst` with [`L2Position::ReceiverOnlyArg`]'s set, plus EOS: an arrow
+/// call of a [`RECEIVER_ONLY_METHODS`] entry has already supplied the one
+/// parameter its whole overload set declares, so its slot admits **only**
+/// whitespace and the call's own closer.
+///
+/// The exact complement of N3d's arity half. There the opened slot owes an
+/// argument and the closer is what is cleared (`->tableReference()` cannot be
+/// walked); here the slot owes nothing and every *opener* is cleared instead, so
+/// `->isEmpty('x')` (live: "isEmpty(Country[*],String[1])", against a candidate
+/// set that is `isEmpty(Any[0..1])` and `isEmpty(Any[*])` and nothing else)
+/// cannot be walked. Both are the same fact — an argument list is exactly as long
+/// as the signature says — read from the two ends.
+///
+/// First-byte discriminated for the reason [`fill_store_method_arg`] gives: under
+/// byte-level BPE a closer routinely arrives fused to what follows it.
+fn fill_receiver_only_arg(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32) {
+    dst.clear_all();
+    for id in 0..vocab.len() as u32 {
+        if opens_with(vocab.bytes(id).unwrap_or(&[]), |byte| {
+            byte.is_ascii_whitespace() || byte == CALL_CLOSE
+        }) {
+            dst.set(id);
+        }
+    }
+    dst.set(eos_bit);
+}
+
+/// The operator bytes no `Table[1]` can open a term with — every ordered
+/// comparison, arithmetic and logical operator the vocabulary offers, keyed on
+/// the byte each begins with (§6.6 N4a).
+///
+/// A first-byte set rather than a token list, for the reason
+/// [`fill_store_method_arg`] gives in the other direction: under byte-level BPE
+/// an operator arrives fused to its right-hand operand (`&&'x'`, `>'Edispl_T2'`),
+/// and a whole-token match would let every such fusion through. Each byte here
+/// opens no *legal* continuation of a store result, so clearing the whole family
+/// masks nothing real:
+///
+/// * `&` and `|` only ever begin `&&`/`||` — live `and(Table[1],String[1])`,
+///   `or(Table[1],String[1])`;
+/// * `<` and `>` begin the four ordered comparators — live
+///   `greaterThan(Table[1],String[1])`, `lessThanEqual(Table[1],String[1])` (the
+///   step arrow's own `>` arrives behind its `-`, at
+///   [`StoreResult::after_dash`](L2Position::StoreResult));
+/// * `+`, `*` and `/` begin the arithmetic operators — live `plus(Any[2])`,
+///   `times(Any[2])`, `divide(Table[1],String[1])`.
+///
+/// `=` and `!` are deliberately absent: `==`/`!=` resolve through
+/// `equal(Any[1],Any[1])` and compile live on a store result.
+const STORE_RESULT_DENIED_OPENERS: &[u8] = b"&|<>+*/";
+
+/// Refill `dst` with [`L2Position::StoreResult`]'s set, plus EOS.
+///
+/// **Subtractive**, unlike N3e's [`fill_source_extent`]: a bare
+/// `|…::Db->tableReference('T','S')` compiles live and returns `Table`, and both
+/// equality comparators compile against it, so this clears exactly the
+/// [`STORE_RESULT_DENIED_OPENERS`] family and leaves every closer, separator,
+/// `.` navigation, equality and `->` step alone.
+///
+/// The `-` of the step arrow is the one denied byte an arithmetic minus shares
+/// with a legal continuation, so it is handled exactly as N3e handles it: kept
+/// only as the arrow — whole (`->`, however much rides behind it), or as the bare
+/// `-` a splitting vocabulary offers — with `after_dash` then narrowing the very
+/// next token to the `>` that completes it, so
+/// `…->tableReference('T','S')-'x'` (live: `minus(Any[2])`) cannot be
+/// reassembled a byte at a time.
+fn fill_store_result(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32, after_dash: bool) {
+    dst.clear_all();
+    for id in 0..vocab.len() as u32 {
+        let bytes = vocab.bytes(id).unwrap_or(&[]);
+        if keeps_store_result(bytes, after_dash) {
+            dst.set(id);
+        }
+    }
+    dst.set(eos_bit);
+}
+
+/// The operator bytes no **string literal** can be the left operand of — the
+/// three arithmetic operators with no `String` overload (§6.6 N4c).
+///
+/// A first-byte set, for the reason [`STORE_RESULT_DENIED_OPENERS`] gives: under
+/// byte-level BPE an operator arrives fused to its right-hand operand
+/// (`*'Continent_t1'` is one token over the gold vocabulary). Neither byte opens
+/// any legal continuation of a string literal, in any of the three corpora: after
+/// a closing quote, `*` and `/` occur **zero** times across the 5034 gold
+/// queries, the modern-dialect seeds and the engine-labelled differential set.
+///
+/// `+` is deliberately absent — `plus(String[*])` is concatenation and compiles
+/// live — as are `<`/`>` (`greaterThan(String[1],String[1])` is a real overload)
+/// and `&`/`|`, which follow a string literal all through the corpus while taking
+/// the enclosing *comparison*, not the literal, as their operand.
+const STR_OPERATOR_DENIED_OPENERS: &[u8] = b"*/";
+
+/// Refill `dst` with [`L2Position::StrOperator`]'s set, plus EOS: everything the
+/// vocabulary offers, less the [`STR_OPERATOR_DENIED_OPENERS`] family, with the
+/// `-` of a step arrow handled exactly as [`fill_store_result`] handles it.
+///
+/// The `-` split matters more here than anywhere else in the overlay: a string
+/// literal is arrowed 32309 times across the three corpora and is the left
+/// operand of an arithmetic minus in none of them, so the byte must stream as the
+/// arrow and die as the operator.
+fn fill_str_operator(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32, after_dash: bool) {
+    dst.clear_all();
+    for id in 0..vocab.len() as u32 {
+        let bytes = vocab.bytes(id).unwrap_or(&[]);
+        if keeps_str_operator(bytes, after_dash) {
+            dst.set(id);
+        }
+    }
+    dst.set(eos_bit);
+}
+
+/// Whether `bytes` may follow a completed string literal — see
+/// [`fill_str_operator`].
+fn keeps_str_operator(bytes: &[u8], after_dash: bool) -> bool {
+    keeps_after_completed_term(bytes, after_dash, STR_OPERATOR_DENIED_OPENERS)
+}
+
+/// The shared keep-rule N4a and N4c discriminate on: after a completed term,
+/// every token survives except one that opens with a byte in `denied`, with the
+/// `-` of a step arrow admitted only as the arrow — whole (`->`, however much
+/// rides behind it), or as the bare `-` a splitting vocabulary offers, which
+/// `after_dash` then narrows to the `>` that completes it.
+///
+/// One derivation for both rules, so the reassembly guard the two share is
+/// stated exactly once (constitution §4).
+fn keeps_after_completed_term(bytes: &[u8], after_dash: bool, denied: &[u8]) -> bool {
+    if after_dash {
+        // The `-` is committed: only the `>` that makes it a step arrow follows.
+        return bytes.first() == Some(&STEP_GT);
+    }
+    match bytes.first() {
+        Some(&STEP_DASH) => bytes.len() == 1 || bytes.starts_with(STEP_ARROW),
+        Some(byte) => !denied.contains(byte),
+        None => false,
+    }
+}
+
+/// Whether `bytes` may continue a store-method result — see
+/// [`fill_store_result`].
+fn keeps_store_result(bytes: &[u8], after_dash: bool) -> bool {
+    keeps_after_completed_term(bytes, after_dash, STORE_RESULT_DENIED_OPENERS)
 }
 
 /// Refill `dst` from a trie walk: keep every vocab token that can still reach a
