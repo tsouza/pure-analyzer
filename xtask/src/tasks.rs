@@ -133,10 +133,6 @@ const PURECARD_FUZZ_TARGET_DIR: &str = "crates/pure-analyzer-purecard/fuzz/fuzz_
 const PURECARD_FFI_SOURCE: &str = "crates/pure-analyzer-purecard/src/ffi.rs";
 /// Parent directory required by cargo-mutants before it creates its reports.
 const MUTATION_OUTPUT_ROOT: &str = "target";
-/// Hard ceiling for an individual mutation-test scenario.
-const MUTATION_SCENARIO_TIMEOUT_SECS: &str = "75";
-/// Hard ceiling for a mutant build before pathological compiler work exhausts its runner.
-const MUTATION_BUILD_TIMEOUT_SECS: &str = "45";
 
 /// Resolve a path owned by the nested PureCARD crate.
 fn purecard_path(relative: impl AsRef<Path>) -> PathBuf {
@@ -426,10 +422,6 @@ fn test_mutation_workspace(shard: Option<(u32, u32)>) -> Result<()> {
     let mut args = vec![
         "mutants".to_string(),
         "--workspace".to_string(),
-        "--timeout".to_string(),
-        MUTATION_SCENARIO_TIMEOUT_SECS.to_string(),
-        "--build-timeout".to_string(),
-        MUTATION_BUILD_TIMEOUT_SECS.to_string(),
         "--exclude".to_string(),
         PURECARD_FFI_SOURCE.to_string(),
         "--in-place".to_string(),
