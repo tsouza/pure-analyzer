@@ -1421,6 +1421,47 @@ Class demo::Broken
 }
 
 #[test]
+fn generic_type_recovery_consumes_a_separator_before_later_facts() {
+    let source = r#"
+Class demo::Broken
+{
+  broken: List<, String junk, Integer>[1];
+  kept: Boolean[1];
+}
+"#;
+    let parsed = panic::catch_unwind(|| parse(source)).expect("Domain parser must not panic");
+
+    assert!(
+        parsed
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == DiagCode::MalformedSyntax),
+        "{:#?}",
+        parsed.diagnostics
+    );
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_PROPERTY_DECL),
+        2
+    );
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_TYPE_REF),
+        5,
+        "recovery must retain the later generic argument before the following property"
+    );
+    assert_eq!(
+        parsed
+            .coverage_gaps
+            .iter()
+            .map(|gap| gap.kind)
+            .collect::<Vec<_>>(),
+        vec![DomainCoverageGapKind::MalformedDeclaration],
+        "generic recovery must preserve later model facts: {:#?}",
+        parsed.coverage_gaps
+    );
+    assert_lossless(source, &parsed);
+}
+
+#[test]
 fn multiplicity_requires_a_lower_bound_after_its_opening_bracket() {
     let source = r#"
 Class demo::Broken

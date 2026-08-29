@@ -110,7 +110,9 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
             if !self.has_remaining_input() {
                 break;
             }
-            if self.consume_if_raw(TokenKind::SEMICOLON).is_some() {
+            let semicolon_start = self.index;
+            self.consume_if_raw(TokenKind::SEMICOLON);
+            if self.index != semicolon_start {
                 continue;
             }
 
@@ -202,7 +204,9 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
                 self.syntax_error("expected `}` before the next Domain declaration");
                 return false;
             }
-            if self.consume_if_raw(TokenKind::SEMICOLON).is_some() {
+            let semicolon_start = self.index;
+            self.consume_if_raw(TokenKind::SEMICOLON);
+            if self.index != semicolon_start {
                 continue;
             }
 
@@ -309,7 +313,9 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
             valid &= name && colon && ty && multiplicity;
             self.consume_trivia();
 
-            if self.consume_if_raw(TokenKind::COMMA).is_some() {
+            let comma_start = self.index;
+            self.consume_if_raw(TokenKind::COMMA);
+            if self.index != comma_start {
                 self.consume_trivia();
                 if self.at(TokenKind::PAREN_CLOSE) {
                     self.syntax_error("expected a parameter after `,`");
@@ -330,7 +336,9 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
             if self.index == before {
                 return false;
             }
-            if self.consume_if_raw(TokenKind::COMMA).is_some() {
+            let comma_start = self.index;
+            self.consume_if_raw(TokenKind::COMMA);
+            if self.index != comma_start {
                 continue;
             }
             return false;
@@ -374,9 +382,12 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
             let before = self.index;
             if self.at_keyword("stereotypes") || self.at_keyword("tags") {
                 valid &= self.parse_profile_section();
-            } else if self.consume_if_raw(TokenKind::SEMICOLON).is_some() {
             } else {
-                self.parse_opaque_member();
+                let semicolon_start = self.index;
+                self.consume_if_raw(TokenKind::SEMICOLON);
+                if self.index == semicolon_start {
+                    self.parse_opaque_member();
+                }
             }
             if self.index == before {
                 self.syntax_error("parser made no progress while reading Domain profile member");
@@ -430,7 +441,9 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
                 self.recover_until(&[TokenKind::COMMA, TokenKind::BRACKET_CLOSE]);
             }
             self.consume_trivia();
-            if self.consume_if_raw(TokenKind::COMMA).is_some() {
+            let comma_start = self.index;
+            self.consume_if_raw(TokenKind::COMMA);
+            if self.index != comma_start {
                 self.consume_trivia();
                 continue;
             }
@@ -438,7 +451,11 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
                 self.syntax_error("expected `,` or `]` after a stereotype name");
                 valid = false;
                 self.recover_until(&[TokenKind::COMMA, TokenKind::BRACKET_CLOSE]);
-                let _ = self.consume_if_raw(TokenKind::COMMA);
+                let comma_start = self.index;
+                self.consume_if_raw(TokenKind::COMMA);
+                if self.index == comma_start && self.raw_at(TokenKind::COMMA) {
+                    return false;
+                }
             }
         }
         valid
@@ -492,14 +509,21 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
             while self.has_remaining_input() && !self.at(TokenKind::GT) {
                 valid &= self.parse_domain_type_reference();
                 self.consume_trivia();
-                if self.consume_if_raw(TokenKind::COMMA).is_some() {
+                let comma_start = self.index;
+                self.consume_if_raw(TokenKind::COMMA);
+                if self.index != comma_start {
                     self.consume_trivia();
                     continue;
                 }
                 if !self.at(TokenKind::GT) {
                     self.syntax_error("expected `,` or `>` after a type argument");
                     self.recover_until(&[TokenKind::COMMA, TokenKind::GT]);
-                    let _ = self.consume_if_raw(TokenKind::COMMA);
+                    let comma_start = self.index;
+                    self.consume_if_raw(TokenKind::COMMA);
+                    if self.index == comma_start && self.raw_at(TokenKind::COMMA) {
+                        valid = false;
+                        break;
+                    }
                 }
             }
             valid &= self.expect(TokenKind::GT, "`>` after type arguments");
@@ -844,7 +868,9 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
 
     fn consume_member_terminator(&mut self) -> bool {
         self.consume_trivia();
-        if self.consume_if_raw(TokenKind::SEMICOLON).is_some() {
+        let semicolon_start = self.index;
+        self.consume_if_raw(TokenKind::SEMICOLON);
+        if self.index != semicolon_start {
             return true;
         }
         self.syntax_error("expected `;` after a property declaration");
@@ -866,7 +892,11 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
                 break;
             }
         }
-        let _ = self.consume_if_raw(TokenKind::SEMICOLON);
+        let semicolon_start = self.index;
+        self.consume_if_raw(TokenKind::SEMICOLON);
+        if self.index == semicolon_start && self.raw_at(TokenKind::SEMICOLON) {
+            self.syntax_error("parser made no progress while consuming Domain recovery terminator");
+        }
         self.close();
     }
 
@@ -1026,20 +1056,14 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
 
     fn consume_if(&mut self, kind: TokenKind) -> bool {
         self.consume_trivia();
-        self.consume_if_raw(kind).is_some()
+        let before = self.index;
+        self.consume_if_raw(kind);
+        self.index != before
     }
 
-    fn consume_if_raw(&mut self, kind: TokenKind) -> Option<TextRange> {
-        if !self.raw_at(kind) {
-            None
-        } else {
-            let before = self.index;
-            let consumed_span = self.current_span();
-            self.bump();
-            if self.index == before {
-                return None;
-            }
-            Some(consumed_span)
+    fn consume_if_raw(&mut self, kind: TokenKind) {
+        if self.raw_at(kind) {
+            let _ = self.bump();
         }
     }
 
