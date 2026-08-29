@@ -202,18 +202,26 @@ struct Baseline {
 const RATCHET_SLACK: usize = 3;
 
 /// Issue #55's criterion baseline, measured live against the pinned Legend
-/// stack (`corpus/legend-stack/docker-compose.yml`): **17/64 total = recipe
-/// 5/5 + exploration 12/59** (Phase 2, 2026-08-29 — unchanged from Phase 1's
-/// own 12/59, which had itself ratcheted up from Phase 0's 7/59).
+/// stack (`corpus/legend-stack/docker-compose.yml`): **39/64 total = recipe
+/// 5/5 + exploration 34/59** (Phase 3, 2026-08-29 — up from Phase 2's
+/// 17/64 = 5/5 + 12/59). Two consecutive runs were bit-identical.
 ///
-/// Phase 2's rules (mask-aware completion, S1's must-call veto, N7) are
-/// strictly more precise than Phase 1's and closed every bucket-B walk they
-/// were attested against — and this number still did not move. Any rule change
-/// re-rolls the whole chained-SplitMix64 exploration stream, and the
-/// intermediate measurements taken across Phase 2 (12 → 14 → 14 → 12, at
-/// monotonically increasing precision) say plainly that this count is
-/// reshuffle-dominated on `world_1` at single-walk granularity. The floor is
-/// the gate; the count is a measurement, not a score.
+/// Phase 3 ships N3c, the pipeline-source continuation rule. A re-taxonomy of
+/// Phase 2's 47 exploration failures found 34 of them (72%) sharing one shape:
+/// the walker arrowed a method straight off a **bare class path**, never
+/// emitting the `.all()` that turns the `Class<T>[1]` metatype into the `T[*]`
+/// extent — so every such call mismatched its signature by construction. A
+/// further 7 misused the store path the mirror way (`Db.all()`). Neither shape
+/// occurs even once in the 5034-query gold corpus. Masking both moved this
+/// number for the first time since Phase 1.
+///
+/// Recorded honestly: the count is **net of five walks that previously
+/// compiled and no longer can** (two here, three on the generalization guard) —
+/// `->pair('US Territory')`, `->limit(1930)` and friends, which only ever
+/// type-checked because a loose builtin signature accepts a `Class<T>[1]` and
+/// hands it straight back. Losing a compile that worked only because the
+/// receiver type was wrong is the precision win, not a regression; they are
+/// frozen as must-be-masked fixtures in `l2_precision.rs`.
 ///
 /// `world_1`'s corpus-derived vocabulary realizes only five of the six recipe
 /// shapes the eager generator offers; `recipe_walks` drops an unrealizable
@@ -222,22 +230,23 @@ const RATCHET_SLACK: usize = 3;
 const CRITERION_BASELINE: Baseline = Baseline {
     db_id: CRITERION_DB,
     recipe_compiled: 5,
-    exploration_compiled: 12,
+    exploration_compiled: 34,
 };
 
-/// The generalization guard's baseline, measured in the same run: **23/64
-/// total = recipe 6/6 + exploration 17/58** (Phase 2, up from Phase 1's 18/64
-/// = 6/6 + 12/58 — **+5** on a database none of Phase 2's rules was authored
-/// against, while the criterion they *were* authored against stayed flat; see
-/// [`CRITERION_BASELINE`] on why that asymmetry is reshuffle, not
-/// generalization failure). `car_1` realizes all six eager recipe shapes, so
-/// its partitions split one slot differently from the criterion's — which is
+/// The generalization guard's baseline, measured in the same run: **40/64
+/// total = recipe 6/6 + exploration 34/58** (Phase 3, up from Phase 2's 23/64
+/// = 6/6 + 17/58 — **+17**). N3c was designed against `world_1`'s re-taxonomy
+/// and `car_1` carried the identical disease in the same proportions (28 of its
+/// 41 exploration failures were the bare-class arrow, 7 the store misuse), so
+/// this arm moving by nearly as much as the criterion is the generalization
+/// evidence, not a coincidence. `car_1` realizes all six eager recipe shapes,
+/// so its partitions split one slot differently from the criterion's — which is
 /// exactly why each floor is stated per database rather than as a single
 /// cross-database number.
 const GENERALIZATION_BASELINE: Baseline = Baseline {
     db_id: GENERALIZATION_DB,
     recipe_compiled: 6,
-    exploration_compiled: 17,
+    exploration_compiled: 34,
 };
 
 /// Decode a walk's token ids back to its Pure text through `grammar`'s own
@@ -377,24 +386,27 @@ fn assert_live_compile_rate(baseline: &Baseline) {
 /// showed only 1/64 compiling at the time — the missing store grammar was
 /// never the dominant cause here; `every_fixture_gold_corpus_compiles_against_its_assembled_store_grammar`
 /// proves that gap is in fact closed (269/269 *real* gold queries compile
-/// against the same grammar this lane uses). What dominates the exploration
-/// partition's residue is instead two causes neither of which
-/// `schema_walker.rs` can fix by itself:
+/// against the same grammar this lane uses).
 ///
-/// - ~1/3 fail to even *parse*: nested predicate/operator combinations
-///   (`&&`, `||`, comparisons, arithmetic) that `docs/spec/grammar.md` §5.7
+/// After Phase 3's N3c source-continuation rule, what dominates the
+/// exploration partition's residue has changed shape entirely — the
+/// receiver-category failures that used to be ~70% of it are gone, and the
+/// 25 remaining `world_1` failures (24 on `car_1`) are:
+///
+/// - **15 of 25 fail to even *parse*** (20 of 24 on `car_1`): nested
+///   predicate/operator combinations (`&&`, `||`, comparisons, arithmetic, a
+///   `:` type ascription in a value slot) that `docs/spec/grammar.md` §5.7
 ///   explicitly documents as "loosely typed... left to L2/compiler," so L1
-///   admits shapes real Pure's parser doesn't accept. Closing this means
-///   L1 modeling real operator/predicate arity, not a walker heuristic.
-/// - ~2/3 parse but fail to *compile*, mostly "can't find property/element":
-///   the walker draws `.`-navigated property names from the whole
-///   cross-schema token vocabulary, unconstrained by which class is actually
-///   being navigated (issue #56's remaining L2 scope), and separately, a
-///   bare classpath followed directly by `.'prop'` (skipping the required
-///   `.all()`) type-checks as a property lookup *on the class metatype*,
-///   never a real one — confirmed live: `Class.all()` and
-///   `Class.all()->filter(...)` both compile; a bare `Class.'name'` never can,
-///   regardless of which name is chosen.
+///   admits shapes real Pure's parser doesn't accept. Closing this means L1
+///   modeling real operator/predicate arity, not a walker heuristic — it is
+///   now the *dominant* residue rather than a third of it.
+/// - **3 are the store method's argument shape**: `tableReference(Database[1],
+///   String[1])` and `(Database[1], Boolean[1])` — the right method name (N3c
+///   narrows that) with the wrong arity or argument types. The same treatment
+///   `SourceMethodArg` gives `all()`'s own call would close them.
+/// - **the rest are operator/literal type errors** (`and(String[1],
+///   String[1])`, `divide`, `minus`) plus two multiplicity errors — the
+///   original taxonomy's bucket E, untouched by this phase.
 #[test]
 fn schema_aware_walks_compile_against_a_real_pmcd() {
     assert_live_compile_rate(&CRITERION_BASELINE);

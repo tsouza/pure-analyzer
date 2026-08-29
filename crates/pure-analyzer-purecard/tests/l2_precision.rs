@@ -408,16 +408,23 @@ fn precision_generalizes_to_oos_held_out_schemas() {
 
 /// Replay `walk`'s tokens through a schema-aware session and assert the stream
 /// **cannot** be produced: at some step the walk's own next token is absent from
-/// `allowed_mask`, so `accept_token` would be the only way forward and the rule
-/// governing that position has closed it.
+/// `allowed_mask`, so `accept_token` would be the only way forward, and that the
+/// token which closed it is exactly `closed_by` — the rule under test's own kill,
+/// not some later rule's.
 ///
 /// The assertion is on the frozen walk **string**, never a walk index: any rule
 /// change reshuffles the whole chained-SplitMix64 exploration stream, so an index
 /// names a different query after the very next PR while the text stays exactly
 /// the degenerate shape that was proven to fail live.
 ///
-/// Returns the masked token so a caller can report which one closed the walk.
-fn assert_walk_is_masked(db_id: &str, walk: &str) -> String {
+/// **`closed_by` is not decoration.** Three phases running, a newly landed rule
+/// has silently taken over a *previous* phase's frozen kills — the walk still
+/// fails to stream, the fixture still passes, and the rule it was written for
+/// stops being exercised at all. In-diff mutation testing cannot see that class:
+/// the code that lost its coverage is untouched by the diff. Pinning the closing
+/// token turns the takeover into a red test at the moment it happens (issue #55,
+/// Phase 3; constitution §5 — fix the class, not the instance).
+fn assert_walk_is_masked(db_id: &str, walk: &str, closed_by: &str) {
     let vocab = TokenVocab::build(&[walk], &[]);
     let grammar = CompiledGrammar::compile(vocab.vocab());
     let schema = load_schema(db_id);
@@ -428,7 +435,12 @@ fn assert_walk_is_masked(db_id: &str, walk: &str) -> String {
             .id_of(&token)
             .unwrap_or_else(|| panic!("token not in vocab: {:?}", bytes_str(&token)));
         if !session.allowed_mask().test(id) {
-            return bytes_str(&token);
+            assert_eq!(
+                bytes_str(&token),
+                closed_by,
+                "the walk was closed by a different token than the rule under test's:\n  {walk}"
+            );
+            return;
         }
         session.accept_token(id).unwrap_or_else(|err| {
             panic!("L1 rejected an L2-admitted token at step {step}: {err}\n  {walk}")
@@ -451,27 +463,48 @@ fn assert_walk_is_masked(db_id: &str, walk: &str) -> String {
 /// future corpus or vocabulary reshuffle.
 #[test]
 fn n3_masks_every_fabricated_classpath_extension_walk() {
-    for walk in [
-        "{|spider::world_1::Db::desc->min('_v')}",
-        "\n|spider::world_1::model::default::Countrylanguage::name\
-         ->distinct('asia'!='GovernmentForm_T1_3')",
-        "{\n    |spider::world_1::model::default::Countrylanguage::pair\
-         ->concatenate(c)+Integer}",
-        "|spider::world_1::model::default::Countrylanguage::limit\
-         ->isEmpty('GovernmentForm_T1')",
-        "{     \n    |spider::world_1::Db::name::language->distinct(row!=.3000)*limit}",
-        "|spider::world_1::model::default::Country::distinct::Y->min()",
-        "{\n    |l::filter->project(renameColumns)}",
-        "|spider::world_1::model::default::Country::min->limit('Capital_t1')",
-        "|spider::world_1::model::default::Country::row1\
-         ::spider::world_1::model::default::Countrylanguage::pair::groupBy\
-         ->restrict('IndepYear'&&'_nn'!='_ord0'+'Percentage_T2_2'!='GNPOld_T1_1')",
+    for (walk, closed_by) in [
+        (
+            "{|spider::world_1::Db::desc->min('_v')}",
+            "spider::world_1::Db::desc",
+        ),
+        (
+            "\n|spider::world_1::model::default::Countrylanguage::name\
+             ->distinct('asia'!='GovernmentForm_T1_3')",
+            "spider::world_1::model::default::Countrylanguage::name",
+        ),
+        (
+            "{\n    |spider::world_1::model::default::Countrylanguage::pair\
+             ->concatenate(c)+Integer}",
+            "spider::world_1::model::default::Countrylanguage::pair",
+        ),
+        (
+            "|spider::world_1::model::default::Countrylanguage::limit\
+             ->isEmpty('GovernmentForm_T1')",
+            "spider::world_1::model::default::Countrylanguage::limit",
+        ),
+        (
+            "{     \n    |spider::world_1::Db::name::language->distinct(row!=.3000)*limit}",
+            "spider::world_1::Db::name::language",
+        ),
+        (
+            "|spider::world_1::model::default::Country::distinct::Y->min()",
+            "spider::world_1::model::default::Country::distinct::Y",
+        ),
+        ("{\n    |l::filter->project(renameColumns)}", "l::filter"),
+        (
+            "|spider::world_1::model::default::Country::min->limit('Capital_t1')",
+            "spider::world_1::model::default::Country::min",
+        ),
+        (
+            "|spider::world_1::model::default::Country::row1\
+             ::spider::world_1::model::default::Countrylanguage::pair::groupBy\
+             ->restrict('IndepYear'&&'_nn'!='_ord0'+'Percentage_T2_2'!='GNPOld_T1_1')",
+            "spider::world_1::model::default::Country::row1\
+             ::spider::world_1::model::default::Countrylanguage::pair::groupBy",
+        ),
     ] {
-        let masked = assert_walk_is_masked("world_1", walk);
-        assert!(
-            masked.contains("::"),
-            "the token N3 closed should be the fabricated classpath itself, got {masked:?}"
-        );
+        assert_walk_is_masked("world_1", walk, closed_by);
     }
 }
 
@@ -490,11 +523,7 @@ fn s2_masks_every_unbound_refvar_walk() {
         ("{|\n        $code\n      /'IsOfficial_t2'}", "code"),
         ("{\n|      $name}", "name"),
     ] {
-        let masked = assert_walk_is_masked("world_1", walk);
-        assert_eq!(
-            masked, name,
-            "S2 should close the walk at the unbound variable name itself"
-        );
+        assert_walk_is_masked("world_1", walk, name);
     }
 }
 
@@ -606,11 +635,7 @@ fn a_resolved_source_method_admits_nothing_but_its_call() {
 /// byte-PDA entered `LetL`, so a bare `l` read as a finished source.
 #[test]
 fn n3_masks_a_source_that_is_only_a_prefix_of_the_let_keyword() {
-    let masked = assert_walk_is_masked("world_1", "{|l->pair(col>'SUM(SurfaceArea)')}");
-    assert_eq!(
-        masked, "->",
-        "N3 should close the walk at the boundary token that ends the half-typed source"
-    );
+    assert_walk_is_masked("world_1", "{|l->pair(col>'SUM(SurfaceArea)')}", "->");
 }
 
 /// Issue #55 Phase 2, piece 3 — **N7**, a bare unresolved identifier in a value
@@ -619,27 +644,115 @@ fn n3_masks_a_source_that_is_only_a_prefix_of_the_let_keyword() {
 /// '<word>'": a bare word that no lambda arrow, package separator, navigation, or
 /// call ever gives a meaning to resolves to nothing.
 ///
+/// **Phase 3 took every one of these kills over.** Each walk arrows straight off
+/// a bare class or store source, so N3c now closes it at that arrow — before the
+/// dangling word is ever reached. They stay frozen (they are still walks the
+/// decoder must never emit), with the closing token pinned so the takeover is
+/// recorded rather than silent; N7's own walk-level evidence moved to
+/// [`n7_masks_a_dangling_value_identifier_behind_a_real_extent`], whose walks
+/// reach the value position through a legal `Class.all()`.
+///
 /// Frozen verbatim (gate (b)) — see
 /// [`n3_masks_every_fabricated_classpath_extension_walk`] on why the string, not
 /// the walk index, is the fixture.
 #[test]
 fn n7_masks_every_dangling_value_identifier_walk() {
-    for walk in [
-        "|spider::world_1::model::default::Country->max(language)",
-        "|spider::world_1::model::default::Countrylanguage->pair(code    \n!='Name_T2')",
-        "|spider::world_1::model::default::Country->filter('Percentage_T2_4'<average)",
-        "|spider::world_1::model::default::Countrylanguage->between(renameColumns>'hasDutch')",
-        "{|spider::world_1::model::default::Country->between(join)<LEFT_OUTER}",
-        "|spider::world_1::model::default::Country->tableReference(restrict)",
-        "|spider::world_1::model::default::Countrylanguage\
-         ->groupBy('Gelderland'||'Population_T1_1'&&asc)",
-        "{|spider::world_1::Db->concatenate('IndepYear_T1_1',desc-col=='IndepYear_country')}",
-        "|spider::world_1::model::default::Countrylanguage->tableReference(pair)",
-        "|spider::world_1::model::default::Country->pair(tableReference)&&5",
-        "|spider::world_1::model::default::Country->col(between\n*'District_city')",
-        "|spider::world_1::model::default::Country->filter('SUM(SurfaceArea)'<agg/'_nn__t0anti1')",
+    for (walk, closed_by) in [
+        (
+            "|spider::world_1::model::default::Country->max(language)",
+            "->",
+        ),
+        (
+            "|spider::world_1::model::default::Countrylanguage->pair(code    \n!='Name_T2')",
+            "->",
+        ),
+        (
+            "|spider::world_1::model::default::Country->filter('Percentage_T2_4'<average)",
+            "->",
+        ),
+        (
+            "|spider::world_1::model::default::Countrylanguage->between(renameColumns>'hasDutch')",
+            "->",
+        ),
+        (
+            "{|spider::world_1::model::default::Country->between(join)<LEFT_OUTER}",
+            "->",
+        ),
+        (
+            "|spider::world_1::model::default::Country->tableReference(restrict)",
+            "->",
+        ),
+        (
+            "|spider::world_1::model::default::Countrylanguage\
+             ->groupBy('Gelderland'||'Population_T1_1'&&asc)",
+            "->",
+        ),
+        (
+            "{|spider::world_1::Db->concatenate('IndepYear_T1_1',desc-col=='IndepYear_country')}",
+            "concatenate",
+        ),
+        (
+            "|spider::world_1::model::default::Countrylanguage->tableReference(pair)",
+            "->",
+        ),
+        (
+            "|spider::world_1::model::default::Country->pair(tableReference)&&5",
+            "->",
+        ),
+        (
+            "|spider::world_1::model::default::Country->col(between\n*'District_city')",
+            "->",
+        ),
+        (
+            "|spider::world_1::model::default::Country->filter('SUM(SurfaceArea)'<agg/'_nn__t0anti1')",
+            "->",
+        ),
     ] {
-        assert_walk_is_masked("world_1", walk);
+        assert_walk_is_masked("world_1", walk, closed_by);
+    }
+}
+
+/// N7's walk-level evidence, re-rooted through a real extent so no source-level
+/// rule can reach it first: the same dangling-word payloads, behind a legal
+/// `Class.all()`. Each was sent through the live engine on this branch and
+/// rejected with the same "Can't find the packageable element '<word>'" as its
+/// bare-source sibling — the dangling word, not the source, is what the engine
+/// objects to:
+///
+/// ```text
+/// |…::Country.all()->max(language)                        => …element 'language'
+/// |…::Country.all()->filter('SUM(SurfaceArea)'<agg/'…')   => …element 'agg'
+/// |…::Country.all()->pair(tableReference)&&5              => …element 'tableReference'
+/// |…::Countrylanguage.all()->pair(code    \n!='Name_T2')   => …element 'code'
+/// |…::Country.all()->col(between\n*'District_city')        => …element 'between'
+/// ```
+#[test]
+fn n7_masks_a_dangling_value_identifier_behind_a_real_extent() {
+    for (walk, closed_by) in [
+        (
+            "|spider::world_1::model::default::Country.all()->max(language)",
+            ")",
+        ),
+        (
+            "|spider::world_1::model::default::Country.all()\
+             ->filter('SUM(SurfaceArea)'<agg/'_nn__t0anti1')",
+            "/",
+        ),
+        (
+            "|spider::world_1::model::default::Country.all()->pair(tableReference)&&5",
+            ")",
+        ),
+        (
+            "|spider::world_1::model::default::Countrylanguage.all()\
+             ->pair(code    \n!='Name_T2')",
+            "    \n",
+        ),
+        (
+            "|spider::world_1::model::default::Country.all()->col(between\n*'District_city')",
+            "\n",
+        ),
+    ] {
+        assert_walk_is_masked("world_1", walk, closed_by);
     }
 }
 
@@ -668,4 +781,288 @@ fn n7_keeps_every_continuation_that_gives_a_bare_word_a_meaning() {
         !admissible_after("world_1", &format!("{lambda}agg"), &[b")"])[0],
         "N7 GAP: the same closer survived after a dangling bare word"
     );
+}
+
+/// Issue #55 Phase 3 — **N3c, the class arm**. A pipeline source that resolves
+/// to a real class denotes the `Class<T>[1]` metatype, not the `T[*]` extent
+/// `.all()` produces, so a method arrowed straight off it mismatches every
+/// signature by construction. Live-attested on the criterion engine:
+///
+/// ```text
+/// |…::Country->groupBy('CountryCode_T2_2')
+///   => Can't find a match for function 'groupBy(Class<Country>[1],String[1])'
+/// |…::Country->sort('Name_t1')
+///   => Can't find a match for function 'sort(Class<Country>[1],String[1])'
+/// |…::Country->restrict()
+///   => Can't find a match for function 'restrict(Class<Country>[1])'
+/// ```
+///
+/// Each walk below came verbatim out of the live lane's own walk set at the
+/// pre-Phase-3 rule state (37 `world_1` and 32 `car_1` exploration walks shared
+/// this one shape); one is frozen per distinct arrowed method name, since the
+/// method name is the only thing that varies — the mask bit N3c clears is the
+/// same `->` in every one of them.
+///
+/// Frozen verbatim (gate (b)) — see
+/// [`n3_masks_every_fabricated_classpath_extension_walk`] on why the string, not
+/// the walk index, is the fixture.
+#[test]
+fn n3c_masks_every_arrow_off_a_bare_class_source_walk() {
+    for (db_id, walk) in [
+        (
+            "world_1",
+            "\n        |spider::world_1::model::default::Countrylanguage->agg('Central Africa')",
+        ),
+        (
+            "world_1",
+            "\n\n \n       \n           |spider::world_1::model::default::Country->col(between.'HeadOfState_T1'!='Brazil')",
+        ),
+        (
+            "world_1",
+            "\n              \n    \n        \n  \n    \n        |spider::world_1::model::default::Countrylanguage->count('Beatrix'&&'AVG(LifeExpectancy)')",
+        ),
+        (
+            "world_1",
+            "\n\n    \n|spider::world_1::model::default::Country->distinct('Angola')",
+        ),
+        (
+            "world_1",
+            "\n    \n  \n        \n        |spider::world_1::model::default::Country->filter('Percentage_T2_4'<average.'HeadOfState_country')",
+        ),
+        (
+            "world_1",
+            "\n|spider::world_1::model::default::Country->groupBy('CountryCode_T2_2')",
+        ),
+        (
+            "world_1",
+            "|spider::world_1::model::default::Countrylanguage->isEmpty('_k0')",
+        ),
+        (
+            "world_1",
+            "  |spider::world_1::model::default::Countrylanguage->join('District_city'\n  .renameColumns||'Europe')",
+        ),
+        (
+            "world_1",
+            "|spider::world_1::model::default::Countrylanguage->max(b.'Region_T3_1')",
+        ),
+        (
+            "world_1",
+            "\n             |spider::world_1::model::default::Country->restrict()",
+        ),
+        (
+            "world_1",
+            "\n    \n    |spider::world_1::model::default::Country->sort('Population_T3_1')",
+        ),
+        (
+            "world_1",
+            "\n    \n         \n  \n        \n      |spider::world_1::model::default::Countrylanguage->sum('GNPOld_T1_3'>'country')",
+        ),
+        (
+            "world_1",
+            "\n           |spider::world_1::model::default::Countrylanguage->tableReference(pair|'Angola'\n    )",
+        ),
+        (
+            "car_1",
+            "|spider::car_1::model::default::CarsData->col(3,'FullName_t1_1')",
+        ),
+        (
+            "car_1",
+            "\n\n    |spider::car_1::model::default::CarsData->count('CountryName'<='Model_T1')",
+        ),
+        (
+            "car_1",
+            "|spider::car_1::model::default::CarMakers->extend('Continent_T3')",
+        ),
+        (
+            "car_1",
+            "  \n      \n        \n  \n        \n    \n\n \n       \n           |spider::car_1::model::default::ModelList->filter('null')",
+        ),
+        (
+            "car_1",
+            "    |spider::car_1::model::default::ModelList->groupBy('Maker_T2_3'>|'Accelerate_T2_2'    )",
+        ),
+        (
+            "car_1",
+            "\n        \n    \n      \n\n\n        \n  |spider::car_1::model::default::CarsData->project('CountryName')",
+        ),
+        (
+            "car_1",
+            "|spider::car_1::model::default::ModelList->restrict(fk4DefaultCarsData.'Maker_t2_4')",
+        ),
+        (
+            "car_1",
+            "\n        \n  |spider::car_1::model::default::CarsData->year('Horsepower_T1'\n=='cars_data'||'_c0__t0l0'!='cars_data'\n  *'Country_T1'    )",
+        ),
+    ] {
+        assert_walk_is_masked(db_id, walk, "->");
+    }
+}
+
+/// Issue #55 Phase 3 — **N3c, the store arm**. The mirror image: a source path
+/// that resolves to the schema's store denotes a
+/// `meta::relational::metamodel::Database`, which has no extent, so `.all()` on
+/// it is the one continuation it can never take. Live-attested on both criterion
+/// and generalization schemas:
+///
+/// ```text
+/// |spider::world_1::Db.all()
+///   => Can't find a match for function 'getAll(Database[1])'
+/// |spider::car_1::Db.all()
+///   => Can't find a match for function 'getAll(Database[1])'
+/// ```
+///
+/// Frozen verbatim (gate (b)).
+#[test]
+fn n3c_masks_every_all_call_on_a_store_source_walk() {
+    for (db_id, walk) in [
+        (
+            "world_1",
+            "\n    {\n          \n          |\n        \n    spider::world_1::Db.\n    \n    \n      \n  all()}",
+        ),
+        (
+            "car_1",
+            "          \n    \n      \n  \n        {\n  \n        \n        \n    |spider::car_1::Db.all()}",
+        ),
+    ] {
+        assert_walk_is_masked(db_id, walk, ".");
+    }
+}
+
+/// Issue #55 Phase 3 — **N3c's store-method set**. A store *is* arrowed into,
+/// but only into a store method. Every one of these walks came verbatim out of
+/// the live lane's pre-Phase-3 walk set and reaches the engine as a bare
+/// `Database[1]` receiver:
+///
+/// ```text
+/// |spider::world_1::Db->tableToTDS()
+///   => Can't find a match for function 'tableToTDS(Database[1])'
+/// ```
+///
+/// The legal set is read off the corpus, not invented: across the 5034 gold
+/// queries a store path is followed by `->tableReference` 8455 times and by
+/// nothing else.
+#[test]
+fn n3c_masks_every_store_arrowed_into_a_non_store_method_walk() {
+    for (db_id, walk, method) in [
+        (
+            "world_1",
+            "{|spider::world_1::Db->max('CountryCode_T2_2')(isEmpty:limit&&'CountryCode_t3')}",
+            "max",
+        ),
+        (
+            "world_1",
+            "\n  \n      \n{\n      |spider::world_1::Db->String('GNP_t1'*'HeadOfState_T3_1' )!=getFloat('CountryCode_t2'  \n      )==getInteger|'AVG(GNP)'!='Continent_T1_1'}",
+            "String",
+        ),
+        (
+            "car_1",
+            "\n    \n\n        {\n\n      |spider::car_1::Db->project('MakeId_T1'\n         =='MPG')  }",
+            "project",
+        ),
+        (
+            "car_1",
+            "\n    {|spider::car_1::Db->exists()|year('ModelId'<='MPG_T1'.'Country'-weight('Id_T1_1','volvo'\n    )&&'Model_T2'+'car_names'    !='$)a)parseFloat<,4000}(tableToTDS)]}else",
+            "exists",
+        ),
+    ] {
+        assert_walk_is_masked(db_id, walk, method);
+    }
+}
+
+/// Issue #55 Phase 3 — the **disclosed precision cost**, pinned so it can never
+/// be quietly re-opened. These five walks *did* compile live at the pre-Phase-3
+/// rule state, and N3c masks them anyway:
+///
+/// ```text
+/// |…::Country->pair('US Territory')  => meta::pure::functions::collection::Pair
+/// |…::Country->limit(1930)          => meta::pure::metamodel::type::Class
+/// ```
+///
+/// Each one only "compiled" because a loose builtin signature happily accepts a
+/// `Class<T>[1]` metatype and hands it (or a `Pair` of it) straight back — a
+/// query that returns the class object it was given, never a result set. Losing
+/// a compile that only ever worked because the receiver type was wrong is the
+/// precision win, not a regression: the live compile-rate lane's own numbers
+/// (`world_1` exploration 12/59 → 34/59, `car_1` 17/58 → 34/58) are net of these
+/// five.
+#[test]
+fn n3c_masks_the_accidental_metatype_compiles_it_costs() {
+    for (db_id, walk) in [
+        (
+            "world_1",
+            "\n        |spider::world_1::model::default::Country->pair('US Territory')",
+        ),
+        (
+            "world_1",
+            "\n        |spider::world_1::model::default::Country->limit(1930)",
+        ),
+        (
+            "car_1",
+            "\n        \n    |spider::car_1::model::default::ModelList->max()",
+        ),
+        (
+            "car_1",
+            "\n  |spider::car_1::model::default::CarsData->concatenate(3  )",
+        ),
+        (
+            "car_1",
+            "\n    \n      \n      \n        \n        |\n      spider::car_1::model::default::ModelList->concatenate('CountryId_T1'+'Id_T2_3'\n  )",
+        ),
+    ] {
+        assert_walk_is_masked(db_id, walk, "->");
+    }
+}
+
+/// N3c's soundness edge, pinned alongside its precision (the same counterfactual
+/// discipline S2 and N7 carry): at exactly the positions where the wrong
+/// continuation is cleared, the right one survives — and so does a longer class
+/// path that merely *begins* with a shorter one, which is the trap a
+/// whole-name-only close policy would spring (`…::Country` is a strict byte
+/// prefix of `…::Countrylanguage`).
+#[test]
+fn n3c_keeps_the_one_continuation_each_source_kind_owes() {
+    // The class arm: the `.all()` dot survives where the arrow is cleared.
+    assert_precision(
+        "world_1",
+        "|spider::world_1::model::default::Country",
+        b".",
+        b"->",
+    );
+    // The store arm, exactly inverted.
+    assert_precision("world_1", "|spider::world_1::Db", b"->", b".");
+    // …and the real store method survives where a phantom one is cleared.
+    assert_precision(
+        "world_1",
+        "|spider::world_1::Db->",
+        b"tableReference",
+        b"tableToTDS",
+    );
+    // The prefix trap: at the terminal node of `…::Country` the trie must still
+    // walk on into `…::Countrylanguage`.
+    assert_precision(
+        "world_1",
+        "|spider::world_1::model::default::Country",
+        b"language",
+        b"->",
+    );
+    // Both real shapes stream end to end and may end where they should.
+    assert!(walk_may_end(
+        "world_1",
+        "|spider::world_1::model::default::Countrylanguage.all()"
+    ));
+    assert_streams_soundly_under_l2(
+        "world_1",
+        "|spider::world_1::Db->tableReference(\n  'default',\n  'city'\n)->tableToTDS()",
+    );
+    // A bare source path — either kind — can never *end* a query, so masking the
+    // wrong continuation cannot be satisfied by simply stopping there.
+    for walk in [
+        "|spider::world_1::model::default::Country",
+        "|spider::world_1::Db",
+    ] {
+        assert!(
+            !walk_may_end("world_1", walk),
+            "PRECISION GAP: a bare source path ended a query:\n  {walk}"
+        );
+    }
 }

@@ -31,8 +31,8 @@ use std::collections::HashMap;
 use crate::grammar::pda::{is_ident_start, is_ident_tail};
 use crate::mask::BitMask;
 use crate::schema::model::{Schema, TypeClass};
-use crate::schema::scope::{L2Position, Lexeme, SOURCE_METHOD, classify};
-use crate::schema::trie::{NameShape, Trie, Walk, walk};
+use crate::schema::scope::{L2Position, Lexeme, SOURCE_METHOD, STORE_METHODS, classify};
+use crate::schema::trie::{NameClose, NameShape, Trie, Walk, walk};
 use crate::vocab::Vocab;
 
 /// The `let` binder keyword, legal at a block-statement source position alongside
@@ -77,6 +77,8 @@ enum CacheKey {
     Source,
     /// S1 source-method set — always the single name [`SOURCE_METHOD`].
     SourceMethod,
+    /// N3c's store-method set — always [`STORE_METHODS`].
+    StoreMethod,
     /// The source method's argument-position set — a whole-vocab constant
     /// (independent of schema, class, or emitted prefix), so one key suffices.
     SourceMethodArg,
@@ -214,6 +216,7 @@ pub(crate) fn narrow_into(
         L2Position::None
         | L2Position::SourceIdent
         | L2Position::SourceMethod
+        | L2Position::StoreMethod
         | L2Position::Member(_)
         | L2Position::Column
         | L2Position::RelationColumn
@@ -319,7 +322,7 @@ pub(crate) fn admits_eos(
     let Some(cursor) = cursor_of(entry, prefix) else {
         return true;
     };
-    name_point(&entry.trie, cursor, rule.close).admits_eos()
+    name_point(&entry.trie, cursor).admits_eos()
 }
 
 /// The legal-name set a trie rule narrows against, plus how that rule's memo is
@@ -332,7 +335,6 @@ pub(crate) fn admits_eos(
 struct TrieRule<'a> {
     key: CacheKey,
     kind: TrieKind,
-    close: NameClose,
     names: Names<'a>,
 }
 
@@ -344,6 +346,8 @@ enum Names<'a> {
     Source(&'a Schema),
     /// S1: the single source method [`SOURCE_METHOD`].
     SourceMethod,
+    /// N3c: the store methods [`STORE_METHODS`].
+    StoreMethod,
     /// N1/N2: one class's member names.
     Member(&'a Schema, &'a str),
     /// N6: the emitted relation columns, quoted as the model writes them.
@@ -354,23 +358,26 @@ enum Names<'a> {
     RefVar(&'a [String]),
 }
 
-/// What a trie rule admits once the emitted prefix is a **whole** legal name.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum NameClose {
-    /// The name stands on its own: whatever L1 admits after it is legal, and the
-    /// stream may end on it.
-    Free,
-    /// The name is a niladic method whose call parens are mandatory, so the only
-    /// legal continuation is its own `(` — not EOS, not another hop, and not even
-    /// whitespace: a space would close the lexeme, drop this rule out of scope,
-    /// and hand the same escape back (confirmed live: bare `Class.all` parses as
-    /// a property read and fails to compile, exactly as `Db->tableToTDS` without
-    /// its `()` did).
-    MustCall,
-}
-
-/// The byte a [`NameClose::MustCall`] name's mandatory call must open with.
+/// The byte a niladic method's mandatory call opens with. S1's `all` owes it:
+/// confirmed live, a bare `Class.all` parses as a property read and fails to
+/// compile, exactly as `Db->tableToTDS` without its `()` did.
 const CALL_OPEN: u8 = b'(';
+
+/// The byte a resolved **class** source path owes: its `.all()` navigation dot.
+/// A class path is a `Class<T>[1]` metatype value, not the `T[*]` extent, so
+/// every method arrowed straight off it is a type mismatch by construction —
+/// live-attested (`…::Country->groupBy('CountryCode_T2_2')` →
+/// "Can't find a match for function 'groupBy(Class<Country>[1],String[1])'").
+const SOURCE_NAV_DOT: u8 = b'.';
+
+/// The byte a resolved **store** path owes: the `-` of its `->` step. A store is
+/// a `Database`, never a class extent, so it is arrowed into a store method and
+/// never `.all()`-ed — live-attested (`|…::Db.all()` → "Can't find a match for
+/// function 'getAll(Database[1])'"). The gold corpus agrees at both ends: across
+/// its 5034 queries a class source path is followed by `.all` 501 times and by
+/// nothing else, and a store path by `->tableReference` 8455 times and by
+/// nothing else.
+const SOURCE_STEP_ARROW: u8 = b'-';
 
 impl<'a> TrieRule<'a> {
     /// The trie rule governing `pos`, or `None` where no trie rule applies.
@@ -380,41 +387,38 @@ impl<'a> TrieRule<'a> {
         columns: &'a [Vec<u8>],
         vars: &'a [String],
     ) -> Option<Self> {
-        let (key, kind, close, names) = match pos {
-            L2Position::SourceIdent => (
-                CacheKey::Source,
-                TrieKind::ClassPath,
-                NameClose::Free,
-                Names::Source(schema),
-            ),
+        let (key, kind, names) = match pos {
+            L2Position::SourceIdent => {
+                (CacheKey::Source, TrieKind::ClassPath, Names::Source(schema))
+            }
             L2Position::SourceMethod => (
                 CacheKey::SourceMethod,
                 TrieKind::IdentOrStr,
-                NameClose::MustCall,
                 Names::SourceMethod,
+            ),
+            L2Position::StoreMethod => (
+                CacheKey::StoreMethod,
+                TrieKind::IdentOrStr,
+                Names::StoreMethod,
             ),
             L2Position::Member(class) => (
                 CacheKey::Member(class.clone()),
                 TrieKind::Ident,
-                NameClose::Free,
                 Names::Member(schema, class),
             ),
             L2Position::Column => (
                 CacheKey::Column(columns.len()),
                 TrieKind::Str,
-                NameClose::Free,
                 Names::Column(columns),
             ),
             L2Position::RelationColumn => (
                 CacheKey::RelationColumn(columns.len()),
                 TrieKind::Ident,
-                NameClose::Free,
                 Names::RelationColumn(columns),
             ),
             L2Position::RefVar => (
                 CacheKey::RefVar(vars.len()),
                 TrieKind::Ident,
-                NameClose::Free,
                 Names::RefVar(vars),
             ),
             // Exhaustive on purpose, like [`narrow_into`]'s own match: the
@@ -428,12 +432,7 @@ impl<'a> TrieRule<'a> {
             | L2Position::Reducer(_)
             | L2Position::ValueIdent => return None,
         };
-        Some(Self {
-            key,
-            kind,
-            close,
-            names,
-        })
+        Some(Self { key, kind, names })
     }
 
     /// This rule's cache entry, building its trie on first use.
@@ -453,15 +452,45 @@ impl Names<'_> {
     /// Build this rule's legal-name trie.
     fn build(&self) -> Trie {
         match self {
-            Self::Source(schema) => {
-                Trie::from_names(schema.source_paths().chain(std::iter::once(LET_KEYWORD)))
-            }
-            Self::SourceMethod => Trie::from_names(std::iter::once(SOURCE_METHOD)),
+            Self::Source(schema) => Trie::from_closing_names(
+                schema
+                    .source_paths()
+                    .map(|path| (path, source_close(schema, path)))
+                    .chain(std::iter::once((LET_KEYWORD, NameClose::Free))),
+            ),
+            Self::SourceMethod => Trie::from_closing_names(std::iter::once((
+                SOURCE_METHOD,
+                NameClose::MustFollow(CALL_OPEN),
+            ))),
+            Self::StoreMethod => Trie::from_closing_names(
+                STORE_METHODS
+                    .iter()
+                    .map(|name| (*name, NameClose::MustFollow(CALL_OPEN))),
+            ),
             Self::Member(schema, class) => Trie::from_names(schema.member_names(class)),
             Self::Column(columns) => Trie::from_names(columns.iter().map(|c| quote(c))),
             Self::RelationColumn(columns) => Trie::from_names(columns.iter().cloned()),
             Self::RefVar(vars) => Trie::from_names(vars.iter().map(String::as_bytes)),
         }
+    }
+}
+
+/// N3c: what a whole pipeline-source path owes as its continuation — the
+/// `.all()` dot for a class, the `->` step for the store (`docs/spec/schema.md`
+/// §6.5). The two are mutually exclusive and neither is optional, which is what
+/// makes the position expressible as a mask at all: a class path denotes a
+/// `Class<T>[1]` metatype, so arrowing a method straight off it mismatches every
+/// signature, and a store path denotes a `Database`, which has no extent to
+/// `.all()`.
+///
+/// [`Schema::has_class`](crate::schema::model::Schema::has_class) is the
+/// classifier because it is the same one `source_paths` builds the set from:
+/// every source path is a class or it is the store.
+fn source_close(schema: &Schema, path: &str) -> NameClose {
+    if schema.has_class(path) {
+        NameClose::MustFollow(SOURCE_NAV_DOT)
+    } else {
+        NameClose::MustFollow(SOURCE_STEP_ARROW)
     }
 }
 
@@ -477,9 +506,10 @@ enum NamePoint {
     Partial,
     /// A whole legal name that stands on its own.
     Whole,
-    /// A whole legal name that must be followed by its mandatory call `(`
-    /// ([`NameClose::MustCall`]).
-    WholeMustCall,
+    /// A whole legal name owing a specific next byte
+    /// ([`NameClose::MustFollow`]) — its mandatory call `(`, a class source's
+    /// `.all()` dot, or a store source's `->` step.
+    WholeMustFollow(u8),
 }
 
 impl NamePoint {
@@ -489,15 +519,18 @@ impl NamePoint {
     }
 }
 
-/// Classify `cursor` against the rule's names and its [`NameClose`] policy.
-fn name_point(trie: &Trie, cursor: u32, close: NameClose) -> NamePoint {
+/// Classify `cursor` against the rule's names and the [`NameClose`] policy of
+/// whichever name ends there.
+fn name_point(trie: &Trie, cursor: u32) -> NamePoint {
     if cursor == trie.root() {
         return NamePoint::Anchor;
     }
-    match (trie.is_terminal(cursor), close) {
-        (false, _) => NamePoint::Partial,
-        (true, NameClose::Free) => NamePoint::Whole,
-        (true, NameClose::MustCall) => NamePoint::WholeMustCall,
+    if !trie.is_terminal(cursor) {
+        return NamePoint::Partial;
+    }
+    match trie.close_at(cursor) {
+        NameClose::Free => NamePoint::Whole,
+        NameClose::MustFollow(byte) => NamePoint::WholeMustFollow(byte),
     }
 }
 
@@ -510,7 +543,7 @@ fn cursor_of(entry: &RuleCache, prefix: &[u8]) -> Option<u32> {
     }
     match walk(&entry.trie, entry.trie.root(), prefix, entry.kind.shape()) {
         Walk::Stay(cursor) => Some(cursor),
-        Walk::Complete | Walk::Diverge => None,
+        Walk::Complete { .. } | Walk::Diverge => None,
     }
 }
 
@@ -567,6 +600,7 @@ pub(crate) fn narrow_fused_into(
         L2Position::None
         | L2Position::SourceIdent
         | L2Position::SourceMethod
+        | L2Position::StoreMethod
         | L2Position::SourceMethodArg
         | L2Position::Column
         | L2Position::ReValue(_)
@@ -661,7 +695,6 @@ fn narrow_trie(
     vocab: &Vocab,
     eos_bit: u32,
 ) -> bool {
-    let close = rule.close;
     let entry = rule.entry(cache);
     // The prefix already completed a legal name or diverged — the lexeme is done
     // (or was never legal); leave the L1 mask unchanged.
@@ -671,7 +704,7 @@ fn narrow_trie(
     if let Some(cached) = entry.masks.get(&cursor) {
         dst.copy_from(cached);
     } else {
-        fill_trie(dst, vocab, eos_bit, &entry.trie, cursor, entry.kind, close);
+        fill_trie(dst, vocab, eos_bit, &entry.trie, cursor, entry.kind);
         entry.masks.insert(cursor, dst.clone());
     }
     true
@@ -864,16 +897,16 @@ fn fill_source_method_arg(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32) {
 /// `cursor` sits relative to a whole name ([`NamePoint`]).
 ///
 /// A *non-candidate* (a structural/whitespace token the rule does not govern) is
-/// kept at the anchor and after a whole name, exactly as the whole-lexeme
-/// narrower kept every non-`Ident`/`Str` lexeme. It is **cleared** at a
-/// [`NamePoint::Partial`] cursor: the rule's own lexeme is open on a strict
+/// kept at the anchor and after a free-standing whole name, exactly as the
+/// whole-lexeme narrower kept every non-`Ident`/`Str` lexeme. It is **cleared**
+/// at a [`NamePoint::Partial`] cursor: the rule's own lexeme is open on a strict
 /// prefix of some legal name, so a boundary token would end the lexeme on a name
 /// that does not exist (confirmed live: a walk `l->pair(…)`, where `l` is a
 /// strict prefix of the `let` keyword the source rule admits — "Can't find the
-/// packageable element 'l'"). The reserved EOS bit follows the same rule, which
-/// is what [`admits_eos`] reads back for
+/// packageable element 'l'"). At a [`NamePoint::WholeMustFollow`] cursor it is
+/// kept only when it opens with the byte that name owes. The reserved EOS bit
+/// follows the same rule, which is what [`admits_eos`] reads back for
 /// [`is_complete`](crate::DecoderSession::is_complete).
-#[allow(clippy::too_many_arguments)]
 fn fill_trie(
     dst: &mut BitMask,
     vocab: &Vocab,
@@ -881,21 +914,20 @@ fn fill_trie(
     trie: &Trie,
     cursor: u32,
     kind: TrieKind,
-    close: NameClose,
 ) {
     dst.clear_all();
-    let point = name_point(trie, cursor, close);
+    let point = name_point(trie, cursor);
     let mid = point != NamePoint::Anchor;
     for id in 0..vocab.len() as u32 {
         let bytes = vocab.bytes(id).unwrap_or(&[]);
-        let keep = match point {
-            // The whole name is a niladic call: nothing but its own `(` continues
-            // it, whatever lexeme shape the token would otherwise be.
-            NamePoint::WholeMustCall => bytes.first() == Some(&CALL_OPEN),
-            _ if is_candidate(bytes, kind, mid) => {
-                !matches!(walk(trie, cursor, bytes, kind.shape()), Walk::Diverge)
+        let keep = if is_candidate(bytes, kind, mid) {
+            keeps_candidate(trie, cursor, bytes, kind.shape())
+        } else {
+            match point {
+                NamePoint::Partial => false,
+                NamePoint::WholeMustFollow(owed) => bytes.first() == Some(&owed),
+                NamePoint::Anchor | NamePoint::Whole => true,
             }
-            _ => point != NamePoint::Partial,
         };
         if keep {
             dst.set(id);
@@ -903,6 +935,25 @@ fn fill_trie(
     }
     if point.admits_eos() {
         dst.set(eos_bit);
+    }
+}
+
+/// Whether a *candidate* token may be kept from `cursor`: it either stays on a
+/// live prefix of some legal name, or completes one at a boundary that name's
+/// own [`NameClose`] admits.
+///
+/// The second half is what makes the close policy hold under byte-level BPE. A
+/// token can carry both a name's tail and the byte that ends it (`y->` closing
+/// `…::Country`), so the cursor at the token's *start* is only a strict prefix
+/// and never reaches [`NamePoint::WholeMustFollow`]. [`Walk::Complete`] reports
+/// where the name ended and on which byte, so the policy is applied at the name
+/// the token actually completed rather than being handed off to a byte-PDA that
+/// re-vets the tail lexically but knows nothing of `.all()` or `->`.
+fn keeps_candidate(trie: &Trie, cursor: u32, bytes: &[u8], shape: NameShape) -> bool {
+    match walk(trie, cursor, bytes, shape) {
+        Walk::Stay(_) => true,
+        Walk::Complete { at, boundary } => trie.close_at(at).admits(boundary),
+        Walk::Diverge => false,
     }
 }
 
@@ -930,11 +981,16 @@ mod tests {
     use crate::schema::scope::L2Position;
     use crate::vocab::Vocab;
 
+    /// Two classes on purpose, one a strict byte prefix of the other (`A` ⊂
+    /// `Ab`): the real `Country` / `Countrylanguage` shape N3c's close policy
+    /// must not break.
     const SAMPLE: &str = r#"{
       "db_id": "d", "db_path": "spider::d::Db",
       "classes": { "A": { "simple_name": "A",
         "properties": [{"name": "countryName", "type": {"kind": "primitive", "name": "Integer"}, "mult": {"lower": 1, "upper": 1}},
-                       {"name": "country", "type": {"kind": "primitive", "name": "Integer"}, "mult": {"lower": 1, "upper": 1}}] } },
+                       {"name": "country", "type": {"kind": "primitive", "name": "Integer"}, "mult": {"lower": 1, "upper": 1}}] },
+        "Ab": { "simple_name": "Ab",
+        "properties": [{"name": "country", "type": {"kind": "primitive", "name": "Integer"}, "mult": {"lower": 1, "upper": 1}}] } },
       "associations": [], "enums": {}
     }"#;
 
@@ -1095,6 +1151,59 @@ mod tests {
         let (_applied, mask) = run(&L2Position::SourceIdent, &[], v);
         assert!(bit(&mask, 0), "a leading classpath prefix survives");
         assert!(!bit(&mask, 1), "a prefix off every source is masked");
+    }
+
+    #[test]
+    fn n3c_splits_the_continuation_a_whole_source_path_owes() {
+        // A *whole* class path owes its `.all()` dot and nothing else; the store
+        // path owes its `->` and nothing else. Both mask EOS, so neither can end
+        // a query on its own.
+        let v = vocab(&[b".", b"->", b"-", b" ", b"(", b"::", b"x"]);
+        let eos = v.len() as u32;
+        let (applied, class) = run_prefix(&L2Position::SourceIdent, &[], b"A", v.clone());
+        assert!(applied);
+        assert!(bit(&class, 0), "a class path keeps its navigation dot");
+        for id in [1u32, 2, 3, 4, 5, 6, eos] {
+            assert!(!bit(&class, id), "token {id} must be masked after a class");
+        }
+        let (_applied, store) = run_prefix(&L2Position::SourceIdent, &[], b"spider::d::Db", v);
+        assert!(bit(&store, 1), "a store path keeps its `->` step");
+        assert!(bit(&store, 2), "…including the `-` it may arrive as");
+        for id in [0u32, 3, 4, 5, 6, eos] {
+            assert!(
+                !bit(&store, id),
+                "token {id} must be masked after the store"
+            );
+        }
+    }
+
+    #[test]
+    fn n3c_keeps_a_longer_source_path_that_a_shorter_one_prefixes() {
+        // `A` is a whole class path *and* a strict prefix of `Ab`. The close
+        // policy must not stop the trie walking on into the longer name — the
+        // real `Country` / `Countrylanguage` trap.
+        let v = vocab(&[b"b", b"->"]);
+        let (_applied, mask) = run_prefix(&L2Position::SourceIdent, &[], b"A", v);
+        assert!(bit(&mask, 0), "the longer sibling path stays reachable");
+        assert!(
+            !bit(&mask, 1),
+            "the arrow is still masked at the shorter one"
+        );
+    }
+
+    #[test]
+    fn store_method_keeps_the_real_name_and_masks_every_other_arrowed_method() {
+        let v = vocab(&[b"tableReference", b"table", b"tableToTDS", b"limit", b"'x'"]);
+        let (applied, mask) = run(&L2Position::StoreMethod, &[], v);
+        assert!(applied);
+        assert!(bit(&mask, 0), "the real store method survives");
+        assert!(bit(&mask, 1), "a leading prefix of it survives");
+        assert!(!bit(&mask, 2), "a non-store method is masked");
+        assert!(!bit(&mask, 3), "a generic collection builtin is masked");
+        assert!(
+            !bit(&mask, 4),
+            "a quoted literal is masked, not passed through"
+        );
     }
 
     #[test]

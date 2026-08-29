@@ -87,6 +87,7 @@ const ALL_RULE_KINDS: &[&str] = &[
     "SourceIdent",
     "SourceMethod",
     "SourceMethodArg",
+    "StoreMethod",
     "Member",
     "ReValue",
     "Comparator",
@@ -104,6 +105,7 @@ fn rule_kind(pos: &L2Position) -> Option<&'static str> {
     match pos {
         L2Position::SourceIdent => Some("SourceIdent"),
         L2Position::SourceMethod => Some("SourceMethod"),
+        L2Position::StoreMethod => Some("StoreMethod"),
         L2Position::SourceMethodArg => Some("SourceMethodArg"),
         L2Position::Member(_) => Some("Member"),
         L2Position::ReValue(_) => Some("ReValue"),

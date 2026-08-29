@@ -90,6 +90,26 @@ pub fn sweep() -> Result<()> {
 const PURECARD_ROOT: &str = "crates/pure-analyzer-purecard";
 /// Cargo package name of the migrated PureCARD workspace member.
 const PURECARD_PACKAGE: &str = "pure-analyzer-purecard";
+
+/// The `legend`-featured test binary that belongs to the **real-model** lane,
+/// not the completeness lane: it additionally needs
+/// `python/tests/test_real_model_inference.py`'s already-written output, whose
+/// path `test_real_model` passes in through `PURECARD_REAL_MODEL_QUERIES`.
+/// [`test_real_model`] already scopes itself to exactly this binary; without the
+/// matching exclusion here, [`test_legend`] collects it too and it panics on the
+/// unset variable — aborting the completeness lane before its own compile-rate
+/// floors ever run.
+const PURECARD_REAL_MODEL_TEST: &str = "real_model_legend_compile";
+
+/// The nextest filterset that keeps [`PURECARD_REAL_MODEL_TEST`] out of the
+/// completeness lane. Deliberately an *exclusion* derived from that one
+/// constant rather than an allow-list of binaries: a new `legend`-featured test
+/// must be picked up by this lane by default, never silently left out of it
+/// (constitution §3 — no test skipping), and the two lanes cannot drift apart
+/// over the binary's name.
+fn purecard_legend_filter() -> String {
+    format!("not binary({PURECARD_REAL_MODEL_TEST})")
+}
 /// PureCARD's manifest, relative to the workspace root.
 const PURECARD_MANIFEST: &str = "crates/pure-analyzer-purecard/Cargo.toml";
 /// Docker Compose file for the pinned Legend engine stack.
@@ -212,6 +232,7 @@ pub fn test_legend() -> Result<()> {
             ))),
         };
     }
+    let legend_filter = purecard_legend_filter();
     let tested = run(
         "cargo",
         &[
@@ -221,6 +242,8 @@ pub fn test_legend() -> Result<()> {
             PURECARD_PACKAGE,
             "--features",
             "legend",
+            "-E",
+            &legend_filter,
         ],
     );
     if tested.is_err() {
@@ -326,7 +349,7 @@ pub fn test_real_model() -> Result<()> {
             "--features",
             "legend",
             "--test",
-            "real_model_legend_compile",
+            PURECARD_REAL_MODEL_TEST,
         ],
         &[("PURECARD_REAL_MODEL_QUERIES", queries_path.as_str())],
     );
@@ -2300,6 +2323,22 @@ fn workspace_member_manifests() -> Result<Vec<(String, String)>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The completeness lane must exclude exactly the binary the real-model
+    /// lane scopes itself to, and nothing else. Both sides read the one
+    /// constant, so this pins the derivation rather than a hand-typed copy:
+    /// when they drifted apart, `just test-legend` collected a test whose
+    /// input only the other lane produces, and the nightly workflow aborted
+    /// on its panic before ever reaching the compile-rate floors it exists to
+    /// enforce.
+    #[test]
+    fn the_legend_lane_excludes_exactly_the_real_model_lanes_own_binary() {
+        assert_eq!(
+            purecard_legend_filter(),
+            format!("not binary({PURECARD_REAL_MODEL_TEST})")
+        );
+        assert!(purecard_legend_filter().contains("real_model_legend_compile"));
+    }
 
     fn public_api_metadata_package(name: &str, crate_types: &[&str]) -> serde_json::Value {
         let crate_types = crate_types

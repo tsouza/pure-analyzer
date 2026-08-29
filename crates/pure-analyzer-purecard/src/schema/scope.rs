@@ -183,6 +183,18 @@ pub enum L2Position {
     /// have the same latent gap but are not narrowed here; out of scope for
     /// this rule.
     SourceMethodArg,
+    /// N3c (store arm): the identifier right after a pipeline-source **store**
+    /// path's own `->` must name a real store method. A store path denotes a
+    /// `meta::relational::metamodel::Database`, not a class extent, so the only
+    /// thing it legally produces is a table reference — every other method the
+    /// vocabulary offers either has no `Database` overload at all (live:
+    /// `|…::Db->tableToTDS()` → "Can't find a match for function
+    /// 'tableToTDS(Database[1])'") or matches a generic collection builtin and
+    /// returns the store right back (`|…::Db->limit(3)` → `Database`), which is
+    /// never a query. The legal set is read off the corpus, not invented: across
+    /// the 5034 gold queries a store path is followed by `->tableReference`
+    /// 8455 times and by nothing else.
+    StoreMethod,
     /// N1/N2: the identifier after `.` must be a member of `class`.
     Member(String),
     /// T1: the comparison operand's literal type must match `class`.
@@ -228,6 +240,22 @@ pub enum L2Position {
 /// not inherit or leak the enclosing pipeline's. `pub(crate)` so `narrow.rs` can
 /// build [`L2Position::SourceMethod`]'s single-name trie from the same constant.
 pub(crate) const SOURCE_METHOD: &str = "all";
+
+/// The store methods a pipeline-source store path may be arrowed into
+/// ([`L2Position::StoreMethod`]). `pub(crate)` so `narrow.rs` builds the rule's
+/// trie from the same list.
+pub(crate) const STORE_METHODS: &[&str] = &["tableReference"];
+
+/// Which kind of pipeline source a schema-resolved source path is — the fact
+/// N3c's two arms split on. A class path denotes a `Class<T>[1]` metatype and
+/// owes its `.all()`; a store path denotes a `Database` and owes its `->`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SourceKind {
+    /// A schema class path (`Schema::has_class`).
+    Class,
+    /// The schema's store/`Db` path.
+    Store,
+}
 
 /// The least delimiter depth at which an `all()` call is *nested*: the top-level
 /// `|Class.all()` sits at depth 1, so a call at depth 2 or deeper is inside a
@@ -396,20 +424,27 @@ pub(crate) struct ScopeTracker {
     /// A `.` was just seen over a relation-row binder; the following identifier is a
     /// bare-ident column reference ([`RelationColumn`](L2Position::RelationColumn)).
     dot_is_column: bool,
-    /// The identifier just dispatched from a source-triggering anchor
-    /// (`ExpectSource`/`BlockStmt`/`BlockStmtClose`) was itself a real source path
-    /// (a schema class or the store) — read and cleared by the very next `.`
-    /// ([`on_dot`](ScopeTracker::on_dot)), which is the only thing that can follow
-    /// a source classpath other than `->`. Never true for `let` (also legal at
+    /// Which kind of source path the identifier just dispatched from a
+    /// source-triggering anchor (`ExpectSource`/`BlockStmt`/`BlockStmtClose`)
+    /// was, when it was one at all — read and cleared by whichever of `.`
+    /// ([`on_dot`](ScopeTracker::on_dot)) or `->`
+    /// ([`on_arrow`](ScopeTracker::on_arrow)) follows it, the only two
+    /// continuations a source path has. Always [`None`] for `let` (also legal at
     /// that anchor, per `schema.source_paths().chain(once(LET_KEYWORD))` in
     /// `narrow.rs`), since `let` is not itself a source path.
-    source_ident_seen: bool,
-    /// A `.` was just seen right after a source classpath (`source_ident_seen`
-    /// was true); the following identifier must be [`SOURCE_METHOD`] (S1). Read
+    source_path_seen: Option<SourceKind>,
+    /// A `.` was just seen right after a source classpath (`source_path_seen`
+    /// was set); the following identifier must be [`SOURCE_METHOD`] (S1). Read
     /// once by [`opening_position`](ScopeTracker::opening_position) when that
     /// identifier's lexeme opens, then cleared the same way `dot_base` is
     /// consumed by [`resolve_member`](ScopeTracker::resolve_member).
     awaiting_source_method: bool,
+    /// A `->` was just seen right after a **store** source path; the following
+    /// identifier must name a store method ([`L2Position::StoreMethod`]).
+    /// Consumed one token later, exactly like
+    /// [`awaiting_reducer`](Self::awaiting_reducer): the arrow sets it and any
+    /// following non-whitespace token clears it.
+    awaiting_store_method: bool,
     /// The call just opened via `on_open` was [`SOURCE_METHOD`]'s own — the
     /// value position immediately following it (and after each following
     /// comma) admits only whitespace, a milestoning date, or the call's own
@@ -692,10 +727,11 @@ impl ScopeTracker {
         if !was_cmp {
             self.cmp_pending = None;
         }
-        // The reducer-name identifier (any non-arrow token after an armed arrow)
-        // consumes T3's arming.
+        // The reducer-name and store-method identifiers (any non-arrow token after
+        // an armed arrow) consume their arrow's arming.
         if !was_arrow {
             self.awaiting_reducer = None;
+            self.awaiting_store_method = false;
         }
     }
 
@@ -715,10 +751,17 @@ impl ScopeTracker {
         // real source path (never true for the `let` keyword, also legal there
         // but not a source path) — S1: the very next `.` (`on_dot`) must narrow
         // its identifier to exactly `SOURCE_METHOD`, not any class member.
-        self.source_ident_seen = matches!(
+        self.source_path_seen = (matches!(
             pre_state,
             State::ExpectSource | State::BlockStmt | State::BlockStmtClose
-        ) && schema.source_paths().any(|path| path == text);
+        ) && schema.source_paths().any(|path| path == text))
+        .then(|| {
+            if schema.has_class(text) {
+                SourceKind::Class
+            } else {
+                SourceKind::Store
+            }
+        });
         match pre_state {
             // A refVar use (`$x`): never a lambda binder, never a member position.
             State::AfterDollar => {
@@ -832,7 +875,7 @@ impl ScopeTracker {
         }
     }
 
-    /// A dot right after a just-dispatched source classpath (`source_ident_seen`)
+    /// A dot right after a just-dispatched source classpath (`source_path_seen`)
     /// arms [`awaiting_source_method`](Self::awaiting_source_method) so the
     /// following identifier is narrowed to [`SOURCE_METHOD`] (S1) rather than
     /// falling through the ordinary `dot_base`/member logic below, which would
@@ -841,7 +884,7 @@ impl ScopeTracker {
     /// unnarrowed — the gap `L2Position::SourceMethod` exists to close.
     fn on_dot(&mut self) {
         self.dot_is_column = false;
-        self.awaiting_source_method = std::mem::take(&mut self.source_ident_seen);
+        self.awaiting_source_method = self.source_path_seen.take().is_some();
         if let Some(var) = self.pending_refvar.take() {
             if self.relation_row_vars.contains(&var) {
                 // `$row.` over an arm-R relation-row binder: the next identifier is a
@@ -860,6 +903,9 @@ impl ScopeTracker {
     }
 
     fn on_arrow(&mut self) {
+        // N3c (store arm): an arrow straight off a store source path opens the
+        // one position where a store method name is legal.
+        self.awaiting_store_method = self.source_path_seen.take() == Some(SourceKind::Store);
         // T3: a bare `$y->` (no intervening dot — `pending_refvar` still names the
         // just-dispatched refVar) where `y` is bound to a primitive element type
         // arms the reducer-name position (`opening_position` reads this one token
@@ -1180,6 +1226,7 @@ impl ScopeTracker {
             },
             // A method-name identifier right after `->` opens here (distinct from
             // `ExpectValue`/`ExpectValueReq`, which a value/lambda term opens at).
+            State::AfterArrow if self.awaiting_store_method => L2Position::StoreMethod,
             State::AfterArrow => match self.awaiting_reducer {
                 Some(tc) => L2Position::Reducer(tc),
                 None => L2Position::None,
@@ -1506,8 +1553,8 @@ mod tests {
         let mut tracker = ScopeTracker::new();
         tracker.dispatch_token(b"A", State::ExpectValue, &schema());
         assert!(
-            !tracker.source_ident_seen,
-            "a value-position classpath armed source_ident_seen"
+            tracker.source_path_seen.is_none(),
+            "a value-position classpath armed source-path narrowing"
         );
     }
 
@@ -1576,15 +1623,15 @@ mod tests {
         // genuine source-triggering anchor (`ExpectSource`/`BlockStmt`/
         // `BlockStmtClose`) — N3's own `source_paths().chain(once(LET_KEYWORD))`
         // admits it there — but it is not itself a source *path*
-        // (`schema.source_paths()` never yields it), so `source_ident_seen` must
-        // stay false. Without this check, `on_ident` would arm S1 after `let`,
+        // (`schema.source_paths()` never yields it), so `source_path_seen` must
+        // stay empty. Without this check, `on_ident` would arm S1 after `let`,
         // wrongly forcing the block-statement's `$name = …` binder syntax through
         // a trie that only ever admits `all`.
         let mut tracker = ScopeTracker::new();
         tracker.dispatch_token(b"let", State::BlockStmt, &schema());
         assert!(
-            !tracker.source_ident_seen,
-            "the `let` keyword armed source_ident_seen"
+            tracker.source_path_seen.is_none(),
+            "the `let` keyword armed source-path narrowing"
         );
     }
 
