@@ -122,6 +122,10 @@ enum CacheKey {
     ReValue(TypeClass),
     /// T2 comparator class — the ordered-comparator lever (cursor-independent).
     Comparator(TypeClass),
+    /// T6's non-scalar-operand set — a whole-vocab constant (it clears the
+    /// ordered comparators outright, with no operand class to key on), so one
+    /// key suffices.
+    OrderedOperand,
     /// T3 reducer class — the aggregation-reducer lever (cursor-independent).
     Reducer(TypeClass),
     /// N6 column set at a given emitted-column count (monotonic within a stream,
@@ -204,8 +208,7 @@ pub(crate) fn narrow_into(
             let masked_by = *tc;
             with_cache(dst, cache, CacheKey::ReValue(masked_by), |dst| {
                 fill_operand(dst, vocab, eos_bit, masked_by);
-            });
-            true
+            })
         }
         L2Position::Comparator(TypeClass::Numeric | TypeClass::Temporal) => {
             // An ordered comparator is legal on a numeric/temporal operand — no
@@ -216,41 +219,34 @@ pub(crate) fn narrow_into(
             let masked_by = *tc;
             with_cache(dst, cache, CacheKey::Comparator(masked_by), |dst| {
                 fill_comparator(dst, vocab, eos_bit, masked_by);
-            });
-            true
+            })
         }
+        L2Position::OrderedOperand => with_cache(dst, cache, CacheKey::OrderedOperand, |dst| {
+            fill_ordered_operand(dst, vocab, eos_bit);
+        }),
         L2Position::Reducer(tc) => {
             let masked_by = *tc;
             with_cache(dst, cache, CacheKey::Reducer(masked_by), |dst| {
                 fill_reducer(dst, vocab, eos_bit, masked_by);
-            });
-            true
+            })
         }
-        L2Position::SourceMethodArg => {
-            with_cache(dst, cache, CacheKey::SourceMethodArg, |dst| {
-                fill_source_method_arg(dst, vocab, eos_bit);
-            });
-            true
-        }
-        L2Position::StoreMethodArg => {
-            with_cache(dst, cache, CacheKey::StoreMethodArg, |dst| {
-                fill_store_method_arg(dst, vocab, eos_bit);
-            });
-            true
-        }
+        L2Position::SourceMethodArg => with_cache(dst, cache, CacheKey::SourceMethodArg, |dst| {
+            fill_source_method_arg(dst, vocab, eos_bit);
+        }),
+        L2Position::StoreMethodArg => with_cache(dst, cache, CacheKey::StoreMethodArg, |dst| {
+            fill_store_method_arg(dst, vocab, eos_bit);
+        }),
         L2Position::StoreMethodArgSep { remaining } => {
             let remaining = *remaining;
             with_cache(dst, cache, CacheKey::StoreMethodArgSep(remaining), |dst| {
                 fill_store_method_arg_sep(dst, vocab, eos_bit, remaining);
-            });
-            true
+            })
         }
         L2Position::SourceExtent { after_dash } => {
             let after_dash = *after_dash;
             with_cache(dst, cache, CacheKey::SourceExtent(after_dash), |dst| {
                 fill_source_extent(dst, vocab, eos_bit, after_dash);
-            });
-            true
+            })
         }
         L2Position::ExtentMethod => {
             let Some(cursor) = extent_deny_cursor(prefix) else {
@@ -258,15 +254,11 @@ pub(crate) fn narrow_into(
             };
             with_cache(dst, cache, CacheKey::ExtentMethod(cursor), |dst| {
                 fill_extent_method(dst, vocab, eos_bit, cursor);
-            });
-            true
+            })
         }
-        L2Position::ReceiverOnlyArg => {
-            with_cache(dst, cache, CacheKey::ReceiverOnlyArg, |dst| {
-                fill_receiver_only_arg(dst, vocab, eos_bit);
-            });
-            true
-        }
+        L2Position::ReceiverOnlyArg => with_cache(dst, cache, CacheKey::ReceiverOnlyArg, |dst| {
+            fill_receiver_only_arg(dst, vocab, eos_bit);
+        }),
         L2Position::StoreResult { after_dash } => {
             let after_dash = *after_dash;
             with_cache(dst, cache, CacheKey::StoreResult(after_dash), |dst| {
@@ -277,8 +269,7 @@ pub(crate) fn narrow_into(
                     after_dash,
                     STORE_RESULT_DENIED_OPENERS,
                 );
-            });
-            true
+            })
         }
         L2Position::StrOperator { after_dash } => {
             let after_dash = *after_dash;
@@ -290,21 +281,14 @@ pub(crate) fn narrow_into(
                     after_dash,
                     STR_OPERATOR_DENIED_OPENERS,
                 );
-            });
-            true
+            })
         }
-        L2Position::LogicalOperand => {
-            with_cache(dst, cache, CacheKey::LogicalOperand, |dst| {
-                fill_operand(dst, vocab, eos_bit, TypeClass::Boolean);
-            });
-            true
-        }
-        L2Position::ValueIdent => {
-            with_cache(dst, cache, CacheKey::ValueIdent, |dst| {
-                fill_value_ident(dst, vocab);
-            });
-            true
-        }
+        L2Position::LogicalOperand => with_cache(dst, cache, CacheKey::LogicalOperand, |dst| {
+            fill_operand(dst, vocab, eos_bit, TypeClass::Boolean);
+        }),
+        L2Position::ValueIdent => with_cache(dst, cache, CacheKey::ValueIdent, |dst| {
+            fill_value_ident(dst, vocab);
+        }),
         // Every trie position already returned above. They are spelled out here
         // rather than swept up by a `_` arm so this match stays **exhaustive**
         // over [`L2Position`]: a new variant then has to be classified here
@@ -548,6 +532,7 @@ impl<'a> TrieRule<'a> {
             | L2Position::LogicalOperand
             | L2Position::ReValue(_)
             | L2Position::Comparator(_)
+            | L2Position::OrderedOperand
             | L2Position::Reducer(_)
             | L2Position::ValueIdent => return None,
         };
@@ -736,6 +721,7 @@ pub(crate) fn narrow_fused_into(
         | L2Position::Column
         | L2Position::ReValue(_)
         | L2Position::Comparator(_)
+        | L2Position::OrderedOperand
         | L2Position::Reducer(_)
         | L2Position::RefVar
         | L2Position::ValueIdent => false,
@@ -842,20 +828,26 @@ fn narrow_trie(
 }
 
 /// Look `key` up in the operand cache; on a hit copy the memoized mask into `dst`,
-/// on a miss run `fill` and memoize it. Only T1's cursor-independent `ReValue`
-/// lever reaches here; the trie rules memoize per cursor node in `narrow_trie`.
+/// on a miss run `fill` and memoize it. The cursor-independent rules reach here;
+/// the trie rules memoize per cursor node in `narrow_trie`.
+///
+/// Returns `true` — [`narrow_into`]'s own "a constraint applied" verdict, which
+/// every caller was otherwise restating one line later. Filling a rule's mask
+/// *is* applying its constraint, so the two are never independently decidable,
+/// and a hand-threaded copy per arm is only somewhere for them to disagree.
 fn with_cache(
     dst: &mut BitMask,
     cache: &mut NarrowCache,
     key: CacheKey,
     fill: impl FnOnce(&mut BitMask),
-) {
+) -> bool {
     if let Some(cached) = cache.operand.get(&key) {
         dst.copy_from(cached);
-        return;
+        return true;
     }
     fill(dst);
     cache.operand.insert(key, dst.clone());
+    true
 }
 
 /// Double `'` to `''` and wrap in quotes — the raw bytes the model emits for a
@@ -940,18 +932,39 @@ fn fill_operand(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32, masked_by: TypeC
     dst.set(eos_bit);
 }
 
+/// Whether `bytes` is one of the **ordered** comparators. [`classify`] folds
+/// every comparator shape into one [`Lexeme::Cmp`], and ordered-vs-equality is
+/// exactly what T2 and T6 both distinguish, so the set is read off the raw bytes
+/// — stated once here rather than spelled out at each of its two use sites.
+fn is_ordered_comparator(bytes: &[u8]) -> bool {
+    matches!(bytes, b"<" | b">" | b"<=" | b">=")
+}
+
 /// Whether a comparator token is kept under a T2 constraint with LHS class `lhs`
-/// (§6.6 T2). [`classify`] folds every comparator shape into one [`Lexeme::Cmp`]
-/// (ordered-vs-equality is exactly what T2 distinguishes), so this reads the raw
-/// bytes directly rather than going through it. An ordered comparator (`< > <=
-/// >=`) is legal only for a numeric or temporal operand; equality/inequality
-/// (`== !=`) and every non-comparator shape stay kept.
+/// (§6.6 T2). An ordered comparator is legal only for a numeric or temporal
+/// operand; equality/inequality (`== !=`) and every non-comparator shape stay
+/// kept.
 fn keeps_comparator(bytes: &[u8], lhs: TypeClass) -> bool {
-    if matches!(bytes, b"<" | b">" | b"<=" | b">=") {
+    if is_ordered_comparator(bytes) {
         matches!(lhs, TypeClass::Numeric | TypeClass::Temporal)
     } else {
         true
     }
+}
+
+/// Refill `dst` with T6's set for a non-scalar navExpr, plus EOS
+/// ([`L2Position::OrderedOperand`]): every token but the ordered comparators,
+/// which the engine declares no overload of for a collection or a class-typed
+/// operand. `== !=` are deliberately kept — Pure's `equal` is `Any[*]`-generic,
+/// and all three of the position's shapes compile with it live.
+fn fill_ordered_operand(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32) {
+    dst.clear_all();
+    for id in 0..vocab.len() as u32 {
+        if !is_ordered_comparator(vocab.bytes(id).unwrap_or(&[])) {
+            dst.set(id);
+        }
+    }
+    dst.set(eos_bit);
 }
 
 /// Refill `dst` with the T2 comparator set for LHS class `masked_by`, plus EOS.
@@ -1774,6 +1787,33 @@ mod tests {
             !bit(&string, 1),
             "a number literal is masked for a string LHS"
         );
+    }
+
+    /// T6 clears exactly the four ordered comparators and nothing else — the
+    /// equality pair and every collapse continuation the spec names stay
+    /// admissible, which is what keeps the gold anchors
+    /// (`$c.fk1DefaultCountrylanguage->filter(…)->isEmpty()`) replayable.
+    #[test]
+    fn ordered_operand_masks_only_the_ordered_comparators() {
+        let masked: &[&[u8]] = &[b"<", b">", b"<=", b">="];
+        let kept: &[&[u8]] = &[b"==", b"!=", b"->", b".", b")", b"isEmpty"];
+        let tokens: Vec<&[u8]> = masked.iter().chain(kept).copied().collect();
+        let (applied, mask) = run(&L2Position::OrderedOperand, &[], vocab(&tokens));
+        assert!(applied);
+        for (id, token) in masked.iter().enumerate() {
+            assert!(
+                !bit(&mask, id as u32),
+                "the ordered comparator {:?} has no overload for a non-scalar operand",
+                String::from_utf8_lossy(token)
+            );
+        }
+        for (offset, token) in kept.iter().enumerate() {
+            assert!(
+                bit(&mask, (masked.len() + offset) as u32),
+                "{:?} stays admissible after a non-scalar navExpr",
+                String::from_utf8_lossy(token)
+            );
+        }
     }
 
     #[test]

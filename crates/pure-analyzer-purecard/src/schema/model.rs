@@ -119,17 +119,29 @@ pub(crate) enum PropType {
 
 /// A `[lower..upper]` multiplicity (§6.2.1). `upper == None` is `*` (unbounded).
 ///
-/// The identifier/type rules (N/T) read a member's *type*, not its
-/// multiplicity; the collapse rule T6 that consumes multiplicity is deferred, so
-/// the bounds are carried on [`Resolved`] but not consumed by the current rules.
+/// The identifier/type rules (N/T) read a member's *type*; T6
+/// ([`L2Position::OrderedOperand`](crate::schema::L2Position::OrderedOperand))
+/// reads its [`is_to_one`](Multiplicity::is_to_one) upper bound.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 pub(crate) struct Multiplicity {
     /// The lower bound.
     #[allow(dead_code)]
     pub(crate) lower: u32,
     /// The upper bound, or `None` for `*` (unbounded).
-    #[allow(dead_code)]
     pub(crate) upper: Option<u32>,
+}
+
+impl Multiplicity {
+    /// The upper bound a *scalar* carries: exactly one value.
+    const SCALAR_UPPER: u32 = 1;
+
+    /// Whether this multiplicity denotes a scalar — an upper bound of exactly
+    /// one (§6.6 T6). `[0..1]` counts, `[1..*]` and `[0..*]` do not: what makes
+    /// an ordered comparison legal is that at most one value can reach it, not
+    /// that at least one must.
+    pub(crate) fn is_to_one(self) -> bool {
+        self.upper == Some(Self::SCALAR_UPPER)
+    }
 }
 
 /// A stored/regular property (§6.2.1).

@@ -229,30 +229,62 @@ The set is deliberately **monotonic and a superset**: a name is recorded whereve
   discipline: admit rather than invent).
 - **T4 — string-predicate type rule.** `->startsWith(…)`, `->endsWith(…)`, `->contains(…)`, `->toLower()`/`->toUpper()` legal only when the receiver's resolved type is **String**.
 - **T5 — enum-comparison type rule.** A nav expression resolving to `EnumRef(E)` may be compared only against a value of enum `E` (pairs with N4); comparing it to a string/number literal is masked. Because L1 has no enum-literal operand position, this rule is outside the supported overlay.
-- **T6 — multiplicity / collapse rule.** A scalar comparison (`navExpr cmpop operand`), a scalar string/temporal `fn`, or scalar arithmetic requires the navExpr's resolved multiplicity to be **to-one** (`upper == 1`). A navigation whose resolved multiplicity is `[0..1]` or that crosses a to-many association end (e.g. from `Continents` via `fk0DefaultCountries` → `Countries[1..*]`) yields a _non-scalar_; using it scalar-wise is illegal — it must be **collapsed to `[1]` first**. The corpus-attested collapse operators are, in order of frequency: **`->toOne()`** (206 gold occurrences — the canonical `[0..1] → [1]` collapse, e.g. `$x.note->toOne()->contains('East')` and `$x.balance->toOne() + …`), an **aggregate** (`->sum()`/`->count()`/… inside `agg`), or an **existence predicate** (`->exists(lambda)` / `->isEmpty()` / `->isNotEmpty()`, which consume a to-many collection and return a scalar Boolean). L2 treats a `navExpr` immediately followed by any of these as scalar at the enclosing operator position. A scalar comparison applied to an _un-collapsed_ `[0..1]`/`[*]` navExpr is masked. (Optional-to-one `[0..1]` FK navigations DO occur in the pilot corpus and are collapsed with `->toOne()`; strictly-to-one `[1]` ends need no collapse.)
-  **Implementation caveat (2026-08-27, #56 research):** the 206-occurrence
-  `->toOne()` evidence and the `[0..1]` FK claim above are drawn from the
-  broader pilot survey, not the 8 committed `FIXTURE_DBS` schemas L2 rules are
-  actually implemented and soundness-verified against. Against those 8, this
-  rule's literal reading — masking scalar `cmp` on **any** non-to-one navExpr —
-  is **falsified** by the in-scope gold corpus itself: `car_1`'s
-  `$x.year < 1980` is a direct, uncollapsed ordered comparison on a `[0..1]`
-  **primitive** (`year: Integer`) and is part of the 269-query soundness-replay
-  set (`l2_soundness.rs`), so masking it would be a soundness regression. Every
-  `->toOne()` occurrence actually reachable in the 8 fixtures is on a
-  **primitive** property (`horsepower`, `isFullTime`, …), never on a
-  class-typed FK navigation — and every FK association across all 8 fixtures
-  is a strict many-to-one pattern (`[1,1]` in the traversed direction; the
-  reverse, to-many, end is never directly compared scalar-wise in the corpus).
-  So neither reading is implementable-and-verifiable today: the
-  any-multiplicity reading is directly falsified, and the
-  class-typed-navigation-only reading (the one consistent with `year < 1980`
-  staying legal) has zero exercisable positive-or-negative evidence in the
-  current fixture set. Implementing either without a new fixture schema
-  containing a genuinely optional/to-many-only FK association — or new
-  corpus cases sourced from beyond the current 8 — would violate the
-  corpus-evidence discipline (constitution §4: "do not invent constraints the
-  corpus does not exercise").
+- **T6 — multiplicity / collapse rule.** An **ordered comparator** (`< > <= >=`)
+  requires the navExpr on its left to be a **scalar primitive**. Those four
+  operators dispatch to `lessThan`/`greaterThan`/`lessThanEqual`/
+  `greaterThanEqual`, which the engine declares only over scalar primitive
+  operands; a navExpr that is not one has no matching overload and the comparator
+  is masked. Three navExpr shapes are not one, each live-attested against the
+  pinned Legend stack (issue #116):
+  - a **collection** — a navigation whose multiplicity has an upper bound other
+    than exactly one (`Multiplicity::is_to_one`), at *any* step of the chain.
+    `$c.fk1DefaultCountrylanguage` is `Countrylanguage[1..*]` →
+    "Can't find a match for function `lessThan(Countrylanguage[1..*],Integer[1])`";
+    and multiplicity **propagates**, so a primitive mapped over such a step is a
+    collection too even where its own declared multiplicity is `[0..1]`
+    (`$c.fk1DefaultCountrylanguage.percentage` → `lessThan(Float[*],Integer[1])`,
+    `$x.fk3DefaultCarNames.model` → `lessThan(String[*],String[1])`).
+  - a navigation off the `Class.all()` **extent**, which is itself a `T[*]`
+    (`Country.all().gnp` → `lessThan(Float[*],Integer[1])`).
+  - a **class-typed** navExpr, at any multiplicity — a class is no ordered
+    operand even when the association end is `[1..1]`
+    (`$c.fk1DefaultCountry` → `lessThan(Country[1],Integer[1])`).
+
+  What the rule does **not** mask:
+  - **Equality.** `==` and `!=` stay admissible at every one of those positions.
+    Pure's `equal` is `Any[*]`-generic, and all three shapes compile with it live
+    (`$c.fk1DefaultCountrylanguage == 'English'` → `Country`). Masking them would
+    be a soundness violation, not a precision win.
+  - **A `[0..1]` scalar.** An upper bound of exactly one is a scalar whatever the
+    lower bound is, which is why `car_1`'s gold `$x.year < 1980` (an
+    `Integer[0..1]` primitive, in the 269-query soundness-replay set) stays legal.
+    The rule keys on `upper == 1`, never on `lower == 0`.
+  - **Any continuation that is not an ordered comparator** — the collapse itself
+    first among them. `->isEmpty()`, `->filter(…)`, `->count()`, `->exists(…)`,
+    `->toOne()`, a further `.` hop, or the end of the term all pass through
+    untouched; the mask clears exactly four tokens and nothing else. This is what
+    keeps the corpus's own to-many navigations replayable — `world_1`
+    `$c.fk1DefaultCountrylanguage->filter(l|$l.language == 'English')->isEmpty()`
+    and `car_1` `$x.fk3DefaultCarNames->exists(c|…)`, both gold.
+
+  **Where the evidence comes from (2026-08-29, #116).** The 8 committed
+  `FIXTURE_DBS` carry 34 class-typed to-many navigations and 36 to-one ones:
+  `Schema::build_navigable` (§6.2.3) makes each association end navigable from
+  the class at the *other* end, so every `fk_n` association is navigable in both
+  directions and the reverse direction of a many-to-one FK is a genuine
+  `[1..*]` navigation. Across this repository's gold corpus and the wider
+  pure-lingua query sets (12,600+ real queries) a to-many navigation occurs 43
+  times and is **never** compared scalar-wise: it collapses via `->isEmpty`
+  (20), `->filter` (13), `->count` (5) or `->exists` (2), or terminates as an
+  `agg` map-lambda body (3). The one measured case of a comparison behind such a
+  navigation is `$a.fk3DefaultAssetParts.partId->count() == 2` — legal only
+  *after* the `->count()`.
+
+  This supersedes the 2026-08-27 research note that recorded T6 as
+  unimplementable against the committed fixtures. That note's blocking claim —
+  "every FK association across all 8 fixtures is a strict many-to-one pattern"
+  — was wrong: it read each association in one direction only.
+
 - **T7 — projection/key lambda return-shape.** `colLambda`/`keyLambda` bodies must resolve to a **scalar** (`upper == 1`) primitive/enum value (a TDS column is scalar); a body left at a class or a to-many collection is masked. (Prevents `project([x|$x.fk0DefaultCountries], …)` — projecting a whole to-many navigation instead of one of its columns.)
 
 ### 6.7 Rule count
@@ -319,7 +351,7 @@ L1 and L2 share a **single position vocabulary**: every place L2 narrows must be
 | **T3** aggregation-reducer type                        | `reduceExpr = refVar "->" reducer "()"` — the `reducer` position (§5.3)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | **T4** string-predicate / string-transform type        | two L1 positions: `valueExpr "->" boolPred` for the predicates `contains`/`startsWith`/`endsWith`, **and** `valueExpr "->" fn` for the transforms `toLower`/`toUpper` (which are `fn`, not `boolPred`, in §5.3) (§5.3)                                                                                                                                                                                                                                                                                                                                                                                             |
 | **T5** enum-comparison type                            | No emitted L1 position; this category is outside the supported schema overlay.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| **T6** multiplicity / collapse                         | the `collapse` (`->toOne()`), `boolPred` `exists`/`isEmpty`/`isNotEmpty`, and `agg` positions that turn a `[0..1]`/`[*]` `navExpr` into a scalar before a scalar `cmp` (§5.3)                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| **T6** multiplicity / collapse                         | the `cmpop` position right after a `navExpr` that is not a scalar primitive — a collection (upper bound ≠ 1 at any step), an extent navigation, or a class-typed step (§5.3). The collapse operators the rule leaves open (`->toOne()`, `exists`/`isEmpty`/`isNotEmpty`, the aggregates) are what turn such a `navExpr` back into a scalar.                                                                                                                                                                                                                                                                          |
 | **T7** projection/key lambda return-shape              | the `valueExpr` body of `colLambda`/`keyLambda` must be scalar (§5.3)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 
 **Two contract points L1 explicitly provides for L2:**

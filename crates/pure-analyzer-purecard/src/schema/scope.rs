@@ -419,6 +419,34 @@ pub enum L2Position {
     /// T2: an ordered comparator (`< > <= >=`) is legal only when the completed
     /// navExpr just left of it is numeric or temporal.
     Comparator(TypeClass),
+    /// T6: the same ordered comparators, at the position after a completed
+    /// navExpr that is **not a scalar primitive** at all — the case
+    /// [`Comparator`](L2Position::Comparator) has no type class to key on and so
+    /// left wholly unnarrowed.
+    ///
+    /// `< > <= >=` dispatch to `lessThan`/`greaterThan`/`lessThanEqual`/
+    /// `greaterThanEqual`, which the engine declares only over scalar primitive
+    /// operands. Three navExpr shapes reach this position, each live-attested
+    /// against the pinned Legend stack (issue #116):
+    ///
+    /// - a **collection** — any nav step on the chain whose upper multiplicity
+    ///   bound is not exactly one (`$c.fk1DefaultCountrylanguage` →
+    ///   "Can't find a match for function
+    ///   `lessThan(Countrylanguage[1..*],Integer[1])`"), including a primitive
+    ///   mapped over one (`$c.fk1DefaultCountrylanguage.percentage` →
+    ///   `lessThan(Float[*],Integer[1])`);
+    /// - a navigation off the `Class.all()` **extent**, which is itself a `T[*]`
+    ///   (`Country.all().gnp` → `lessThan(Float[*],Integer[1])`);
+    /// - a **class-typed** navExpr at any multiplicity, a class being no
+    ///   ordered operand even when the association end is `[1..1]`
+    ///   (`$c.fk1DefaultCountry` → `lessThan(Country[1],Integer[1])`).
+    ///
+    /// Equality is **not** masked here, in any of the three: Pure's `equal` is
+    /// `Any[*]`-generic, and all three shapes compile with `==` live. Nor is any
+    /// non-comparator continuation — `->` (the collapse the spec names:
+    /// `->isEmpty()`, `->filter(…)`, `->count()`, `->exists(…)`), a further `.`,
+    /// or the end of the term.
+    OrderedOperand,
     /// T3: `sum`/`average` are legal only when the reduce lambda's declared
     /// element type is numeric; `min`/`max`/`count` are unconstrained (see
     /// `narrow::keeps_reducer`'s doc comment for the corpus evidence).
@@ -588,6 +616,25 @@ enum SourceKind {
     Store,
 }
 
+/// What a completed navExpr left on the stream — the fact the comparison
+/// position immediately after it reads (`docs/spec/schema.md` §6.6 T1/T2/T6).
+///
+/// The distinction is exactly "is this an operand the scalar operators are
+/// declared over": a scalar primitive is, and nothing else is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NavResult {
+    /// A **scalar primitive**: a primitive-typed member whose whole navigation
+    /// chain is to-one ([`is_to_one`](super::model::Multiplicity::is_to_one) at
+    /// every step). Carries the
+    /// type class T1 ([`L2Position::ReValue`]) and T2
+    /// ([`L2Position::Comparator`]) key on.
+    Scalar(TypeClass),
+    /// Anything else a navigation can end on — a class-typed step, or a
+    /// collection. T6 ([`L2Position::OrderedOperand`]) masks the ordered
+    /// comparators here; T1/T2 have no operand type class to read.
+    NonScalar,
+}
+
 /// The least delimiter depth at which an `all()` call is *nested*: the top-level
 /// `|Class.all()` sits at depth 1, so a call at depth 2 or deeper is inside a
 /// lambda body and heads a nested pipeline.
@@ -687,11 +734,19 @@ pub(crate) struct ScopeTracker {
     dot_base: Option<String>,
     /// The class a navigation chain has reached so far (feeds N2).
     nav_cursor: Option<String>,
-    /// The type-class of the most recently completed primitive navExpr — read by
-    /// the *next* comparison operator to arm T1 (`cmp_pending`), and by the
+    /// What the most recently completed navExpr resolved to — read by the *next*
+    /// comparison operator to arm T1 (`cmp_pending`), and by the
     /// `AfterValue`/`AfterName` anchor right in front of it to arm T2
-    /// (`Comparator`).
-    last_resolved: Option<TypeClass>,
+    /// (`Comparator`) or T6 (`OrderedOperand`).
+    last_nav: Option<NavResult>,
+    /// Whether the navigation chain currently under `nav_cursor` has crossed a
+    /// non-to-one step — a to-many association end, or the `Class.all()` extent
+    /// the chain is rooted at. Latched because multiplicity *propagates*: the
+    /// `percentage` in `$c.fk1DefaultCountrylanguage.percentage` is declared
+    /// `Float[0..1]` on its own class yet the chain yields `Float[*]`, so the
+    /// step's own multiplicity alone would read it as a scalar. Reset wherever a
+    /// fresh chain starts (see [`on_dot`](ScopeTracker::on_dot)).
+    nav_to_many: bool,
     /// The class the most recently completed navExpr resolved to (a to-many/class
     /// nav receiver), used to bind a following method lambda's variable.
     last_nav_class: Option<String>,
@@ -1089,14 +1144,14 @@ impl ScopeTracker {
         // leave N4b unarmed — the very split-token case N4a and N4c go to
         // explicit trouble over.
         let was_logical = is_logical_operator(bytes, pre_state);
-        let mut resolved_now: Option<TypeClass> = None;
+        let mut resolved_now: Option<NavResult> = None;
 
         match &lex {
             Lexeme::Ident(text) => self.on_ident(text, pre_state, schema, &mut resolved_now),
             Lexeme::Dot => self.on_dot(),
             Lexeme::Arrow => self.on_arrow(),
             Lexeme::Cmp => {
-                if let Some(tc) = self.last_resolved {
+                if let Some(NavResult::Scalar(tc)) = self.last_nav {
                     self.cmp_pending = Some(tc);
                 }
             }
@@ -1129,8 +1184,8 @@ impl ScopeTracker {
         }
 
         // T1 arming lives exactly one non-whitespace token: it is set by a
-        // primitive navExpr and read by the immediately following comparison.
-        self.last_resolved = resolved_now;
+        // completed navExpr and read by the immediately following comparison.
+        self.last_nav = resolved_now;
         // The comparison operand (any non-cmp token after an armed comparison)
         // clears the arming.
         if !was_cmp {
@@ -1169,7 +1224,7 @@ impl ScopeTracker {
         text: &str,
         pre_state: State,
         schema: &Schema,
-        resolved_now: &mut Option<TypeClass>,
+        resolved_now: &mut Option<NavResult>,
     ) {
         // A fully-qualified class path only appears as a pipeline source; binding
         // the pipeline element class here also handles nested subquery sources.
@@ -1267,7 +1322,7 @@ impl ScopeTracker {
         &mut self,
         ident: &str,
         schema: &Schema,
-        resolved_now: &mut Option<TypeClass>,
+        resolved_now: &mut Option<NavResult>,
     ) {
         if std::mem::take(&mut self.awaiting_source_method) {
             // The identifier closing this dot was narrowed to `SOURCE_METHOD`
@@ -1289,12 +1344,20 @@ impl ScopeTracker {
             return;
         };
         match schema.resolve(&base, ident) {
-            Some(Resolved::Class { path, .. }) => {
+            Some(Resolved::Class { path, mult }) => {
+                self.nav_to_many |= !mult.is_to_one();
+                // A class is no scalar operand at any multiplicity — see
+                // [`L2Position::OrderedOperand`].
+                *resolved_now = Some(NavResult::NonScalar);
                 self.nav_cursor = Some(path.clone());
                 self.last_nav_class = Some(path);
             }
-            Some(Resolved::Primitive { prim, .. }) => {
-                *resolved_now = Some(prim.type_class());
+            Some(Resolved::Primitive { prim, mult }) => {
+                *resolved_now = Some(if self.nav_to_many || !mult.is_to_one() {
+                    NavResult::NonScalar
+                } else {
+                    NavResult::Scalar(prim.type_class())
+                });
                 self.nav_cursor = None;
                 self.last_nav_class = None;
             }
@@ -1315,6 +1378,9 @@ impl ScopeTracker {
     fn on_dot(&mut self) {
         self.dot_is_column = false;
         self.awaiting_source_method = self.source_path_seen.take().is_some();
+        // Only the `nav_cursor` arm continues the chain already in flight; every
+        // other arm roots a new one, so T6's latch starts over there.
+        let chained_to_many = std::mem::take(&mut self.nav_to_many);
         if let Some(var) = self.pending_refvar.take() {
             if self.relation_row_vars.contains(&var) {
                 // `$row.` over an arm-R relation-row binder: the next identifier is a
@@ -1327,6 +1393,7 @@ impl ScopeTracker {
             }
         } else if let Some(cursor) = &self.nav_cursor {
             self.dot_base = Some(cursor.clone());
+            self.nav_to_many = chained_to_many;
         } else if self.awaiting_extent_step {
             // A `.` straight off `Class.all()` navigates the extent's own class —
             // the one nav position with no `$var` and no prior cursor to read it
@@ -1334,6 +1401,10 @@ impl ScopeTracker {
             // `{|…::Country.all().sort …}` → "Can't find property 'sort' in class
             // …::Country").
             self.dot_base = self.cur_class.clone();
+            // The extent is itself a `T[*]`, so a property navigated off it maps
+            // over the whole collection (live: `Country.all().gnp < 3` →
+            // "Can't find a match for function `lessThan(Float[*],Integer[1])`").
+            self.nav_to_many = true;
         } else {
             self.dot_base = None;
         }
@@ -1746,8 +1817,8 @@ impl ScopeTracker {
             }
             // N4a. Mutually exclusive with N3e above — one arming is set by the
             // source method's close, the other by the store method's — and it
-            // outranks T2's comparator lever, which reads a *primitive* navExpr
-            // and so is never armed on a `Table[1]` anyway.
+            // outranks the T2/T6 levers below, which read a *member navigation*
+            // and so are never armed on a `Table[1]` a store call returned.
             State::AfterValue | State::AfterName if self.awaiting_store_result => {
                 L2Position::StoreResult { after_dash: false }
             }
@@ -1756,8 +1827,9 @@ impl ScopeTracker {
             State::AfterValue | State::AfterName if self.awaiting_str_operator => {
                 L2Position::StrOperator { after_dash: false }
             }
-            State::AfterValue | State::AfterName => match self.last_resolved {
-                Some(tc) => L2Position::Comparator(tc),
+            State::AfterValue | State::AfterName => match self.last_nav {
+                Some(NavResult::Scalar(tc)) => L2Position::Comparator(tc),
+                Some(NavResult::NonScalar) => L2Position::OrderedOperand,
                 None => L2Position::None,
             },
             // A method-name identifier right after `->` opens here (distinct from
@@ -2003,7 +2075,12 @@ mod tests {
         "B": { "simple_name": "B", "properties": [
           {"name": "m", "type": {"kind": "primitive", "name": "Integer"}, "mult": {"lower": 1, "upper": 1}}
         ] } },
-      "associations": [], "enums": {}
+      "associations": [
+        { "path": "a_b", "ends": [
+          {"property_name": "a", "target_class": "A", "mult": {"lower": 1, "upper": 1}},
+          {"property_name": "bs", "target_class": "B", "mult": {"lower": 1, "upper": null}}
+        ] } ],
+      "enums": {}
     }"#;
 
     fn schema() -> Schema {
@@ -2357,6 +2434,109 @@ mod tests {
         assert_eq!(
             tracker.position(pda.state()),
             L2Position::ReValue(TypeClass::Str)
+        );
+    }
+
+    /// T6's three non-scalar navExpr shapes each report
+    /// [`L2Position::OrderedOperand`] at the comparison anchor, while the
+    /// scalar-primitive navExprs beside them keep reporting T2's
+    /// [`L2Position::Comparator`] — the whole point being that the collapse rule
+    /// fires exactly where the operand is not a scalar.
+    #[test]
+    fn a_non_scalar_navexpr_reports_the_t6_ordered_operand_position() {
+        // A to-many association step: `bs` is `B[1..*]` from A.
+        let to_many: &[&[u8]] = &[
+            b"|", b"A", b".", b"all", b"(", b")", b"->", b"filter", b"(", b"x", b"|", b"$", b"x",
+            b".", b"bs", b" ",
+        ];
+        let (tracker, pda) = run(to_many);
+        assert_eq!(tracker.position(pda.state()), L2Position::OrderedOperand);
+
+        // A primitive mapped over that step: `m` is declared `Integer[1..1]` on
+        // B, but the chain that reaches it is to-many, so it is a collection.
+        let through_to_many: &[&[u8]] = &[
+            b"|", b"A", b".", b"all", b"(", b")", b"->", b"filter", b"(", b"x", b"|", b"$", b"x",
+            b".", b"bs", b".", b"m", b" ",
+        ];
+        let (tracker, pda) = run(through_to_many);
+        assert_eq!(tracker.position(pda.state()), L2Position::OrderedOperand);
+
+        // A navigation off the `Class.all()` extent, itself a `T[*]`.
+        let extent: &[&[u8]] = &[b"|", b"A", b".", b"all", b"(", b")", b".", b"n", b" "];
+        let (tracker, pda) = run(extent);
+        assert_eq!(tracker.position(pda.state()), L2Position::OrderedOperand);
+
+        // A **to-one** association step: still class-typed, still no ordered
+        // operand.
+        let to_one_class: &[&[u8]] = &[
+            b"|", b"B", b".", b"all", b"(", b")", b"->", b"filter", b"(", b"y", b"|", b"$", b"y",
+            b".", b"a", b" ",
+        ];
+        let (tracker, pda) = run(to_one_class);
+        assert_eq!(tracker.position(pda.state()), L2Position::OrderedOperand);
+    }
+
+    /// The contrast that keeps T6's latch honest: a scalar primitive reached
+    /// through a to-one chain still arms T2, and a fresh navigation off a binder
+    /// does not inherit an earlier chain's to-many-ness.
+    #[test]
+    fn a_scalar_navexpr_still_arms_the_t2_comparator_position() {
+        // A bare scalar property.
+        let direct: &[&[u8]] = &[
+            b"|", b"A", b".", b"all", b"(", b")", b"->", b"filter", b"(", b"x", b"|", b"$", b"x",
+            b".", b"n", b" ",
+        ];
+        let (tracker, pda) = run(direct);
+        assert_eq!(
+            tracker.position(pda.state()),
+            L2Position::Comparator(TypeClass::Numeric)
+        );
+
+        // Two to-one hops: `$y.a` is `A[1]`, and `n` is `Integer[1]` on it.
+        let to_one_chain: &[&[u8]] = &[
+            b"|", b"B", b".", b"all", b"(", b")", b"->", b"filter", b"(", b"y", b"|", b"$", b"y",
+            b".", b"a", b".", b"n", b" ",
+        ];
+        let (tracker, pda) = run(to_one_chain);
+        assert_eq!(
+            tracker.position(pda.state()),
+            L2Position::Comparator(TypeClass::Numeric)
+        );
+
+        // A to-many navigation, then a *new* navigation off the binder: the
+        // second chain starts scalar again.
+        let re_rooted: &[&[u8]] = &[
+            b"|", b"A", b".", b"all", b"(", b")", b"->", b"filter", b"(", b"x", b"|", b"$", b"x",
+            b".", b"bs", b"->", b"isEmpty", b"(", b")", b"&&", b"$", b"x", b".", b"n", b" ",
+        ];
+        let (tracker, pda) = run(re_rooted);
+        assert_eq!(
+            tracker.position(pda.state()),
+            L2Position::Comparator(TypeClass::Numeric)
+        );
+    }
+
+    /// T1 stays out of a non-scalar comparison's operand slot. Pure's `equal` is
+    /// `Any[*]`-generic, so `$x.bs == 'v'` compiles live; arming `ReValue` off a
+    /// class-typed navExpr would mask a literal the engine accepts.
+    #[test]
+    fn a_non_scalar_navexpr_does_not_arm_the_t1_operand_position() {
+        let non_scalar: &[&[u8]] = &[
+            b"|", b"A", b".", b"all", b"(", b")", b"->", b"filter", b"(", b"x", b"|", b"$", b"x",
+            b".", b"bs", b"==",
+        ];
+        let (tracker, pda) = run(non_scalar);
+        assert_eq!(tracker.position(pda.state()), L2Position::None);
+        // The same slot after a *scalar* navExpr is armed, so the contrast is
+        // T6's doing and not an unreachable operand position.
+        let scalar: &[&[u8]] = &[
+            b"|", b"A", b".", b"all", b"(", b")", b"->", b"filter", b"(", b"x", b"|", b"$", b"x",
+            b".", b"n", b"==",
+        ];
+        let (tracker, pda) = run(scalar);
+        assert_eq!(
+            tracker.position(pda.state()),
+            L2Position::ReValue(TypeClass::Numeric)
         );
     }
 
