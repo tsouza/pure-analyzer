@@ -371,6 +371,10 @@ Class demo::Collision
 {
   second: Integer[1];
 }
+Class demo::Independent
+{
+  kept: Boolean[1];
+}
 "#,
     );
 
@@ -378,6 +382,12 @@ Class demo::Collision
         graph.class("demo::Collision").is_none(),
         "duplicate class declarations cannot select a last definition"
     );
+    let independent = graph.class("demo::Independent").expect("independent class");
+    assert!(
+        independent.coverage_gap(),
+        "a duplicate declaration leaves same-source class coverage open-world"
+    );
+    assert!(independent.properties().contains_key("kept"));
     let diagnostics = graph
         .diagnostics()
         .iter()
@@ -478,6 +488,51 @@ Class demo::Winner
     assert_eq!(
         winner.properties()["value"].target().raw_type().as_str(),
         "String"
+    );
+    assert_eq!(graph.diagnostics().len(), 1);
+    let diagnostic = &graph.diagnostics()[0];
+    assert_eq!(diagnostic.code, MODEL_MERGE_CONFLICT);
+    assert_eq!(diagnostic.primary.file.index(), 1);
+    assert_eq!(diagnostic.secondary[0].file.index(), 0);
+}
+
+#[test]
+fn mixed_documents_allow_a_later_pmcd_class_to_replace_pure_deterministically() {
+    let pmcd = json!({
+        "_type": "data",
+        "elements": [{
+            "_type": "class",
+            "package": "demo",
+            "name": "Winner",
+            "superTypes": [],
+            "stereotypes": [],
+            "properties": [{
+                "name": "value",
+                "genericType": {"rawType": "Integer"},
+                "multiplicity": {"lowerBound": 1, "upperBound": 1}
+            }],
+            "qualifiedProperties": []
+        }]
+    })
+    .to_string();
+    let pure_source = r#"
+Class demo::Winner
+{
+  value: String[0..1];
+}
+"#;
+    let graph = load_model_documents(&[
+        ModelDocument::Pure(PureDocument::new("first.pure", pure_source)),
+        ModelDocument::Pmcd(PmcdDocument::new("second.pmcd.json", &pmcd)),
+    ])
+    .expect("merge");
+
+    let winner = graph.class("demo::Winner").expect("winner");
+    assert_eq!(winner.provenance(), Provenance::Pmcd);
+    assert_eq!(winner.source().index(), 1);
+    assert_eq!(
+        winner.properties()["value"].target().raw_type().as_str(),
+        "Integer"
     );
     assert_eq!(graph.diagnostics().len(), 1);
     let diagnostic = &graph.diagnostics()[0];
