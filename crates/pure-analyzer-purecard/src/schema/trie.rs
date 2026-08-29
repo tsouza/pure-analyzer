@@ -22,12 +22,42 @@ pub(crate) struct Trie {
 }
 
 /// One trie node: its outgoing edges (sorted by byte for binary search — dense
-/// alphabets never blow up to a 256-wide array) and whether a legal name ends
-/// here.
+/// alphabets never blow up to a 256-wide array), whether a legal name ends here,
+/// and — when one does — what that name admits as its continuation.
 #[derive(Debug, Default, Clone)]
 struct Node {
     next: Vec<(u8, u32)>,
     terminal: bool,
+    close: NameClose,
+}
+
+/// What a **whole** legal name in the trie admits once its bytes are complete.
+///
+/// A per-name property rather than a per-rule one: the N3 source trie holds
+/// class paths, the store path, and the `let` keyword side by side, and each
+/// continues differently (`Class.all()`, `Db->tableReference(…)`,
+/// `let x = …`). Keying it on the terminal node is what lets one trie carry
+/// all three.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) enum NameClose {
+    /// The name stands on its own: whatever the byte-PDA admits after it is
+    /// legal, and the stream may end on it.
+    #[default]
+    Free,
+    /// The name is only ever continued by a token opening with this byte — not
+    /// EOS, not another hop, and not even whitespace (a space would close the
+    /// lexeme, drop the rule out of scope, and hand the same escape back).
+    MustFollow(u8),
+}
+
+impl NameClose {
+    /// Whether a whole name closed this way may be followed by `byte`.
+    pub(crate) const fn admits(self, byte: u8) -> bool {
+        match self {
+            Self::Free => true,
+            Self::MustFollow(required) => byte == required,
+        }
+    }
 }
 
 /// Which bytes continue a name's own lexeme — the predicate that separates "the
@@ -68,25 +98,44 @@ pub(crate) enum Walk {
     /// advance the cursor here.
     Stay(u32),
     /// The bytes completed a legal name and continued with a boundary byte (a
-    /// non-identifier byte the byte-PDA will re-vet) — keep the token; the name is
-    /// done.
-    Complete,
+    /// non-identifier byte the byte-PDA will re-vet) — the name is done. The
+    /// node it completed at and the boundary byte that ended it are reported so
+    /// the caller can hold the completed name to its own [`NameClose`]: the
+    /// byte-PDA re-vets the tail *lexically*, but it does not know a class path
+    /// owes a `.all()` and a store path owes a `->`.
+    Complete {
+        /// The terminal node the name completed at.
+        at: u32,
+        /// The byte that ended it.
+        boundary: u8,
+    },
     /// The bytes cannot extend any legal name — clear the token.
     Diverge,
 }
 
 impl Trie {
-    /// Build a trie from a set of legal completion byte-strings.
+    /// Build a trie from a set of legal completion byte-strings, each standing on
+    /// its own ([`NameClose::Free`]).
     pub(crate) fn from_names<I, S>(names: I) -> Self
     where
         I: IntoIterator<Item = S>,
         S: AsRef<[u8]>,
     {
+        Self::from_closing_names(names.into_iter().map(|name| (name, NameClose::Free)))
+    }
+
+    /// Build a trie from legal completion byte-strings paired with what each
+    /// admits once whole.
+    pub(crate) fn from_closing_names<I, S>(names: I) -> Self
+    where
+        I: IntoIterator<Item = (S, NameClose)>,
+        S: AsRef<[u8]>,
+    {
         let mut trie = Self {
             nodes: vec![Node::default()],
         };
-        for name in names {
-            trie.insert(name.as_ref());
+        for (name, close) in names {
+            trie.insert(name.as_ref(), close);
         }
         trie
     }
@@ -96,7 +145,7 @@ impl Trie {
         0
     }
 
-    fn insert(&mut self, bytes: &[u8]) {
+    fn insert(&mut self, bytes: &[u8], close: NameClose) {
         let mut node = 0usize;
         for &byte in bytes {
             node = match self.child(node as u32, byte) {
@@ -118,6 +167,7 @@ impl Trie {
             };
         }
         self.nodes[node].terminal = true;
+        self.nodes[node].close = close;
     }
 
     fn child(&self, node: u32, byte: u8) -> Option<u32> {
@@ -133,6 +183,13 @@ impl Trie {
     /// whether the open lexeme may end here (`docs/spec/schema.md` §6.5).
     pub(crate) fn is_terminal(&self, node: u32) -> bool {
         self.nodes[node as usize].terminal
+    }
+
+    /// What the name ending at `node` admits as its continuation. Meaningful
+    /// only at a terminal node; a non-terminal carries the
+    /// [`Free`](NameClose::Free) default, which constrains nothing.
+    pub(crate) fn close_at(&self, node: u32) -> NameClose {
+        self.nodes[node as usize].close
     }
 }
 
@@ -152,7 +209,10 @@ pub(crate) fn walk(trie: &Trie, mut node: u32, bytes: &[u8], shape: NameShape) -
             Some(child) => node = child,
             None => {
                 return if trie.is_terminal(node) && !shape.continues(byte) {
-                    Walk::Complete
+                    Walk::Complete {
+                        at: node,
+                        boundary: byte,
+                    }
                 } else {
                     Walk::Diverge
                 };
@@ -164,7 +224,7 @@ pub(crate) fn walk(trie: &Trie, mut node: u32, bytes: &[u8], shape: NameShape) -
 
 #[cfg(test)]
 mod tests {
-    use super::{NameShape, Trie, Walk, walk};
+    use super::{NameClose, NameShape, Trie, Walk, walk};
 
     fn member_trie() -> Trie {
         Trie::from_names(["country", "countryName", "countryId", "id"])
@@ -210,14 +270,14 @@ mod tests {
     fn a_completed_name_then_a_boundary_byte_completes() {
         let trie = member_trie();
         // `id` is a name; a following `.` (a boundary byte) means the name is done.
-        assert_eq!(
+        assert!(matches!(
             walk(&trie, trie.root(), b"id.", NameShape::Plain),
-            Walk::Complete
-        );
-        assert_eq!(
+            Walk::Complete { boundary: b'.', .. }
+        ));
+        assert!(matches!(
             walk(&trie, trie.root(), b"id(", NameShape::Plain),
-            Walk::Complete
-        );
+            Walk::Complete { boundary: b'(', .. }
+        ));
     }
 
     #[test]
@@ -295,10 +355,10 @@ mod tests {
         );
         // …and the same bytes under `Plain` are exactly the leak: a hand-off to an
         // automaton that does not in fact re-vet.
-        assert_eq!(
+        assert!(matches!(
             walk(&trie, trie.root(), b"spider::w::Db::", NameShape::Plain),
-            Walk::Complete
-        );
+            Walk::Complete { boundary: b':', .. }
+        ));
         // A colon that *does* extend a real path still walks.
         assert!(matches!(
             walk(
@@ -310,10 +370,10 @@ mod tests {
             Walk::Stay(_)
         ));
         // A genuine boundary byte after a complete path still completes.
-        assert_eq!(
+        assert!(matches!(
             walk(&trie, trie.root(), b"spider::w::Db.", NameShape::ClassPath),
-            Walk::Complete
-        );
+            Walk::Complete { boundary: b'.', .. }
+        ));
     }
 
     /// A plain name's colon is a real boundary (`InIdent` + `:` leaves the
@@ -322,10 +382,51 @@ mod tests {
     #[test]
     fn a_plain_name_still_completes_at_a_colon() {
         let trie = member_trie();
-        assert_eq!(
+        assert!(matches!(
             walk(&trie, trie.root(), b"id:", NameShape::Plain),
-            Walk::Complete
-        );
+            Walk::Complete { boundary: b':', .. }
+        ));
+    }
+
+    /// N3c's mechanism at its root: one trie carrying names that close
+    /// *differently*. A completed name reports the node it ended at, so the
+    /// caller reads that name's own policy rather than one policy per rule.
+    #[test]
+    fn each_name_carries_its_own_close_policy() {
+        let trie = Trie::from_closing_names([
+            ("spider::w::model::Country", NameClose::MustFollow(b'.')),
+            ("spider::w::Db", NameClose::MustFollow(b'-')),
+            ("let", NameClose::Free),
+        ]);
+        for (name, next, admitted) in [
+            ("spider::w::model::Country", b'.', true),
+            ("spider::w::model::Country", b'-', false),
+            ("spider::w::Db", b'-', true),
+            ("spider::w::Db", b'.', false),
+            ("let", b' ', true),
+        ] {
+            let mut bytes = name.as_bytes().to_vec();
+            bytes.push(next);
+            let Walk::Complete { at, boundary } =
+                walk(&trie, trie.root(), &bytes, NameShape::ClassPath)
+            else {
+                panic!("{name} + {:?} must complete", char::from(next));
+            };
+            assert_eq!(boundary, next);
+            assert_eq!(
+                trie.close_at(at).admits(boundary),
+                admitted,
+                "{name} followed by {:?}",
+                char::from(next)
+            );
+        }
+        // A non-terminal node constrains nothing, so a prefix cursor never
+        // accidentally inherits a longer name's policy.
+        let Walk::Stay(cursor) = walk(&trie, trie.root(), b"spider::w::D", NameShape::ClassPath)
+        else {
+            panic!("a strict prefix stays");
+        };
+        assert_eq!(trie.close_at(cursor), NameClose::Free);
     }
 
     #[test]
