@@ -507,7 +507,7 @@ const RATCHET_SLACK: usize = 3;
 /// was designed to move.
 ///
 /// **Phase 8 (2026-08-29) re-measures at 49/64 = recipe 5/5 + exploration
-/// 44/59**, bit-identical across two consecutive runs — one below Phase 7's
+/// 44/59**, bit-identical across two consecutive runs — one below the standing
 /// record, so this baseline is *not* raised (floors ratchet upward only) and not
 /// lowered either. Four L1 tightenings land, each a case of L1 spelling a
 /// construct exactly as the pinned engine does: a date literal's fractional
@@ -515,7 +515,7 @@ const RATCHET_SLACK: usize = 3;
 /// position opens a parenthesised *group*, which has no `,` to separate; a lambda
 /// binder pipe binds to a name; and a binder type that has taken a `::` owes its
 /// multiplicity. Live parse failures across both databases fell **13 → 9**, and
-/// the guard arm — where this phase's gain landed — moved +2.
+/// the guard arm — where this phase's gain landed — moved 48/64 → 50/64.
 const CRITERION_BASELINE: Baseline = Baseline {
     db_id: CRITERION_DB,
     recipe_compiled: 5,
@@ -587,16 +587,17 @@ const CRITERION_BASELINE: Baseline = Baseline {
 /// reshuffled; 41 clears its 42 − [`RATCHET_SLACK`] = 39 floor, which is
 /// therefore left where Phase 7 set it and T6 confirmed.
 ///
-/// **Phase 8 (2026-08-29) ratchets this to 50/64 = recipe 6/6 + exploration
-/// 44/58**, bit-identical across two consecutive runs. None of the phase's four
-/// tightenings was designed against either database's taxonomy — each was read
-/// off the pinned engine's own answers to a probe set on the branch — and the
-/// arm that is not the design target is the one that moved, which is the
+/// **Phase 8 (2026-08-29) ratchets this to 50/64 = recipe 7/7 + exploration
+/// 43/57**, bit-identical across two consecutive runs, measured over T4's own
+/// partition split. None of the phase's four tightenings was designed against
+/// either database's taxonomy — each was read off the pinned engine's answers to
+/// a probe set on the branch — and the arm that is not the design target is the
+/// one that moved (+2 on the total, +2 on the exploration record), which is the
 /// generalization evidence.
 const GENERALIZATION_BASELINE: Baseline = Baseline {
     db_id: GENERALIZATION_DB,
     recipe_compiled: 7,
-    exploration_compiled: 44,
+    exploration_compiled: 43,
 };
 
 /// Decode a walk's token ids back to its Pure text through `grammar`'s own
