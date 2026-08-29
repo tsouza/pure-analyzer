@@ -342,13 +342,13 @@ const RATCHET_SLACK: usize = 3;
 /// too (`->isEmpty('…')` is gone; no receiver-only builtin is called with an
 /// argument on either database).
 ///
-/// **Issue #116 T6 re-measure (2026-08-29): unchanged at 49/64 = recipe 5/5 +
-/// exploration 44/59**, bit-identical across two consecutive runs, measured on
-/// the same stack immediately before and after the rule landed. T6 is a
-/// soundness/precision rule, not a walk-count push: it clears four tokens at one
-/// anchor, so it removes illegal walks from the *admissible* set rather than
-/// converting a failing walk into a compiling one. The generalization guard did
-/// move — see [`GENERALIZATION_BASELINE`].
+/// **Issue #116 T6 re-measure (2026-08-29): unchanged at 50/64 = recipe 5/5 +
+/// exploration 45/59**, measured on the same stack with the T6 commits' own
+/// sources checked out to their parent and back. T6 is a soundness/precision
+/// rule, not a walk-count push: it clears four tokens at one anchor, so it
+/// removes illegal walks from the *admissible* set rather than converting a
+/// failing walk into a compiling one. The generalization guard did not move
+/// either — see [`GENERALIZATION_BASELINE`].
 const CRITERION_BASELINE: Baseline = Baseline {
     db_id: CRITERION_DB,
     recipe_compiled: 5,
@@ -398,17 +398,19 @@ const CRITERION_BASELINE: Baseline = Baseline {
 /// **+7** against the criterion's +4 — the arm that is not the design target
 /// moving further is the generalization evidence.
 ///
-/// **Issue #116 T6 ratchets this to 49/64 = recipe 6/6 + exploration 43/58**,
-/// bit-identical across two consecutive runs, against 48/64 = 6/6 + 42/58
-/// measured on the same stack with the T6 commit's own sources checked out to
-/// their parent. The +1 is a single walk that stopped reaching an ordered
-/// comparator on a to-many navigation and drew a compiling continuation
-/// instead; the criterion did not move at all, so this is reported as what it
-/// is — reshuffle within the phase's slack, not a claimed precision win.
+/// **Issue #116 T6 re-measure (2026-08-29): unchanged at 48/64 = recipe 6/6 +
+/// exploration 42/58**, measured on the same stack with the T6 commits' own
+/// sources checked out to their parent and back, so this baseline is not
+/// raised. Recorded because the honest number changed under the rule's feet:
+/// against the *pre*-Phase-7 base T6 measured +1 here (42 → 43), and the note
+/// claiming that ratchet was withdrawn once Phase 7 landed underneath and the
+/// re-measure came back level. A one-walk move that a neighbouring phase
+/// reshuffles away was exploration noise, not the rule's doing — which is what
+/// the criterion arm holding still through both measurements already said.
 const GENERALIZATION_BASELINE: Baseline = Baseline {
     db_id: GENERALIZATION_DB,
     recipe_compiled: 6,
-    exploration_compiled: 43,
+    exploration_compiled: 42,
 };
 
 /// Decode a walk's token ids back to its Pure text through `grammar`'s own
