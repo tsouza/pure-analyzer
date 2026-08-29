@@ -33,8 +33,16 @@ fn empty_pmcd_class(name: &str) -> String {
 const COLLIDING_PURE_ASSOCIATION: &str = r#"
 Association demo::APure
 {
-  others: demo::Left[*];
-  shared: demo::Right[1];
+ others: demo::Left[*];
+ shared: demo::Right[1];
+}
+"#;
+
+const SECOND_COLLIDING_PURE_ASSOCIATION: &str = r#"
+Association demo::BPure
+{
+ moreOthers: demo::Left[*];
+ shared: demo::Right[1];
 }
 "#;
 
@@ -597,6 +605,29 @@ fn pmcd_association_survives_a_colliding_pure_association_in_either_order() {
     let pure_first = mixed_association_collision_graph(true);
     assert_trusted_pmcd_association(&pure_first, 3);
     assert_unresolved_pure_collision(&pure_first, 0);
+}
+
+#[test]
+fn one_pmcd_association_wins_against_multiple_colliding_pure_ends() {
+    let left = empty_pmcd_class("Left");
+    let right = empty_pmcd_class("Right");
+    let trusted = trusted_pmcd_association();
+    let graph = load_model_documents(&[
+        ModelDocument::Pmcd(PmcdDocument::new("left.pmcd.json", &left)),
+        ModelDocument::Pmcd(PmcdDocument::new("right.pmcd.json", &right)),
+        ModelDocument::Pmcd(PmcdDocument::new("trusted.pmcd.json", &trusted)),
+        ModelDocument::Pure(PureDocument::new(
+            "first-colliding.pure",
+            COLLIDING_PURE_ASSOCIATION,
+        )),
+        ModelDocument::Pure(PureDocument::new(
+            "second-colliding.pure",
+            SECOND_COLLIDING_PURE_ASSOCIATION,
+        )),
+    ])
+    .expect("Pure uncertainty must not invalidate the sole PMCD association");
+
+    assert_trusted_pmcd_association(&graph, 2);
 }
 
 #[test]
