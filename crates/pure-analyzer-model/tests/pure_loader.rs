@@ -476,6 +476,27 @@ Class demo::Partial
 }
 
 #[test]
+fn unsupported_later_pure_source_opens_prior_unrelated_pmcd_classes() {
+    let existing = empty_pmcd_class("Existing");
+    let graph = load_model_documents(&[
+        ModelDocument::Pmcd(PmcdDocument::new("existing.pmcd.json", &existing)),
+        ModelDocument::Pure(PureDocument::new(
+            "unsupported.pure",
+            r#"
+Enum demo::Unsupported { enabled }
+"#,
+        )),
+    ])
+    .expect("unsupported Pure must preserve prior PMCD facts");
+
+    let existing = graph.class("demo::Existing").expect("prior class");
+    assert!(
+        existing.coverage_gap(),
+        "an unrelated unsupported later Pure source leaves the complete model open-world"
+    );
+}
+
+#[test]
 fn incomplete_associations_open_same_source_classes() {
     let graph = pure(
         r#"

@@ -474,12 +474,8 @@ fn lower_association(node: &GreenNode, context: LoweringContext<'_>) -> LoweredA
 
     let mut ends = Vec::new();
     for property in direct_nodes(node, SyntaxKind::DOMAIN_PROPERTY_DECL) {
-        if node_is_unconfirmed(property, context) {
-            return LoweredAssociation {
-                value: None,
-                uncertain: true,
-            };
-        }
+        // `node_has_coverage_gap` above covers every descendant declaration,
+        // including each association end.
         let Some(property) = lower_property(property) else {
             return LoweredAssociation {
                 value: None,
@@ -825,16 +821,6 @@ fn is_trivia(kind: SyntaxKind) -> bool {
         kind,
         SyntaxKind::WHITESPACE | SyntaxKind::LINE_COMMENT | SyntaxKind::BLOCK_COMMENT
     )
-}
-
-fn node_is_unconfirmed(node: &GreenNode, context: LoweringContext<'_>) -> bool {
-    context.gaps.iter().any(|gap| {
-        gap.kind == DomainCoverageGapKind::MalformedDeclaration
-            && range_start(gap.span) == range_start(node.text_range())
-    }) || context
-        .parser_diagnostics
-        .iter()
-        .any(|diagnostic| ranges_touch_or_overlap(diagnostic.primary.span, node.text_range()))
 }
 
 fn node_has_coverage_gap(node: &GreenNode, context: LoweringContext<'_>) -> bool {
