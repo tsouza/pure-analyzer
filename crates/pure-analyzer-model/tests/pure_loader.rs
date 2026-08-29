@@ -611,7 +611,7 @@ Class demo::Partial
         partial.declaration_span(),
         Some(exact_span(
             source,
-            "Class demo::Partial\n{\n  bad: Foo;\n  good: String[1];\n}"
+            "Class demo::Partial\n{\n    bad: Foo;\n    good: String[1];\n    query(value: String[1]): String[1] {};\n}"
         )),
         "a confirmed class path retains its declaration span despite an open-world coverage gap"
     );
