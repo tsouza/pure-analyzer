@@ -294,13 +294,9 @@ fn insert_property(
     class: &QName,
     context: LoweringContext<'_>,
 ) -> bool {
-    if node_is_unconfirmed(node, context) {
-        return false;
-    }
-    let Some(property) = lower_property(node) else {
+    let Some(name) = direct_name(node) else {
         return false;
     };
-    let name = property.name().clone();
     if let Some(first) = members.property_declarations.get(&name) {
         let _ = members.properties.remove(&name);
         members.diagnostics.push(duplicate_member_diagnostic(
@@ -316,6 +312,12 @@ fn insert_property(
     members
         .property_declarations
         .insert(name.clone(), node.text_range());
+    if node_is_unconfirmed(node, context) {
+        return false;
+    }
+    let Some(property) = lower_property(node) else {
+        return false;
+    };
     members.properties.insert(name, property).is_none()
 }
 
@@ -326,13 +328,9 @@ fn insert_qualified_property(
     class: &QName,
     context: LoweringContext<'_>,
 ) -> bool {
-    if node_is_unconfirmed(node, context) {
-        return false;
-    }
-    let Some(property) = lower_qualified_property(node, annotations, context) else {
+    let Some(name) = direct_name(node) else {
         return false;
     };
-    let name = property.name().clone();
     if let Some(first) = members.qualified_property_declarations.get(&name) {
         let _ = members.qualified_properties.remove(&name);
         members.diagnostics.push(duplicate_member_diagnostic(
@@ -348,6 +346,12 @@ fn insert_qualified_property(
     members
         .qualified_property_declarations
         .insert(name.clone(), node.text_range());
+    if node_is_unconfirmed(node, context) {
+        return false;
+    }
+    let Some(property) = lower_qualified_property(node, annotations, context) else {
+        return false;
+    };
     members
         .qualified_properties
         .insert(name, property)

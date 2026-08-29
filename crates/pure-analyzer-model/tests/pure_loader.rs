@@ -360,6 +360,51 @@ Class demo::Duplicate
 }
 
 #[test]
+fn malformed_duplicate_pure_members_do_not_leave_confirmed_facts() {
+    for source in [
+        r#"
+Class demo::MalformedDuplicate {
+  value: String[1];
+  value: Integer;
+  query(): String[1] {};
+  query(): Integer {};
+}
+"#,
+        r#"
+Class demo::MalformedDuplicate {
+  value: Integer;
+  value: String[1];
+  query(): Integer {};
+  query(): String[1] {};
+}
+"#,
+    ] {
+        let graph = pure(source);
+        let class = graph
+            .class("demo::MalformedDuplicate")
+            .expect("malformed duplicate class");
+        assert!(class.coverage_gap(), "{source}");
+        assert!(
+            !class.properties().contains_key("value"),
+            "a malformed duplicate property must invalidate any same-name fact: {source}"
+        );
+        assert!(
+            !class.qualified_properties().contains_key("query"),
+            "a malformed duplicate qualified property must invalidate any same-name fact: {source}"
+        );
+        assert_eq!(
+            graph
+                .diagnostics()
+                .iter()
+                .filter(|diagnostic| diagnostic.code == DiagCode::DuplicateModelDeclaration)
+                .count(),
+            2,
+            "each malformed duplicate needs a collision diagnostic: {source}"
+        );
+    }
+}
+
+#[test]
 fn duplicate_pure_classes_do_not_choose_a_last_declaration() {
     let graph = pure(
         r#"
