@@ -227,6 +227,22 @@ const RATCHET_SLACK: usize = 3;
 /// shapes the eager generator offers; `recipe_walks` drops an unrealizable
 /// shape rather than padding it, so the recipe partition is five walks wide
 /// here and the exploration partition inherits the freed slot.
+///
+/// **Phase 4 re-measure (2026-08-29): 38/64 = recipe 5/5 + exploration 33/59**,
+/// bit-identical across two consecutive runs. The baseline below is *not*
+/// lowered to it — floors ratchet upward only (constitution §3/§7) — and the
+/// floor stays 34 − [`RATCHET_SLACK`] = 31, which the re-measure clears.
+///
+/// Recorded honestly, because the headline number is not where Phase 4's work
+/// landed: the phase halved the L1 **parse**-failure residue on both databases
+/// (`world_1` 15 → 7, `car_1` 20 → 10 of their exploration failures), and the
+/// probability mass that freed up refilled with builtin-signature and
+/// multiplicity type errors (`world_1` 10 → 19, `car_1` 4 → 16) — the original
+/// taxonomy's buckets D and E, which no L1 tightening can reach and which this
+/// phase did not target. The exploration stream reshuffles end to end on every
+/// mask change, so a closed failure class frees a slot for a fresh draw rather
+/// than converting to a compile; the count moved −1 / −2 while the failure
+/// *set* changed shape substantially.
 const CRITERION_BASELINE: Baseline = Baseline {
     db_id: CRITERION_DB,
     recipe_compiled: 5,
@@ -243,6 +259,11 @@ const CRITERION_BASELINE: Baseline = Baseline {
 /// so its partitions split one slot differently from the criterion's — which is
 /// exactly why each floor is stated per database rather than as a single
 /// cross-database number.
+///
+/// **Phase 4 re-measure (2026-08-29): 38/64 = recipe 6/6 + exploration 32/58**,
+/// bit-identical across two consecutive runs, clearing the 34 − 3 = 31 floor.
+/// Not lowered, for the reason [`CRITERION_BASELINE`] states; the parse-failure
+/// halving it records is, if anything, larger here.
 const GENERALIZATION_BASELINE: Baseline = Baseline {
     db_id: GENERALIZATION_DB,
     recipe_compiled: 6,
@@ -388,25 +409,32 @@ fn assert_live_compile_rate(baseline: &Baseline) {
 /// proves that gap is in fact closed (269/269 *real* gold queries compile
 /// against the same grammar this lane uses).
 ///
-/// After Phase 3's N3c source-continuation rule, what dominates the
-/// exploration partition's residue has changed shape entirely — the
-/// receiver-category failures that used to be ~70% of it are gone, and the
-/// 25 remaining `world_1` failures (24 on `car_1`) are:
+/// After Phase 4, the exploration residue has inverted again. Of `world_1`'s 26
+/// remaining exploration failures (26 on `car_1`) only **7** (10 on `car_1`)
+/// fail to parse at all, down from 15 / 20 — the four L1 tightenings this phase
+/// shipped (`docs/spec/grammar.md` §5.6) plus N3d/N3e/N1 closed the shapes that
+/// dominated it. What is left is almost entirely the original taxonomy's
+/// buckets D and E, and neither is reachable from L1:
 ///
-/// - **15 of 25 fail to even *parse*** (20 of 24 on `car_1`): nested
-///   predicate/operator combinations (`&&`, `||`, comparisons, arithmetic, a
-///   `:` type ascription in a value slot) that `docs/spec/grammar.md` §5.7
-///   explicitly documents as "loosely typed... left to L2/compiler," so L1
-///   admits shapes real Pure's parser doesn't accept. Closing this means L1
-///   modeling real operator/predicate arity, not a walker heuristic — it is
-///   now the *dominant* residue rather than a third of it.
-/// - **3 are the store method's argument shape**: `tableReference(Database[1],
-///   String[1])` and `(Database[1], Boolean[1])` — the right method name (N3c
-///   narrows that) with the wrong arity or argument types. The same treatment
-///   `SourceMethodArg` gives `all()`'s own call would close them.
-/// - **the rest are operator/literal type errors** (`and(String[1],
-///   String[1])`, `divide`, `minus`) plus two multiplicity errors — the
-///   original taxonomy's bucket E, untouched by this phase.
+/// - **Bucket D — wrong method for a `T[*]` extent receiver** (`->pair`,
+///   `->average`, `->isEmpty(x)`, `->agg`, `->join`, `->groupBy`, `->between`):
+///   the receiver is right and the *name* is a real builtin, so nothing about
+///   the shape is wrong — only the signature. N3c's trick does not transfer:
+///   the corpus offers no closed name set here (gold sees `filter`/`project`/
+///   `groupBy`/`map` after an extent, the engine-labelled differential corpus a
+///   dozen more), and §4 forbids inventing one. This needs the coarse
+///   receiver-category state Phase 0 already named as D's prevention mechanism.
+/// - **Bucket E — operator/literal type and multiplicity errors**
+///   (`and(String[1],String[1])`, `divide`, `minus(Any[2])`, "Collection element
+///   must have a multiplicity [1]"): L2 literal-kind tracking per operator, also
+///   already named.
+///
+/// The named L1 residue that remains is small and each item is its own unit:
+/// the symbolic milestoning literal is still `%<lowercase>+` rather than the two
+/// real symbols (§5.6), so `Class.all(%name)` walks; a typed-binder `:` inside a
+/// call is still admitted after any completed term rather than only after the
+/// argument's own first identifier; and a value-position `::` classpath is
+/// narrowed by no rule at all.
 #[test]
 fn schema_aware_walks_compile_against_a_real_pmcd() {
     assert_live_compile_rate(&CRITERION_BASELINE);

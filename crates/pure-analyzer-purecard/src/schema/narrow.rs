@@ -82,6 +82,15 @@ enum CacheKey {
     /// The source method's argument-position set — a whole-vocab constant
     /// (independent of schema, class, or emitted prefix), so one key suffices.
     SourceMethodArg,
+    /// N3d's store-method argument-slot set — likewise a whole-vocab constant.
+    StoreMethodArg,
+    /// N3d's store-method separator set. Whether the call still owes another
+    /// argument is the whole identity of the set (`,` while arguments remain,
+    /// the call's own `)` once the arity is met), so it keys the memo exactly.
+    StoreMethodArgSep(bool),
+    /// N3e's class-extent continuation set, before vs. after the `-` that opens a
+    /// step arrow — two whole-vocab constants.
+    SourceExtent(bool),
     /// N1/N2 member set of a class — one per class.
     Member(String),
     /// T1 operand class — the literal-class lever (cursor-independent).
@@ -195,6 +204,26 @@ pub(crate) fn narrow_into(
         L2Position::SourceMethodArg => {
             with_cache(dst, cache, CacheKey::SourceMethodArg, |dst| {
                 fill_source_method_arg(dst, vocab, eos_bit);
+            });
+            true
+        }
+        L2Position::StoreMethodArg => {
+            with_cache(dst, cache, CacheKey::StoreMethodArg, |dst| {
+                fill_store_method_arg(dst, vocab, eos_bit);
+            });
+            true
+        }
+        L2Position::StoreMethodArgSep { remaining } => {
+            let remaining = *remaining;
+            with_cache(dst, cache, CacheKey::StoreMethodArgSep(remaining), |dst| {
+                fill_store_method_arg_sep(dst, vocab, eos_bit, remaining);
+            });
+            true
+        }
+        L2Position::SourceExtent { after_dash } => {
+            let after_dash = *after_dash;
+            with_cache(dst, cache, CacheKey::SourceExtent(after_dash), |dst| {
+                fill_source_extent(dst, vocab, eos_bit, after_dash);
             });
             true
         }
@@ -348,7 +377,11 @@ enum Names<'a> {
     SourceMethod,
     /// N3c: the store methods [`STORE_METHODS`].
     StoreMethod,
-    /// N1/N2: one class's member names.
+    /// N1/N2: one class's member names, bare and quoted. Pure admits either form
+    /// after a navigation dot (`$x.name`, `$x.'Gross Credits'`), and both name the
+    /// same member set — so both are candidates, and a quoted phantom is cleared
+    /// exactly as a bare one is (live: `{|…::Countrylanguage.all().'Capital_T1'}`
+    /// → "Can't find property 'Capital_T1' in class …::Countrylanguage").
     Member(&'a Schema, &'a str),
     /// N6: the emitted relation columns, quoted as the model writes them.
     Column(&'a [Vec<u8>]),
@@ -403,7 +436,7 @@ impl<'a> TrieRule<'a> {
             ),
             L2Position::Member(class) => (
                 CacheKey::Member(class.clone()),
-                TrieKind::Ident,
+                TrieKind::IdentOrStr,
                 Names::Member(schema, class),
             ),
             L2Position::Column => (
@@ -427,6 +460,9 @@ impl<'a> TrieRule<'a> {
             // deleted without a compile error.
             L2Position::None
             | L2Position::SourceMethodArg
+            | L2Position::StoreMethodArg
+            | L2Position::StoreMethodArgSep { .. }
+            | L2Position::SourceExtent { .. }
             | L2Position::ReValue(_)
             | L2Position::Comparator(_)
             | L2Position::Reducer(_)
@@ -465,9 +501,18 @@ impl Names<'_> {
             Self::StoreMethod => Trie::from_closing_names(
                 STORE_METHODS
                     .iter()
-                    .map(|name| (*name, NameClose::MustFollow(CALL_OPEN))),
+                    .map(|(name, _)| (*name, NameClose::MustFollow(CALL_OPEN))),
             ),
-            Self::Member(schema, class) => Trie::from_names(schema.member_names(class)),
+            Self::Member(schema, class) => {
+                let names = schema.member_names(class);
+                let quoted: Vec<Vec<u8>> = names.iter().map(|n| quote(n.as_bytes())).collect();
+                Trie::from_names(
+                    names
+                        .iter()
+                        .map(|n| n.as_bytes().to_vec())
+                        .chain(quoted.into_iter()),
+                )
+            }
             Self::Column(columns) => Trie::from_names(columns.iter().map(|c| quote(c))),
             Self::RelationColumn(columns) => Trie::from_names(columns.iter().cloned()),
             Self::RefVar(vars) => Trie::from_names(vars.iter().map(String::as_bytes)),
@@ -602,6 +647,9 @@ pub(crate) fn narrow_fused_into(
         | L2Position::SourceMethod
         | L2Position::StoreMethod
         | L2Position::SourceMethodArg
+        | L2Position::StoreMethodArg
+        | L2Position::StoreMethodArgSep { .. }
+        | L2Position::SourceExtent { .. }
         | L2Position::Column
         | L2Position::ReValue(_)
         | L2Position::Comparator(_)
@@ -890,6 +938,119 @@ fn fill_source_method_arg(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32) {
         }
     }
     dst.set(eos_bit);
+}
+
+/// The byte a store-method argument owes: its string literal's opening quote.
+/// Every store-method parameter is a `String[1]` (`STORE_METHODS`' corpus and
+/// signature evidence), and a Pure string literal has exactly one opener.
+const STR_OPEN: u8 = b'\'';
+
+/// The byte that separates two store-method arguments.
+const ARG_SEP: u8 = b',';
+
+/// The byte that closes a store method's own call.
+const CALL_CLOSE: u8 = b')';
+
+/// Refill `dst` with [`L2Position::StoreMethodArg`]'s set, plus EOS: an opened
+/// store-method argument slot owes a string literal, so only whitespace and a
+/// string's own opening quote survive. The closer is *not* kept — that is the
+/// arity half of N3d, and it is why `->tableReference()` (live:
+/// "tableReference(Database[1])") cannot be walked at all.
+///
+/// Discriminated on the token's **first byte** rather than a whole-token
+/// [`classify`], exactly as N7's [`keeps_value_ident`] is: under byte-level BPE
+/// a legal continuation routinely arrives fused to its neighbours
+/// (`,\n    'Faculty'` is one token over the gold vocabulary), and a whole-token
+/// classification would mask it — over-masking a *gold* query, not a phantom.
+fn fill_store_method_arg(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32) {
+    dst.clear_all();
+    for id in 0..vocab.len() as u32 {
+        if opens_with(vocab.bytes(id).unwrap_or(&[]), |byte| {
+            byte.is_ascii_whitespace() || byte == STR_OPEN
+        }) {
+            dst.set(id);
+        }
+    }
+    dst.set(eos_bit);
+}
+
+/// Refill `dst` with [`L2Position::StoreMethodArgSep`]'s set for a call that has
+/// completed `complete` arguments, plus EOS: a `,` while arguments remain, the
+/// call's own `)` once the arity is met, and whitespace either way. No operator
+/// is ever legal between a store method's arguments, which is what closes the
+/// `->tableReference('a'=='b')` residue the compiler — not the parser — rejects.
+///
+/// A `'` is kept too: this position is also read on an argument literal's
+/// *pending* closing quote (see `ScopeTracker::store_method_arg_sep`), where a
+/// second `'` doubles it and the same literal continues (`'O''Brien'`).
+///
+/// First-byte discrimination for the same BPE reason [`fill_store_method_arg`]
+/// documents.
+fn fill_store_method_arg_sep(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32, remaining: bool) {
+    let owed = if remaining { ARG_SEP } else { CALL_CLOSE };
+    dst.clear_all();
+    for id in 0..vocab.len() as u32 {
+        if opens_with(vocab.bytes(id).unwrap_or(&[]), |byte| {
+            byte.is_ascii_whitespace() || byte == owed || byte == STR_OPEN
+        }) {
+            dst.set(id);
+        }
+    }
+    dst.set(eos_bit);
+}
+
+/// The byte a pipeline step opens with: the `-` of its `->`.
+const STEP_DASH: u8 = b'-';
+
+/// The byte a property navigation over an extent opens with.
+const NAV_DOT: u8 = b'.';
+
+/// The byte that completes a step arrow once its `-` has been emitted.
+const STEP_GT: u8 = b'>';
+
+/// The whole step connector, for the vocabularies that offer it as one token.
+const STEP_ARROW: &[u8] = b"->";
+
+/// Refill `dst` with [`L2Position::SourceExtent`]'s set, plus EOS: a closed
+/// `Class.all()` is a `T[*]` extent, and the only things that follow one are a
+/// pipeline step (`->`), a property navigation that maps over it (`.`), or the
+/// end of the query. Every operator the vocabulary offers is a type mismatch
+/// against a collection, which is what this clears.
+///
+/// The `-` of the step arrow is the one byte an *arithmetic* minus shares, so it
+/// is admitted only as the arrow: either whole (`->`, however much rides behind
+/// it), or as the bare `-` a vocabulary that splits the connector offers — and
+/// then `after_dash` narrows the very next token to the `>` that completes it,
+/// so `Class.all()-'HeadOfState'` (live: "Collection element must have a
+/// multiplicity [1]") cannot be reassembled a byte at a time.
+fn fill_source_extent(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32, after_dash: bool) {
+    dst.clear_all();
+    for id in 0..vocab.len() as u32 {
+        let bytes = vocab.bytes(id).unwrap_or(&[]);
+        if keeps_source_extent(bytes, after_dash) {
+            dst.set(id);
+        }
+    }
+    dst.set(eos_bit);
+}
+
+/// Whether `bytes` may continue a class extent — see [`fill_source_extent`].
+fn keeps_source_extent(bytes: &[u8], after_dash: bool) -> bool {
+    if after_dash {
+        // The `-` is committed: only the `>` that makes it a step arrow follows.
+        return bytes.first() == Some(&STEP_GT);
+    }
+    match bytes.first() {
+        Some(&byte) if byte.is_ascii_whitespace() || byte == NAV_DOT => true,
+        Some(&STEP_DASH) => bytes.len() == 1 || bytes.starts_with(STEP_ARROW),
+        _ => false,
+    }
+}
+
+/// Whether `bytes`' first byte satisfies `keep` — the shared first-byte test the
+/// N3d/N3e fills discriminate on (an empty token keeps nothing).
+fn opens_with(bytes: &[u8], keep: impl Fn(u8) -> bool) -> bool {
+    bytes.first().copied().is_some_and(keep)
 }
 
 /// Refill `dst` from a trie walk: keep every vocab token that can still reach a

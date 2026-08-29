@@ -19,6 +19,56 @@ use crate::grammar::pda::{Frame, LexKind, Pda, State, Step, is_ident_start, is_i
 use crate::schema::model::{PrimName, Resolved, Schema, TypeClass};
 use crate::schema::narrow::value_ident_constrains;
 
+/// The first byte of a two-byte operator the PDA has **already consumed** when a
+/// token opens at `anchor` — the byte a [`classify`] of that token's own bytes
+/// alone cannot see.
+///
+/// [`flush_gap`](ScopeTracker::flush_gap) munches a two-byte operator whole
+/// *within* one token, but a vocabulary that offers `-` and `>` as separate
+/// tokens splits it across two, and then no token's bytes are `->` at all: the
+/// step arrow is read as a dash and a comparison, and every rule keyed on
+/// [`on_arrow`](ScopeTracker::on_arrow) — N3c's store-method set, T3's reducer
+/// arming — is silently bypassed. Live-attested: `|…::Db->min('default'…)` was
+/// walked past N3c precisely this way (`-`, `>`, `min` as three tokens), and the
+/// engine rejected it with "Can't find a match for function
+/// 'min(Database[1],…)'".
+///
+/// These are the PDA's own "first half consumed" states, minus the one whose
+/// reconstruction no consumer could observe: [`State::SawAmp`] is left out
+/// because `&&` and a lone `&` both [`classify`] as [`Lexeme::Other`], so an arm
+/// for it would be a no-op no test could pin (and an unkillable mutant — the
+/// hazard issue #55 Phase 2 recorded). Every state listed changes the verdict:
+/// `->` is an [`Arrow`](Lexeme::Arrow) where a lone `>` is a comparison, `==`
+/// `!=` `>=` `<=` are [`Cmp`](Lexeme::Cmp) where a lone `=` is
+/// [`Other`](Lexeme::Other), and `||` is `Other` where a lone `|` is the lambda
+/// binder [`Pipe`](Lexeme::Pipe).
+const fn pending_operator_byte(anchor: State) -> Option<u8> {
+    match anchor {
+        State::SawDash | State::SourceDash => Some(b'-'),
+        State::SawEq => Some(b'='),
+        State::SawBang => Some(b'!'),
+        State::SawGt => Some(b'>'),
+        State::SawLt => Some(b'<'),
+        State::SawPipe => Some(b'|'),
+        _ => None,
+    }
+}
+
+/// [`classify`] a token read from the PDA state it opened at, so a two-byte
+/// operator split across two tokens is classified as the operator it is rather
+/// than as its second byte alone (see [`pending_operator_byte`]).
+///
+/// Only a *single-byte* token that genuinely completes one of the operators
+/// ([`is_two_byte_op`]) is treated this way: anything longer opened its own
+/// lexeme, and a byte that does not complete the operator (the whitespace of
+/// `weight < 3500`, the digit of `-5`) is still its own token.
+fn classify_at(bytes: &[u8], anchor: State) -> Lexeme {
+    match (pending_operator_byte(anchor), bytes) {
+        (Some(first), [second]) if is_two_byte_op(first, *second) => classify(&[first, *second]),
+        _ => classify(bytes),
+    }
+}
+
 /// Whether `a`, `b` begin one of the two-byte operators the grammar recognises
 /// (`-> == != <= >= && ||`). A structural-gap walk munches these whole so an
 /// operator never fragments into mis-classified single bytes (`>` alone reads as
@@ -195,6 +245,56 @@ pub enum L2Position {
     /// the 5034 gold queries a store path is followed by `->tableReference`
     /// 8455 times and by nothing else.
     StoreMethod,
+    /// N3d: a value slot inside a store method's own call ([`STORE_METHODS`]) —
+    /// right after its `(`, or right after one of its commas. Every store-method
+    /// parameter is a string literal, per the engine's own signature quoted back
+    /// in its rejection (`tableReference(Database[1],String[1],String[1]):Table[1]`),
+    /// so nothing else may open a slot here. The matching closer is masked too,
+    /// which is the arity half of the rule: an opened slot owes its argument, so
+    /// `->tableReference()` and a one-argument `->tableReference('T')` cannot
+    /// complete. Corpus-attested, not invented — all 8455 store-method calls
+    /// across the 5034 gold queries pass exactly two single-quoted strings.
+    StoreMethodArg,
+    /// N3d's separator half: the position right after a *completed* store-method
+    /// argument, carrying how many arguments the call has completed so far. A `,`
+    /// is legal only while arguments remain, the call's own `)` only once the
+    /// arity is met, and an operator never is — the walker's residue here was
+    /// `->tableReference('a'=='b')` and `->tableReference('a'*'b')`, which the
+    /// engine reports as a *signature* mismatch
+    /// (`tableReference(Database[1],Boolean[1])`) rather than a parse error, so
+    /// no L1 tightening can reach it.
+    StoreMethodArgSep {
+        /// Whether the call still owes at least one more argument. The tracker
+        /// derives it from the arity [`STORE_METHODS`] declares for the open
+        /// call and the commas it has emitted, so the arity stays a single fact
+        /// stated once beside the method's own name.
+        remaining: bool,
+    },
+    /// N3e: the position right after the source method's own call closed —
+    /// `Class.all()`, the class **extent**. An extent is a `T[*]` collection, so
+    /// every binary operator the vocabulary offers mismatches it by construction
+    /// (live: `{|…::ModelList.all() && 'Year_T1'}` → "Can't find a match for
+    /// function 'and(ModelList[*],String[1])'"; `{|…::CarMakers.all()*'Accelerate_T2'}`
+    /// → "Collection element must have a multiplicity [1]"). What an extent *does*
+    /// take is a pipeline step, a property navigation that maps over it, or
+    /// nothing at all — and that is exactly what the corpus shows: across the 5034
+    /// gold queries a closed `.all()` is followed by `->` 438 times, by a `.`
+    /// property 37 times, and by end-of-query 25 times, and by nothing else. The
+    /// same three, and only those three, in the modern-dialect seeds and the
+    /// engine-labelled differential corpus.
+    ///
+    /// The direct successor of [`StoreMethod`](L2Position::StoreMethod)'s own
+    /// rule: N3c stops a method being arrowed off the bare `Class<T>[1]` metatype,
+    /// this stops one being *operated on* once `.all()` has produced the extent.
+    SourceExtent {
+        /// Whether the `-` that opens the step arrow has already been emitted, so
+        /// only the `>` that completes it may follow. Without this second half a
+        /// vocabulary offering `-` and `>` separately would reassemble an
+        /// arithmetic minus one byte at a time (live:
+        /// `{|…::Countrylanguage.all() -'HeadOfState_T1_3'}` → "Collection element
+        /// must have a multiplicity [1]").
+        after_dash: bool,
+    },
     /// N1/N2: the identifier after `.` must be a member of `class`.
     Member(String),
     /// T1: the comparison operand's literal type must match `class`.
@@ -242,9 +342,34 @@ pub enum L2Position {
 pub(crate) const SOURCE_METHOD: &str = "all";
 
 /// The store methods a pipeline-source store path may be arrowed into
-/// ([`L2Position::StoreMethod`]). `pub(crate)` so `narrow.rs` builds the rule's
-/// trie from the same list.
-pub(crate) const STORE_METHODS: &[&str] = &["tableReference"];
+/// ([`L2Position::StoreMethod`]), each with the number of string arguments its
+/// call takes ([`L2Position::StoreMethodArg`]). `pub(crate)` so `narrow.rs`
+/// builds the rule's trie from the same list.
+///
+/// The name set and the arity are read off the same corpus evidence: across the
+/// 5034 gold queries a store path is followed by `->tableReference` 8455 times
+/// and by nothing else, and every one of those 8455 calls passes exactly two
+/// single-quoted strings. The engine agrees, naming the signature in its own
+/// rejection: `tableReference(Database[1],String[1],String[1]):Table[1]` (the
+/// receiver is the first parameter).
+///
+/// The arity travels *with* the name rather than as a lone constant so a second
+/// store method cannot be added without stating its own — the arity is a fact
+/// about one method's signature, never about the set.
+pub(crate) const STORE_METHODS: &[(&str, usize)] = &[("tableReference", 2)];
+
+/// The lone `-` a vocabulary that splits the step connector offers as its own
+/// token — the one token N3e's extent arming survives (see
+/// [`L2Position::SourceExtent`]).
+const STEP_DASH_TOKEN: &[u8] = b"-";
+
+/// `name`'s declared argument count if it is a [`STORE_METHODS`] entry.
+fn store_method_arity(name: &str) -> Option<usize> {
+    STORE_METHODS
+        .iter()
+        .find(|(method, _)| *method == name)
+        .map(|(_, arity)| *arity)
+}
 
 /// Which kind of pipeline source a schema-resolved source path is — the fact
 /// N3c's two arms split on. A class path denotes a `Class<T>[1]` metatype and
@@ -358,7 +483,8 @@ pub(crate) struct ScopeTracker {
     nav_cursor: Option<String>,
     /// The type-class of the most recently completed primitive navExpr — read by
     /// the *next* comparison operator to arm T1 (`cmp_pending`), and by the
-    /// `AfterValue` anchor right in front of it to arm T2 (`Comparator`).
+    /// `AfterValue`/`AfterName` anchor right in front of it to arm T2
+    /// (`Comparator`).
     last_resolved: Option<TypeClass>,
     /// The class the most recently completed navExpr resolved to (a to-many/class
     /// nav receiver), used to bind a following method lambda's variable.
@@ -445,6 +571,17 @@ pub(crate) struct ScopeTracker {
     /// [`awaiting_reducer`](Self::awaiting_reducer): the arrow sets it and any
     /// following non-whitespace token clears it.
     awaiting_store_method: bool,
+    /// The call just opened via `on_open` was a [`STORE_METHODS`] entry's own,
+    /// carrying that method's declared argument count. Every value slot inside
+    /// it is a [`L2Position::StoreMethodArg`] and every completed argument is
+    /// followed by a [`L2Position::StoreMethodArgSep`]. Cleared at the matching
+    /// `on_close` for the same reason
+    /// [`in_source_method_args`](Self::in_source_method_args) is.
+    store_call_arity: Option<usize>,
+    /// How many commas the open store-method call has emitted, so the separator
+    /// position knows how many arguments are already complete (a `,` only ever
+    /// follows a completed argument, so `complete = commas + 1`).
+    store_call_commas: usize,
     /// The call just opened via `on_open` was [`SOURCE_METHOD`]'s own — the
     /// value position immediately following it (and after each following
     /// comma) admits only whitespace, a milestoning date, or the call's own
@@ -458,6 +595,12 @@ pub(crate) struct ScopeTracker {
     /// without an intervening `on_open` (a comparison operand directly
     /// following the call's close, e.g. a hypothetical `A.all() == 5`).
     in_source_method_args: bool,
+    /// The source method's own call ([`SOURCE_METHOD`]) has just closed, so the
+    /// next token sits on the class extent ([`L2Position::SourceExtent`]).
+    /// Consumed one token later, exactly like
+    /// [`awaiting_store_method`](Self::awaiting_store_method): the close sets it
+    /// and any following non-whitespace token clears it.
+    awaiting_extent_step: bool,
     /// Every column name emitted so far — quoted string literals (arm-A N6,
     /// `~'Gross Credits'`) and arm-R `~`-introduced names (`~Col`, `~[Week, …]`
     /// keys). A superset stored as raw (unquoted) bytes, so a real reference to a
@@ -638,12 +781,14 @@ impl ScopeTracker {
     /// Buffer a lexeme still open at the token's end into [`Pending`], resolved and
     /// narrowed once a later token closes it (§6.4, B1). A continuation extends
     /// the existing buffer; a fresh run opens a new one, stamping the rule its
-    /// anchor establishes (T1's `ReValue` lever and S1's `SourceMethodArg` are
-    /// both whole-token classify-based tests with no prefix/trie walk, so their
+    /// anchor establishes (T1's `ReValue` lever, S1's `SourceMethodArg` and N3d's
+    /// `StoreMethodArg` are
+    /// both whole-token/first-byte shape tests with no prefix/trie walk, so their
     /// continuation sub-tokens pass through untouched once the anchor token's own
     /// shape has already been narrowed — e.g. a milestoning literal fragmented by
     /// BPE, `%late` + `st`, must not have its second fragment masked for not
-    /// itself starting with `%`).
+    /// itself starting with `%`; likewise N3d's string argument, `'defa` + `ult',`,
+    /// whose closing fragment carries the `,` that ends it).
     fn buffer_trailing(&mut self, kind: LexKind, seg: &[u8], anchor: State, continuing: bool) {
         if continuing {
             if let Some(pending) = self.pending.as_mut() {
@@ -658,7 +803,10 @@ impl ScopeTracker {
             // `->filter('SUM(SurfaceArea)'<agg/'…')` ("Can't find the
             // packageable element 'agg'").
             (LexKind::Ident, L2Position::ReValue(_)) => L2Position::ValueIdent,
-            (_, L2Position::ReValue(_) | L2Position::SourceMethodArg) => L2Position::None,
+            (
+                _,
+                L2Position::ReValue(_) | L2Position::SourceMethodArg | L2Position::StoreMethodArg,
+            ) => L2Position::None,
             (_, narrowed) => narrowed,
         };
         self.pending = Some(Pending {
@@ -675,7 +823,7 @@ impl ScopeTracker {
     /// (constitution §4, DRY), so a fragmented and a whole identifier drive scope
     /// identically.
     fn dispatch_token(&mut self, bytes: &[u8], pre_state: State, schema: &Schema) {
-        let lex = classify(bytes);
+        let lex = classify_at(bytes, pre_state);
         if lex == Lexeme::Ws {
             return;
         }
@@ -685,6 +833,11 @@ impl ScopeTracker {
         // T3's reducer-name arming lives exactly one token past the arrow that
         // sets it (see `on_arrow`); every other token clears it.
         let was_arrow = matches!(lex, Lexeme::Arrow);
+        // N3e's arming is set *by* this token when it is the source method's own
+        // closer, so the closer itself must not immediately consume it — nor may
+        // the lone `-` of a step arrow the vocabulary splits.
+        let was_close = matches!(lex, Lexeme::Close);
+        let was_step_dash = bytes == STEP_DASH_TOKEN;
         let mut resolved_now: Option<TypeClass> = None;
 
         match &lex {
@@ -703,6 +856,9 @@ impl ScopeTracker {
                 self.lambda_first_ident = None;
                 self.last_ident = None;
                 self.pending_binder_element = None;
+                if self.store_call_arity.is_some() {
+                    self.store_call_commas += 1;
+                }
             }
             Lexeme::Str(content) => {
                 self.emitted_strings.push(content.clone());
@@ -732,6 +888,14 @@ impl ScopeTracker {
         if !was_arrow {
             self.awaiting_reducer = None;
             self.awaiting_store_method = false;
+        }
+        // N3e's arming likewise lives exactly one non-whitespace token past the
+        // close that set it (a `Lexeme::Ws` returns before reaching here, so
+        // `Class.all() ->step()` keeps the arming across its whitespace) — plus
+        // the bare `-` of a split step arrow, whose `>` the arming still has to
+        // require.
+        if !was_close && !was_step_dash {
+            self.awaiting_extent_step = false;
         }
     }
 
@@ -897,6 +1061,13 @@ impl ScopeTracker {
             }
         } else if let Some(cursor) = &self.nav_cursor {
             self.dot_base = Some(cursor.clone());
+        } else if self.awaiting_extent_step {
+            // A `.` straight off `Class.all()` navigates the extent's own class —
+            // the one nav position with no `$var` and no prior cursor to read it
+            // from, and so the one N1 used to leave wholly unnarrowed (live:
+            // `{|…::Country.all().sort …}` → "Can't find property 'sort' in class
+            // …::Country").
+            self.dot_base = self.cur_class.clone();
         } else {
             self.dot_base = None;
         }
@@ -1002,6 +1173,10 @@ impl ScopeTracker {
         // of nesting depth — unlike the nested-pipeline reset below, this is not
         // depth-gated.
         self.in_source_method_args = method.as_deref() == Some(SOURCE_METHOD);
+        // N3d: a store method's own call owes exactly its declared string
+        // arguments, so arm the argument/separator positions for its whole extent.
+        self.store_call_arity = method.as_deref().and_then(store_method_arity);
+        self.store_call_commas = 0;
         // A `~[` opens a relation column set: latch the pipeline as arm-R, so an
         // `ExpectValue` key identifier inside it is a column name and a following
         // relation-row binder narrows column access. The flag is pushed for *every*
@@ -1038,7 +1213,11 @@ impl ScopeTracker {
         // Consume the source-method-args flag at its own call's close — it must
         // never survive to wrongly mask a later value position reached without
         // an intervening `on_open` (see `in_source_method_args`'s doc comment).
+        // N3e reads the same fact one token further on: the call that just closed
+        // was the source method's, so what follows sits on the class extent.
+        self.awaiting_extent_step = self.in_source_method_args;
         self.in_source_method_args = false;
+        self.store_call_arity = None;
         // Restore every binder introduced at the closing delimiter's depth to what it
         // shadowed, so a lambda's binder never outlives its scope (§6.4). Deeper
         // scopes have already restored and popped, so the depth-matching saves are
@@ -1128,6 +1307,28 @@ impl ScopeTracker {
         !self.ref_stack.is_empty() && self.rel_explicit && self.est_stack.is_empty()
     }
 
+    /// N3d's separator position, when `state` is one of the two the open
+    /// store-method call decides: right after a completed argument
+    /// ([`State::AfterValue`]/[`State::AfterName`]), or on an argument literal's
+    /// pending closing quote
+    /// ([`State::InStrLit`] with a quote awaiting its disambiguating byte).
+    ///
+    /// One derivation for both, so the arity fact — how many arguments
+    /// [`STORE_METHODS`] declares for the open call, against how many commas it
+    /// has emitted — is stated exactly once.
+    fn store_method_arg_sep(&self, state: State) -> Option<L2Position> {
+        let decided = matches!(
+            state,
+            State::AfterValue | State::AfterName | State::InStrLit { escaped: true }
+        );
+        let arity = self.store_call_arity?;
+        // A `,` only ever follows a completed argument, so the call has completed
+        // one more argument than it has emitted commas.
+        decided.then(|| L2Position::StoreMethodArgSep {
+            remaining: self.store_call_commas + 1 < arity,
+        })
+    }
+
     /// The L2 constraint at the current PDA `state`.
     ///
     /// At an **anchor** state (an inter-lexeme position) the rule is read from the
@@ -1137,6 +1338,16 @@ impl ScopeTracker {
     /// only the leading one (B1). An in-lexeme state with no open accumulation, or
     /// an accumulation the anchor did not narrow, is [`None`](L2Position::None).
     pub(crate) fn position(&self, state: State) -> L2Position {
+        // N3d, the one in-lexeme state that is nonetheless a decided position: a
+        // store-method argument literal sitting on a *pending* closing quote is
+        // already a complete argument. The next byte either doubles the quote
+        // (`'O''Brien'`, which the separator set admits for exactly this reason)
+        // or is the `,`/`)` the call owes — never an operator. Without this the
+        // arity half of the rule would be unreachable, because the token that
+        // closes the literal is read at this state, not at `AfterValue`.
+        if let Some(sep) = self.store_method_arg_sep(state) {
+            return sep;
+        }
         let pos = if state.lexeme_kind().is_some() {
             match &self.pending {
                 Some(pending) => pending.pos.clone(),
@@ -1195,6 +1406,8 @@ impl ScopeTracker {
             State::ExpectValue | State::ExpectValueReq => {
                 if self.in_source_method_args {
                     L2Position::SourceMethodArg
+                } else if self.store_call_arity.is_some() {
+                    L2Position::StoreMethodArg
                 } else if let Some(tc) = self.cmp_pending {
                     L2Position::ReValue(tc)
                 } else if self.in_column_arg() {
@@ -1219,8 +1432,20 @@ impl ScopeTracker {
             // `ExpectValue`. Live-attested on both routes:
             // `->col(between|true!='Brazil')` and
             // `->filter('SUM(SurfaceArea)'<agg/'…')`.
+            // N3e's second half outranks N7 here: the `-` it is holding open is a
+            // step arrow under construction, not a word in operand position.
+            State::SawDash if self.awaiting_extent_step => {
+                L2Position::SourceExtent { after_dash: true }
+            }
             State::SawPipe | State::SawLt | State::SawGt | State::SawDash => L2Position::ValueIdent,
-            State::AfterValue => match self.last_resolved {
+            // T2's comparator lever reads a *completed* term, whichever of the
+            // two terminal hubs it landed in — a navExpr ends on its property
+            // name, so `$x.population > 5` reaches the comparator through
+            // `AfterName`, not `AfterValue`.
+            State::AfterValue if self.awaiting_extent_step => {
+                L2Position::SourceExtent { after_dash: false }
+            }
+            State::AfterValue | State::AfterName => match self.last_resolved {
                 Some(tc) => L2Position::Comparator(tc),
                 None => L2Position::None,
             },
@@ -1330,9 +1555,52 @@ impl ScopeTracker {
 
 #[cfg(test)]
 mod tests {
-    use super::{L2Position, Lexeme, SOURCE_METHOD, ScopeTracker, classify, is_two_byte_op};
+    use super::{
+        L2Position, Lexeme, SOURCE_METHOD, ScopeTracker, classify, classify_at, is_two_byte_op,
+    };
     use crate::grammar::pda::{Pda, State};
     use crate::schema::model::{Schema, TypeClass};
+
+    /// A two-byte operator split across two tokens is classified as the operator
+    /// it is, not as its second byte alone — the fix for the leak that let a
+    /// store path be arrowed into an arbitrary method past N3c (a vocabulary
+    /// offering `-` and `>` separately meant no token's bytes were ever `->`, so
+    /// `on_arrow` never fired). Every listed anchor changes the verdict; the
+    /// contrast rows below pin that it changes nothing else.
+    #[test]
+    fn a_two_byte_operator_split_across_tokens_classifies_as_the_whole_operator() {
+        for (anchor, second, want) in [
+            (State::SawDash, b'>', Lexeme::Arrow),
+            (State::SourceDash, b'>', Lexeme::Arrow),
+            (State::SawEq, b'=', Lexeme::Cmp),
+            (State::SawBang, b'=', Lexeme::Cmp),
+            (State::SawGt, b'=', Lexeme::Cmp),
+            (State::SawLt, b'=', Lexeme::Cmp),
+            // `||` is boolean-or, deliberately *not* the lambda binder `Pipe` a
+            // lone `|` classifies as.
+            (State::SawPipe, b'|', Lexeme::Other),
+        ] {
+            assert_eq!(
+                classify_at(&[second], anchor),
+                want,
+                "{:?} + {:?} completes a two-byte operator",
+                anchor.name(),
+                char::from(second)
+            );
+        }
+        // The same second bytes read at an anchor holding no operator half
+        // classify on their own bytes.
+        assert_eq!(classify_at(b">", State::AfterValue), Lexeme::Cmp);
+        assert_eq!(classify_at(b"|", State::AfterValue), Lexeme::Pipe);
+        assert_eq!(classify_at(b"=", State::AfterValue), Lexeme::Other);
+        // A byte that does not complete the operator is still its own token —
+        // the whitespace of `weight < 3500` must stay `Ws` (a scope no-op), not
+        // become a state-clearing `Other`.
+        assert_eq!(classify_at(b" ", State::SawLt), Lexeme::Ws);
+        assert_eq!(classify_at(b"5", State::SawDash), Lexeme::Number);
+        // Only a single-byte token can be an operator's second half.
+        assert_eq!(classify_at(b">take", State::SawDash), Lexeme::Other);
+    }
 
     const SAMPLE: &str = r#"{
       "db_id": "d", "db_path": "spider::d::Db",

@@ -1066,3 +1066,282 @@ fn n3c_keeps_the_one_continuation_each_source_kind_owes() {
         );
     }
 }
+
+/// Issue #55 Phase 4 — N3d, the store method's own call shape. Every store-method
+/// parameter is a `String[1]` and the call takes exactly two of them (the
+/// engine's own signature, quoted back in its rejection:
+/// `tableReference(Database[1],String[1],String[1]):Table[1]`; the 5034-query gold
+/// corpus agrees, with all 8455 of its store-method calls passing exactly two
+/// single-quoted strings). The argument slot therefore admits only whitespace and
+/// a string's opening quote — not the call's own closer, which is the arity half
+/// — and the separator that follows a completed argument admits only the `,` the
+/// call still owes or, once it owes none, its `)`.
+///
+/// Frozen verbatim from the live lane, each with the token that closes it
+/// (issue #55 Phase 3's fixture rule): a later rule stealing one of these kills
+/// reddens the fixture instead of silently passing.
+#[test]
+fn n3d_masks_every_store_method_call_with_the_wrong_argument_shape() {
+    for (db_id, walk, closed_by) in [
+        // world_1
+        (
+            "world_1",
+            "  \n      \n        \n         \n     \n        \n     \n            \n         \n    \n  \n        \n        \n            \n     \n      \n    \n    \n  \n        \n          \n    {    \n    \n      \n      \n    \n        \n   \n            |    \n        spider::world_1::Db->tableReference('Code_T1_3') }",
+            ")",
+        ),
+        // world_1
+        (
+            "world_1",
+            "  \n    \n    \n  \n    \n        \n\n        \n        {\n      | \n        \n\n    spider::world_1::Db->tableReference('Continent_T1_3'=='GovernmentForm_T3_1'>'dutch')&&'IndepYear_country'&&'_c0__t0r0'}",
+            "==",
+        ),
+        // car_1
+        (
+            "car_1",
+            "   {    \n         \n  \n\n      |spider::car_1::Db->tableReference('MakeId_T1'\n         =='MPG')  }",
+            "==",
+        ),
+    ] {
+        assert_walk_is_masked(db_id, walk, closed_by);
+    }
+}
+
+/// N3d's soundness counterfactual: the two-string call the rule is built around
+/// streams end to end, and so does the arm-A envelope that follows it — so the
+/// rule is masking a wrong argument shape and not the position itself.
+#[test]
+fn n3d_still_admits_the_two_string_store_method_call() {
+    assert_streams_soundly_under_l2(
+        "world_1",
+        "|spider::world_1::Db->tableReference('default','country')->tableToTDS()->limit(5)",
+    );
+}
+
+/// Issue #55 Phase 4 — N3e, the class-extent continuation. `Class.all()` produces
+/// a `T[*]` extent, so every binary operator the vocabulary offers mismatches it
+/// by construction (live: "Can't find a match for function
+/// 'and(ModelList[*],String[1])'"). Across the 5034 gold queries a closed
+/// `.all()` is followed by `->` 438 times, by a `.` property 37 times and by
+/// end-of-query 25 times — and by nothing else.
+#[test]
+fn n3e_masks_every_operator_applied_to_a_class_extent() {
+    for (db_id, walk, closed_by) in [
+        // car_1
+        (
+            "car_1",
+            "  {\n\n  \n      \n      \n  \n        \n    \n      \n    |spider::car_1::model::default::ModelList.    \n    \n  all()&&'usa'}",
+            "&&",
+        ),
+        // car_1
+        (
+            "car_1",
+            "  {\n          \n        \n        |spider::car_1::model::default::ModelList.   all(  )&&'MPG_T3'}",
+            "&&",
+        ),
+    ] {
+        assert_walk_is_masked(db_id, walk, closed_by);
+    }
+}
+
+/// N3e's soundness counterfactual: the three continuations the corpus does
+/// exercise all still stream — the step arrow, a property navigation over the
+/// extent, and (for the arrow) the whitespace that may precede it.
+#[test]
+fn n3e_still_admits_the_step_arrow_and_the_extent_property_dot() {
+    assert_streams_soundly_under_l2(
+        "world_1",
+        "|spider::world_1::model::default::Country.all() ->filter(x|$x.name == 'Aruba')",
+    );
+    assert_streams_soundly_under_l2(
+        "world_1",
+        "|spider::world_1::model::default::Country.all().name",
+    );
+}
+
+/// Issue #55 Phase 4 — N1 over the extent dot. A `.` straight off `Class.all()`
+/// navigates the extent's own class, and Pure spells a member either bare or
+/// quoted; both name the same set, so a phantom in either spelling is cleared.
+/// Before this the position had no `dot_base` at all and was wholly unnarrowed.
+#[test]
+fn n1_masks_a_phantom_member_after_the_extent_dot_in_either_spelling() {
+    for (db_id, walk, closed_by) in [
+        // world_1
+        (
+            "world_1",
+            "   \n       \n      \n    \n      {      \n|\n\n          spider::world_1::model::default::Countrylanguage.\n  \n    \n  \n        all(\n    \n\n)\n    .'Capital_T1'  }",
+            "'Capital_T1'",
+        ),
+        // world_1
+        (
+            "world_1",
+            "  \n  \n          \n          { \n  \n      \n        |spider::world_1::model::default::Countrylanguage.\n      \n           all(\n  \n        ).'Code';}",
+            "'Code'",
+        ),
+        // car_1
+        (
+            "car_1",
+            "  \n      \n\n    \n    \n      \n      {\n    \n      \n        \n        \n  \n        \n        \n \n        \n       \n\n\n          \n        \n        |spider::car_1::model::default::ModelList.   all(  ).'_c1'}",
+            "'_c1'",
+        ),
+        // car_1
+        (
+            "car_1",
+            "  \n      \n    \n  \n        \n          \n      {\n  |\n\n      spider::car_1::model::default::ModelList. all()\n    \n\n      .'Id_T2_2'}",
+            "'Id_T2_2'",
+        ),
+        // world_1
+        (
+            "world_1",
+            "  \n    \n        \n\n      {|       \n      \n  \n        \n    \n     \n        spider::world_1::model::default::Country.\n        \n      \n         all(\n  \n      ).sort ||'Language_t2'=='Code2_T1_3'\n+'countrylanguage'-getInteger||spider::world_1::model::default::Countrylanguage}",
+            "sort",
+        ),
+        // car_1
+        (
+            "car_1",
+            "   \n       \n      \n    \n      {      \n|\n\n          spider::car_1::model::default::CarMakers.\n  \n    \n  \n        all(\n    \n\n)\n      \n     \n        \n.col    ->tableReference('Horsepower_T1'   ,'_v__t0sc0'  )*concatenate('CountryName_T1_2').'COUNT()'\n        \n}",
+            "col",
+        ),
+    ] {
+        assert_walk_is_masked(db_id, walk, closed_by);
+    }
+}
+
+/// N1's counterfactual at the same position: a *real* member streams in both
+/// spellings, so the rule is narrowing the name set and not the position.
+#[test]
+fn n1_still_admits_a_real_member_after_the_extent_dot() {
+    assert_streams_soundly_under_l2(
+        "world_1",
+        "|spider::world_1::model::default::Country.all().name",
+    );
+    assert_streams_soundly_under_l2(
+        "world_1",
+        "|spider::world_1::model::default::Country.all().'name'",
+    );
+}
+
+/// Drive an explicit token run through a schema-aware session for `db_id`,
+/// asserting every token but the last is admitted and the last one is masked.
+///
+/// Unlike [`assert_walk_is_masked`], which lexes the walk and so always offers a
+/// whole `->`, this pins behaviour under a vocabulary that splits the step
+/// connector into `-` and `>` — the split that let a store path be arrowed into
+/// an arbitrary method past N3c (live:
+/// `{|spider::car_1::Db->min('default'…)}` → "Can't find a match for function
+/// 'min(Database[1],…)'"), because no token's bytes were ever `->` and the scope
+/// machine's arrow event never fired.
+fn assert_token_run_is_masked(db_id: &str, tokens: &[&str]) {
+    let owned: Vec<Vec<u8>> = tokens.iter().map(|t| t.as_bytes().to_vec()).collect();
+    let vocab = TokenVocab::build(&[], &owned);
+    let grammar = CompiledGrammar::compile(vocab.vocab());
+    let schema = load_schema(db_id);
+    let mut session =
+        DecoderSession::with_schema(&grammar, schema).expect("grammar is fixed-engine");
+    let (last, lead) = tokens.split_last().expect("a non-empty token run");
+    for (step, token) in lead.iter().enumerate() {
+        let id = vocab.id_of(token.as_bytes()).expect("token in vocab");
+        assert!(
+            session.allowed_mask().test(id),
+            "the run was closed at step {step} ({token:?}), before the token under test"
+        );
+        session
+            .accept_token(id)
+            .unwrap_or_else(|err| panic!("L1 rejected an L2-admitted token {token:?}: {err}"));
+    }
+    let id = vocab.id_of(last.as_bytes()).expect("token in vocab");
+    assert!(
+        !session.allowed_mask().test(id),
+        "PRECISION GAP: {last:?} is still admitted after {lead:?}"
+    );
+}
+
+/// Issue #55 Phase 4 — N3c holds when the step connector arrives split. The scope
+/// machine classifies a token from the automaton state it opened at, so the lone
+/// `>` that lands on a just-consumed `-` is the step arrow it completes, and the
+/// store-method narrowing that arrow arms fires exactly as it does for a whole
+/// `->`.
+#[test]
+fn n3c_holds_when_the_step_arrow_arrives_as_two_tokens() {
+    for method in ["min", "isEmpty", "count", "restrict", "tableToTDS"] {
+        assert_token_run_is_masked("car_1", &["{", "|", "spider::car_1::Db", "-", ">", method]);
+    }
+    // The counterfactual: the one store method there *is* still streams through
+    // the same split arrow, so the rule is narrowing the name and not the arrow.
+    let tokens = [
+        "{",
+        "|",
+        "spider::car_1::Db",
+        "-",
+        ">",
+        "tableReference",
+        "(",
+    ];
+    let owned: Vec<Vec<u8>> = tokens.iter().map(|t| t.as_bytes().to_vec()).collect();
+    let vocab = TokenVocab::build(&[], &owned);
+    let grammar = CompiledGrammar::compile(vocab.vocab());
+    let mut session = DecoderSession::with_schema(&grammar, load_schema("car_1"))
+        .expect("grammar is fixed-engine");
+    for token in tokens {
+        let id = vocab.id_of(token.as_bytes()).expect("token in vocab");
+        assert!(
+            session.allowed_mask().test(id),
+            "the store method's own name must stay admitted through a split arrow ({token:?})"
+        );
+        session.accept_token(id).expect("L1 admits the token");
+    }
+}
+
+/// Drive an explicit token run through a schema-aware session for `db_id`,
+/// asserting every token is admitted and accepted — the positive twin of
+/// [`assert_token_run_is_masked`], for the shapes a split vocabulary must keep.
+fn assert_token_run_streams(db_id: &str, tokens: &[&str]) {
+    let owned: Vec<Vec<u8>> = tokens.iter().map(|t| t.as_bytes().to_vec()).collect();
+    let vocab = TokenVocab::build(&[], &owned);
+    let grammar = CompiledGrammar::compile(vocab.vocab());
+    let schema = load_schema(db_id);
+    let mut session =
+        DecoderSession::with_schema(&grammar, schema).expect("grammar is fixed-engine");
+    for (step, token) in tokens.iter().enumerate() {
+        let id = vocab.id_of(token.as_bytes()).expect("token in vocab");
+        assert!(
+            session.allowed_mask().test(id),
+            "L2 masked a legal token at step {step} ({token:?}) in {tokens:?}"
+        );
+        session
+            .accept_token(id)
+            .unwrap_or_else(|err| panic!("L1 rejected {token:?} at step {step}: {err}"));
+    }
+}
+
+/// N3e admits the step arrow the *one* way it is an arrow, whether the
+/// vocabulary offers it whole or split — and nothing else that opens with a `-`.
+///
+/// The split half is what makes the rule hold under byte-level BPE: a lone `-`
+/// stays admissible (a vocabulary may only be able to spell the connector that
+/// way), and the very next token is then narrowed to the `>` that completes it,
+/// so an arithmetic minus cannot be reassembled a byte at a time — live-attested,
+/// `{|…::Countrylanguage.all() -'HeadOfState_T1_3'}` is rejected with "Collection
+/// element must have a multiplicity [1]".
+#[test]
+fn n3e_admits_the_step_arrow_split_or_whole_and_no_other_dash() {
+    const EXTENT: &[&str] = &[
+        "|",
+        "spider::world_1::model::default::Country",
+        ".",
+        "all",
+        "(",
+        ")",
+    ];
+    fn run<'a>(tail: &[&'a str]) -> Vec<&'a str> {
+        EXTENT.iter().chain(tail).copied().collect()
+    }
+    // Whole and split, both admitted through to the step's own method name.
+    assert_token_run_streams("world_1", &run(&["->", "filter"]));
+    assert_token_run_streams("world_1", &run(&["-", ">", "filter"]));
+    // The `-` is committed once emitted: only the `>` may follow it.
+    assert_token_run_is_masked("world_1", &run(&["-", "'HeadOfState_T1_3'"]));
+    assert_token_run_is_masked("world_1", &run(&["-", "3"]));
+    // …and a longer `-`-led token that is not the arrow never opens at all.
+    assert_token_run_is_masked("world_1", &run(&["-'HeadOfState_T1_3'"]));
+    assert_token_run_is_masked("world_1", &run(&["-3"]));
+}

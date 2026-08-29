@@ -128,9 +128,24 @@ pub enum State {
     /// [`ExpectValue`](State::ExpectValue) except a closer is a dead state, so an
     /// operator may not dangle against a `)`/`]`/`}` (`take(1 +)`, `$x.a && )`).
     ExpectValueReq,
-    /// Having just completed a term; an operator, separator, call, or closer may
+    /// Having just completed a term; an operator, separator, or closer may
     /// follow.
     AfterValue,
+    /// Having just completed an **identifier** term (past any trailing
+    /// whitespace). Everything [`AfterValue`](State::AfterValue) admits, plus the
+    /// two continuations only a *name* can carry: a call's own `(` and a
+    /// multiplicity `[`.
+    ///
+    /// Both bind to a name and to nothing else. A call applies a *function*,
+    /// named by an identifier — the engine rejects a juxtaposed application off
+    /// any other term (live: `|…::ModelList.all()(Float(…))` → "Unexpected token
+    /// '('"). A `[…]` after a term is only ever the multiplicity of the type it
+    /// annotates (`row: meta::pure::tds::TDSRow[1]`); Legend has no positional
+    /// index at all, and says so in as many words (live:
+    /// `{|…::ModelList.all()['MPG_T1_1']}` → "Bracket operation is not
+    /// supported"). A list literal `[…]` and a relation column set `~[…]` open at
+    /// a *value* position, never here, so neither is affected.
+    AfterName,
     /// Inside an identifier or classpath segment (`[A-Za-z_][A-Za-z0-9_]*`).
     InIdent,
     /// Just consumed the `-` sign of a numeric literal in value position; a digit
@@ -239,6 +254,7 @@ impl State {
             State::ExpectValue => "ExpectValue",
             State::ExpectValueReq => "ExpectValueReq",
             State::AfterValue => "AfterValue",
+            State::AfterName => "AfterName",
             State::InIdent => "InIdent",
             State::SawNumSign => "SawNumSign",
             State::InNumberInt => "InNumberInt",
@@ -327,13 +343,14 @@ impl State {
             State::SawExp => 44,
             State::NeedExpDigit => 45,
             State::InExp => 46,
+            State::AfterName => 47,
         }
     }
 
     /// The number of distinct automaton states — the length a per-state cache
     /// (`Vec<_>` keyed by [`index`](State::index)) must have. One more than the
     /// largest [`index`](State::index).
-    pub const COUNT: usize = 47;
+    pub const COUNT: usize = 48;
 
     /// The lexeme class this state is *inside*, if any (`None` = an inter-lexeme
     /// or structural position).
@@ -489,6 +506,28 @@ pub(crate) const fn is_ident_tail(byte: u8) -> bool {
 /// the `-`, `T`, `:` separators (`%2018-03-17T07:13:53`).
 const fn is_date_char(byte: u8) -> bool {
     byte.is_ascii_digit() || matches!(byte, b'-' | b'T' | b':')
+}
+
+/// Whether `top` is a frame whose contents are a **comma-separated element
+/// list** — a call's argument list or a parenthesised group ([`Frame::Paren`]),
+/// a collection or multiplicity bracket ([`Frame::Bracket`]), or a brace
+/// lambda's typed-binder list ([`Frame::BraceLambda`]).
+///
+/// The two excluded configurations are the ones where a `,` has no list to
+/// separate: an empty stack (a simple query's top level) and [`Frame::Brace`]
+/// (a block query, whose statements are separated by `;`, never `,`). Both are
+/// live-attested engine rejections — `{|…::Countrylanguage.all(),'Language_T2'}`
+/// → "Unexpected token ','. Valid alternatives: ['&&', '||', '==', '!=', '->',
+/// '[', '.', ';', '+', '*', '-', '/', '<', '<=', '>', '>=']".
+///
+/// A `,` inside a brace lambda's *body* is still admitted: the PDA cannot see
+/// the binder pipe from the frame alone, and §4 forbids inventing a constraint
+/// the corpus does not exercise.
+const fn separates_elements(top: Option<Frame>) -> bool {
+    matches!(
+        top,
+        Some(Frame::Paren | Frame::Bracket | Frame::BraceLambda)
+    )
 }
 
 /// Close `top` if `byte` is its matching closer, else [`Step::Dead`].
@@ -647,11 +686,15 @@ fn step_after_value(stack_top: Option<Frame>, byte: u8) -> Step {
         b'+' | b'*' | b'/' => Step::Next(State::ExpectValueReq),
         b'.' => Step::Next(State::AfterDot),
         b':' => Step::Next(State::AfterColon),
-        b'(' => Step::Push(Frame::Paren, State::ExpectValue),
-        b'[' => Step::Push(Frame::Bracket, State::ExpectValue),
+        // A call's `(` and a multiplicity's `[` belong to a *name*, so they live
+        // in [`State::AfterName`], not here.
         // A `,` separates list/argument elements: the next element is required
-        // (no trailing `(a,)`).
-        b',' if stack_top.is_some() => Step::Next(State::ExpectValueReq),
+        // (no trailing `(a,)`). It needs an *element list* to separate, which only
+        // a call/collection `(`/`[` or a brace lambda's binder list opens — never a
+        // block query's own [`Frame::Brace`], whose statements are `;`-separated.
+        // Live-attested: `{|…::Countrylanguage.all(),'Language_T2'}` →
+        // "Unexpected token ','".
+        b',' if separates_elements(stack_top) => Step::Next(State::ExpectValueReq),
         // A `;` ends a block-query statement; the next `let` binding or the final
         // pipeline follows, but the block may also close immediately (`;}`), so
         // [`BlockStmtClose`] admits both a fresh statement and the trailing `}`.
@@ -665,7 +708,20 @@ fn step_in_ident(stack_top: Option<Frame>, byte: u8) -> Step {
     if is_ident_tail(byte) {
         Step::Next(State::InIdent)
     } else {
-        step(State::AfterValue, stack_top, byte)
+        step(State::AfterName, stack_top, byte)
+    }
+}
+
+// A completed identifier: the two name-only continuations, then everything a
+// completed term admits. Whitespace keeps the position a *name* position, so a
+// call written `foo (x)` or a multiplicity written `Type [1]` still streams —
+// the constraint is on what the `(`/`[` may attach to, never on the spacing.
+fn step_after_name(stack_top: Option<Frame>, byte: u8) -> Step {
+    match byte {
+        b if is_ws(b) => Step::Next(State::AfterName),
+        b'(' => Step::Push(Frame::Paren, State::ExpectValue),
+        b'[' => Step::Push(Frame::Bracket, State::ExpectValue),
+        _ => step_after_value(stack_top, byte),
     }
 }
 
@@ -937,13 +993,26 @@ fn step_after_arrow(byte: u8) -> Step {
     }
 }
 
-fn step_after_colon(byte: u8) -> Step {
+// A `:` that has just followed a completed term is either the first half of a
+// `::` classpath separator — legal wherever a classpath is — or a **typed
+// binder**'s own colon (`row: meta::pure::tds::TDSRow[1]|…`, arm-R's
+// `~'total': y|…`). Like the lambda pipe it introduces, that binder needs an
+// argument or element slot to sit in, i.e. exactly [`separates_elements`]'s
+// frames: a block query's [`Frame::Brace`] top level takes statements, not
+// binders, and a simple query's empty stack takes the pipeline itself.
+// Live-attested at both, e.g.
+// `{|…::Countrylanguage.all() && filter:average}` → "Unexpected token ':'".
+fn step_after_colon(stack_top: Option<Frame>, byte: u8) -> Step {
     match byte {
+        // A `::` separator must be contiguous, so it is decided before the
+        // binder arms — and unguarded, since a value-position classpath
+        // (`meta::relational::metamodel::join::JoinType`) is legal anywhere.
+        b':' => Step::Next(State::AfterColon2),
+        _ if !separates_elements(stack_top) => Step::Dead,
         // Whitespace after the first `:` splits off into [`AfterColonWs`], where a
         // second `:` is no longer legal — `::` must be contiguous, so `meta: :pure`
         // dies while the typed binder `row: Type` still streams.
         b if is_ws(b) => Step::Next(State::AfterColonWs),
-        b':' => Step::Next(State::AfterColon2),
         b if is_ident_start(b) => Step::Next(State::InIdent),
         // An arm-R relation aggregate binds a column name to a lambda after a
         // `:` (`colName : {p,w,r|…}` window frame, `~[agg:{…}:…]`); the `{`
@@ -978,9 +1047,19 @@ fn step_saw_dash(stack_top: Option<Frame>, byte: u8) -> Step {
     }
 }
 
+// A `|` that has just followed a completed term is either the second byte of a
+// boolean `||` — legal wherever an operator is — or a **lambda binder pipe**,
+// which needs an argument slot to be a lambda *in*. That slot is always a call
+// argument, a collection element, or a brace lambda's own body, i.e. exactly
+// [`separates_elements`]'s frames. At a block query's [`Frame::Brace`] top level
+// or on an empty stack (a simple query's top level) the query's own body is
+// already open, so a second, bodiless pipe there is a dead state — live-attested
+// (`{|…::Db->count('Edispl'.'150')|'AVG(Weight)'…}` → "Unexpected token '|'").
 fn step_saw_pipe(stack_top: Option<Frame>, byte: u8) -> Step {
     if byte == b'|' {
         Step::Next(State::ExpectValueReq)
+    } else if !separates_elements(stack_top) {
+        Step::Dead
     } else {
         step(State::ExpectValueReq, stack_top, byte)
     }
@@ -1067,6 +1146,7 @@ pub fn step(state: State, stack_top: Option<Frame>, byte: u8) -> Step {
         State::ExpectValue => step_expect_value(stack_top, byte),
         State::ExpectValueReq => step_expect_value_req(stack_top, byte),
         State::AfterValue => step_after_value(stack_top, byte),
+        State::AfterName => step_after_name(stack_top, byte),
         State::InIdent => step_in_ident(stack_top, byte),
         State::SawNumSign => step_saw_num_sign(byte),
         State::InNumberInt => step_in_number_int(stack_top, byte),
@@ -1082,7 +1162,7 @@ pub fn step(state: State, stack_top: Option<Frame>, byte: u8) -> Step {
         State::AfterDollar => step_after_dollar(byte),
         State::AfterDot => step_after_dot(byte),
         State::AfterArrow => step_after_arrow(byte),
-        State::AfterColon => step_after_colon(byte),
+        State::AfterColon => step_after_colon(stack_top, byte),
         State::AfterColon2 => step_after_colon2(byte),
         State::SawDash => step_saw_dash(stack_top, byte),
         State::SawPipe => step_saw_pipe(stack_top, byte),
@@ -1182,7 +1262,9 @@ impl Pda {
     /// hand-maintained list: a configuration is accepting iff its stack is empty
     /// and feeding a value-boundary byte (`VALUE_BOUNDARY`, a space) from the
     /// current state lands in
-    /// [`State::AfterValue`]. That auto-includes every value-terminal lexical
+    /// [`State::AfterValue`] or its name-position twin [`State::AfterName`]
+    /// (which an identifier's own trailing whitespace lands in). That
+    /// auto-includes every value-terminal lexical
     /// state — [`AfterValue`](State::AfterValue) itself and the *closed-token*
     /// states [`InIdent`](State::InIdent), [`InNumberInt`](State::InNumberInt),
     /// [`InNumberFrac`](State::InNumberFrac), [`InDateLit`](State::InDateLit), and
@@ -1206,7 +1288,7 @@ impl Pda {
         self.stack.is_empty()
             && matches!(
                 step(self.state, None, VALUE_BOUNDARY),
-                Step::Next(State::AfterValue)
+                Step::Next(State::AfterValue | State::AfterName)
             )
     }
 
@@ -1354,6 +1436,7 @@ pub const ALL_STATES: [State; State::COUNT] = [
     State::ExpectValue,
     State::ExpectValueReq,
     State::AfterValue,
+    State::AfterName,
     State::InIdent,
     State::SawNumSign,
     State::InNumberInt,
