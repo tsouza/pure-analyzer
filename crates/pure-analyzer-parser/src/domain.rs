@@ -105,32 +105,37 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
         self.open(SyntaxKind::ROOT);
         self.open(SyntaxKind::DOMAIN_FILE);
 
-        while self.raw_kind().is_some() {
+        let iteration_budget = self.tokens.len();
+        for _ in 0..iteration_budget {
+            if self.raw_kind().is_none() {
+                break;
+            }
             self.consume_trivia();
             if self.raw_kind().is_none() {
                 break;
             }
-            let semicolon_start = self.index;
-            self.consume_if_raw(TokenKind::SEMICOLON);
-            let consumed_semicolon = self.index != semicolon_start;
-            if !consumed_semicolon {
-                let before = self.index;
-                match self.declaration_kind() {
-                    Some(DeclarationKind::Class) => self.parse_class(),
-                    Some(DeclarationKind::Association) => self.parse_association(),
-                    Some(DeclarationKind::Profile) => self.parse_profile(),
-                    None => self.parse_opaque_top_level(),
-                }
-                if self.index == before {
-                    self.syntax_error("parser made no progress while reading a Domain declaration");
-                    self.open(SyntaxKind::ERROR_NODE);
-                    if !self.bump() {
-                        self.close();
-                        break;
-                    }
-                    self.close();
-                }
+            if self.raw_at(TokenKind::SEMICOLON) && self.bump() {
+                continue;
             }
+
+            let before = self.index;
+            match self.declaration_kind() {
+                Some(DeclarationKind::Class) => self.parse_class(),
+                Some(DeclarationKind::Association) => self.parse_association(),
+                Some(DeclarationKind::Profile) => self.parse_profile(),
+                None => self.parse_opaque_top_level(),
+            }
+            if self.index != before {
+                continue;
+            }
+
+            self.syntax_error("parser made no progress while reading a Domain declaration");
+            self.open(SyntaxKind::ERROR_NODE);
+            if !self.bump() {
+                self.close();
+                break;
+            }
+            self.close();
         }
 
         self.close();
@@ -1298,7 +1303,7 @@ mod tests {
 
     #[test]
     fn exhausted_fuel_stops_top_level_recovery_after_one_error_node() {
-        let source = ";";
+        let source = ";;";
         let tokens = lex(source);
         let mut parser = Parser::new(source, FileId::new(0), &tokens);
         parser.fuel = 0;

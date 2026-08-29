@@ -597,6 +597,46 @@ Class <<meta::tag>> ::demo::model::Thing extends ::demo::Base , other::Stamped
 }
 
 #[test]
+fn double_angle_close_preserves_an_abutting_declaration_name() {
+    let source = r#"
+Class <<meta::tag>>demo::Tagged
+{
+  value: String[1];
+}
+"#;
+    let parsed = parse(source);
+
+    assert!(parsed.diagnostics.is_empty(), "{:#?}", parsed.diagnostics);
+    assert!(
+        parsed.coverage_gaps.is_empty(),
+        "{:#?}",
+        parsed.coverage_gaps
+    );
+    let class = parsed
+        .green
+        .children()
+        .iter()
+        .filter_map(GreenElement::as_node)
+        .flat_map(GreenNode::children)
+        .filter_map(GreenElement::as_node)
+        .find(|node| node.kind() == SyntaxKind::DOMAIN_CLASS_DECL)
+        .expect("Domain file must contain the tagged class");
+    let name = class
+        .children()
+        .iter()
+        .filter_map(GreenElement::as_node)
+        .find(|node| node.kind() == SyntaxKind::DOMAIN_QUALIFIED_NAME)
+        .expect("tagged class must retain its qualified name");
+    assert_eq!(name.text().trim_end(), "demo::Tagged");
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::DOMAIN_CLASS_DECL), 1);
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_PROPERTY_DECL),
+        1
+    );
+    assert_lossless(source, &parsed);
+}
+
+#[test]
 fn profile_tag_lists_keep_nested_multiplicities_before_later_sections() {
     let source = r#"
 Profile demo::Annotated
