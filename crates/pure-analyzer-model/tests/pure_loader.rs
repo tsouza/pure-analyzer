@@ -79,6 +79,31 @@ fn trusted_pmcd_association() -> String {
     .to_string()
 }
 
+fn second_pmcd_association() -> String {
+    json!({
+        "_type": "data",
+        "elements": [{
+            "_type": "association",
+            "package": "demo",
+            "name": "Second",
+            "stereotypes": [],
+            "properties": [
+                {
+                    "name": "lefts",
+                    "genericType": {"rawType": "demo::Left"},
+                    "multiplicity": {"lowerBound": 0, "upperBound": null}
+                },
+                {
+                    "name": "shared",
+                    "genericType": {"rawType": "demo::Right"},
+                    "multiplicity": {"lowerBound": 1, "upperBound": 1}
+                }
+            ]
+        }]
+    })
+    .to_string()
+}
+
 fn mixed_association_collision_graph(pure_first: bool) -> pure_analyzer_model::ModelGraph {
     let left = empty_pmcd_class("Left");
     let right = empty_pmcd_class("Right");
@@ -572,6 +597,27 @@ fn pmcd_association_survives_a_colliding_pure_association_in_either_order() {
     let pure_first = mixed_association_collision_graph(true);
     assert_trusted_pmcd_association(&pure_first, 3);
     assert_unresolved_pure_collision(&pure_first, 0);
+}
+
+#[test]
+fn two_pmcd_associations_do_not_survive_a_colliding_pure_end() {
+    let left = empty_pmcd_class("Left");
+    let right = empty_pmcd_class("Right");
+    let trusted = trusted_pmcd_association();
+    let second = second_pmcd_association();
+    let error = load_model_documents(&[
+        ModelDocument::Pmcd(PmcdDocument::new("left.pmcd.json", &left)),
+        ModelDocument::Pmcd(PmcdDocument::new("right.pmcd.json", &right)),
+        ModelDocument::Pmcd(PmcdDocument::new("trusted.pmcd.json", &trusted)),
+        ModelDocument::Pmcd(PmcdDocument::new("second.pmcd.json", &second)),
+        ModelDocument::Pure(PureDocument::new(
+            "colliding.pure",
+            COLLIDING_PURE_ASSOCIATION,
+        )),
+    ])
+    .expect_err("two closed-world PMCD ends must not be suppressed by a Pure collision");
+
+    assert!(error.to_string().contains("demo::Second"));
 }
 
 struct AssociationWinnerExpectation<'a> {
