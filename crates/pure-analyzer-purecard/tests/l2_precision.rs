@@ -1879,6 +1879,49 @@ static FROZEN_KILLS: &[FrozenKill] = &[
             closed_by: "*",
         },
     },
+    // One row per byte of `STORE_RESULT_DENIED_OPENERS` that the walker's own
+    // failures do not already pin (`&`, `>` and `*` are covered above), so no
+    // byte can be dropped from the set without a red test — the standard N3g's
+    // per-name rows set in this same phase. Each was sent through the live engine
+    // on this branch: `||` gives `or(Table[1],Boolean[1])`, `<` gives
+    // `lessThan(Table[1],String[1])`, `+` gives `plus(Any[2])` and `/` gives
+    // `divide(Table[1],Integer[1])`.
+    FrozenKill {
+        fixture: "n4a-store-result",
+        db: "world_1",
+        closer: Closer::L2("StoreResult"),
+        kill: Kill::Walk {
+            walk: "{|spider::world_1::Db->tableReference('default','country')||true}",
+            closed_by: "||",
+        },
+    },
+    FrozenKill {
+        fixture: "n4a-store-result",
+        db: "world_1",
+        closer: Closer::L2("StoreResult"),
+        kill: Kill::Walk {
+            walk: "{|spider::world_1::Db->tableReference('default','country')<'x'}",
+            closed_by: "<",
+        },
+    },
+    FrozenKill {
+        fixture: "n4a-store-result",
+        db: "world_1",
+        closer: Closer::L2("StoreResult"),
+        kill: Kill::Walk {
+            walk: "{|spider::world_1::Db->tableReference('default','country')+1}",
+            closed_by: "+",
+        },
+    },
+    FrozenKill {
+        fixture: "n4a-store-result",
+        db: "world_1",
+        closer: Closer::L2("StoreResult"),
+        kill: Kill::Walk {
+            walk: "{|spider::world_1::Db->tableReference('default','country')/1}",
+            closed_by: "/",
+        },
+    },
     FrozenKill {
         fixture: "n4b-logical-operand",
         db: "world_1",
@@ -1927,6 +1970,20 @@ static FROZEN_KILLS: &[FrozenKill] = &[
             walk: "{|spider::world_1::model::default::Country.all()\
              ->extend('Percentage_T4_2'=='IndepYear_T1_1'/'COUNT(DISTINCT Language)')}",
             closed_by: "/",
+        },
+    },
+    // The **whitespace-separated** operator, which is the only route to N4c's
+    // arming half: with no gap the rule is read at the byte-PDA's pending-quote
+    // state, and the `awaiting_str_operator` arm at `AfterValue` is never
+    // reached. Live-attested with the space in place (`times(String[2])`).
+    FrozenKill {
+        fixture: "n4c-str-operator",
+        db: "world_1",
+        closer: Closer::L2("StrOperator"),
+        kill: Kill::Walk {
+            walk: "{|spider::world_1::model::default::Countrylanguage.all()\
+             ->isEmpty()>'LifeExpectancy' *'Continent_t1'}",
+            closed_by: "*",
         },
     },
     FrozenKill {
@@ -2847,6 +2904,11 @@ fn n3g_still_admits_the_niladic_call_and_the_plain_function_form() {
 /// The fourth is the reassembly guard, and it is the one that lands on a token
 /// other than the operator: the `-` streams, because it may still become the
 /// `->` of `->tableToTDS()`, and the walk dies on the operand behind it.
+///
+/// The last four carry one walk per [`STORE_RESULT_DENIED_OPENERS`] byte the
+/// walker's own failures leave unpinned (`|`, `<`, `+`, `/`), so — exactly as
+/// N3g's per-name rows do for its set — no byte can be dropped from the deny set
+/// without a red test. Each was live-attested on this branch alongside the rest.
 #[test]
 fn n4a_masks_every_operator_applied_to_a_store_methods_table_result() {
     assert_frozen("n4a-store-result");
@@ -2922,6 +2984,14 @@ fn n4b_still_admits_every_operand_that_can_be_boolean() {
 /// The first is the reassembly guard again, and lands on the operand rather than
 /// the operator: a string literal is arrowed 32309 times across the three
 /// corpora, so the `-` must stream as a possible `->` and die on what follows.
+///
+/// The fourth is the rule's **arming** half, and it needs the space to exist at
+/// all. A string literal is dispatched only once a later token closes it, so an
+/// operator written flush against the closing quote is decided at the byte-PDA's
+/// pending-quote state, inside `position`; only a token that *closes* the literal
+/// first — whitespace here — reaches the `awaiting_str_operator` arm at
+/// `AfterValue`. Without this row that arm has no fixture, and replacing its
+/// guard with `false` is a mutant every other N4c walk survives.
 #[test]
 fn n4c_masks_arithmetic_whose_left_operand_is_a_string_literal() {
     assert_frozen("n4c-str-operator");

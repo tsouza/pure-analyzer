@@ -86,6 +86,20 @@ const fn is_two_byte_op(a: u8, b: u8) -> bool {
     )
 }
 
+/// `bytes` as the operator it forms at `anchor`: a two-byte operator split across
+/// two tokens is rejoined with the byte the anchor is holding, exactly as
+/// [`classify_at`] rejoins it. Every other token is returned unchanged.
+///
+/// Split out rather than folded into [`classify_at`] because N4b needs the
+/// *bytes* (`&&` and `||` both classify as [`Lexeme::Other`], which cannot tell
+/// them apart), while `classify_at` needs the [`Lexeme`].
+fn operator_bytes(bytes: &[u8], anchor: State) -> Vec<u8> {
+    match (pending_operator_byte(anchor), bytes) {
+        (Some(first), [second]) if is_two_byte_op(first, *second) => vec![first, *second],
+        _ => bytes.to_vec(),
+    }
+}
+
 /// A lexical token, classified from its raw bytes — the granularity the tracker
 /// and narrower reason over. Whole identifiers/classpaths, string/number/date
 /// literals, and the operators that drive scope transitions.
@@ -1059,7 +1073,13 @@ impl ScopeTracker {
         // N4b's arming is set by this token when it is a logical operator, so —
         // exactly like the comparison arming above — the operator itself must not
         // consume it.
-        let was_logical = LOGICAL_OPERATORS.contains(&bytes);
+        //
+        // Read through the same reassembly `classify_at` uses, not off `bytes`:
+        // a vocabulary that splits `||` offers its second `|` as a token of its
+        // own, and matching the raw bytes would miss the operator entirely and
+        // leave N4b unarmed — the very split-token case N4a and N4c go to
+        // explicit trouble over.
+        let was_logical = LOGICAL_OPERATORS.contains(&operator_bytes(bytes, pre_state).as_slice());
         let mut resolved_now: Option<TypeClass> = None;
 
         match &lex {

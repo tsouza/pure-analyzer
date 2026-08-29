@@ -270,14 +270,26 @@ pub(crate) fn narrow_into(
         L2Position::StoreResult { after_dash } => {
             let after_dash = *after_dash;
             with_cache(dst, cache, CacheKey::StoreResult(after_dash), |dst| {
-                fill_store_result(dst, vocab, eos_bit, after_dash);
+                fill_after_completed_term(
+                    dst,
+                    vocab,
+                    eos_bit,
+                    after_dash,
+                    STORE_RESULT_DENIED_OPENERS,
+                );
             });
             true
         }
         L2Position::StrOperator { after_dash } => {
             let after_dash = *after_dash;
             with_cache(dst, cache, CacheKey::StrOperator(after_dash), |dst| {
-                fill_str_operator(dst, vocab, eos_bit, after_dash);
+                fill_after_completed_term(
+                    dst,
+                    vocab,
+                    eos_bit,
+                    after_dash,
+                    STR_OPERATOR_DENIED_OPENERS,
+                );
             });
             true
         }
@@ -1170,12 +1182,11 @@ fn keeps_extent_method(cursor: u32, bytes: &[u8]) -> bool {
 /// Whether `bytes` may continue a class extent — see [`fill_source_extent`].
 fn keeps_source_extent(bytes: &[u8], after_dash: bool) -> bool {
     if after_dash {
-        // The `-` is committed: only the `>` that makes it a step arrow follows.
-        return bytes.first() == Some(&STEP_GT);
+        return completes_step_arrow(bytes);
     }
     match bytes.first() {
         Some(&byte) if byte.is_ascii_whitespace() || byte == NAV_DOT => true,
-        Some(&STEP_DASH) => bytes.len() == 1 || bytes.starts_with(STEP_ARROW),
+        Some(&STEP_DASH) => opens_step_arrow(bytes),
         _ => false,
     }
 }
@@ -1237,32 +1248,6 @@ fn fill_receiver_only_arg(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32) {
 /// `equal(Any[1],Any[1])` and compile live on a store result.
 const STORE_RESULT_DENIED_OPENERS: &[u8] = b"&|<>+*/";
 
-/// Refill `dst` with [`L2Position::StoreResult`]'s set, plus EOS.
-///
-/// **Subtractive**, unlike N3e's [`fill_source_extent`]: a bare
-/// `|…::Db->tableReference('T','S')` compiles live and returns `Table`, and both
-/// equality comparators compile against it, so this clears exactly the
-/// [`STORE_RESULT_DENIED_OPENERS`] family and leaves every closer, separator,
-/// `.` navigation, equality and `->` step alone.
-///
-/// The `-` of the step arrow is the one denied byte an arithmetic minus shares
-/// with a legal continuation, so it is handled exactly as N3e handles it: kept
-/// only as the arrow — whole (`->`, however much rides behind it), or as the bare
-/// `-` a splitting vocabulary offers — with `after_dash` then narrowing the very
-/// next token to the `>` that completes it, so
-/// `…->tableReference('T','S')-'x'` (live: `minus(Any[2])`) cannot be
-/// reassembled a byte at a time.
-fn fill_store_result(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32, after_dash: bool) {
-    dst.clear_all();
-    for id in 0..vocab.len() as u32 {
-        let bytes = vocab.bytes(id).unwrap_or(&[]);
-        if keeps_store_result(bytes, after_dash) {
-            dst.set(id);
-        }
-    }
-    dst.set(eos_bit);
-}
-
 /// The operator bytes no **string literal** can be the left operand of — the
 /// three arithmetic operators with no `String` overload (§6.6 N4c).
 ///
@@ -1277,31 +1262,41 @@ fn fill_store_result(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32, after_dash:
 /// live — as are `<`/`>` (`greaterThan(String[1],String[1])` is a real overload)
 /// and `&`/`|`, which follow a string literal all through the corpus while taking
 /// the enclosing *comparison*, not the literal, as their operand.
+/// The `-` split matters more at this rule than anywhere else in the overlay: a
+/// string literal is arrowed 32309 times across the three corpora and is the left
+/// operand of an arithmetic minus in none of them, so the byte must stream as the
+/// arrow and die as the operator ([`keeps_after_completed_term`]).
 const STR_OPERATOR_DENIED_OPENERS: &[u8] = b"*/";
 
-/// Refill `dst` with [`L2Position::StrOperator`]'s set, plus EOS: everything the
-/// vocabulary offers, less the [`STR_OPERATOR_DENIED_OPENERS`] family, with the
-/// `-` of a step arrow handled exactly as [`fill_store_result`] handles it.
+/// Refill `dst` with the continuation set of a **completed term** whose type
+/// forbids the operator family `denied`, plus EOS — N4a's and N4c's shared fill.
 ///
-/// The `-` split matters more here than anywhere else in the overlay: a string
-/// literal is arrowed 32309 times across the three corpora and is the left
-/// operand of an arithmetic minus in none of them, so the byte must stream as the
-/// arrow and die as the operator.
-fn fill_str_operator(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32, after_dash: bool) {
+/// **Subtractive**, unlike N3e's [`fill_source_extent`]: both rules govern a term
+/// that really does accept more than a class extent does — a bare
+/// `|…::Db->tableReference('T','S')` compiles live and returns `Table`, and a
+/// string literal takes `+`, the ordered comparators and a step arrow — so each
+/// clears exactly its own attested family and leaves every closer, separator,
+/// `.` navigation and equality comparison alone.
+///
+/// One fill for both, because the two differ in nothing but `denied`: the
+/// per-rule facts live in [`STORE_RESULT_DENIED_OPENERS`] and
+/// [`STR_OPERATOR_DENIED_OPENERS`], and the guard they share is stated once in
+/// [`keeps_after_completed_term`] (constitution §4).
+fn fill_after_completed_term(
+    dst: &mut BitMask,
+    vocab: &Vocab,
+    eos_bit: u32,
+    after_dash: bool,
+    denied: &[u8],
+) {
     dst.clear_all();
     for id in 0..vocab.len() as u32 {
         let bytes = vocab.bytes(id).unwrap_or(&[]);
-        if keeps_str_operator(bytes, after_dash) {
+        if keeps_after_completed_term(bytes, after_dash, denied) {
             dst.set(id);
         }
     }
     dst.set(eos_bit);
-}
-
-/// Whether `bytes` may follow a completed string literal — see
-/// [`fill_str_operator`].
-fn keeps_str_operator(bytes: &[u8], after_dash: bool) -> bool {
-    keeps_after_completed_term(bytes, after_dash, STR_OPERATOR_DENIED_OPENERS)
 }
 
 /// The shared keep-rule N4a and N4c discriminate on: after a completed term,
@@ -1314,20 +1309,26 @@ fn keeps_str_operator(bytes: &[u8], after_dash: bool) -> bool {
 /// stated exactly once (constitution §4).
 fn keeps_after_completed_term(bytes: &[u8], after_dash: bool, denied: &[u8]) -> bool {
     if after_dash {
-        // The `-` is committed: only the `>` that makes it a step arrow follows.
-        return bytes.first() == Some(&STEP_GT);
+        return completes_step_arrow(bytes);
     }
     match bytes.first() {
-        Some(&STEP_DASH) => bytes.len() == 1 || bytes.starts_with(STEP_ARROW),
+        Some(&STEP_DASH) => opens_step_arrow(bytes),
         Some(byte) => !denied.contains(byte),
         None => false,
     }
 }
 
-/// Whether `bytes` may continue a store-method result — see
-/// [`fill_store_result`].
-fn keeps_store_result(bytes: &[u8], after_dash: bool) -> bool {
-    keeps_after_completed_term(bytes, after_dash, STORE_RESULT_DENIED_OPENERS)
+/// Whether a `-`-leading `bytes` is admissible **as a step arrow**: the whole
+/// `->` (however much rides behind it), or the bare `-` a vocabulary that splits
+/// the connector offers. The one place the arithmetic-minus carve-out is stated.
+fn opens_step_arrow(bytes: &[u8]) -> bool {
+    bytes.len() == 1 || bytes.starts_with(STEP_ARROW)
+}
+
+/// Whether `bytes` completes a step arrow whose `-` is already committed — the
+/// `after_dash` half of the same carve-out.
+fn completes_step_arrow(bytes: &[u8]) -> bool {
+    bytes.first() == Some(&STEP_GT)
 }
 
 /// Refill `dst` from a trie walk: keep every vocab token that can still reach a

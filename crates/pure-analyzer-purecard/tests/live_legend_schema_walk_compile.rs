@@ -264,7 +264,7 @@ const RATCHET_SLACK: usize = 3;
 /// operand cannot be a mismatched literal) and N4c (`-`/`*`/`/` cannot take a
 /// string literal as their left operand). Bucket E — operator and multiplicity
 /// type errors, the largest bucket on both databases after Phase 5 — went
-/// **9 → 3** across the two databases, with both sub-shapes the phase targeted
+/// **9 → 2** across the two databases, with both sub-shapes the phase targeted
 /// closed outright: zero operator-on-a-store-result failures remain (was 5) and
 /// zero string-literal-arithmetic ones (was 3). Bucket D's arity half is closed
 /// too (`->isEmpty('…')` is gone; no receiver-only builtin is called with an
@@ -298,16 +298,16 @@ const CRITERION_BASELINE: Baseline = Baseline {
 /// criterion (bucket D 3 → 1 here). It moves less in raw count because `car_1`'s
 /// residue is more heavily parse- and operator-shaped to begin with.
 ///
-/// **Phase 6 (2026-08-29) ratchets this to 47/64 = recipe 6/6 + exploration
-/// 41/58**, bit-identical across two consecutive runs. Every rule in the phase
+/// **Phase 6 (2026-08-29) ratchets this to 48/64 = recipe 6/6 + exploration
+/// 42/58**, bit-identical across two consecutive runs. Every rule in the phase
 /// was built from an engine-printed overload set and a three-corpus frequency
 /// check rather than from either database's taxonomy, and the guard moves by
-/// **+6** against the criterion's +4 — the arm that is not the design target
+/// **+7** against the criterion's +4 — the arm that is not the design target
 /// moving further is the generalization evidence.
 const GENERALIZATION_BASELINE: Baseline = Baseline {
     db_id: GENERALIZATION_DB,
     recipe_compiled: 6,
-    exploration_compiled: 41,
+    exploration_compiled: 42,
 };
 
 /// Decode a walk's token ids back to its Pure text through `grammar`'s own
@@ -452,45 +452,45 @@ fn assert_live_compile_rate(baseline: &Baseline) {
 /// Phase 6 shipped four rules over the *completed term* — N3g (arity), N4a
 /// (the store result's operator set), N4b (the logical operand) and N4c (the
 /// string-literal operator) — and both sub-shapes it targeted are closed
-/// outright. What remains, across 15 `world_1` / 17 `car_1` exploration
-/// failures, taxonomised per walk and in descending order of size:
+/// outright. What remains, across 15 `world_1` / 16 `car_1` exploration
+/// failures, taxonomised per walk and summing to exactly 31:
 ///
 /// - **L1 parse over-approximation — 7 `world_1` / 8 `car_1`, and now the
-///   largest residue on both databases by a wide margin.** Five of the fifteen
-///   are one shape: the symbolic milestoning literal is still `%<lowercase>+`
-///   rather than the two real symbols (§5.6), so `Class.all(%name)` walks and the
-///   engine answers "no viable alternative at input '.all(%'". That single L1
-///   tightening is the highest-yield item left anywhere in the taxonomy. The rest
-///   are the typed-binder `:` inside a call (4) and a value-position `::` — both
-///   already named residue, unchanged since Phase 4.
+///   largest residue on both databases by a wide margin.** Two shapes account
+///   for ten of the fifteen. Five are the symbolic milestoning literal, still
+///   `%<lowercase>+` rather than the two real symbols (§5.6), so `Class.all(%name)`
+///   walks and the engine answers "no viable alternative at input '.all(%'".
+///   Five more are the typed-binder `:` inside a call, admitted after any
+///   completed term rather than only after the argument's own first identifier.
+///   **That first tightening is the highest-yield item left anywhere in the
+///   taxonomy**, and both are L1 work, not decoder rules. The other five are one
+///   `::`, one `|`, one malformed argument list and two unlabelled parse errors.
 /// - **A dangling bare word or `::` classpath in a value position — 4
 ///   `world_1` / 3 `car_1`** ("Can't find the packageable element 'countryCode'",
-///   "'max::extend'"). N7 governs what may *follow* a bare word and deliberately
-///   narrows no name set, because a novel binder name must stay admissible; these
-///   walks all take a continuation N7 permits (`.`, `::`) into a name the model
-///   does not contain. Closing them means narrowing the *name* against the
-///   schema's own element set at a value position — the first rule in this series
-///   that would have to decide how much of a closed model to assume, and a
-///   scoping question rather than an implementation one.
-/// - **A method whose receiver is one category over — 4.** Three families, each
-///   the exact analogue of a rule this phase or Phase 5 already shipped, one
-///   receiver across: a *primitive extent* reached by navigating off a class one
-///   (`CarMakers.all().id->tableReference(…)` → `tableReference(Integer[*],String[1],String[1])`,
-///   and `ModelList.all().fk3DefaultCarNames <= …` → `lessThanEqual(CarNames[*],Boolean[1])`
-///   — N3f's and N4a's error one category over); a store method arrowed off a
-///   *`Table`* rather than the `Database` (`…->tableReference('T','S')->tableReference(…)`
-///   → `tableReference(Table[1],String[1],String[1])`, reachable because N4a
+///   "'max::extend'", "'String::X'"). N7 governs what may *follow* a bare word
+///   and deliberately narrows no name set, because a novel binder name must stay
+///   admissible; these walks all take a continuation N7 permits (`.`, `::`) into
+///   a name the model does not contain. Closing them means narrowing the *name*
+///   against the schema's own element set at a value position — the first rule in
+///   this series that would have to decide how much of a closed model to assume,
+///   and a scoping question rather than an implementation one.
+/// - **A method or member whose receiver is one category over — 5.** Three
+///   families, each the exact analogue of a rule this phase or Phase 5 already
+///   shipped, one receiver across: a *primitive extent* reached by navigating off
+///   a class one (`CarMakers.all().id->tableReference(…)` →
+///   `tableReference(Integer[*],String[1],String[1])`, and
+///   `ModelList.all().fk3DefaultCarNames <= …` →
+///   `lessThanEqual(CarNames[*],Boolean[1])` — N3f's and N4a's error one category
+///   over); a store method arrowed off a *`Table`* rather than the `Database`
+///   (`…->tableReference('T','S')->tableReference(…)`, reachable because N4a
 ///   deliberately keeps the `->` that `->tableToTDS()` needs); and a member taken
 ///   off a `Table` or a string literal (`…->tableReference('T','S').'CountryCode_T1_1'`,
-///   `'Maker_t1'.'MPG'`), which N4a likewise keeps because `.name` really does
-///   resolve on the metamodel `Table`. All four were live-probed on this branch
-///   and all four are real; each wants its own attested table.
-/// - **Bucket E's remainder — 3.** `plus(Any[2])` on a `count()` result;
-///   `and(String[1],Boolean[1])`, where the *left* operand is the literal and no
-///   left-hand rule reaches it; and one `or(Boolean[1],String[1])` that N4b masks
-///   in its split form and misses in its BPE-fused one (`||'CountryId_T2'` is a
-///   single vocabulary token, read at the preceding anchor — the limitation N4b's
-///   own doc records, and one T1 has always shared).
+///   `'Maker_t1'.'MPG'`), which N4a and N4c likewise keep because `.name` really
+///   does resolve on the metamodel `Table`. All five were live-probed on this
+///   branch and all five are real; each wants its own attested table.
+/// - **Bucket E's remainder — 2, both on the guard.** `plus(Any[2])` on a
+///   `count()` result, and `and(String[1],Boolean[1])` where the *left* operand is
+///   the literal and no left-hand rule reaches it. Down from 9.
 /// - **A wrong-shaped argument on a legal name — 1**
 ///   (`sort(Countrylanguage[*],Boolean[1])`): the name is legal, the arity is
 ///   legal, only the argument's *type* is not — the residue N3g's arity half does
