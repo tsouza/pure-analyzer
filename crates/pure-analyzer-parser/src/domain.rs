@@ -470,7 +470,12 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
     fn parse_stereotype_list(&mut self) -> bool {
         self.consume_trivia();
         let mut valid = true;
-        while self.raw_kind().is_some() && !self.at(TokenKind::BRACKET_CLOSE) {
+        let iteration_budget = self.tokens.len();
+        for _ in 0..iteration_budget {
+            if self.raw_kind().is_none() || self.at(TokenKind::BRACKET_CLOSE) {
+                break;
+            }
+            let start = self.index;
             self.open(SyntaxKind::DOMAIN_STEREOTYPE_DECL);
             let name = self.consume_name("a stereotype name");
             self.close();
@@ -494,6 +499,13 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
                 if self.index == comma_start && self.raw_at(TokenKind::COMMA) {
                     return false;
                 }
+            }
+            if self.index == start {
+                self.syntax_error("parser made no progress in stereotype list");
+                self.open(SyntaxKind::ERROR_NODE);
+                let _ = self.bump();
+                self.close();
+                return false;
             }
         }
         valid
@@ -647,11 +659,9 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
                     "parser made no progress while reading Domain stereotype applications",
                 );
                 self.open(SyntaxKind::ERROR_NODE);
-                let advanced = self.bump();
+                let _ = self.bump();
                 self.close();
-                if !advanced {
-                    break;
-                }
+                break;
             }
             if !structurally_valid || !closed {
                 if closed {
@@ -903,8 +913,8 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
                 Some(TokenKind::BRACE_OPEN) => depth = depth.saturating_add(1),
                 Some(TokenKind::BRACE_CLOSE) => {
                     depth = depth.saturating_sub(1);
-                    let advanced = self.bump();
-                    if !advanced || self.index == before {
+                    let _ = self.bump();
+                    if self.index == before {
                         break;
                     }
                     if depth == 0 {
@@ -914,8 +924,8 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
                 }
                 _ => {}
             }
-            let advanced = self.bump();
-            if !advanced || self.index == before {
+            let _ = self.bump();
+            if self.index == before {
                 break;
             }
         }
@@ -936,15 +946,16 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
             }
             let before = self.index;
             if self.at_double_angle_close() {
-                let first = self.bump();
-                let second = self.bump();
-                if first && second && self.index != before {
-                    return true;
-                }
-                break;
+                let (true, true) = (
+                    self.expect(TokenKind::GT, "first `>` after stereotype applications"),
+                    self.expect(TokenKind::GT, "second `>` after stereotype applications"),
+                ) else {
+                    break;
+                };
+                return true;
             }
-            let advanced = self.bump();
-            if !advanced || self.index == before {
+            let _ = self.bump();
+            if self.index == before {
                 break;
             }
         }
@@ -1166,8 +1177,15 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
     }
 
     fn consume_trivia(&mut self) {
-        while self.raw_kind().is_some_and(is_trivia) {
-            if !self.bump() {
+        let iteration_budget = self.tokens.len();
+        for _ in 0..iteration_budget {
+            match self.raw_kind() {
+                Some(kind) if is_trivia(kind) => {}
+                _ => break,
+            }
+            let before = self.index;
+            let _ = self.bump();
+            if self.index == before {
                 break;
             }
         }
@@ -1376,6 +1394,29 @@ mod tests {
     }
 
     #[test]
+    fn stereotype_list_stops_at_trivia_only_eof() {
+        let source = " /* comment */ ";
+        let tokens = lex(source);
+        assert!(tokens.len() > 1);
+        let mut parser = Parser::new(source, FileId::new(0), &tokens);
+
+        assert!(parser.parse_stereotype_list());
+        assert_eq!(parser.index, tokens.len());
+        assert!(parser.diagnostics.is_empty());
+    }
+
+    #[test]
+    fn stereotype_list_leaves_closing_bracket_for_its_caller() {
+        let source = "]";
+        let tokens = lex(source);
+        let mut parser = Parser::new(source, FileId::new(0), &tokens);
+
+        assert!(parser.parse_stereotype_list());
+        assert_eq!(parser.index, 0);
+        assert!(parser.diagnostics.is_empty());
+    }
+
+    #[test]
     fn exhausted_fuel_stops_stereotype_application_recovery() {
         let source = "{";
         let tokens = lex(source);
@@ -1427,5 +1468,16 @@ mod tests {
         assert_eq!(parser.fuel, 0);
         assert_eq!(parser.diagnostics.len(), 1);
         assert_eq!(parser.diagnostics[0].code, DiagCode::MalformedSyntax);
+    }
+
+    #[test]
+    fn double_angle_consumption_advances_past_both_significant_closers() {
+        let source = "<< > >";
+        let tokens = lex(source);
+        let mut parser = Parser::new(source, FileId::new(0), &tokens);
+
+        assert!(parser.consume_double_angle());
+        assert_eq!(parser.index, tokens.len());
+        assert!(parser.diagnostics.is_empty());
     }
 }
