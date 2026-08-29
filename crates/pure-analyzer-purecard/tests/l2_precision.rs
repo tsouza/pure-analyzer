@@ -340,7 +340,8 @@ fn t6_masks_an_ordered_comparator_on_a_non_scalar_nav_expr() {
 ///   here is `Member`, and the tracker has already resolved the member to a
 ///   class, so this is the *natural* place to write a T7 and must be covered.
 /// - the **completed-term** anchor, one space later, where T2/T6 are read. The
-///   active rule here is `OrderedOperand`.
+///   active rule here is `OrderedOperand` on the non-scalar body and
+///   `Comparator` on the scalar control — the two the contrast below separates.
 ///
 /// At the completed-term anchor the ordered comparator is additionally asserted
 /// masked on the non-scalar body and admissible on the scalar one, and the

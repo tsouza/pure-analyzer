@@ -145,6 +145,12 @@ fn a_non_scalar_projection_lambda_body_compiles_so_t7_stays_retired() {
     const CAR_CONTINENTS: &str = "spider::car_1::model::default::Continents";
     const CAR_MODEL_LIST: &str = "spider::car_1::model::default::ModelList";
 
+    // Both constants are the engine's own fully-qualified spelling, read off a
+    // live run of these exact probes against the pinned stack — not the short
+    // names the §6.6 T7 evidence table abbreviates to. This lane is
+    // schedule/dispatch-only (`purecard-legend.yml`), so a wrong string here
+    // would redden a nightly rather than a PR; they were re-verified live after
+    // the assertions were tightened from `ReturnType(_)`.
     /// The arm-A projection return type, asserted rather than merely "some
     /// type" so a semantic drift is caught as loudly as an outright rejection.
     const TDS: &str = "meta::pure::tds::TabularDataSet";
