@@ -32,11 +32,22 @@ use l2::{TokenVocab, load_schema};
 use legend::{LegendClient, ReturnTypeOutcome};
 use purecard::CompiledGrammar;
 use schema_context::{first_class_path, full_model_text, pure_model_text};
-use schema_walker::generate_first_complete_schema_walks;
+use schema_walker::{WALK_COUNT, generate_first_complete_schema_walk_set};
 
 const ENGINE_BASE: &str = "http://localhost:6300/api";
 const HEALTH_TIMEOUT: Duration = Duration::from_secs(90);
 const STRUCTURAL_BYTES: &[u8] = b"abXY1_ |{}()[].,;:$%'-><=!&+*/";
+
+/// Issue #55's own criterion database: the schema its live-compile-rate
+/// target names, and the one the decoder-rule series' failure taxonomy was
+/// built from.
+const CRITERION_DB: &str = "world_1";
+
+/// The generalization-guard database (issue #55's Phase 0 scope ruling): a
+/// second, independent fixture measured and floored alongside the criterion,
+/// so a rule tuned tightly to [`CRITERION_DB`]'s taxonomy cannot pass as a
+/// general precision win.
+const GENERALIZATION_DB: &str = "car_1";
 
 fn corpus_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("corpus/gold_queries.jsonl")
@@ -140,10 +151,207 @@ fn every_fixture_class_all_lambda_compiles_against_its_own_pmcd() {
     }
 }
 
-/// Diagnostic, not a gate (this whole file only runs via the opt-in
-/// `just test-legend`, never `just ci`/`just ci-full`): sends every
-/// schema-aware walk (issue #59's generator) for `world_1` through the real
-/// engine's two-call compile sequence and reports the parse/compile split.
+/// One walk partition's live tally: how many of its walks reached a real
+/// `returnType` against the fixture's own PMCD.
+#[derive(Default)]
+struct Tally {
+    compiled: usize,
+    total: usize,
+}
+
+impl std::fmt::Display for Tally {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}/{}", self.compiled, self.total)
+    }
+}
+
+/// A database's live compile outcome, split at the walk set's own recipe /
+/// exploration boundary (`SchemaWalkSet::recipe_len`).
+///
+/// The split is the whole point of this lane's reporting (issue #55): recipe
+/// walks are deterministic, oracle-verified constructs that compile *by
+/// construction*, so counting one toward a decoder-rule's precision win would
+/// be circular. Only the exploration partition is evidence about the mask.
+struct CompileRate {
+    recipe: Tally,
+    exploration: Tally,
+    failures: Vec<String>,
+}
+
+/// A database's recorded Phase 0 live baseline, and thus its floors.
+///
+/// The recipe partition is deterministic — the same schema and vocabulary
+/// always build the same recipe walks — so its floor is the exact measured
+/// count. The exploration partition is drawn from one chained SplitMix64
+/// stream that *any* rule change reshuffles end to end, so its floor carries
+/// [`RATCHET_SLACK`]: an exact pin would red this lane on reshuffle noise
+/// alone, and since the constitution (§3) forbids the agent lowering a floor,
+/// an exact pin is a designed deadlock.
+///
+/// PROTECTED, ratchet-only: raise a baseline at a phase boundary once a
+/// re-measure beats it. Only a maintainer may lower one.
+struct Baseline {
+    db_id: &'static str,
+    recipe_compiled: usize,
+    exploration_compiled: usize,
+}
+
+/// Slack every exploration floor carries below its recorded baseline (issue
+/// #55's plan, standing gate (e)) — sized to the reshuffle noise observed
+/// across the recipe PRs that preceded this measurement.
+const RATCHET_SLACK: usize = 3;
+
+/// Issue #55's criterion baseline, measured live against the pinned Legend
+/// stack (`corpus/legend-stack/docker-compose.yml`) on 2026-08-29: **12/64
+/// total = recipe 5/5 + exploration 7/59**.
+///
+/// `world_1`'s corpus-derived vocabulary realizes only five of the six recipe
+/// shapes the eager generator offers; `recipe_walks` drops an unrealizable
+/// shape rather than padding it, so the recipe partition is five walks wide
+/// here and the exploration partition inherits the freed slot.
+const CRITERION_BASELINE: Baseline = Baseline {
+    db_id: CRITERION_DB,
+    recipe_compiled: 5,
+    exploration_compiled: 7,
+};
+
+/// The generalization guard's baseline, measured in the same run: **13/64
+/// total = recipe 6/6 + exploration 7/58**. `car_1` realizes all six eager
+/// recipe shapes, so its partitions split one slot differently from the
+/// criterion's — which is exactly why each floor is stated per database
+/// rather than as a single cross-database number.
+const GENERALIZATION_BASELINE: Baseline = Baseline {
+    db_id: GENERALIZATION_DB,
+    recipe_compiled: 6,
+    exploration_compiled: 7,
+};
+
+/// Decode a walk's token ids back to its Pure text through `grammar`'s own
+/// vocabulary.
+fn walk_text(grammar: &CompiledGrammar, walk: &[u32]) -> String {
+    walk.iter()
+        .flat_map(|&id| {
+            grammar
+                .vocab()
+                .bytes(id)
+                .expect("real token")
+                .iter()
+                .copied()
+        })
+        .map(char::from)
+        .collect()
+}
+
+/// Send every schema-aware walk (issue #59's generator) for `db_id` through
+/// the real engine's two-call compile sequence, tallying the recipe and
+/// exploration partitions separately.
+fn measure_compile_rate(client: &LegendClient, db_id: &str) -> CompileRate {
+    let pmcd = client
+        .grammar_to_json_model(&full_model_text(db_id))
+        .unwrap_or_else(|err| panic!("{db_id}: the assembled model must itself parse: {err}"));
+
+    let extra: Vec<Vec<u8>> = STRUCTURAL_BYTES.iter().map(|&byte| vec![byte]).collect();
+    let queries: Vec<String> = load_gold(&corpus_path())
+        .expect("open the committed gold corpus")
+        .filter_map(Result::ok)
+        .filter(|record| record.db_id == db_id)
+        .map(|record| record.pure_text)
+        .collect();
+    assert!(
+        !queries.is_empty(),
+        "no gold queries for fixture db {db_id}"
+    );
+    let refs: Vec<&str> = queries.iter().map(String::as_str).collect();
+    let vocab = TokenVocab::build(&refs, &extra);
+    let grammar = CompiledGrammar::compile(vocab.vocab());
+    let schema = load_schema(db_id);
+
+    let set = generate_first_complete_schema_walk_set(&grammar, &schema);
+    assert_eq!(
+        set.walks().len(),
+        WALK_COUNT,
+        "{db_id}: the walk set's size is the denominator every floor is stated against"
+    );
+
+    let mut rate = CompileRate {
+        recipe: Tally::default(),
+        exploration: Tally::default(),
+        failures: Vec::new(),
+    };
+    for (index, walk) in set.walks().iter().enumerate() {
+        let is_recipe = index < set.recipe_len();
+        let partition = if is_recipe { "recipe" } else { "exploration" };
+        let tally = if is_recipe {
+            &mut rate.recipe
+        } else {
+            &mut rate.exploration
+        };
+        tally.total += 1;
+        let text = walk_text(&grammar, walk);
+        match client.grammar_to_json_lambda(&text) {
+            Err(err) => rate.failures.push(format!(
+                "{db_id} {partition} walk {index}: PARSE: {err}\n  {text}"
+            )),
+            Ok(lambda_json) => match client
+                .lambda_return_type(&lambda_json, &pmcd)
+                .unwrap_or_else(|err| panic!("walk {index} ({text:?}) request failed: {err}"))
+            {
+                ReturnTypeOutcome::ReturnType(_) => tally.compiled += 1,
+                ReturnTypeOutcome::CompileError(message) => rate.failures.push(format!(
+                    "{db_id} {partition} walk {index}: COMPILE: {message}\n  {text}"
+                )),
+            },
+        }
+    }
+    rate
+}
+
+/// Measure `baseline`'s database live and hold it to its floors.
+///
+/// This lane runs only under the opt-in `just test-legend` (nightly
+/// `purecard-legend.yml`, plus dispatch), never `just ci`/`just ci-full`, so
+/// the floors here are the nightly regression gate for issue #55's
+/// compile-rate work. The per-partition numbers are printed on every run,
+/// pass or fail: a phase's re-measure is read straight out of this line.
+fn assert_live_compile_rate(baseline: &Baseline) {
+    let client = LegendClient::new(ENGINE_BASE);
+    client
+        .health_wait(HEALTH_TIMEOUT)
+        .expect("Legend engine must become healthy");
+
+    let db_id = baseline.db_id;
+    let rate = measure_compile_rate(&client, db_id);
+    let compiled = rate.recipe.compiled + rate.exploration.compiled;
+    let exploration_floor = baseline.exploration_compiled.saturating_sub(RATCHET_SLACK);
+    eprintln!(
+        "issue-55 live compile rate [{db_id}]: total {compiled}/{WALK_COUNT} \
+         | recipe {} (floor {}) | exploration {} (floor {exploration_floor})\n{}",
+        rate.recipe,
+        baseline.recipe_compiled,
+        rate.exploration,
+        rate.failures.join("\n\n")
+    );
+
+    assert!(
+        rate.recipe.compiled >= baseline.recipe_compiled,
+        "{db_id}: recipe partition regressed to {} against its exact, deterministic \
+         baseline of {} — a recipe walk that stops compiling is a broken oracle-verified \
+         construct, not reshuffle noise",
+        rate.recipe,
+        baseline.recipe_compiled
+    );
+    assert!(
+        rate.exploration.compiled >= exploration_floor,
+        "{db_id}: exploration partition fell to {} , below the floor of {exploration_floor} \
+         (baseline {} − {RATCHET_SLACK} slack). Fix the rule or take a re-scope to the \
+         maintainer; never lower this floor (constitution §3, §7)",
+        rate.exploration,
+        baseline.exploration_compiled
+    );
+}
+
+/// Issue #55's criterion arm: `world_1`'s schema-aware walks against a real
+/// PMCD, reported and floored per partition.
 ///
 /// Two real, walker-level bugs surfaced and were fixed this way (see
 /// `schema_walker.rs`'s `PendingCall`/`would_fuse` docs: a `->name` call
@@ -155,12 +363,9 @@ fn every_fixture_class_all_lambda_compiles_against_its_own_pmcd() {
 /// showed only 1/64 compiling at the time — the missing store grammar was
 /// never the dominant cause here; `every_fixture_gold_corpus_compiles_against_its_assembled_store_grammar`
 /// proves that gap is in fact closed (269/269 *real* gold queries compile
-/// against the same grammar this diagnostic uses). What actually dominates
-/// this walk set's failures, split into two causes neither of which
-/// `schema_walker.rs` can fix by itself — the deterministic recipe walks
-/// (issue #55) have since lifted the measured figure to 9/64, one walk per
-/// recipe that realizes a real, compilable shape, leaving the residue below
-/// unchanged in kind:
+/// against the same grammar this lane uses). What dominates the exploration
+/// partition's residue is instead two causes neither of which
+/// `schema_walker.rs` can fix by itself:
 ///
 /// - ~1/3 fail to even *parse*: nested predicate/operator combinations
 ///   (`&&`, `||`, comparisons, arithmetic) that `docs/spec/grammar.md` §5.7
@@ -178,61 +383,19 @@ fn every_fixture_class_all_lambda_compiles_against_its_own_pmcd() {
 ///   regardless of which name is chosen.
 #[test]
 fn schema_aware_walks_compile_against_a_real_pmcd() {
-    let client = LegendClient::new(ENGINE_BASE);
-    client
-        .health_wait(HEALTH_TIMEOUT)
-        .expect("Legend engine must become healthy");
+    assert_live_compile_rate(&CRITERION_BASELINE);
+}
 
-    let db_id = "world_1";
-    let pmcd = client
-        .grammar_to_json_model(&full_model_text(db_id))
-        .expect("the assembled model must itself parse");
-
-    let extra: Vec<Vec<u8>> = STRUCTURAL_BYTES.iter().map(|&byte| vec![byte]).collect();
-    let queries: Vec<String> = load_gold(&corpus_path())
-        .expect("open the committed gold corpus")
-        .filter_map(Result::ok)
-        .filter(|record| record.db_id == db_id)
-        .map(|record| record.pure_text)
-        .collect();
-    let refs: Vec<&str> = queries.iter().map(String::as_str).collect();
-    let vocab = TokenVocab::build(&refs, &extra);
-    let grammar = CompiledGrammar::compile(vocab.vocab());
-    let schema = load_schema(db_id);
-
-    let walks = generate_first_complete_schema_walks(&grammar, &schema);
-    let mut compiled = 0usize;
-    let mut parse_failures: Vec<(usize, String, String)> = Vec::new();
-    let mut compile_failures: Vec<(usize, String, String)> = Vec::new();
-    for (index, walk) in walks.iter().enumerate() {
-        let text: String = walk
-            .iter()
-            .flat_map(|&id| {
-                grammar
-                    .vocab()
-                    .bytes(id)
-                    .expect("real token")
-                    .iter()
-                    .copied()
-            })
-            .map(char::from)
-            .collect();
-        match client.grammar_to_json_lambda(&text) {
-            Err(err) => parse_failures.push((index, text, err.to_string())),
-            Ok(lambda_json) => match client
-                .lambda_return_type(&lambda_json, &pmcd)
-                .unwrap_or_else(|err| panic!("walk {index} ({text:?}) request failed: {err}"))
-            {
-                ReturnTypeOutcome::ReturnType(_) => compiled += 1,
-                ReturnTypeOutcome::CompileError(message) => {
-                    compile_failures.push((index, text, message));
-                }
-            },
-        }
-    }
-
-    eprintln!(
-        "{compiled}/{} walks compiled for {db_id}\nparse_failures: {parse_failures:#?}\ncompile_failures: {compile_failures:#?}",
-        walks.len()
-    );
+/// The generalization-guard arm: the identical measurement on `car_1`, built
+/// from `car_1`'s own gold-corpus vocabulary slice, its own committed schema
+/// fixture, and its own assembled PMCD.
+///
+/// Issue #55's criterion names `world_1`, and every decoder rule in the
+/// series is designed against `world_1`'s failure taxonomy. A second,
+/// independent fixture measured the same way is what keeps that from becoming
+/// overfitting: a rule that only closes `world_1`'s specific degenerate walks
+/// leaves this arm flat, and one that over-masks reddens it outright.
+#[test]
+fn schema_aware_walks_compile_against_a_real_pmcd_for_the_generalization_guard() {
+    assert_live_compile_rate(&GENERALIZATION_BASELINE);
 }

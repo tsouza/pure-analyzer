@@ -148,8 +148,12 @@ property inputs become committed regressions.
 - `just wheel` builds the unpublished verification wheel; the wheel workflow
   smoke-tests supported Python/platform combinations.
 - `just test-legend` owns compose startup, health wait, package-scoped Legend
-  tests, and teardown. It is local/on-demand while the compile-rate assertion is
-  incomplete.
+  tests, and teardown. It runs nightly (`purecard-legend.yml`, plus dispatch)
+  and on demand locally, never per PR — the stack is too heavy for that lane.
+  It carries the schema-walk compile-rate floors: per database, and per walk
+  partition (`recipe` vs `exploration`), since recipe walks compile by
+  construction and only the exploration partition is evidence about mask
+  precision.
 
 All commands run from the monorepo root through the shared `just` frontend.
 
