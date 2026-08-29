@@ -208,8 +208,7 @@ pub(crate) fn narrow_into(
             let masked_by = *tc;
             with_cache(dst, cache, CacheKey::ReValue(masked_by), |dst| {
                 fill_operand(dst, vocab, eos_bit, masked_by);
-            });
-            true
+            })
         }
         L2Position::Comparator(TypeClass::Numeric | TypeClass::Temporal) => {
             // An ordered comparator is legal on a numeric/temporal operand — no
@@ -220,47 +219,34 @@ pub(crate) fn narrow_into(
             let masked_by = *tc;
             with_cache(dst, cache, CacheKey::Comparator(masked_by), |dst| {
                 fill_comparator(dst, vocab, eos_bit, masked_by);
-            });
-            true
+            })
         }
-        L2Position::OrderedOperand => {
-            with_cache(dst, cache, CacheKey::OrderedOperand, |dst| {
-                fill_ordered_operand(dst, vocab, eos_bit);
-            });
-            true
-        }
+        L2Position::OrderedOperand => with_cache(dst, cache, CacheKey::OrderedOperand, |dst| {
+            fill_ordered_operand(dst, vocab, eos_bit);
+        }),
         L2Position::Reducer(tc) => {
             let masked_by = *tc;
             with_cache(dst, cache, CacheKey::Reducer(masked_by), |dst| {
                 fill_reducer(dst, vocab, eos_bit, masked_by);
-            });
-            true
+            })
         }
-        L2Position::SourceMethodArg => {
-            with_cache(dst, cache, CacheKey::SourceMethodArg, |dst| {
-                fill_source_method_arg(dst, vocab, eos_bit);
-            });
-            true
-        }
-        L2Position::StoreMethodArg => {
-            with_cache(dst, cache, CacheKey::StoreMethodArg, |dst| {
-                fill_store_method_arg(dst, vocab, eos_bit);
-            });
-            true
-        }
+        L2Position::SourceMethodArg => with_cache(dst, cache, CacheKey::SourceMethodArg, |dst| {
+            fill_source_method_arg(dst, vocab, eos_bit);
+        }),
+        L2Position::StoreMethodArg => with_cache(dst, cache, CacheKey::StoreMethodArg, |dst| {
+            fill_store_method_arg(dst, vocab, eos_bit);
+        }),
         L2Position::StoreMethodArgSep { remaining } => {
             let remaining = *remaining;
             with_cache(dst, cache, CacheKey::StoreMethodArgSep(remaining), |dst| {
                 fill_store_method_arg_sep(dst, vocab, eos_bit, remaining);
-            });
-            true
+            })
         }
         L2Position::SourceExtent { after_dash } => {
             let after_dash = *after_dash;
             with_cache(dst, cache, CacheKey::SourceExtent(after_dash), |dst| {
                 fill_source_extent(dst, vocab, eos_bit, after_dash);
-            });
-            true
+            })
         }
         L2Position::ExtentMethod => {
             let Some(cursor) = extent_deny_cursor(prefix) else {
@@ -268,15 +254,11 @@ pub(crate) fn narrow_into(
             };
             with_cache(dst, cache, CacheKey::ExtentMethod(cursor), |dst| {
                 fill_extent_method(dst, vocab, eos_bit, cursor);
-            });
-            true
+            })
         }
-        L2Position::ReceiverOnlyArg => {
-            with_cache(dst, cache, CacheKey::ReceiverOnlyArg, |dst| {
-                fill_receiver_only_arg(dst, vocab, eos_bit);
-            });
-            true
-        }
+        L2Position::ReceiverOnlyArg => with_cache(dst, cache, CacheKey::ReceiverOnlyArg, |dst| {
+            fill_receiver_only_arg(dst, vocab, eos_bit);
+        }),
         L2Position::StoreResult { after_dash } => {
             let after_dash = *after_dash;
             with_cache(dst, cache, CacheKey::StoreResult(after_dash), |dst| {
@@ -287,8 +269,7 @@ pub(crate) fn narrow_into(
                     after_dash,
                     STORE_RESULT_DENIED_OPENERS,
                 );
-            });
-            true
+            })
         }
         L2Position::StrOperator { after_dash } => {
             let after_dash = *after_dash;
@@ -300,21 +281,14 @@ pub(crate) fn narrow_into(
                     after_dash,
                     STR_OPERATOR_DENIED_OPENERS,
                 );
-            });
-            true
+            })
         }
-        L2Position::LogicalOperand => {
-            with_cache(dst, cache, CacheKey::LogicalOperand, |dst| {
-                fill_operand(dst, vocab, eos_bit, TypeClass::Boolean);
-            });
-            true
-        }
-        L2Position::ValueIdent => {
-            with_cache(dst, cache, CacheKey::ValueIdent, |dst| {
-                fill_value_ident(dst, vocab);
-            });
-            true
-        }
+        L2Position::LogicalOperand => with_cache(dst, cache, CacheKey::LogicalOperand, |dst| {
+            fill_operand(dst, vocab, eos_bit, TypeClass::Boolean);
+        }),
+        L2Position::ValueIdent => with_cache(dst, cache, CacheKey::ValueIdent, |dst| {
+            fill_value_ident(dst, vocab);
+        }),
         // Every trie position already returned above. They are spelled out here
         // rather than swept up by a `_` arm so this match stays **exhaustive**
         // over [`L2Position`]: a new variant then has to be classified here
@@ -854,20 +828,26 @@ fn narrow_trie(
 }
 
 /// Look `key` up in the operand cache; on a hit copy the memoized mask into `dst`,
-/// on a miss run `fill` and memoize it. Only T1's cursor-independent `ReValue`
-/// lever reaches here; the trie rules memoize per cursor node in `narrow_trie`.
+/// on a miss run `fill` and memoize it. The cursor-independent rules reach here;
+/// the trie rules memoize per cursor node in `narrow_trie`.
+///
+/// Returns `true` — [`narrow_into`]'s own "a constraint applied" verdict, which
+/// every caller was otherwise restating one line later. Filling a rule's mask
+/// *is* applying its constraint, so the two are never independently decidable,
+/// and a hand-threaded copy per arm is only somewhere for them to disagree.
 fn with_cache(
     dst: &mut BitMask,
     cache: &mut NarrowCache,
     key: CacheKey,
     fill: impl FnOnce(&mut BitMask),
-) {
+) -> bool {
     if let Some(cached) = cache.operand.get(&key) {
         dst.copy_from(cached);
-        return;
+        return true;
     }
     fill(dst);
     cache.operand.insert(key, dst.clone());
+    true
 }
 
 /// Double `'` to `''` and wrap in quotes — the raw bytes the model emits for a
