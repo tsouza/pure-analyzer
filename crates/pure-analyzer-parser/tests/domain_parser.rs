@@ -657,6 +657,24 @@ Class demo::After
 }
 
 #[test]
+fn eof_diagnostics_anchor_at_the_end_of_domain_source() {
+    let source = "Class demo::Unfinished";
+    let parsed = parse(source);
+    let eof = source.len();
+
+    assert!(
+        parsed.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == DiagCode::MalformedSyntax
+                && usize::from(diagnostic.primary.span.start()) == eof
+                && usize::from(diagnostic.primary.span.end()) == eof
+        }),
+        "missing-body diagnostic must be anchored at EOF: {:#?}",
+        parsed.diagnostics
+    );
+    assert_lossless(source, &parsed);
+}
+
+#[test]
 fn malformed_parameter_tail_does_not_swallow_a_following_property() {
     let source = r#"
 Class demo::BrokenParameters
