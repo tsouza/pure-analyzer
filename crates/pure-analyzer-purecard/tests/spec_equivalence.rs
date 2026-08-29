@@ -151,6 +151,53 @@ fn modern_dialect_seed_corpus_is_equivalent_across_both_engines() {
     );
 }
 
+/// The `%`-literal and typed-binder strings issue #55 Phase 7 pinned, kept in
+/// their own function so [`precision_corpus`] stays inside the workspace's
+/// function-length lint rather than growing without bound as phases land.
+fn phase_7_literal_and_binder_corpus() -> Vec<String> {
+    vec![
+        // milestoning literal is exactly the `%latest` keyword
+        "|X.all()->take(%Latest)".to_owned(),
+        "|X.all()->take(%latest1)".to_owned(),
+        "|X.all()->take(%latestX)".to_owned(),
+        "|X.all(%latest)->take(1)".to_owned(),
+        "|X.all(%latest, %latest)->take(1)".to_owned(),
+        "|X.all(%latestdate)->take(1)".to_owned(),
+        "|X.all(%late)->take(1)".to_owned(),
+        "|X.all(%a)->take(1)".to_owned(),
+        "|X.all(%filter)->take(1)".to_owned(),
+        "|X.all()->filter(x|$x.d == %latest)".to_owned(),
+        // a typed binder's type is a classpath, a multiplicity, then a pipe
+        "|X.all()->extend(getFloat:row)".to_owned(),
+        "|X.all()->extend(a:b.c[1]|1)".to_owned(),
+        "|X.all()->extend(a:b+1)".to_owned(),
+        "|X.all()->extend(a:'b'|1)".to_owned(),
+        "|X.all()->extend(a:b : c[1]|1)".to_owned(),
+        "|X.all()->extend(a:b:::c[1]|1)".to_owned(),
+        "|X.all()->extend(a:b:: c[1]|1)".to_owned(),
+        "|X.all()->extend(a:b['europe']|1)".to_owned(),
+        "|X.all()->extend(a:b[]|1)".to_owned(),
+        "|X.all()->extend(a:b[**]|1)".to_owned(),
+        "|X.all()->extend(a:b[1],c)".to_owned(),
+        "|X.all()->extend(a:b[1]->foo())".to_owned(),
+        "|X.all()->extend(a:b[1]&&1)".to_owned(),
+        "|X.all()->extend(a:b[1]||1)".to_owned(),
+        "|X.all()->extend(a:b||1)".to_owned(),
+        "|X.all()->extend(a:b[1]|1)".to_owned(),
+        "|X.all()->extend(a:b::c[1]|1)".to_owned(),
+        "|X.all()->extend(a:b ::c[1]|1)".to_owned(),
+        "|X.all()->extend(a :b [*]|1)".to_owned(),
+        "|X.all()->extend(a:b[ 12 ] | 1)".to_owned(),
+        "|X.all()->groupBy(~[a:x|$x.b],~'t':y|$y->sum())".to_owned(),
+        // a `[` binds to a binder type and to nothing else
+        "|X.all()->filter(x|$x.a[1] > 1)".to_owned(),
+        "|X.all()->filter(x|foo[1] > 1)".to_owned(),
+        "|X.all()->take(1)['a']".to_owned(),
+        "|X.all()->extend(getFloat[1])".to_owned(),
+        "|X.all()->extend(a:b [1]|1)".to_owned(),
+    ]
+}
+
 /// Every malformed-input string `tests/precision_reject.rs` exercises via its
 /// `dies(...)` helper (both the ones that must reject and the well-formed
 /// anchors that must not) — transcribed verbatim (identical string-literal
@@ -195,17 +242,15 @@ fn precision_corpus() -> Vec<String> {
         "|X.all()->take(--5)".to_owned(),
         "|X.all()->filter(x|$x.a > .)".to_owned(),
         "|X.all()->filter(x|$x.a > 1.5e)".to_owned(),
-        // an empty date literal dies
+        // an empty date literal dies, and so does one that opens on a separator
         "|X.all()->take(%)".to_owned(),
         "|X.all()->filter(x|$x.d < %)".to_owned(),
-        // milestoning literal is lowercase-letters-only
-        "|X.all()->take(%Latest)".to_owned(),
-        "|X.all()->take(%latest1)".to_owned(),
-        "|X.all()->take(%latestX)".to_owned(),
-        "|X.all(%latest)->take(1)".to_owned(),
-        "|X.all(%latest, %latest)->take(1)".to_owned(),
-        "|X.all(%latestdate)->take(1)".to_owned(),
-        "|X.all()->filter(x|$x.d == %latest)".to_owned(),
+        "|X.all()->filter(x|$x.d < %-)".to_owned(),
+        "|X.all()->filter(x|$x.d < %T)".to_owned(),
+        "|X.all()->filter(x|$x.d < %:)".to_owned(),
+        "|X.all(%->take(1))".to_owned(),
+        "|X.all()->filter(x|$x.d < %1)".to_owned(),
+        "|X.all()->filter(x|$x.d < %2018-03-17T07:13:53.000)".to_owned(),
         // arm-R tilde sigil
         "|X.all()->project(~)".to_owned(),
         "|X.all()->project(~ [Col: x|$x.a])".to_owned(),
@@ -286,6 +331,7 @@ fn precision_corpus() -> Vec<String> {
     ];
     cases.sort();
     cases.dedup();
+    cases.extend(phase_7_literal_and_binder_corpus());
     cases
 }
 

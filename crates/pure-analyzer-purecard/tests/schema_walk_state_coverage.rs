@@ -90,13 +90,27 @@ const STRUCTURAL_BYTES: &[u8] = b"abXY1_ |{}()[].,;:$%'-><=!&+*/";
 ///   restriction — so unlike the entries above it would disappear the moment a
 ///   path-prefix token entered the corpus.
 ///
-/// `InMultiplicity` and `InDateLit` were on this list until issue #117's
-/// deeper/broader exploration (a wider `GROW_MIN`/`GROW_MAX`, several new
-/// candidate-selection biases) started reaching them too — not through any
-/// intentional multiplicity/date-literal construct, but incidentally: a much
-/// longer walk occasionally strings `STRUCTURAL_BYTES`' `[`/`*` or `%`/digit
-/// tokens adjacently by chance. Removed rather than re-added with a now-false
-/// "never reaches" justification.
+/// - `InMultiplicity`: the generic `[*]` multiplicity slot. This state and
+///   `InDateLit` were both *off* this list between issue #117 and issue #55's
+///   Phase 7, reached not through any intentional multiplicity/date construct
+///   but incidentally — a long walk occasionally strings `STRUCTURAL_BYTES`'
+///   `[`/`*` or `%`/digit tokens adjacently by chance. Phase 7 reshuffled the
+///   exploration stream off this one again: a typed binder's `[…]` is now its
+///   own `ExpectBinderMult` chain, leaving only that incidental value-position
+///   route. `InDateLit` stays reached. Nothing about either state's grammar
+///   changed, and this entry would disappear again on the next reshuffle.
+/// - `MilestoneL`…`MilestoneLates`/`InMilestoneLit`: the `%latest` keyword chain
+///   (issue #55 Phase 7). `InMilestoneLit` *was* reached — through `%a`,
+///   `%filter`, `%limit` and friends, every one of which the pinned engine
+///   rejects at the `%` ("no viable alternative at input '.all(%'"). Now that
+///   L1 spells the engine's one symbol exactly, reaching the chain needs a
+///   vocabulary that can spell `latest` after a `%`: none of the 8 fixture
+///   vocabularies can — `STRUCTURAL_BYTES` offers no `l`/`t`/`e`/`s`, and no
+///   gold lexeme is a prefix-aligned fragment of the keyword. This is a
+///   property of these test vocabularies, not of the grammar — the chain is
+///   driven end to end by the modern-dialect seed corpus
+///   (`modern_dialect_soundness.rs`), by `precision_reject.rs`, and byte by
+///   byte by `pda`'s own `the_milestone_chain_spells_exactly_the_engine_symbol`.
 const EXPECTED_UNREACHABLE: &[&str] = &[
     "LetL",
     "LetLe",
@@ -106,6 +120,13 @@ const EXPECTED_UNREACHABLE: &[&str] = &[
     "SawTilde",
     "SourceColon",
     "SourceColon2",
+    "MilestoneL",
+    "MilestoneLa",
+    "MilestoneLat",
+    "MilestoneLate",
+    "MilestoneLates",
+    "InMilestoneLit",
+    "InMultiplicity",
 ];
 
 fn corpus_path() -> PathBuf {

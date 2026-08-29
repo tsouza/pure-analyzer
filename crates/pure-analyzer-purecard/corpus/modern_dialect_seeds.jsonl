@@ -1,8 +1,8 @@
 {"db_id":"modern","source_id":"gap-report/g2-latest:1","arm":"C","constructs":["milestoning","latest","source"],"pure_text":"|finos::trade::Trade.all(%latest)->project([x|$x.name], ['name'])"}
 {"db_id":"modern","source_id":"gap-report/g2-latest:2","arm":"C","constructs":["milestoning","latest","bitemporal","source"],"pure_text":"|finos::trade::Trade.all(%latest, %latest)->take(1)"}
 {"db_id":"modern","source_id":"gap-report/g2-latest:3","arm":"C","constructs":["milestoning","latest","property"],"pure_text":"|finos::trade::Trade.all()->filter(x|$x.facet(%latest, %latest).level == 'a')->take(1)"}
-{"db_id":"modern","source_id":"gap-report/g2-latest:4","arm":"C","constructs":["milestoning","latestdate","source"],"pure_text":"|finos::trade::Trade.all(%latestdate)->take(1)"}
-{"db_id":"modern","source_id":"gap-report/g2-latest:5","arm":"C","constructs":["milestoning","latest","operand"],"pure_text":"|finos::trade::Trade.all()->filter(x|$x.asOf == %latest)->take(1)"}
+{"db_id":"modern","source_id":"issue-55/g2-latest-corrected:4","arm":"C","constructs":["milestoning","latest","property","unitemporal"],"pure_text":"|finos::trade::Trade.all()->filter(x|$x.facet(%latest).level == 'a')->take(1)"}
+{"db_id":"modern","source_id":"issue-55/g2-latest-corrected:5","arm":"C","constructs":["milestoning","latest","source","property","chained"],"pure_text":"|finos::trade::Trade.all(%latest)->filter(x|$x.facet(%latest, %latest).sub(%latest).level == 'a')->take(1)"}
 {"db_id":"modern","source_id":"gap-report/g1-armr:1","arm":"R","constructs":["relation","project"],"pure_text":"|X.all()->project(~[Col: x|$x.a])"}
 {"db_id":"modern","source_id":"gap-report/g1-armr:2","arm":"R","constructs":["relation","project","deep-nav"],"pure_text":"|X.all()->project(~[A: x|$x.a, B: x|$x.b.c])"}
 {"db_id":"modern","source_id":"gap-report/g1-armr:3","arm":"R","constructs":["relation","groupBy","agg"],"pure_text":"|X.all()->groupBy(~[K], ~'Agg': x|$x.v : y|$y->sum())"}

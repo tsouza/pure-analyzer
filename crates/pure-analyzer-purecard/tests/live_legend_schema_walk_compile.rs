@@ -53,6 +53,10 @@ fn corpus_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("corpus/gold_queries.jsonl")
 }
 
+fn seed_corpus_path() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("corpus/modern_dialect_seeds.jsonl")
+}
+
 /// The full, real, execution-verified gold corpus — arm-A
 /// (`Db->tableReference(...)->tableToTDS()`) and arm-C (`Class.all()->...`)
 /// alike, across all 8 `FIXTURE_DBS` (269 queries total) — compiles against
@@ -106,6 +110,58 @@ fn every_fixture_gold_corpus_compiles_against_its_assembled_store_grammar() {
     assert!(
         failures.is_empty(),
         "{}/{total} gold queries failed to compile:\n{}",
+        failures.len(),
+        failures.join("\n\n")
+    );
+}
+
+/// Every seed in the modern-dialect corpus **parses against the pinned engine**.
+///
+/// The seed corpus (ADR-0007) is a soundness oracle: `modern_dialect_soundness`
+/// asserts L1 accepts every row, and `docs/spec/grammar.md` §5 makes those rows
+/// the *motivation* for the productions L1 grew to admit them. That only holds
+/// if the rows are real Legend Pure — and until issue #55 Phase 7, two of them
+/// were not. `gap-report/g2-latest:4` claimed `Class.all(%latestdate)` and
+/// `:5` claimed `%latest` as a comparison operand; the pinned engine rejects
+/// both outright ("no viable alternative at input '.all(%latestdate'"), and a
+/// grammar widened to admit them widened past the language. No gate could see
+/// it: L1 accepting more than the engine is exactly §5.10's documented
+/// over-approximation, so the soundness lane stayed green while the oracle was
+/// wrong.
+///
+/// This is that missing gate, and it is the constitution §5 half of the fix (the
+/// two rows themselves are corrected to live-attested shapes, `issue-55/…`).
+/// A **parse**, not a compile: the seeds name `finos::trade::Trade` and other
+/// elements no fixture model defines, so `grammarToJson/lambda` is the whole of
+/// what the engine can adjudicate about them — and it is exactly the layer L1
+/// transcribes.
+#[test]
+fn every_modern_dialect_seed_parses_against_the_pinned_engine() {
+    let client = LegendClient::new(ENGINE_BASE);
+    client
+        .health_wait(HEALTH_TIMEOUT)
+        .expect("Legend engine must become healthy");
+
+    let mut total = 0usize;
+    let mut failures: Vec<String> = Vec::new();
+    for record in load_gold(&seed_corpus_path()).expect("open the modern-dialect seed corpus") {
+        let record = record.expect("the modern-dialect seed corpus parses");
+        total += 1;
+        if let Err(err) = client.grammar_to_json_lambda(&record.pure_text) {
+            failures.push(format!(
+                "seed {}: PARSE: {err}\n  {}",
+                record.source_id, record.pure_text
+            ));
+        }
+    }
+    assert!(
+        total > 0,
+        "the modern-dialect seed corpus must not be empty"
+    );
+    assert!(
+        failures.is_empty(),
+        "{}/{total} modern-dialect seeds are not real Legend Pure — a production \
+         seeded by one of these is motivated by a string the engine cannot parse:\n{}",
         failures.len(),
         failures.join("\n\n")
     );
@@ -256,7 +312,23 @@ const RATCHET_SLACK: usize = 3;
 /// legal niladic) and a `groupBy` argument-shape failure, neither of which a
 /// receiver-category rule reaches.
 ///
-/// **Phase 6 (2026-08-29) ratchets this to 49/64 = recipe 5/5 + exploration
+/// **Phase 7 (2026-08-29) ratchets this to 50/64 = recipe 5/5 + exploration
+/// 45/59**, bit-identical across two consecutive runs. The phase is four L1
+/// tightenings, each live-attested: the symbolic milestoning literal is now the
+/// `%latest` keyword rather than any `%<lowercase>+` run; a numeric date literal
+/// must open on a digit, not on a `-`/`T`/`:` separator; a binder colon's
+/// right-hand side is a classpath, then its `[mult]`, then exactly one pipe; and
+/// a `[` no longer follows an arbitrary name, only a binder's type — the arm
+/// that admitted it was left dead by the third change and CI's mutation shard
+/// caught it as an unkillable mutant.
+///
+/// Live **parse** failures went 15 → 13 across the two databases with both
+/// named sub-shapes closed outright — zero `%<not-latest>` walks (was 5) and
+/// zero wrong-continuation typed binders (was 4). The count moves by less than
+/// the classes closed because the exploration stream refills a freed slot from
+/// whatever bucket is next-largest rather than converting it to a compile.
+///
+/// **Phase 6 (2026-08-29) ratcheted this to 49/64 = recipe 5/5 + exploration
 /// 44/59**, bit-identical across two consecutive runs. Four rules land together,
 /// all of them answers to "what may follow a term whose type is already
 /// decided": N3g (a receiver-only builtin's arrow call takes no argument), N4a
@@ -272,7 +344,7 @@ const RATCHET_SLACK: usize = 3;
 const CRITERION_BASELINE: Baseline = Baseline {
     db_id: CRITERION_DB,
     recipe_compiled: 5,
-    exploration_compiled: 44,
+    exploration_compiled: 45,
 };
 
 /// The generalization guard's baseline, measured in the same run: **40/64
@@ -298,7 +370,20 @@ const CRITERION_BASELINE: Baseline = Baseline {
 /// criterion (bucket D 3 → 1 here). It moves less in raw count because `car_1`'s
 /// residue is more heavily parse- and operator-shaped to begin with.
 ///
-/// **Phase 6 (2026-08-29) ratchets this to 48/64 = recipe 6/6 + exploration
+/// **Phase 7 (2026-08-29) re-measures at 48/64 = recipe 6/6 + exploration
+/// 42/58**, bit-identical across two consecutive runs — level with Phase 6, so
+/// this baseline is *not* raised (floors ratchet upward only, and a re-measure
+/// that does not beat the record does not move it).
+///
+/// Recorded honestly, because the guard is where the phase's one regression
+/// landed. The first three tightenings put this arm at 49/64; removing the dead
+/// `AfterName` `[` arm the third had orphaned — a real L1 over-acceptance, since
+/// Legend has no positional index and answers "Bracket operation is not
+/// supported" — cost it back. A dead arm is not kept to protect a number
+/// (constitution §4/§7); the criterion arm held its +1 and the parse-failure
+/// count fell on both.
+///
+/// **Phase 6 (2026-08-29) ratcheted this to 48/64 = recipe 6/6 + exploration
 /// 42/58**, bit-identical across two consecutive runs. Every rule in the phase
 /// was built from an engine-printed overload set and a three-corpus frequency
 /// check rather than from either database's taxonomy, and the guard moves by
