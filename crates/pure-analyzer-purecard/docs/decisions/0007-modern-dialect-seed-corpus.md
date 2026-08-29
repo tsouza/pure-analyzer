@@ -69,6 +69,19 @@ files.
   reddens the gate. The arm-R Relation/Function API work (G1, ADR-0008) extended
   this file and its counts with `~`-bearing seeds, and added the
   `Envelope::RelationApi` variant the seed lane classifies against.
+- **A seed must be real Legend Pure, and that is now enforced (issue #55 Phase 7).**
+  Provenance separation kept the two corpora honest about *where* their rows came
+  from; it did not check that a row is in the language. Two of the five G2
+  `%latest` seeds were not — `:4`'s `Class.all(%latestdate)` and `:5`'s
+  `%latest` as a comparison operand are both rejected by the pinned engine, and
+  `milestoneLit` had been widened to `%<lowercase>+` to admit the first of them.
+  No gate could see it: L1 accepting more than the engine is `docs/spec/grammar.md`
+  §5.10's documented over-approximation, so the soundness lane passed on a wrong
+  oracle. Both rows are corrected to live-attested shapes, and
+  `live_legend_schema_walk_compile.rs`'s
+  `every_modern_dialect_seed_parses_against_the_pinned_engine` now sends every
+  seed through `grammarToJson/lambda` in the nightly Legend lane, so the class
+  cannot recur.
 - **Relationship to prior ADRs:** complements ADR-0004 (both-arms M1 scope) — it
   does not change what `gold_queries.jsonl` encodes; it adds a second, separate
   oracle for constructs that corpus never held. It does not touch ADR-0002/0003

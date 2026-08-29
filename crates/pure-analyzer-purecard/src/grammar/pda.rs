@@ -181,10 +181,24 @@ pub enum State {
     SawPercent,
     /// Inside a `%`-prefixed date/time literal (`%2018-03-17T07:13:53`).
     InDateLit,
-    /// Inside a `%`-prefixed *symbolic* milestoning literal (`%latest`,
-    /// `%latestdate`): a `%` sigil followed by lowercase ASCII letters. Distinct
-    /// from [`InDateLit`](State::InDateLit) so a milestone symbol and a numeric
-    /// date literal never share a byte class; value-terminal like `InDateLit`.
+    /// Consumed `%l`, the first byte of the engine's one symbolic milestoning
+    /// literal. The chain spells `MILESTONE_LATEST` one state per byte, exactly
+    /// as [`LetL`](State::LetL)/[`LetLe`](State::LetLe)/[`LetLet`](State::LetLet)
+    /// spell the `let` keyword: a milestone symbol is a *keyword*, not an open
+    /// lowercase run.
+    MilestoneL,
+    /// Consumed `%la`.
+    MilestoneLa,
+    /// Consumed `%lat`.
+    MilestoneLat,
+    /// Consumed `%late`.
+    MilestoneLate,
+    /// Consumed `%lates`.
+    MilestoneLates,
+    /// Completed the symbolic milestoning literal `%latest`. Distinct from
+    /// [`InDateLit`](State::InDateLit) so a milestone symbol and a numeric date
+    /// literal never share a byte class; value-terminal like `InDateLit`, which is
+    /// what makes the trailing `date` of `%latestdate` a dead state.
     InMilestoneLit,
     /// Just consumed `$`; a `refVar` identifier must follow.
     AfterDollar,
@@ -202,6 +216,51 @@ pub enum State {
     /// Just consumed the second `:` of a `::` classpath separator; a classpath
     /// identifier must follow. A third `:` is a dead state — `:::` is never valid.
     AfterColon2,
+    /// Inside the identifier a typed-binder `:` opened — the binder's *type*
+    /// classpath (`row: meta::pure::tds::TDSRow[1]|…`) or, in the arm-R column
+    /// binding, the bound variable itself (`~'Total': y|$y->sum()`).
+    ///
+    /// Distinct from the generic [`InIdent`](State::InIdent) because a binder's
+    /// right-hand side is not a free term: only the classpath's own `::`, its
+    /// multiplicity `[…]`, and the lambda pipe `|` may follow it. Live-attested —
+    /// `->extend(getFloat:row)`, `->extend(a:b.c[1]|1)` and the walk set's own
+    /// `|language:fk1DefaultCountry.row[…]` are all "Unexpected token" against the
+    /// pinned engine, while `extend(a:b[1]|1)`, `extend(a:b::c[1]|1)` and
+    /// `groupBy(~[a:x|$x.b], ~'t':y|$y->sum())` all parse.
+    InBinderType,
+    /// A completed binder type/variable name, past its trailing whitespace
+    /// (`row: TDSRow [1]|…`). The classpath may still resume here — `a:b ::c[1]|1`
+    /// parses live — so only the `::`, the multiplicity `[`, and the pipe remain.
+    AfterBinderType,
+    /// Just consumed the first `:` of a `::` *inside* a binder's type classpath;
+    /// a second `:` must follow immediately.
+    BinderTypeColon,
+    /// Just consumed the second `:` of a binder type classpath's `::`; a
+    /// classpath identifier must follow, keeping the type in its own chain.
+    BinderTypeColon2,
+    /// Right after the `[` of a typed binder's **multiplicity** — a bracket that
+    /// holds `1`, `*`, or another integer (`mult`, §5.4) and nothing else.
+    /// Distinct from the generic list bracket a `[` opens elsewhere, which is
+    /// what let `row['europe']` stream (live: "Unexpected token '.'. Valid
+    /// alternatives: ['|']").
+    ExpectBinderMult,
+    /// Inside a typed binder's integer multiplicity (`[1]`, `[0]`, `[12]`).
+    InBinderMult,
+    /// A complete multiplicity token (`*`, or an integer past its trailing
+    /// whitespace); only the closing `]` remains.
+    AfterBinderMultToken,
+    /// The typed binder's multiplicity bracket has closed, so the binder is
+    /// complete and owes its lambda: only the pipe may follow.
+    AfterBinderMult,
+    /// The body of a lambda a *binder colon* opened (`row: …[1]|$row.…`,
+    /// `~'t': y|$y->sum()`). Identical to
+    /// [`ExpectValueReq`](State::ExpectValueReq) except that a `|` is a dead
+    /// state: the pipe just consumed was the binder's own, so a second one is
+    /// neither a boolean `||` (the binder is not an operand) nor a zero-arg
+    /// lambda (`if(c, |x, |y)` opens those after a `,`). Live-attested —
+    /// `extend(a:b[1]||1)` and `extend(getFloat:row[2] ||desc)` are both
+    /// "Unexpected token '||'. Valid alternatives: ['|']".
+    ExpectLambdaBody,
     /// Just consumed `-`; a `>` completes `->`, anything else is arithmetic minus.
     SawDash,
     /// Just consumed `|`; a second `|` is boolean `||`, anything else is the
@@ -267,12 +326,26 @@ impl State {
             State::InStrLit { escaped: true } => "InStrLit(pendingQuote)",
             State::SawPercent => "SawPercent",
             State::InDateLit => "InDateLit",
+            State::MilestoneL => "MilestoneL",
+            State::MilestoneLa => "MilestoneLa",
+            State::MilestoneLat => "MilestoneLat",
+            State::MilestoneLate => "MilestoneLate",
+            State::MilestoneLates => "MilestoneLates",
             State::InMilestoneLit => "InMilestoneLit",
             State::AfterDollar => "AfterDollar",
             State::AfterDot => "AfterDot",
             State::AfterArrow => "AfterArrow",
             State::AfterColon => "AfterColon",
             State::AfterColon2 => "AfterColon2",
+            State::InBinderType => "InBinderType",
+            State::AfterBinderType => "AfterBinderType",
+            State::BinderTypeColon => "BinderTypeColon",
+            State::BinderTypeColon2 => "BinderTypeColon2",
+            State::ExpectBinderMult => "ExpectBinderMult",
+            State::InBinderMult => "InBinderMult",
+            State::AfterBinderMultToken => "AfterBinderMultToken",
+            State::AfterBinderMult => "AfterBinderMult",
+            State::ExpectLambdaBody => "ExpectLambdaBody",
             State::SawDash => "SawDash",
             State::SawPipe => "SawPipe",
             State::SawEq => "SawEq",
@@ -344,13 +417,27 @@ impl State {
             State::NeedExpDigit => 45,
             State::InExp => 46,
             State::AfterName => 47,
+            State::MilestoneL => 48,
+            State::MilestoneLa => 49,
+            State::MilestoneLat => 50,
+            State::MilestoneLate => 51,
+            State::MilestoneLates => 52,
+            State::InBinderType => 53,
+            State::AfterBinderType => 54,
+            State::BinderTypeColon => 55,
+            State::BinderTypeColon2 => 56,
+            State::ExpectBinderMult => 57,
+            State::InBinderMult => 58,
+            State::AfterBinderMultToken => 59,
+            State::AfterBinderMult => 60,
+            State::ExpectLambdaBody => 61,
         }
     }
 
     /// The number of distinct automaton states — the length a per-state cache
     /// (`Vec<_>` keyed by [`index`](State::index)) must have. One more than the
     /// largest [`index`](State::index).
-    pub const COUNT: usize = 48;
+    pub const COUNT: usize = 62;
 
     /// The lexeme class this state is *inside*, if any (`None` = an inter-lexeme
     /// or structural position).
@@ -372,8 +459,11 @@ impl State {
             State::InIdent
             | State::InSourceIdent
             | State::InBinder
+            | State::InBinderType
             | State::SourceColon
             | State::SourceColon2
+            | State::BinderTypeColon
+            | State::BinderTypeColon2
             | State::LetL
             | State::LetLe
             | State::LetLet => Some(LexKind::Ident),
@@ -384,7 +474,14 @@ impl State {
             | State::SawExp
             | State::NeedExpDigit
             | State::InExp => Some(LexKind::Number),
-            State::SawPercent | State::InDateLit | State::InMilestoneLit => Some(LexKind::Date),
+            State::SawPercent
+            | State::InDateLit
+            | State::MilestoneL
+            | State::MilestoneLa
+            | State::MilestoneLat
+            | State::MilestoneLate
+            | State::MilestoneLates
+            | State::InMilestoneLit => Some(LexKind::Date),
             State::InStrLit { .. } => Some(LexKind::Str),
             _ => None,
         }
@@ -508,6 +605,15 @@ const fn is_date_char(byte: u8) -> bool {
     byte.is_ascii_digit() || matches!(byte, b'-' | b'T' | b':')
 }
 
+/// The engine's one symbolic milestoning literal, spelled without its `%` sigil.
+///
+/// Legend 4.113.0 lexes `%latest` as a single `LATEST_DATE` token and knows no
+/// other `%`-plus-letters symbol: `%latestdate`, `%late` and `%foo` are all
+/// "no viable alternative at input '.all(%'" against the pinned stack. The
+/// `MilestoneL…` state chain spells this constant one byte at a time, and
+/// `the_milestone_chain_spells_exactly_the_engine_symbol` pins the two together.
+const MILESTONE_LATEST: &[u8] = b"latest";
+
 /// Whether `top` is a frame whose contents are a **comma-separated element
 /// list** — a call's argument list or a parenthesised group ([`Frame::Paren`]),
 /// a collection or multiplicity bracket ([`Frame::Bracket`]), or a brace
@@ -530,18 +636,27 @@ const fn separates_elements(top: Option<Frame>) -> bool {
     )
 }
 
-/// Close `top` if `byte` is its matching closer, else [`Step::Dead`].
+/// Close `top` if `byte` is its matching closer, resuming in `resume`, else
+/// [`Step::Dead`].
 ///
-/// The one place delimiter matching is decided; both hubs route their `)`/`]`/`}`
-/// here so the context-dependent pop lives in a single spot.
-const fn close(top: Option<Frame>, byte: u8) -> Step {
+/// The one place delimiter matching is decided; every hub routes its `)`/`]`/`}`
+/// here so the context-dependent pop lives in a single spot. Only the resume
+/// state varies: a typed binder's multiplicity bracket owes its lambda pipe once
+/// it closes, where every other closer yields a completed value.
+const fn close_to(top: Option<Frame>, byte: u8, resume: State) -> Step {
     match (top, byte) {
         (Some(Frame::Paren), b')')
         | (Some(Frame::Bracket), b']')
         | (Some(Frame::Brace), b'}')
-        | (Some(Frame::BraceLambda), b'}') => Step::Pop(State::AfterValue),
+        | (Some(Frame::BraceLambda), b'}') => Step::Pop(resume),
         _ => Step::Dead,
     }
+}
+
+/// Close `top` and resume at [`State::AfterValue`] — every delimiter but a typed
+/// binder's multiplicity bracket yields a completed value when it closes.
+const fn close(top: Option<Frame>, byte: u8) -> Step {
+    close_to(top, byte, State::AfterValue)
 }
 
 /// The shared body of the two value-position hubs. `allow_close` distinguishes
@@ -934,11 +1049,28 @@ fn step_in_str_lit(escaped: bool, stack_top: Option<Frame>, byte: u8) -> Step {
     }
 }
 
+// The `%` sigil opens exactly two literals, and each is pinned at its first
+// byte: a *digit* opens the numeric date/time literal (`%2018-03-17T07:13:53`,
+// and the engine accepts a bare year run down to `%1`), an `l` opens the
+// `%latest` milestone keyword, and everything else is a dead state. The `-`/`T`/
+// `:` separators are date *interior* bytes only — live-attested, `%-`, `%T` and
+// `%:` are each "no viable alternative at input '…<%'".
 fn step_saw_percent(byte: u8) -> Step {
-    if is_date_char(byte) {
+    if byte.is_ascii_digit() {
         Step::Next(State::InDateLit)
-    } else if byte.is_ascii_lowercase() {
-        Step::Next(State::InMilestoneLit)
+    } else if byte == MILESTONE_LATEST[0] {
+        Step::Next(State::MilestoneL)
+    } else {
+        Step::Dead
+    }
+}
+
+/// One link of the `%latest` keyword chain: the expected byte advances to
+/// `next`, anything else is a dead state — the literal is a symbol, so a
+/// divergent byte has not completed a value and cannot be re-dispatched.
+fn milestone_link(expected: u8, next: State, byte: u8) -> Step {
+    if byte == expected {
+        Step::Next(next)
     } else {
         Step::Dead
     }
@@ -957,11 +1089,7 @@ fn step_in_date_lit(stack_top: Option<Frame>, byte: u8) -> Step {
 }
 
 fn step_in_milestone_lit(stack_top: Option<Frame>, byte: u8) -> Step {
-    if byte.is_ascii_lowercase() {
-        Step::Next(State::InMilestoneLit)
-    } else {
-        step(State::AfterValue, stack_top, byte)
-    }
+    step(State::AfterValue, stack_top, byte)
 }
 
 fn step_after_dollar(byte: u8) -> Step {
@@ -1013,7 +1141,7 @@ fn step_after_colon(stack_top: Option<Frame>, byte: u8) -> Step {
         // second `:` is no longer legal — `::` must be contiguous, so `meta: :pure`
         // dies while the typed binder `row: Type` still streams.
         b if is_ws(b) => Step::Next(State::AfterColonWs),
-        b if is_ident_start(b) => Step::Next(State::InIdent),
+        b if is_ident_start(b) => Step::Next(State::InBinderType),
         // An arm-R relation aggregate binds a column name to a lambda after a
         // `:` (`colName : {p,w,r|…}` window frame, `~[agg:{…}:…]`); the `{`
         // opens a brace lambda exactly as it does in value position.
@@ -1025,7 +1153,7 @@ fn step_after_colon(stack_top: Option<Frame>, byte: u8) -> Step {
 fn step_after_colon_ws(byte: u8) -> Step {
     match byte {
         b if is_ws(b) => Step::Next(State::AfterColonWs),
-        b if is_ident_start(b) => Step::Next(State::InIdent),
+        b if is_ident_start(b) => Step::Next(State::InBinderType),
         b'{' => Step::Push(Frame::BraceLambda, State::ExpectBraceBinder),
         _ => Step::Dead,
     }
@@ -1036,6 +1164,118 @@ fn step_after_colon2(byte: u8) -> Step {
         Step::Next(State::InIdent)
     } else {
         Step::Dead
+    }
+}
+
+// A typed binder's right-hand side. Unlike the generic [`State::InIdent`] this
+// name is not a free term: the binder owes a lambda, so only the type's own `::`
+// continuation, its multiplicity bracket, and the pipe that opens the body may
+// follow. Every other continuation is live-attested dead — `extend(getFloat:row)`,
+// `extend(a:b.c[1]|1)`, `extend(a:b+1)` and `extend(a:'b'|1)` are all rejected by
+// the pinned engine, and so are the `|language:fk1DefaultCountry.row[…]` and
+// `all:id/'model_list'` shapes the walk set produced.
+//
+// ponytail (L1 residual, §5.6): the multiplicity itself is still optional here.
+// A binder that carries one owes its pipe ([`State::AfterBinderMult`]), but one
+// that goes straight to `|` is admitted, because the arm-R column binding
+// legitimately has no multiplicity (`~'t': y|$y->sum()`) and the byte machine
+// cannot see the `~` that distinguishes it from a typed lambda parameter.
+fn step_in_binder_type(byte: u8) -> Step {
+    match byte {
+        b if is_ident_tail(b) => Step::Next(State::InBinderType),
+        b':' => Step::Next(State::BinderTypeColon),
+        b if is_ws(b) => Step::Next(State::AfterBinderType),
+        b'[' => Step::Push(Frame::Bracket, State::ExpectBinderMult),
+        b'|' => Step::Next(State::ExpectLambdaBody),
+        _ => Step::Dead,
+    }
+}
+
+// The binder's type name, past its trailing whitespace: the classpath may still
+// resume across the gap (`row: meta ::pure::T[1]`, live-attested), and otherwise
+// only the multiplicity and the pipe remain.
+fn step_after_binder_type(byte: u8) -> Step {
+    match byte {
+        b if is_ws(b) => Step::Next(State::AfterBinderType),
+        b':' => Step::Next(State::BinderTypeColon),
+        b'[' => Step::Push(Frame::Bracket, State::ExpectBinderMult),
+        b'|' => Step::Next(State::ExpectLambdaBody),
+        _ => Step::Dead,
+    }
+}
+
+// A `::` inside a binder's type classpath (`row: meta::pure::tds::TDSRow[1]`):
+// contiguous, and an identifier must follow, keeping the type in its own chain
+// rather than releasing it into the generic value machinery.
+fn step_binder_type_colon(byte: u8) -> Step {
+    if byte == b':' {
+        Step::Next(State::BinderTypeColon2)
+    } else {
+        Step::Dead
+    }
+}
+
+fn step_binder_type_colon2(byte: u8) -> Step {
+    if is_ident_start(byte) {
+        Step::Next(State::InBinderType)
+    } else {
+        Step::Dead
+    }
+}
+
+// A typed binder's multiplicity bracket holds a `mult` and nothing else (§5.4:
+// `1`, `*`, or another integer) — it is not the generic list bracket a `[` opens
+// elsewhere. Live-attested: `->extend(getFloat:row['europe'] .'150'|…)` is
+// "Unexpected token '.'. Valid alternatives: ['|']".
+fn step_expect_binder_mult(byte: u8) -> Step {
+    match byte {
+        b if is_ws(b) => Step::Next(State::ExpectBinderMult),
+        b if b.is_ascii_digit() => Step::Next(State::InBinderMult),
+        b'*' => Step::Next(State::AfterBinderMultToken),
+        _ => Step::Dead,
+    }
+}
+
+fn step_in_binder_mult(stack_top: Option<Frame>, byte: u8) -> Step {
+    match byte {
+        b if b.is_ascii_digit() => Step::Next(State::InBinderMult),
+        b if is_ws(b) => Step::Next(State::AfterBinderMultToken),
+        b']' => close_to(stack_top, byte, State::AfterBinderMult),
+        _ => Step::Dead,
+    }
+}
+
+fn step_after_binder_mult_token(stack_top: Option<Frame>, byte: u8) -> Step {
+    match byte {
+        b if is_ws(b) => Step::Next(State::AfterBinderMultToken),
+        b']' => close_to(stack_top, byte, State::AfterBinderMult),
+        _ => Step::Dead,
+    }
+}
+
+// The binder is complete and owes its lambda, so only the pipe — or, inside a
+// `join` brace lambda's binder *list*, the `,` that introduces the next binder —
+// may follow its multiplicity. Live-attested at both ends: `extend(a:b[1],c)`,
+// `extend(a:b[1]->foo())` and `|language:fk1DefaultCountry['…'] && …` are all
+// rejected, while `extend(a:b[1] | 1)` and the two-binder join lambda
+// `{r1: …[1], r2: …[1]|…}` both parse.
+fn step_after_binder_mult(stack_top: Option<Frame>, byte: u8) -> Step {
+    match byte {
+        b if is_ws(b) => Step::Next(State::AfterBinderMult),
+        b'|' => Step::Next(State::ExpectLambdaBody),
+        b',' if stack_top == Some(Frame::BraceLambda) => Step::Next(State::ExpectBraceBinder),
+        _ => Step::Dead,
+    }
+}
+
+// A binder lambda's body. The pipe that opened it was the binder's own, so a
+// second `|` cannot be a boolean `||` here; every other byte is exactly the
+// required-term value position, delegated rather than duplicated (§4, DRY).
+fn step_expect_lambda_body(stack_top: Option<Frame>, byte: u8) -> Step {
+    if byte == b'|' {
+        Step::Dead
+    } else {
+        step(State::ExpectValueReq, stack_top, byte)
     }
 }
 
@@ -1158,12 +1398,26 @@ pub fn step(state: State, stack_top: Option<Frame>, byte: u8) -> Step {
         State::InStrLit { escaped } => step_in_str_lit(escaped, stack_top, byte),
         State::SawPercent => step_saw_percent(byte),
         State::InDateLit => step_in_date_lit(stack_top, byte),
+        State::MilestoneL => milestone_link(MILESTONE_LATEST[1], State::MilestoneLa, byte),
+        State::MilestoneLa => milestone_link(MILESTONE_LATEST[2], State::MilestoneLat, byte),
+        State::MilestoneLat => milestone_link(MILESTONE_LATEST[3], State::MilestoneLate, byte),
+        State::MilestoneLate => milestone_link(MILESTONE_LATEST[4], State::MilestoneLates, byte),
+        State::MilestoneLates => milestone_link(MILESTONE_LATEST[5], State::InMilestoneLit, byte),
         State::InMilestoneLit => step_in_milestone_lit(stack_top, byte),
         State::AfterDollar => step_after_dollar(byte),
         State::AfterDot => step_after_dot(byte),
         State::AfterArrow => step_after_arrow(byte),
         State::AfterColon => step_after_colon(stack_top, byte),
         State::AfterColon2 => step_after_colon2(byte),
+        State::InBinderType => step_in_binder_type(byte),
+        State::AfterBinderType => step_after_binder_type(byte),
+        State::BinderTypeColon => step_binder_type_colon(byte),
+        State::BinderTypeColon2 => step_binder_type_colon2(byte),
+        State::ExpectBinderMult => step_expect_binder_mult(byte),
+        State::InBinderMult => step_in_binder_mult(stack_top, byte),
+        State::AfterBinderMultToken => step_after_binder_mult_token(stack_top, byte),
+        State::AfterBinderMult => step_after_binder_mult(stack_top, byte),
+        State::ExpectLambdaBody => step_expect_lambda_body(stack_top, byte),
         State::SawDash => step_saw_dash(stack_top, byte),
         State::SawPipe => step_saw_pipe(stack_top, byte),
         State::SawEq => step_saw_eq(byte),
@@ -1449,12 +1703,26 @@ pub const ALL_STATES: [State; State::COUNT] = [
     State::InStrLit { escaped: true },
     State::SawPercent,
     State::InDateLit,
+    State::MilestoneL,
+    State::MilestoneLa,
+    State::MilestoneLat,
+    State::MilestoneLate,
+    State::MilestoneLates,
     State::InMilestoneLit,
     State::AfterDollar,
     State::AfterDot,
     State::AfterArrow,
     State::AfterColon,
     State::AfterColon2,
+    State::InBinderType,
+    State::AfterBinderType,
+    State::BinderTypeColon,
+    State::BinderTypeColon2,
+    State::ExpectBinderMult,
+    State::InBinderMult,
+    State::AfterBinderMultToken,
+    State::AfterBinderMult,
+    State::ExpectLambdaBody,
     State::SawDash,
     State::SawPipe,
     State::SawEq,
@@ -1470,8 +1738,8 @@ mod tests {
     use std::collections::{HashMap, VecDeque, hash_map::Entry};
 
     use super::{
-        ALL_FRAMES, ALL_STATES, Frame, LexKind, Pda, State, Step, WS, is_date_char, is_ident_start,
-        is_ident_tail, step,
+        ALL_FRAMES, ALL_STATES, Frame, LexKind, MILESTONE_LATEST, Pda, State, Step, WS,
+        is_date_char, is_ident_start, is_ident_tail, step,
     };
 
     /// The deepest stack included in the bounded reachability regression.
@@ -2340,63 +2608,142 @@ mod tests {
 
     #[test]
     fn milestoning_literal_operand_accepts() {
-        // `%latest` / `%latestdate` are symbolic milestoning literals usable as an
-        // `.all(...)` argument, a milestoned `.PROP(...)` argument, and a
-        // comparison operand (gap report G2).
+        // `%latest` is the engine's one symbolic milestoning literal, usable as an
+        // `.all(...)` argument and a milestoned `.PROP(...)` argument (gap report
+        // G2, re-attested live in issue #55 Phase 7).
         assert!(accepts("|X.all(%latest)->project([p|$p.n], ['n'])"));
         assert!(accepts("|X.all(%latest, %latest)->take(1)"));
-        assert!(accepts("|X.all(%latestdate)->take(1)"));
         assert!(accepts(
             "|X.all()->filter(x|$x.FACET(%latest, %latest).seg == 'a')"
         ));
-        // A bare `%latest` completes at end-of-stream (value-terminal).
+        // A bare `%latest` completes at end-of-stream (value-terminal). The engine
+        // admits the symbol only in a milestoning argument slot, so this is a
+        // residual L1 over-approximation (§5.6), not an engine-attested shape.
         assert!(accepts("|X.all()->filter(x|$x.d < %latest)"));
     }
 
     #[test]
-    fn a_milestoning_literal_is_lowercase_letters_after_the_percent() {
+    fn a_milestoning_literal_is_exactly_the_latest_symbol() {
         // Bare `%` is still a dead state (the existing date-literal pin).
         assert!(dies("|X.all()->take(%)"));
-        // The symbolic literal is lowercase letters only: an uppercase or digit
-        // first byte after `%` is not a milestone symbol, and mid-literal a digit
-        // or uppercase closes the lexeme — so `%latest1`/`%latestX` stop the token
-        // at `%latest` and the trailing byte has no legal continuation here.
+        // Anything but the `%latest` keyword dies at the byte that diverges from
+        // it — including `%latestdate`, which the pinned engine rejects outright.
         assert!(dies("|X.all()->take(%Latest)"));
         assert!(dies("|X.all()->take(%latest1)"));
         assert!(dies("|X.all()->take(%latestX)"));
-        // A milestone literal mid-lex (only `%l` so far) is not yet accepting.
+        assert!(dies("|X.all(%latestdate)->take(1)"));
+        assert!(dies("|X.all(%late)->take(1)"));
+        assert!(dies("|X.all(%foo)->take(1)"));
+        // A milestone literal mid-keyword is not yet accepting.
         assert!(!accepts("|X.all()->filter(x|$x.d < %l"));
+        assert!(!accepts("|X.all()->filter(x|$x.d < %lates"));
+    }
+
+    /// The `MilestoneL…` chain and [`MILESTONE_LATEST`] are one fact stated
+    /// twice; walking the constant through the chain pins them together, so a
+    /// state added, dropped, or mis-linked cannot silently change the symbol.
+    #[test]
+    fn the_milestone_chain_spells_exactly_the_engine_symbol() {
+        let mut state = State::SawPercent;
+        for (offset, &byte) in MILESTONE_LATEST.iter().enumerate() {
+            let Step::Next(next) = step(state, None, byte) else {
+                panic!("byte {offset} of the milestone symbol must advance the chain");
+            };
+            assert!(
+                !Pda::at(state).is_accepting(),
+                "{} is mid-keyword and must not accept",
+                state.name()
+            );
+            // Past the sigil — which the numeric date literal shares — every other
+            // byte at every link is a dead state: the symbol is a keyword, so a
+            // divergence has not completed a value to re-dispatch.
+            if offset > 0 {
+                for other in 0u8..=255 {
+                    if other != byte {
+                        assert!(
+                            matches!(step(state, None, other), Step::Dead),
+                            "{}: byte {other:#04x} must not continue the keyword",
+                            state.name()
+                        );
+                    }
+                }
+            }
+            state = next;
+        }
+        assert_eq!(state, State::InMilestoneLit);
+        assert!(Pda::at(state).is_accepting());
     }
 
     #[test]
     fn direct_step_covers_the_saw_percent_and_milestone_branches() {
-        // `%` + lowercase opens the milestone lexeme; `%` + date char opens the
-        // numeric date lexeme; `%` + anything else dies.
+        // `%l` opens the milestone keyword; `%` + date char opens the numeric date
+        // lexeme; `%` + anything else — another lowercase letter included — dies.
         assert!(matches!(
             step(State::SawPercent, None, b'l'),
-            Step::Next(State::InMilestoneLit)
+            Step::Next(State::MilestoneL)
         ));
         assert!(matches!(
             step(State::SawPercent, None, b'2'),
             Step::Next(State::InDateLit)
         ));
+        assert!(matches!(step(State::SawPercent, None, b'a'), Step::Dead));
         assert!(matches!(step(State::SawPercent, None, b'Z'), Step::Dead));
         assert!(matches!(step(State::SawPercent, None, b')'), Step::Dead));
-        // The milestone lexeme accretes lowercase letters and delegates any other
-        // byte to `AfterValue` (value-terminal), so a following `)` pops a frame.
-        assert!(matches!(
-            step(State::InMilestoneLit, None, b'a'),
-            Step::Next(State::InMilestoneLit)
-        ));
+        // The completed literal is value-terminal: it delegates every byte to
+        // `AfterValue`, so a following `)` pops a frame and a letter dies.
         assert!(matches!(
             step(State::InMilestoneLit, Some(Frame::Paren), b')'),
             Step::Pop(State::AfterValue)
         ));
-        // A digit mid-literal delegates to `AfterValue`, where a bare digit dies.
+        assert!(matches!(
+            step(State::InMilestoneLit, None, b'd'),
+            Step::Dead
+        ));
         assert!(matches!(
             step(State::InMilestoneLit, None, b'1'),
             Step::Dead
         ));
+    }
+
+    /// A typed binder's right-hand side owes a lambda, so only the type's own
+    /// `::`, its multiplicity `[`, and the pipe may follow it — every other
+    /// continuation is a dead state, live-attested against the pinned engine.
+    #[test]
+    fn a_typed_binder_type_admits_only_a_classpath_a_multiplicity_and_a_pipe() {
+        let join = "|db::Db->tableReference('default','T')->tableToTDS()\
+                    ->filter(row: meta::pure::tds::TDSRow[1]|$row.getInteger('c') > 1)";
+        assert!(accepts(join));
+        assert!(accepts("|X.all()->extend(a:b[1]|1)"));
+        assert!(accepts("|X.all()->extend(a:b::c[1]|1)"));
+        assert!(accepts("|X.all()->extend(a:b[*]|1)"));
+        assert!(accepts("|X.all()->extend(a:b[12]|1)"));
+        assert!(accepts("|X.all()->extend(a :b [1]|1)"));
+        assert!(accepts("|X.all()->extend(a:b[ 1 ] | 1)"));
+        // The arm-R column binding omits the multiplicity (`~'t': y|…`).
+        assert!(accepts("|X.all()->groupBy(~[a:x|$x.b],~'t':y|$y->sum())"));
+        // …and every shape the engine refuses now dies here too.
+        assert!(dies("|X.all()->extend(getFloat:row)"));
+        assert!(dies("|X.all()->extend(a:b.c[1]|1)"));
+        // The multiplicity bracket holds a `mult` and nothing else, and once it
+        // closes the binder owes its pipe.
+        assert!(dies("|X.all()->extend(a:b['europe']|1)"));
+        assert!(dies("|X.all()->extend(a:b[1x]|1)"));
+        assert!(dies("|X.all()->extend(a:b[**]|1)"));
+        assert!(dies("|X.all()->extend(a:b[]|1)"));
+        assert!(dies("|X.all()->extend(a:b[1],c)"));
+        assert!(dies("|X.all()->extend(a:b[1]->foo())"));
+        assert!(dies("|X.all()->extend(a:b[1]&&1)"));
+        assert!(dies("|X.all()->extend(a:b+1)"));
+        assert!(dies("|X.all()->extend(a:b/1)"));
+        assert!(dies("|X.all()->extend(a:'b'|1)"));
+        // A lone `:` inside the type is not a separator, and `:::` never is.
+        assert!(dies("|X.all()->extend(a:b : c[1]|1)"));
+        assert!(dies("|X.all()->extend(a:b:::c[1]|1)"));
+        // The classpath resumes across whitespace *before* its `::`, matching the
+        // engine; whitespace *after* it stays dead, exactly as `AfterColon2`
+        // already made it in every other classpath position.
+        assert!(accepts("|X.all()->extend(a:b ::c[1]|1)"));
+        assert!(dies("|X.all()->extend(a:b:: c[1]|1)"));
     }
 
     #[test]

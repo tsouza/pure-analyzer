@@ -55,6 +55,117 @@
         }
       ]
     },
+    "AfterBinderMult": {
+      "accepting": false,
+      "rules": [
+        {
+          "action": {
+            "kind": "next",
+            "state": "AfterBinderMult"
+          },
+          "match": {
+            "kind": "whitespace"
+          }
+        },
+        {
+          "action": {
+            "kind": "next",
+            "state": "ExpectLambdaBody"
+          },
+          "match": {
+            "byte": 124,
+            "kind": "exact"
+          }
+        },
+        {
+          "action": {
+            "kind": "next",
+            "state": "ExpectBraceBinder"
+          },
+          "match": {
+            "byte": 44,
+            "kind": "exact"
+          },
+          "guard": {
+            "frame": "BraceLambda",
+            "kind": "stack_top_is"
+          }
+        }
+      ]
+    },
+    "AfterBinderMultToken": {
+      "accepting": false,
+      "rules": [
+        {
+          "action": {
+            "kind": "next",
+            "state": "AfterBinderMultToken"
+          },
+          "match": {
+            "kind": "whitespace"
+          }
+        },
+        {
+          "action": {
+            "kind": "pop",
+            "state": "AfterBinderMult"
+          },
+          "match": {
+            "byte": 93,
+            "kind": "exact"
+          },
+          "guard": {
+            "frame": "Bracket",
+            "kind": "stack_top_is"
+          }
+        }
+      ]
+    },
+    "AfterBinderType": {
+      "accepting": false,
+      "rules": [
+        {
+          "action": {
+            "kind": "next",
+            "state": "AfterBinderType"
+          },
+          "match": {
+            "kind": "whitespace"
+          }
+        },
+        {
+          "action": {
+            "kind": "next",
+            "state": "BinderTypeColon"
+          },
+          "match": {
+            "byte": 58,
+            "kind": "exact"
+          }
+        },
+        {
+          "action": {
+            "frame": "Bracket",
+            "kind": "push",
+            "state": "ExpectBinderMult"
+          },
+          "match": {
+            "byte": 91,
+            "kind": "exact"
+          }
+        },
+        {
+          "action": {
+            "kind": "next",
+            "state": "ExpectLambdaBody"
+          },
+          "match": {
+            "byte": 124,
+            "kind": "exact"
+          }
+        }
+      ]
+    },
     "AfterBraceOpen": {
       "accepting": false,
       "rules": [
@@ -108,7 +219,7 @@
         {
           "action": {
             "kind": "next",
-            "state": "InIdent"
+            "state": "InBinderType"
           },
           "match": {
             "kind": "ident_start"
@@ -164,7 +275,7 @@
         {
           "action": {
             "kind": "next",
-            "state": "InIdent"
+            "state": "InBinderType"
           },
           "match": {
             "kind": "ident_start"
@@ -477,6 +588,35 @@
         }
       ]
     },
+    "BinderTypeColon": {
+      "accepting": false,
+      "rules": [
+        {
+          "action": {
+            "kind": "next",
+            "state": "BinderTypeColon2"
+          },
+          "match": {
+            "byte": 58,
+            "kind": "exact"
+          }
+        }
+      ]
+    },
+    "BinderTypeColon2": {
+      "accepting": false,
+      "rules": [
+        {
+          "action": {
+            "kind": "next",
+            "state": "InBinderType"
+          },
+          "match": {
+            "kind": "ident_start"
+          }
+        }
+      ]
+    },
     "BlockStmt": {
       "accepting": false,
       "rules": [
@@ -614,6 +754,39 @@
         }
       ]
     },
+    "ExpectBinderMult": {
+      "accepting": false,
+      "rules": [
+        {
+          "action": {
+            "kind": "next",
+            "state": "ExpectBinderMult"
+          },
+          "match": {
+            "kind": "whitespace"
+          }
+        },
+        {
+          "action": {
+            "kind": "next",
+            "state": "InBinderMult"
+          },
+          "match": {
+            "kind": "digit"
+          }
+        },
+        {
+          "action": {
+            "kind": "next",
+            "state": "AfterBinderMultToken"
+          },
+          "match": {
+            "byte": 42,
+            "kind": "exact"
+          }
+        }
+      ]
+    },
     "ExpectBraceBinder": {
       "accepting": false,
       "rules": [
@@ -633,6 +806,29 @@
           },
           "match": {
             "kind": "ident_start"
+          }
+        }
+      ]
+    },
+    "ExpectLambdaBody": {
+      "accepting": false,
+      "rules": [
+        {
+          "action": {
+            "kind": "dead"
+          },
+          "match": {
+            "byte": 124,
+            "kind": "exact"
+          }
+        },
+        {
+          "action": {
+            "kind": "goto",
+            "state": "ExpectValueReq"
+          },
+          "match": {
+            "kind": "any"
           }
         }
       ]
@@ -1053,6 +1249,97 @@
         }
       ]
     },
+    "InBinderMult": {
+      "accepting": false,
+      "rules": [
+        {
+          "action": {
+            "kind": "next",
+            "state": "InBinderMult"
+          },
+          "match": {
+            "kind": "digit"
+          }
+        },
+        {
+          "action": {
+            "kind": "next",
+            "state": "AfterBinderMultToken"
+          },
+          "match": {
+            "kind": "whitespace"
+          }
+        },
+        {
+          "action": {
+            "kind": "pop",
+            "state": "AfterBinderMult"
+          },
+          "match": {
+            "byte": 93,
+            "kind": "exact"
+          },
+          "guard": {
+            "frame": "Bracket",
+            "kind": "stack_top_is"
+          }
+        }
+      ]
+    },
+    "InBinderType": {
+      "accepting": false,
+      "rules": [
+        {
+          "action": {
+            "kind": "next",
+            "state": "InBinderType"
+          },
+          "match": {
+            "kind": "ident_tail"
+          }
+        },
+        {
+          "action": {
+            "kind": "next",
+            "state": "BinderTypeColon"
+          },
+          "match": {
+            "byte": 58,
+            "kind": "exact"
+          }
+        },
+        {
+          "action": {
+            "kind": "next",
+            "state": "AfterBinderType"
+          },
+          "match": {
+            "kind": "whitespace"
+          }
+        },
+        {
+          "action": {
+            "frame": "Bracket",
+            "kind": "push",
+            "state": "ExpectBinderMult"
+          },
+          "match": {
+            "byte": 91,
+            "kind": "exact"
+          }
+        },
+        {
+          "action": {
+            "kind": "next",
+            "state": "ExpectLambdaBody"
+          },
+          "match": {
+            "byte": 124,
+            "kind": "exact"
+          }
+        }
+      ]
+    },
     "InDateLit": {
       "accepting": false,
       "rules": [
@@ -1140,43 +1427,6 @@
     "InMilestoneLit": {
       "accepting": false,
       "rules": [
-        {
-          "action": {
-            "kind": "next",
-            "state": "InMilestoneLit"
-          },
-          "match": {
-            "bytes": [
-              97,
-              98,
-              99,
-              100,
-              101,
-              102,
-              103,
-              104,
-              105,
-              106,
-              107,
-              108,
-              109,
-              110,
-              111,
-              112,
-              113,
-              114,
-              115,
-              116,
-              117,
-              118,
-              119,
-              120,
-              121,
-              122
-            ],
-            "kind": "one_of"
-          }
-        },
         {
           "action": {
             "kind": "goto",
@@ -1439,6 +1689,81 @@
         }
       ]
     },
+    "MilestoneL": {
+      "accepting": false,
+      "rules": [
+        {
+          "action": {
+            "kind": "next",
+            "state": "MilestoneLa"
+          },
+          "match": {
+            "byte": 97,
+            "kind": "exact"
+          }
+        }
+      ]
+    },
+    "MilestoneLa": {
+      "accepting": false,
+      "rules": [
+        {
+          "action": {
+            "kind": "next",
+            "state": "MilestoneLat"
+          },
+          "match": {
+            "byte": 116,
+            "kind": "exact"
+          }
+        }
+      ]
+    },
+    "MilestoneLat": {
+      "accepting": false,
+      "rules": [
+        {
+          "action": {
+            "kind": "next",
+            "state": "MilestoneLate"
+          },
+          "match": {
+            "byte": 101,
+            "kind": "exact"
+          }
+        }
+      ]
+    },
+    "MilestoneLate": {
+      "accepting": false,
+      "rules": [
+        {
+          "action": {
+            "kind": "next",
+            "state": "MilestoneLates"
+          },
+          "match": {
+            "byte": 115,
+            "kind": "exact"
+          }
+        }
+      ]
+    },
+    "MilestoneLates": {
+      "accepting": false,
+      "rules": [
+        {
+          "action": {
+            "kind": "next",
+            "state": "InMilestoneLit"
+          },
+          "match": {
+            "byte": 116,
+            "kind": "exact"
+          }
+        }
+      ]
+    },
     "NeedExpDigit": {
       "accepting": false,
       "rules": [
@@ -1650,52 +1975,11 @@
         {
           "action": {
             "kind": "next",
-            "state": "InDateLit"
+            "state": "MilestoneL"
           },
           "match": {
-            "bytes": [
-              45,
-              84,
-              58
-            ],
-            "kind": "one_of"
-          }
-        },
-        {
-          "action": {
-            "kind": "next",
-            "state": "InMilestoneLit"
-          },
-          "match": {
-            "bytes": [
-              97,
-              98,
-              99,
-              100,
-              101,
-              102,
-              103,
-              104,
-              105,
-              106,
-              107,
-              108,
-              109,
-              110,
-              111,
-              112,
-              113,
-              114,
-              115,
-              116,
-              117,
-              118,
-              119,
-              120,
-              121,
-              122
-            ],
-            "kind": "one_of"
+            "byte": 108,
+            "kind": "exact"
           }
         }
       ]

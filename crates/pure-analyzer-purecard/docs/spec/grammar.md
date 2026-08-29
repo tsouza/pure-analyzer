@@ -95,7 +95,7 @@ reduceLambda = binderVar "|" reduceExpr ;              (* agg reduce, e.g. y|$y-
 agg          = "agg" "(" mapLambda "," reduceLambda ")" ;   (* arm-C 2-arg agg *)
 
 (* --- arm-A typed-multiplicity binders (relational lambdas) --- *)
-typedBinder  = ident ":" classpath "[" mult "]" ;      (* row: meta::pure::tds::TDSRow[1] *)
+typedBinder  = ident ":" classpath [ "[" mult "]" ] "|" ; (* row: meta::pure::tds::TDSRow[1]| — the pipe is required *)
 mult         = "1" | "*" | int ;                       (* corpus exercises 1 and * only; int reserved (§5.6) *)
 tdsLambda    = typedBinder "|" boolExpr ;              (* filter row predicate *)
 tdsColLambda = typedBinder "|" valueExpr ;             (* extend/col value *)
@@ -148,10 +148,9 @@ number     = [ "-" ] ( digit { digit } [ frac ] | frac ) ;   (* int, "1.5", lead
 frac       = "." digit { digit } [ exp ] ;             (* exponent only AFTER a fractional part (§5.5)     *)
 exp        = ( "e" | "E" ) [ "+" | "-" ] digit { digit } ;   (* scientific: "1.5e3", "1.5e-3"; NOT "1e3"  *)
 boollit    = "true" | "false" ;
-dateLit    = "%" dateChar { dateChar | "." } ;         (* numeric date/time: %2018-03-17[T07:13:53[.000]]  *)
+dateLit    = "%" digit { dateChar | "." } ;            (* numeric date/time: %2018-03-17[T07:13:53[.000]]  *)
 dateChar   = digit | "-" | "T" | ":" ;
-milestoneLit = "%" lower { lower } ;                   (* symbolic milestoning: %latest / %latestdate      *)
-lower      = "a".."z" ;
+milestoneLit = "%latest" ;                             (* the engine's one symbolic milestoning symbol     *)
 int        = digit { digit } ;
 strOrList  = strlit | "[" [ strlit { "," strlit } ] "]" ;  (* single string OR bracketed list (MAY be []); arm-A restrict/groupBy keys *)
 ident      = alpha { alnum | "_" } ;                   (* camelCase props, PascalCase classes, snake cols *)
@@ -166,7 +165,7 @@ digit      = "0".."9" ;
 - **Single-quote strings only.** Double quotes never appear; an embedded quote is written `''` (15 gold queries exercise the doubling). A grammar admitting `"..."` is a compile-unsound over-approximation — keep `strlit` single-quote-only.
 - **`SortDirection.ASC` / `SortDirection.DESC`** are the only enum-shaped literals in the pilot corpus (36 occurrences), and they occur **only inside `sort`** (via `sortdir`), never as a comparison operand. They are a _Pure builtin_, not a schema enumeration, so they are **not** an L2 N4/N5 position — L1 fixes their `EnumPath "." IDENT` shape as a fixed terminal in `sortdir`, and L2 does not narrow them. Schema-enum comparison is outside the emitted grammar and supported schema overlay.
 - **`binderVar` vs `refVar`.** The lambda _header_ names the variable bare (`x|`); every _use_ in the body is `$`-prefixed (`$x.`). L1 keeps them distinct so a stray bare `x.name` or `$x|` is rejected; L2 binds the header name and resolves `$`-uses against it (§6.4, transition S2).
-- **Two kinds of `%`-literal.** A `%` opens either a _numeric_ date/time literal (`dateLit`, `%2018-03-17[T07:13:53]`) or a _symbolic_ milestoning literal (`milestoneLit`, `%latest` / `%latestdate`). They are disjoint at the first byte after `%`: a `dateChar` (digit / `-` / `T` / `:`) opens `dateLit`, a lowercase letter opens `milestoneLit`, and a bare `%` (or any other byte) is a dead state. `%latest` is not in the Spider-derived gold corpus; it is oracle'd by the **modern-dialect seed corpus** (§5.8) — the fine-tuned model emits it in `Class.all(%latest)`, bitemporal `Class.all(%latest, %latest)`, milestoned `.PROP(%latest, %latest)`, and comparison-operand positions (gap report §5/G2). Like `dateLit`, `milestoneLit` is a `Lexeme::Date` L2 pass-through — no schema narrowing.
+- **Two kinds of `%`-literal, disjoint at the byte after the sigil.** A `%` opens either a _numeric_ date/time literal (`dateLit`, `%2018-03-17[T07:13:53]`) or the _symbolic_ milestoning literal (`milestoneLit`, `%latest`). A **digit** opens `dateLit`; an **`l`** opens the `%latest` keyword; every other byte — a bare `%`, an uppercase letter, and the `-`/`T`/`:` date *separators*, which are interior bytes only — is a dead state. Both boundaries are live-attested against the pinned engine (issue #55 Phase 7): `%-`, `%T`, `%:`, `%foo`, `%late` and `%latestdate` are each "no viable alternative at input '…%'", while `%1`, `%2018-03-17T07:13:53.000` and `%latest` all parse. `%latest` is not in the Spider-derived gold corpus; it is oracle'd by the **modern-dialect seed corpus** (§5.8) — the fine-tuned model emits it in `Class.all(%latest)`, bitemporal `Class.all(%latest, %latest)` and milestoned `.PROP(%latest[, %latest])`. Like `dateLit`, `milestoneLit` is a `Lexeme::Date` L2 pass-through — no schema narrowing.
 
 ### 5.6 Deliberate over-approximations (oracle-driven tightening)
 
@@ -178,7 +177,6 @@ The grammar over-approximates validity where a CFG cannot cheaply enforce a cons
 - **Predicate arity.** `boolPred` arguments are loosely typed (`predArg`); the exact arg shape per predicate (lambda vs value) is left to L2/compiler.
 - **Typed-binder multiplicity.** `mult` admits `int` as well as `1`/`*`; the corpus exercises only `1` and `*` (`TDSRow[1]`, `TDSRow[*]`). The `int` alternative is a deliberate, sound widening (it admits more, never less); an integer multiplicity a model emits is caught by the compiler, not L1.
 - **`restrict`/`groupBy` string-or-list.** The arm-A relational steps accept a bare `strlit` _or_ a bracketed list (`strOrList`); L1 does not require the list form even where a single column would suffice.
-- **Symbolic milestoning literal shape.** `milestoneLit = "%" lower { lower }` admits any `%`-prefixed lowercase run, not only the two known symbols `%latest` / `%latestdate`. This mirrors how the machine already admits _any_ identifier where a reducer/step/property name is expected: L1 fixes the `% <lowercase>+` shape and the compiler/L2 reject an unknown milestone symbol. Uppercase and digit boundaries stay dead (`tests/precision_reject.rs`), so the widening cannot silently grow to `%<anything>`.
 
 
 **Tightened in issue #55 Phase 4 (removed from this list).** Four shapes L1 used
@@ -197,6 +195,18 @@ and each with its rejecting byte pinned in `tests/precision_reject.rs`:
   `::` classpath separator is decided *before* the frame test and stays legal
   wherever a classpath is, so `meta::relational::…::JoinType` in a
   block-statement-level value position is unaffected ("Unexpected token ':'").
+- **A binder colon's multiplicity is optional, and `%latest`'s position is not
+  fixed.** Two residuals the Phase 7 tightening deliberately stops short of.
+  (1) `typedBinder` requires the pipe but not the `[mult]`, because the arm-R
+  column binding legitimately has none (`~'Total': y|$y->sum()`, `~[Week: x|…]`)
+  and the byte machine cannot see the `~` sigil that distinguishes it from a
+  typed lambda parameter — the engine *does* require the multiplicity for the
+  latter ("Unexpected token '|'. Valid alternatives: \['[', '(', '<'\]").
+  (2) `milestoneLit` is admitted wherever a literal is, though the engine takes
+  `%latest` only in a milestoning argument slot (`.all(…)` / `.PROP(…)`, one or
+  two arguments); a comparison operand is rejected. Both want a position/sigil
+  phase the current per-byte machine does not track.
+
 - **A call's `(` and a multiplicity `[` bind to a name.** Both are admitted from
   `AfterName` — the state an identifier's completion (past any trailing
   whitespace) lands in — and not from the generic `AfterValue`, so a juxtaposed
@@ -205,6 +215,24 @@ and each with its rejecting byte pinned in `tests/precision_reject.rs`:
   not supported" — the engine has no positional index at all). Whitespace keeps
   the position a *name* position, so `filter (x|…)` and `TDSRow [1]`, both
   engine-legal, still stream.
+
+**Tightened in issue #55 Phase 7 (also removed from the over-approximation
+list).** Three more shapes are now dead states, each live-attested and each with
+its rejecting byte pinned in `tests/precision_reject.rs`:
+
+- **The milestone literal is the `%latest` keyword**, spelled one state per byte
+  (`MilestoneL`…`InMilestoneLit`) exactly as `LetL`/`LetLe`/`LetLet` spell `let`.
+  `%latestdate` — which the seed corpus used to assert L1 accepts — is on the
+  rejected side; see §5.8.
+- **A date literal opens on a digit.** `-`/`T`/`:` are date *interior* bytes; a
+  literal that starts on one (`%->…`, `%T`, `%:`) is dead.
+- **A typed binder's right-hand side is a classpath, then its multiplicity, then
+  exactly one pipe.** Only `::` (contiguous), `[`, and `|` may follow the type
+  name; the multiplicity bracket holds a `mult` and nothing else (`row['europe']`
+  is dead); and once it closes, only the pipe — or, inside a `join` brace
+  lambda's binder list, the `,` that opens the next binder — may follow. A
+  second `|` is dead in the body a binder colon opens: the binder is not an
+  operand, so that `||` is never a boolean one.
 
 ### 5.7 Observed construct inventory (the empirical spec)
 
@@ -279,9 +307,22 @@ each seed through the real byte-PDA with the same killer property as §8.1 (neve
 dead, ends accepting) and classifies it to its declared envelope. The seed corpus
 is the oracle for anything added here — do **not** add a production without a seed.
 
+**A seed is only an oracle if it is real Legend Pure.** Two of the G2 rows were
+not: `gap-report/g2-latest:4` claimed `Class.all(%latestdate)` and `:5` claimed
+`%latest` as a comparison operand, and the pinned engine rejects both outright.
+Nothing caught it — L1 accepting more than the engine is exactly §5.10's
+documented over-approximation, so the soundness lane stayed green while the
+oracle was wrong, and `milestoneLit` had been widened to `%<lowercase>+` to
+admit a string that was never in the language. Issue #55 Phase 7 corrects both
+rows to live-attested shapes (single-argument property milestoning, and a chained
+milestoned navigation; `issue-55/g2-latest-corrected:4`/`:5`) and adds the gate
+that closes the class: `every_modern_dialect_seed_parses_against_the_pinned_engine`
+sends every seed through the engine's own `grammarToJson/lambda`, so a seed that
+is not real Pure cannot be committed again.
+
 | Construct                             | Seeds | Grammar production       | Gap report |
 | ------------------------------------- | ----: | ------------------------ | ---------- |
-| `%latest` / `%latestdate` milestoning | 5     | `milestoneLit` (§5.4)    | G2         |
+| `%latest` milestoning                 | 5     | `milestoneLit` (§5.4)    | G2         |
 | `~` Relation/Function API (arm-R)     | 11    | arm-R productions (§5.9) | G1         |
 
 ### 5.9 Arm-R — the Relation/Function API (`~`-column constructs)
