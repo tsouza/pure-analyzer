@@ -51,6 +51,8 @@ enum Command {
     },
     /// Run the feature-gated FFI-boundary mutation pass (fast; never sharded).
     TestMutationFfi,
+    /// Run the focused M3 parser mutation pass.
+    TestMutationParser,
     /// Produce a test-coverage report via cargo-llvm-cov.
     Coverage {
         /// Emit an HTML report in addition to the summary.
@@ -98,6 +100,7 @@ fn main() -> Result<()> {
         Command::TestMutation => tasks::test_mutation(),
         Command::TestMutationShard { index, total } => tasks::test_mutation_shard(index, total),
         Command::TestMutationFfi => tasks::test_mutation_ffi(),
+        Command::TestMutationParser => tasks::test_mutation_parser(),
         Command::Coverage { html } => tasks::coverage(html),
         Command::ReleasePlzCheck => tasks::release_plz_check(),
         Command::CheckCoreDeplight => tasks::check_core_deplight(),

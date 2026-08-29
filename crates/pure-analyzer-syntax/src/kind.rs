@@ -10,7 +10,7 @@ macro_rules! define_syntax_kinds {
         /// The stable token-ID namespace is `0x0000..=0x7fff`; current
         /// assignments are contiguous at `0x0000..=0x0031`. The stable node-ID
         /// namespace is the disjoint `0x8000..=0xffff`; current assignments are
-        /// `0x8000..=0x8020`. Existing assignments do not change.
+        /// `0x8000..=0x8030`. Existing assignments do not change.
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
         #[repr(u16)]
         #[allow(non_camel_case_types, missing_docs)]
@@ -136,6 +136,22 @@ define_syntax_kinds! {
         FUNCTION_CALL = 0x801e,
         COLLECTION_LITERAL = 0x801f,
         COLUMN_NAME = 0x8020,
+        DOMAIN_FILE = 0x8021,
+        DOMAIN_CLASS_DECL = 0x8022,
+        DOMAIN_ASSOCIATION_DECL = 0x8023,
+        DOMAIN_PROFILE_DECL = 0x8024,
+        DOMAIN_STEREOTYPE_DECL = 0x8025,
+        DOMAIN_STEREOTYPE_APPLICATIONS = 0x8026,
+        DOMAIN_EXTENDS_CLAUSE = 0x8027,
+        DOMAIN_PROPERTY_DECL = 0x8028,
+        DOMAIN_QUALIFIED_PROPERTY_DECL = 0x8029,
+        DOMAIN_PARAMETER_DECL = 0x802a,
+        DOMAIN_TYPE_REF = 0x802b,
+        DOMAIN_MULTIPLICITY = 0x802c,
+        DOMAIN_QUALIFIED_NAME = 0x802d,
+        DOMAIN_OPAQUE_NODE = 0x802e,
+        DOMAIN_OPAQUE_BODY = 0x802f,
+        DOMAIN_PROFILE_SECTION = 0x8030,
     }
 }
 

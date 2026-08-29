@@ -8,8 +8,10 @@
 //! syntax failures are reported in [`Parse::diagnostics`]; the `Result` only
 //! reports an infrastructure failure while constructing the validated tree.
 
+mod domain;
 mod m3;
 
+pub use domain::{DomainCoverageGap, DomainCoverageGapKind, DomainParse, parse_domain};
 pub use m3::{Parse, parse_query};
 
 /// The crate's semantic version, as declared in `Cargo.toml`.

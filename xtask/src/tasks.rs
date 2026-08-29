@@ -133,6 +133,8 @@ const PURECARD_FUZZ_TARGET_DIR: &str = "crates/pure-analyzer-purecard/fuzz/fuzz_
 const PURECARD_FFI_SOURCE: &str = "crates/pure-analyzer-purecard/src/ffi.rs";
 /// Parent directory required by cargo-mutants before it creates its reports.
 const MUTATION_OUTPUT_ROOT: &str = "target";
+/// Hard ceiling for each cargo build or test command spawned by cargo-mutants.
+const MUTATION_COMMAND_TIMEOUT_SECONDS: &str = "120";
 
 /// Resolve a path owned by the nested PureCARD crate.
 fn purecard_path(relative: impl AsRef<Path>) -> PathBuf {
@@ -427,6 +429,8 @@ fn test_mutation_workspace(shard: Option<(u32, u32)>) -> Result<()> {
         "--in-place".to_string(),
         "--output".to_string(),
         output,
+        "--timeout".to_string(),
+        MUTATION_COMMAND_TIMEOUT_SECONDS.to_string(),
     ];
     if let Some((index, total)) = shard {
         args.push("--shard".to_string());
@@ -474,8 +478,33 @@ pub fn test_mutation_ffi() -> Result<()> {
             "--in-place",
             "--output",
             "target/mutants-ffi",
+            "--timeout",
+            MUTATION_COMMAND_TIMEOUT_SECONDS,
             "--",
             "--lib",
+        ],
+    )
+}
+
+/// Run the focused M3 parser mutation pass used during parser development.
+///
+/// # Errors
+///
+/// Returns an error if cargo-mutants fails.
+pub fn test_mutation_parser() -> Result<()> {
+    run(
+        "cargo",
+        &[
+            "mutants",
+            "--package",
+            "pure-analyzer-parser",
+            "--file",
+            "crates/pure-analyzer-parser/src/m3.rs",
+            "--in-place",
+            "--output",
+            "target/mutants-parser",
+            "--timeout",
+            MUTATION_COMMAND_TIMEOUT_SECONDS,
         ],
     )
 }

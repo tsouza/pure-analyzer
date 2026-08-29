@@ -206,6 +206,22 @@ pub pure_analyzer_syntax::SyntaxKind::COLUMN_SPEC_ARRAY = 32787
 pub pure_analyzer_syntax::SyntaxKind::COMMA = 11
 pub pure_analyzer_syntax::SyntaxKind::DATE_TIME = 0
 pub pure_analyzer_syntax::SyntaxKind::DOLLAR = 5
+pub pure_analyzer_syntax::SyntaxKind::DOMAIN_ASSOCIATION_DECL = 32803
+pub pure_analyzer_syntax::SyntaxKind::DOMAIN_CLASS_DECL = 32802
+pub pure_analyzer_syntax::SyntaxKind::DOMAIN_EXTENDS_CLAUSE = 32807
+pub pure_analyzer_syntax::SyntaxKind::DOMAIN_FILE = 32801
+pub pure_analyzer_syntax::SyntaxKind::DOMAIN_MULTIPLICITY = 32812
+pub pure_analyzer_syntax::SyntaxKind::DOMAIN_OPAQUE_BODY = 32815
+pub pure_analyzer_syntax::SyntaxKind::DOMAIN_OPAQUE_NODE = 32814
+pub pure_analyzer_syntax::SyntaxKind::DOMAIN_PARAMETER_DECL = 32810
+pub pure_analyzer_syntax::SyntaxKind::DOMAIN_PROFILE_DECL = 32804
+pub pure_analyzer_syntax::SyntaxKind::DOMAIN_PROFILE_SECTION = 32816
+pub pure_analyzer_syntax::SyntaxKind::DOMAIN_PROPERTY_DECL = 32808
+pub pure_analyzer_syntax::SyntaxKind::DOMAIN_QUALIFIED_NAME = 32813
+pub pure_analyzer_syntax::SyntaxKind::DOMAIN_QUALIFIED_PROPERTY_DECL = 32809
+pub pure_analyzer_syntax::SyntaxKind::DOMAIN_STEREOTYPE_APPLICATIONS = 32806
+pub pure_analyzer_syntax::SyntaxKind::DOMAIN_STEREOTYPE_DECL = 32805
+pub pure_analyzer_syntax::SyntaxKind::DOMAIN_TYPE_REF = 32811
 pub pure_analyzer_syntax::SyntaxKind::DOT = 10
 pub pure_analyzer_syntax::SyntaxKind::EQ = 18
 pub pure_analyzer_syntax::SyntaxKind::ERROR = 48
@@ -862,6 +878,694 @@ impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::ColumnSpecArray whe
 pub unsafe fn pure_analyzer_syntax::ColumnSpecArray::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for pure_analyzer_syntax::ColumnSpecArray
 pub fn pure_analyzer_syntax::ColumnSpecArray::from(T) -> T
+pub struct pure_analyzer_syntax::DomainAssociationDeclaration(_)
+impl core::clone::Clone for pure_analyzer_syntax::DomainAssociationDeclaration
+pub fn pure_analyzer_syntax::DomainAssociationDeclaration::clone(&self) -> pure_analyzer_syntax::DomainAssociationDeclaration
+impl core::cmp::Eq for pure_analyzer_syntax::DomainAssociationDeclaration
+impl core::cmp::PartialEq for pure_analyzer_syntax::DomainAssociationDeclaration
+pub fn pure_analyzer_syntax::DomainAssociationDeclaration::eq(&self, &pure_analyzer_syntax::DomainAssociationDeclaration) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::DomainAssociationDeclaration
+pub fn pure_analyzer_syntax::DomainAssociationDeclaration::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::DomainAssociationDeclaration
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::DomainAssociationDeclaration
+pub fn pure_analyzer_syntax::DomainAssociationDeclaration::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::DomainAssociationDeclaration::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::DomainAssociationDeclaration::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::DomainAssociationDeclaration::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::DomainAssociationDeclaration
+impl core::marker::Send for pure_analyzer_syntax::DomainAssociationDeclaration
+impl core::marker::Sync for pure_analyzer_syntax::DomainAssociationDeclaration
+impl core::marker::Unpin for pure_analyzer_syntax::DomainAssociationDeclaration
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::DomainAssociationDeclaration
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::DomainAssociationDeclaration
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::DomainAssociationDeclaration
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::DomainAssociationDeclaration where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::DomainAssociationDeclaration::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::DomainAssociationDeclaration where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::DomainAssociationDeclaration::Error = never
+pub fn pure_analyzer_syntax::DomainAssociationDeclaration::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::DomainAssociationDeclaration where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::DomainAssociationDeclaration::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::DomainAssociationDeclaration::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::DomainAssociationDeclaration where T: core::clone::Clone
+pub type pure_analyzer_syntax::DomainAssociationDeclaration::Owned = T
+pub fn pure_analyzer_syntax::DomainAssociationDeclaration::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::DomainAssociationDeclaration::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::DomainAssociationDeclaration where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainAssociationDeclaration::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::DomainAssociationDeclaration where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainAssociationDeclaration::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::DomainAssociationDeclaration where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainAssociationDeclaration::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::DomainAssociationDeclaration where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::DomainAssociationDeclaration::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::DomainAssociationDeclaration
+pub fn pure_analyzer_syntax::DomainAssociationDeclaration::from(T) -> T
+pub struct pure_analyzer_syntax::DomainClassDeclaration(_)
+impl core::clone::Clone for pure_analyzer_syntax::DomainClassDeclaration
+pub fn pure_analyzer_syntax::DomainClassDeclaration::clone(&self) -> pure_analyzer_syntax::DomainClassDeclaration
+impl core::cmp::Eq for pure_analyzer_syntax::DomainClassDeclaration
+impl core::cmp::PartialEq for pure_analyzer_syntax::DomainClassDeclaration
+pub fn pure_analyzer_syntax::DomainClassDeclaration::eq(&self, &pure_analyzer_syntax::DomainClassDeclaration) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::DomainClassDeclaration
+pub fn pure_analyzer_syntax::DomainClassDeclaration::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::DomainClassDeclaration
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::DomainClassDeclaration
+pub fn pure_analyzer_syntax::DomainClassDeclaration::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::DomainClassDeclaration::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::DomainClassDeclaration::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::DomainClassDeclaration::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::DomainClassDeclaration
+impl core::marker::Send for pure_analyzer_syntax::DomainClassDeclaration
+impl core::marker::Sync for pure_analyzer_syntax::DomainClassDeclaration
+impl core::marker::Unpin for pure_analyzer_syntax::DomainClassDeclaration
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::DomainClassDeclaration
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::DomainClassDeclaration
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::DomainClassDeclaration
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::DomainClassDeclaration where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::DomainClassDeclaration::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::DomainClassDeclaration where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::DomainClassDeclaration::Error = never
+pub fn pure_analyzer_syntax::DomainClassDeclaration::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::DomainClassDeclaration where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::DomainClassDeclaration::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::DomainClassDeclaration::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::DomainClassDeclaration where T: core::clone::Clone
+pub type pure_analyzer_syntax::DomainClassDeclaration::Owned = T
+pub fn pure_analyzer_syntax::DomainClassDeclaration::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::DomainClassDeclaration::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::DomainClassDeclaration where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainClassDeclaration::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::DomainClassDeclaration where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainClassDeclaration::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::DomainClassDeclaration where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainClassDeclaration::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::DomainClassDeclaration where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::DomainClassDeclaration::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::DomainClassDeclaration
+pub fn pure_analyzer_syntax::DomainClassDeclaration::from(T) -> T
+pub struct pure_analyzer_syntax::DomainExtendsClause(_)
+impl core::clone::Clone for pure_analyzer_syntax::DomainExtendsClause
+pub fn pure_analyzer_syntax::DomainExtendsClause::clone(&self) -> pure_analyzer_syntax::DomainExtendsClause
+impl core::cmp::Eq for pure_analyzer_syntax::DomainExtendsClause
+impl core::cmp::PartialEq for pure_analyzer_syntax::DomainExtendsClause
+pub fn pure_analyzer_syntax::DomainExtendsClause::eq(&self, &pure_analyzer_syntax::DomainExtendsClause) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::DomainExtendsClause
+pub fn pure_analyzer_syntax::DomainExtendsClause::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::DomainExtendsClause
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::DomainExtendsClause
+pub fn pure_analyzer_syntax::DomainExtendsClause::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::DomainExtendsClause::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::DomainExtendsClause::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::DomainExtendsClause::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::DomainExtendsClause
+impl core::marker::Send for pure_analyzer_syntax::DomainExtendsClause
+impl core::marker::Sync for pure_analyzer_syntax::DomainExtendsClause
+impl core::marker::Unpin for pure_analyzer_syntax::DomainExtendsClause
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::DomainExtendsClause
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::DomainExtendsClause
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::DomainExtendsClause
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::DomainExtendsClause where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::DomainExtendsClause::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::DomainExtendsClause where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::DomainExtendsClause::Error = never
+pub fn pure_analyzer_syntax::DomainExtendsClause::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::DomainExtendsClause where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::DomainExtendsClause::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::DomainExtendsClause::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::DomainExtendsClause where T: core::clone::Clone
+pub type pure_analyzer_syntax::DomainExtendsClause::Owned = T
+pub fn pure_analyzer_syntax::DomainExtendsClause::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::DomainExtendsClause::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::DomainExtendsClause where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainExtendsClause::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::DomainExtendsClause where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainExtendsClause::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::DomainExtendsClause where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainExtendsClause::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::DomainExtendsClause where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::DomainExtendsClause::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::DomainExtendsClause
+pub fn pure_analyzer_syntax::DomainExtendsClause::from(T) -> T
+pub struct pure_analyzer_syntax::DomainFile(_)
+impl core::clone::Clone for pure_analyzer_syntax::DomainFile
+pub fn pure_analyzer_syntax::DomainFile::clone(&self) -> pure_analyzer_syntax::DomainFile
+impl core::cmp::Eq for pure_analyzer_syntax::DomainFile
+impl core::cmp::PartialEq for pure_analyzer_syntax::DomainFile
+pub fn pure_analyzer_syntax::DomainFile::eq(&self, &pure_analyzer_syntax::DomainFile) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::DomainFile
+pub fn pure_analyzer_syntax::DomainFile::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::DomainFile
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::DomainFile
+pub fn pure_analyzer_syntax::DomainFile::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::DomainFile::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::DomainFile::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::DomainFile::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::DomainFile
+impl core::marker::Send for pure_analyzer_syntax::DomainFile
+impl core::marker::Sync for pure_analyzer_syntax::DomainFile
+impl core::marker::Unpin for pure_analyzer_syntax::DomainFile
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::DomainFile
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::DomainFile
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::DomainFile
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::DomainFile where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::DomainFile::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::DomainFile where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::DomainFile::Error = never
+pub fn pure_analyzer_syntax::DomainFile::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::DomainFile where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::DomainFile::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::DomainFile::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::DomainFile where T: core::clone::Clone
+pub type pure_analyzer_syntax::DomainFile::Owned = T
+pub fn pure_analyzer_syntax::DomainFile::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::DomainFile::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::DomainFile where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainFile::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::DomainFile where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainFile::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::DomainFile where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainFile::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::DomainFile where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::DomainFile::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::DomainFile
+pub fn pure_analyzer_syntax::DomainFile::from(T) -> T
+pub struct pure_analyzer_syntax::DomainMultiplicity(_)
+impl core::clone::Clone for pure_analyzer_syntax::DomainMultiplicity
+pub fn pure_analyzer_syntax::DomainMultiplicity::clone(&self) -> pure_analyzer_syntax::DomainMultiplicity
+impl core::cmp::Eq for pure_analyzer_syntax::DomainMultiplicity
+impl core::cmp::PartialEq for pure_analyzer_syntax::DomainMultiplicity
+pub fn pure_analyzer_syntax::DomainMultiplicity::eq(&self, &pure_analyzer_syntax::DomainMultiplicity) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::DomainMultiplicity
+pub fn pure_analyzer_syntax::DomainMultiplicity::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::DomainMultiplicity
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::DomainMultiplicity
+pub fn pure_analyzer_syntax::DomainMultiplicity::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::DomainMultiplicity::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::DomainMultiplicity::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::DomainMultiplicity::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::DomainMultiplicity
+impl core::marker::Send for pure_analyzer_syntax::DomainMultiplicity
+impl core::marker::Sync for pure_analyzer_syntax::DomainMultiplicity
+impl core::marker::Unpin for pure_analyzer_syntax::DomainMultiplicity
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::DomainMultiplicity
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::DomainMultiplicity
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::DomainMultiplicity
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::DomainMultiplicity where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::DomainMultiplicity::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::DomainMultiplicity where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::DomainMultiplicity::Error = never
+pub fn pure_analyzer_syntax::DomainMultiplicity::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::DomainMultiplicity where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::DomainMultiplicity::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::DomainMultiplicity::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::DomainMultiplicity where T: core::clone::Clone
+pub type pure_analyzer_syntax::DomainMultiplicity::Owned = T
+pub fn pure_analyzer_syntax::DomainMultiplicity::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::DomainMultiplicity::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::DomainMultiplicity where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainMultiplicity::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::DomainMultiplicity where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainMultiplicity::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::DomainMultiplicity where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainMultiplicity::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::DomainMultiplicity where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::DomainMultiplicity::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::DomainMultiplicity
+pub fn pure_analyzer_syntax::DomainMultiplicity::from(T) -> T
+pub struct pure_analyzer_syntax::DomainOpaqueBody(_)
+impl core::clone::Clone for pure_analyzer_syntax::DomainOpaqueBody
+pub fn pure_analyzer_syntax::DomainOpaqueBody::clone(&self) -> pure_analyzer_syntax::DomainOpaqueBody
+impl core::cmp::Eq for pure_analyzer_syntax::DomainOpaqueBody
+impl core::cmp::PartialEq for pure_analyzer_syntax::DomainOpaqueBody
+pub fn pure_analyzer_syntax::DomainOpaqueBody::eq(&self, &pure_analyzer_syntax::DomainOpaqueBody) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::DomainOpaqueBody
+pub fn pure_analyzer_syntax::DomainOpaqueBody::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::DomainOpaqueBody
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::DomainOpaqueBody
+pub fn pure_analyzer_syntax::DomainOpaqueBody::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::DomainOpaqueBody::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::DomainOpaqueBody::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::DomainOpaqueBody::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::DomainOpaqueBody
+impl core::marker::Send for pure_analyzer_syntax::DomainOpaqueBody
+impl core::marker::Sync for pure_analyzer_syntax::DomainOpaqueBody
+impl core::marker::Unpin for pure_analyzer_syntax::DomainOpaqueBody
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::DomainOpaqueBody
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::DomainOpaqueBody
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::DomainOpaqueBody
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::DomainOpaqueBody where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::DomainOpaqueBody::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::DomainOpaqueBody where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::DomainOpaqueBody::Error = never
+pub fn pure_analyzer_syntax::DomainOpaqueBody::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::DomainOpaqueBody where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::DomainOpaqueBody::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::DomainOpaqueBody::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::DomainOpaqueBody where T: core::clone::Clone
+pub type pure_analyzer_syntax::DomainOpaqueBody::Owned = T
+pub fn pure_analyzer_syntax::DomainOpaqueBody::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::DomainOpaqueBody::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::DomainOpaqueBody where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainOpaqueBody::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::DomainOpaqueBody where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainOpaqueBody::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::DomainOpaqueBody where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainOpaqueBody::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::DomainOpaqueBody where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::DomainOpaqueBody::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::DomainOpaqueBody
+pub fn pure_analyzer_syntax::DomainOpaqueBody::from(T) -> T
+pub struct pure_analyzer_syntax::DomainOpaqueNode(_)
+impl core::clone::Clone for pure_analyzer_syntax::DomainOpaqueNode
+pub fn pure_analyzer_syntax::DomainOpaqueNode::clone(&self) -> pure_analyzer_syntax::DomainOpaqueNode
+impl core::cmp::Eq for pure_analyzer_syntax::DomainOpaqueNode
+impl core::cmp::PartialEq for pure_analyzer_syntax::DomainOpaqueNode
+pub fn pure_analyzer_syntax::DomainOpaqueNode::eq(&self, &pure_analyzer_syntax::DomainOpaqueNode) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::DomainOpaqueNode
+pub fn pure_analyzer_syntax::DomainOpaqueNode::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::DomainOpaqueNode
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::DomainOpaqueNode
+pub fn pure_analyzer_syntax::DomainOpaqueNode::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::DomainOpaqueNode::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::DomainOpaqueNode::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::DomainOpaqueNode::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::DomainOpaqueNode
+impl core::marker::Send for pure_analyzer_syntax::DomainOpaqueNode
+impl core::marker::Sync for pure_analyzer_syntax::DomainOpaqueNode
+impl core::marker::Unpin for pure_analyzer_syntax::DomainOpaqueNode
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::DomainOpaqueNode
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::DomainOpaqueNode
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::DomainOpaqueNode
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::DomainOpaqueNode where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::DomainOpaqueNode::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::DomainOpaqueNode where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::DomainOpaqueNode::Error = never
+pub fn pure_analyzer_syntax::DomainOpaqueNode::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::DomainOpaqueNode where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::DomainOpaqueNode::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::DomainOpaqueNode::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::DomainOpaqueNode where T: core::clone::Clone
+pub type pure_analyzer_syntax::DomainOpaqueNode::Owned = T
+pub fn pure_analyzer_syntax::DomainOpaqueNode::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::DomainOpaqueNode::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::DomainOpaqueNode where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainOpaqueNode::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::DomainOpaqueNode where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainOpaqueNode::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::DomainOpaqueNode where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainOpaqueNode::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::DomainOpaqueNode where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::DomainOpaqueNode::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::DomainOpaqueNode
+pub fn pure_analyzer_syntax::DomainOpaqueNode::from(T) -> T
+pub struct pure_analyzer_syntax::DomainParameterDeclaration(_)
+impl core::clone::Clone for pure_analyzer_syntax::DomainParameterDeclaration
+pub fn pure_analyzer_syntax::DomainParameterDeclaration::clone(&self) -> pure_analyzer_syntax::DomainParameterDeclaration
+impl core::cmp::Eq for pure_analyzer_syntax::DomainParameterDeclaration
+impl core::cmp::PartialEq for pure_analyzer_syntax::DomainParameterDeclaration
+pub fn pure_analyzer_syntax::DomainParameterDeclaration::eq(&self, &pure_analyzer_syntax::DomainParameterDeclaration) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::DomainParameterDeclaration
+pub fn pure_analyzer_syntax::DomainParameterDeclaration::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::DomainParameterDeclaration
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::DomainParameterDeclaration
+pub fn pure_analyzer_syntax::DomainParameterDeclaration::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::DomainParameterDeclaration::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::DomainParameterDeclaration::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::DomainParameterDeclaration::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::DomainParameterDeclaration
+impl core::marker::Send for pure_analyzer_syntax::DomainParameterDeclaration
+impl core::marker::Sync for pure_analyzer_syntax::DomainParameterDeclaration
+impl core::marker::Unpin for pure_analyzer_syntax::DomainParameterDeclaration
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::DomainParameterDeclaration
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::DomainParameterDeclaration
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::DomainParameterDeclaration
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::DomainParameterDeclaration where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::DomainParameterDeclaration::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::DomainParameterDeclaration where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::DomainParameterDeclaration::Error = never
+pub fn pure_analyzer_syntax::DomainParameterDeclaration::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::DomainParameterDeclaration where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::DomainParameterDeclaration::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::DomainParameterDeclaration::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::DomainParameterDeclaration where T: core::clone::Clone
+pub type pure_analyzer_syntax::DomainParameterDeclaration::Owned = T
+pub fn pure_analyzer_syntax::DomainParameterDeclaration::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::DomainParameterDeclaration::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::DomainParameterDeclaration where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainParameterDeclaration::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::DomainParameterDeclaration where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainParameterDeclaration::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::DomainParameterDeclaration where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainParameterDeclaration::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::DomainParameterDeclaration where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::DomainParameterDeclaration::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::DomainParameterDeclaration
+pub fn pure_analyzer_syntax::DomainParameterDeclaration::from(T) -> T
+pub struct pure_analyzer_syntax::DomainProfileDeclaration(_)
+impl core::clone::Clone for pure_analyzer_syntax::DomainProfileDeclaration
+pub fn pure_analyzer_syntax::DomainProfileDeclaration::clone(&self) -> pure_analyzer_syntax::DomainProfileDeclaration
+impl core::cmp::Eq for pure_analyzer_syntax::DomainProfileDeclaration
+impl core::cmp::PartialEq for pure_analyzer_syntax::DomainProfileDeclaration
+pub fn pure_analyzer_syntax::DomainProfileDeclaration::eq(&self, &pure_analyzer_syntax::DomainProfileDeclaration) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::DomainProfileDeclaration
+pub fn pure_analyzer_syntax::DomainProfileDeclaration::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::DomainProfileDeclaration
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::DomainProfileDeclaration
+pub fn pure_analyzer_syntax::DomainProfileDeclaration::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::DomainProfileDeclaration::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::DomainProfileDeclaration::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::DomainProfileDeclaration::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::DomainProfileDeclaration
+impl core::marker::Send for pure_analyzer_syntax::DomainProfileDeclaration
+impl core::marker::Sync for pure_analyzer_syntax::DomainProfileDeclaration
+impl core::marker::Unpin for pure_analyzer_syntax::DomainProfileDeclaration
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::DomainProfileDeclaration
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::DomainProfileDeclaration
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::DomainProfileDeclaration
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::DomainProfileDeclaration where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::DomainProfileDeclaration::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::DomainProfileDeclaration where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::DomainProfileDeclaration::Error = never
+pub fn pure_analyzer_syntax::DomainProfileDeclaration::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::DomainProfileDeclaration where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::DomainProfileDeclaration::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::DomainProfileDeclaration::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::DomainProfileDeclaration where T: core::clone::Clone
+pub type pure_analyzer_syntax::DomainProfileDeclaration::Owned = T
+pub fn pure_analyzer_syntax::DomainProfileDeclaration::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::DomainProfileDeclaration::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::DomainProfileDeclaration where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainProfileDeclaration::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::DomainProfileDeclaration where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainProfileDeclaration::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::DomainProfileDeclaration where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainProfileDeclaration::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::DomainProfileDeclaration where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::DomainProfileDeclaration::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::DomainProfileDeclaration
+pub fn pure_analyzer_syntax::DomainProfileDeclaration::from(T) -> T
+pub struct pure_analyzer_syntax::DomainProfileSection(_)
+impl core::clone::Clone for pure_analyzer_syntax::DomainProfileSection
+pub fn pure_analyzer_syntax::DomainProfileSection::clone(&self) -> pure_analyzer_syntax::DomainProfileSection
+impl core::cmp::Eq for pure_analyzer_syntax::DomainProfileSection
+impl core::cmp::PartialEq for pure_analyzer_syntax::DomainProfileSection
+pub fn pure_analyzer_syntax::DomainProfileSection::eq(&self, &pure_analyzer_syntax::DomainProfileSection) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::DomainProfileSection
+pub fn pure_analyzer_syntax::DomainProfileSection::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::DomainProfileSection
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::DomainProfileSection
+pub fn pure_analyzer_syntax::DomainProfileSection::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::DomainProfileSection::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::DomainProfileSection::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::DomainProfileSection::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::DomainProfileSection
+impl core::marker::Send for pure_analyzer_syntax::DomainProfileSection
+impl core::marker::Sync for pure_analyzer_syntax::DomainProfileSection
+impl core::marker::Unpin for pure_analyzer_syntax::DomainProfileSection
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::DomainProfileSection
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::DomainProfileSection
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::DomainProfileSection
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::DomainProfileSection where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::DomainProfileSection::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::DomainProfileSection where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::DomainProfileSection::Error = never
+pub fn pure_analyzer_syntax::DomainProfileSection::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::DomainProfileSection where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::DomainProfileSection::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::DomainProfileSection::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::DomainProfileSection where T: core::clone::Clone
+pub type pure_analyzer_syntax::DomainProfileSection::Owned = T
+pub fn pure_analyzer_syntax::DomainProfileSection::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::DomainProfileSection::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::DomainProfileSection where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainProfileSection::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::DomainProfileSection where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainProfileSection::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::DomainProfileSection where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainProfileSection::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::DomainProfileSection where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::DomainProfileSection::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::DomainProfileSection
+pub fn pure_analyzer_syntax::DomainProfileSection::from(T) -> T
+pub struct pure_analyzer_syntax::DomainPropertyDeclaration(_)
+impl core::clone::Clone for pure_analyzer_syntax::DomainPropertyDeclaration
+pub fn pure_analyzer_syntax::DomainPropertyDeclaration::clone(&self) -> pure_analyzer_syntax::DomainPropertyDeclaration
+impl core::cmp::Eq for pure_analyzer_syntax::DomainPropertyDeclaration
+impl core::cmp::PartialEq for pure_analyzer_syntax::DomainPropertyDeclaration
+pub fn pure_analyzer_syntax::DomainPropertyDeclaration::eq(&self, &pure_analyzer_syntax::DomainPropertyDeclaration) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::DomainPropertyDeclaration
+pub fn pure_analyzer_syntax::DomainPropertyDeclaration::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::DomainPropertyDeclaration
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::DomainPropertyDeclaration
+pub fn pure_analyzer_syntax::DomainPropertyDeclaration::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::DomainPropertyDeclaration::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::DomainPropertyDeclaration::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::DomainPropertyDeclaration::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::DomainPropertyDeclaration
+impl core::marker::Send for pure_analyzer_syntax::DomainPropertyDeclaration
+impl core::marker::Sync for pure_analyzer_syntax::DomainPropertyDeclaration
+impl core::marker::Unpin for pure_analyzer_syntax::DomainPropertyDeclaration
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::DomainPropertyDeclaration
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::DomainPropertyDeclaration
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::DomainPropertyDeclaration
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::DomainPropertyDeclaration where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::DomainPropertyDeclaration::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::DomainPropertyDeclaration where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::DomainPropertyDeclaration::Error = never
+pub fn pure_analyzer_syntax::DomainPropertyDeclaration::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::DomainPropertyDeclaration where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::DomainPropertyDeclaration::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::DomainPropertyDeclaration::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::DomainPropertyDeclaration where T: core::clone::Clone
+pub type pure_analyzer_syntax::DomainPropertyDeclaration::Owned = T
+pub fn pure_analyzer_syntax::DomainPropertyDeclaration::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::DomainPropertyDeclaration::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::DomainPropertyDeclaration where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainPropertyDeclaration::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::DomainPropertyDeclaration where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainPropertyDeclaration::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::DomainPropertyDeclaration where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainPropertyDeclaration::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::DomainPropertyDeclaration where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::DomainPropertyDeclaration::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::DomainPropertyDeclaration
+pub fn pure_analyzer_syntax::DomainPropertyDeclaration::from(T) -> T
+pub struct pure_analyzer_syntax::DomainQualifiedName(_)
+impl core::clone::Clone for pure_analyzer_syntax::DomainQualifiedName
+pub fn pure_analyzer_syntax::DomainQualifiedName::clone(&self) -> pure_analyzer_syntax::DomainQualifiedName
+impl core::cmp::Eq for pure_analyzer_syntax::DomainQualifiedName
+impl core::cmp::PartialEq for pure_analyzer_syntax::DomainQualifiedName
+pub fn pure_analyzer_syntax::DomainQualifiedName::eq(&self, &pure_analyzer_syntax::DomainQualifiedName) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::DomainQualifiedName
+pub fn pure_analyzer_syntax::DomainQualifiedName::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::DomainQualifiedName
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::DomainQualifiedName
+pub fn pure_analyzer_syntax::DomainQualifiedName::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::DomainQualifiedName::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::DomainQualifiedName::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::DomainQualifiedName::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::DomainQualifiedName
+impl core::marker::Send for pure_analyzer_syntax::DomainQualifiedName
+impl core::marker::Sync for pure_analyzer_syntax::DomainQualifiedName
+impl core::marker::Unpin for pure_analyzer_syntax::DomainQualifiedName
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::DomainQualifiedName
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::DomainQualifiedName
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::DomainQualifiedName
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::DomainQualifiedName where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::DomainQualifiedName::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::DomainQualifiedName where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::DomainQualifiedName::Error = never
+pub fn pure_analyzer_syntax::DomainQualifiedName::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::DomainQualifiedName where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::DomainQualifiedName::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::DomainQualifiedName::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::DomainQualifiedName where T: core::clone::Clone
+pub type pure_analyzer_syntax::DomainQualifiedName::Owned = T
+pub fn pure_analyzer_syntax::DomainQualifiedName::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::DomainQualifiedName::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::DomainQualifiedName where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainQualifiedName::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::DomainQualifiedName where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainQualifiedName::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::DomainQualifiedName where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainQualifiedName::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::DomainQualifiedName where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::DomainQualifiedName::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::DomainQualifiedName
+pub fn pure_analyzer_syntax::DomainQualifiedName::from(T) -> T
+pub struct pure_analyzer_syntax::DomainQualifiedPropertyDeclaration(_)
+impl core::clone::Clone for pure_analyzer_syntax::DomainQualifiedPropertyDeclaration
+pub fn pure_analyzer_syntax::DomainQualifiedPropertyDeclaration::clone(&self) -> pure_analyzer_syntax::DomainQualifiedPropertyDeclaration
+impl core::cmp::Eq for pure_analyzer_syntax::DomainQualifiedPropertyDeclaration
+impl core::cmp::PartialEq for pure_analyzer_syntax::DomainQualifiedPropertyDeclaration
+pub fn pure_analyzer_syntax::DomainQualifiedPropertyDeclaration::eq(&self, &pure_analyzer_syntax::DomainQualifiedPropertyDeclaration) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::DomainQualifiedPropertyDeclaration
+pub fn pure_analyzer_syntax::DomainQualifiedPropertyDeclaration::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::DomainQualifiedPropertyDeclaration
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::DomainQualifiedPropertyDeclaration
+pub fn pure_analyzer_syntax::DomainQualifiedPropertyDeclaration::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::DomainQualifiedPropertyDeclaration::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::DomainQualifiedPropertyDeclaration::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::DomainQualifiedPropertyDeclaration::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::DomainQualifiedPropertyDeclaration
+impl core::marker::Send for pure_analyzer_syntax::DomainQualifiedPropertyDeclaration
+impl core::marker::Sync for pure_analyzer_syntax::DomainQualifiedPropertyDeclaration
+impl core::marker::Unpin for pure_analyzer_syntax::DomainQualifiedPropertyDeclaration
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::DomainQualifiedPropertyDeclaration
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::DomainQualifiedPropertyDeclaration
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::DomainQualifiedPropertyDeclaration
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::DomainQualifiedPropertyDeclaration where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::DomainQualifiedPropertyDeclaration::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::DomainQualifiedPropertyDeclaration where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::DomainQualifiedPropertyDeclaration::Error = never
+pub fn pure_analyzer_syntax::DomainQualifiedPropertyDeclaration::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::DomainQualifiedPropertyDeclaration where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::DomainQualifiedPropertyDeclaration::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::DomainQualifiedPropertyDeclaration::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::DomainQualifiedPropertyDeclaration where T: core::clone::Clone
+pub type pure_analyzer_syntax::DomainQualifiedPropertyDeclaration::Owned = T
+pub fn pure_analyzer_syntax::DomainQualifiedPropertyDeclaration::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::DomainQualifiedPropertyDeclaration::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::DomainQualifiedPropertyDeclaration where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainQualifiedPropertyDeclaration::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::DomainQualifiedPropertyDeclaration where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainQualifiedPropertyDeclaration::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::DomainQualifiedPropertyDeclaration where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainQualifiedPropertyDeclaration::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::DomainQualifiedPropertyDeclaration where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::DomainQualifiedPropertyDeclaration::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::DomainQualifiedPropertyDeclaration
+pub fn pure_analyzer_syntax::DomainQualifiedPropertyDeclaration::from(T) -> T
+pub struct pure_analyzer_syntax::DomainStereotypeApplications(_)
+impl core::clone::Clone for pure_analyzer_syntax::DomainStereotypeApplications
+pub fn pure_analyzer_syntax::DomainStereotypeApplications::clone(&self) -> pure_analyzer_syntax::DomainStereotypeApplications
+impl core::cmp::Eq for pure_analyzer_syntax::DomainStereotypeApplications
+impl core::cmp::PartialEq for pure_analyzer_syntax::DomainStereotypeApplications
+pub fn pure_analyzer_syntax::DomainStereotypeApplications::eq(&self, &pure_analyzer_syntax::DomainStereotypeApplications) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::DomainStereotypeApplications
+pub fn pure_analyzer_syntax::DomainStereotypeApplications::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::DomainStereotypeApplications
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::DomainStereotypeApplications
+pub fn pure_analyzer_syntax::DomainStereotypeApplications::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::DomainStereotypeApplications::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::DomainStereotypeApplications::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::DomainStereotypeApplications::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::DomainStereotypeApplications
+impl core::marker::Send for pure_analyzer_syntax::DomainStereotypeApplications
+impl core::marker::Sync for pure_analyzer_syntax::DomainStereotypeApplications
+impl core::marker::Unpin for pure_analyzer_syntax::DomainStereotypeApplications
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::DomainStereotypeApplications
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::DomainStereotypeApplications
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::DomainStereotypeApplications
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::DomainStereotypeApplications where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::DomainStereotypeApplications::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::DomainStereotypeApplications where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::DomainStereotypeApplications::Error = never
+pub fn pure_analyzer_syntax::DomainStereotypeApplications::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::DomainStereotypeApplications where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::DomainStereotypeApplications::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::DomainStereotypeApplications::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::DomainStereotypeApplications where T: core::clone::Clone
+pub type pure_analyzer_syntax::DomainStereotypeApplications::Owned = T
+pub fn pure_analyzer_syntax::DomainStereotypeApplications::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::DomainStereotypeApplications::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::DomainStereotypeApplications where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainStereotypeApplications::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::DomainStereotypeApplications where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainStereotypeApplications::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::DomainStereotypeApplications where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainStereotypeApplications::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::DomainStereotypeApplications where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::DomainStereotypeApplications::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::DomainStereotypeApplications
+pub fn pure_analyzer_syntax::DomainStereotypeApplications::from(T) -> T
+pub struct pure_analyzer_syntax::DomainStereotypeDeclaration(_)
+impl core::clone::Clone for pure_analyzer_syntax::DomainStereotypeDeclaration
+pub fn pure_analyzer_syntax::DomainStereotypeDeclaration::clone(&self) -> pure_analyzer_syntax::DomainStereotypeDeclaration
+impl core::cmp::Eq for pure_analyzer_syntax::DomainStereotypeDeclaration
+impl core::cmp::PartialEq for pure_analyzer_syntax::DomainStereotypeDeclaration
+pub fn pure_analyzer_syntax::DomainStereotypeDeclaration::eq(&self, &pure_analyzer_syntax::DomainStereotypeDeclaration) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::DomainStereotypeDeclaration
+pub fn pure_analyzer_syntax::DomainStereotypeDeclaration::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::DomainStereotypeDeclaration
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::DomainStereotypeDeclaration
+pub fn pure_analyzer_syntax::DomainStereotypeDeclaration::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::DomainStereotypeDeclaration::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::DomainStereotypeDeclaration::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::DomainStereotypeDeclaration::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::DomainStereotypeDeclaration
+impl core::marker::Send for pure_analyzer_syntax::DomainStereotypeDeclaration
+impl core::marker::Sync for pure_analyzer_syntax::DomainStereotypeDeclaration
+impl core::marker::Unpin for pure_analyzer_syntax::DomainStereotypeDeclaration
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::DomainStereotypeDeclaration
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::DomainStereotypeDeclaration
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::DomainStereotypeDeclaration
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::DomainStereotypeDeclaration where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::DomainStereotypeDeclaration::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::DomainStereotypeDeclaration where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::DomainStereotypeDeclaration::Error = never
+pub fn pure_analyzer_syntax::DomainStereotypeDeclaration::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::DomainStereotypeDeclaration where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::DomainStereotypeDeclaration::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::DomainStereotypeDeclaration::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::DomainStereotypeDeclaration where T: core::clone::Clone
+pub type pure_analyzer_syntax::DomainStereotypeDeclaration::Owned = T
+pub fn pure_analyzer_syntax::DomainStereotypeDeclaration::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::DomainStereotypeDeclaration::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::DomainStereotypeDeclaration where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainStereotypeDeclaration::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::DomainStereotypeDeclaration where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainStereotypeDeclaration::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::DomainStereotypeDeclaration where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainStereotypeDeclaration::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::DomainStereotypeDeclaration where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::DomainStereotypeDeclaration::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::DomainStereotypeDeclaration
+pub fn pure_analyzer_syntax::DomainStereotypeDeclaration::from(T) -> T
+pub struct pure_analyzer_syntax::DomainTypeReference(_)
+impl core::clone::Clone for pure_analyzer_syntax::DomainTypeReference
+pub fn pure_analyzer_syntax::DomainTypeReference::clone(&self) -> pure_analyzer_syntax::DomainTypeReference
+impl core::cmp::Eq for pure_analyzer_syntax::DomainTypeReference
+impl core::cmp::PartialEq for pure_analyzer_syntax::DomainTypeReference
+pub fn pure_analyzer_syntax::DomainTypeReference::eq(&self, &pure_analyzer_syntax::DomainTypeReference) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::DomainTypeReference
+pub fn pure_analyzer_syntax::DomainTypeReference::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::DomainTypeReference
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::DomainTypeReference
+pub fn pure_analyzer_syntax::DomainTypeReference::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::DomainTypeReference::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::DomainTypeReference::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::DomainTypeReference::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::DomainTypeReference
+impl core::marker::Send for pure_analyzer_syntax::DomainTypeReference
+impl core::marker::Sync for pure_analyzer_syntax::DomainTypeReference
+impl core::marker::Unpin for pure_analyzer_syntax::DomainTypeReference
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::DomainTypeReference
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::DomainTypeReference
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::DomainTypeReference
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::DomainTypeReference where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::DomainTypeReference::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::DomainTypeReference where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::DomainTypeReference::Error = never
+pub fn pure_analyzer_syntax::DomainTypeReference::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::DomainTypeReference where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::DomainTypeReference::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::DomainTypeReference::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::DomainTypeReference where T: core::clone::Clone
+pub type pure_analyzer_syntax::DomainTypeReference::Owned = T
+pub fn pure_analyzer_syntax::DomainTypeReference::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::DomainTypeReference::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::DomainTypeReference where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainTypeReference::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::DomainTypeReference where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainTypeReference::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::DomainTypeReference where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainTypeReference::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::DomainTypeReference where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::DomainTypeReference::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::DomainTypeReference
+pub fn pure_analyzer_syntax::DomainTypeReference::from(T) -> T
 pub struct pure_analyzer_syntax::ErrorNode(_)
 impl core::clone::Clone for pure_analyzer_syntax::ErrorNode
 pub fn pure_analyzer_syntax::ErrorNode::clone(&self) -> pure_analyzer_syntax::ErrorNode
@@ -2084,6 +2788,86 @@ pub fn pure_analyzer_syntax::ColumnSpecArray::can_cast(pure_analyzer_syntax::Syn
 pub fn pure_analyzer_syntax::ColumnSpecArray::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
 pub fn pure_analyzer_syntax::ColumnSpecArray::syntax(&self) -> &pure_analyzer_syntax::GreenNode
 pub fn pure_analyzer_syntax::ColumnSpecArray::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::DomainAssociationDeclaration
+pub fn pure_analyzer_syntax::DomainAssociationDeclaration::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::DomainAssociationDeclaration::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::DomainAssociationDeclaration::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::DomainAssociationDeclaration::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::DomainClassDeclaration
+pub fn pure_analyzer_syntax::DomainClassDeclaration::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::DomainClassDeclaration::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::DomainClassDeclaration::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::DomainClassDeclaration::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::DomainExtendsClause
+pub fn pure_analyzer_syntax::DomainExtendsClause::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::DomainExtendsClause::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::DomainExtendsClause::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::DomainExtendsClause::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::DomainFile
+pub fn pure_analyzer_syntax::DomainFile::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::DomainFile::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::DomainFile::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::DomainFile::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::DomainMultiplicity
+pub fn pure_analyzer_syntax::DomainMultiplicity::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::DomainMultiplicity::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::DomainMultiplicity::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::DomainMultiplicity::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::DomainOpaqueBody
+pub fn pure_analyzer_syntax::DomainOpaqueBody::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::DomainOpaqueBody::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::DomainOpaqueBody::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::DomainOpaqueBody::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::DomainOpaqueNode
+pub fn pure_analyzer_syntax::DomainOpaqueNode::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::DomainOpaqueNode::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::DomainOpaqueNode::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::DomainOpaqueNode::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::DomainParameterDeclaration
+pub fn pure_analyzer_syntax::DomainParameterDeclaration::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::DomainParameterDeclaration::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::DomainParameterDeclaration::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::DomainParameterDeclaration::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::DomainProfileDeclaration
+pub fn pure_analyzer_syntax::DomainProfileDeclaration::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::DomainProfileDeclaration::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::DomainProfileDeclaration::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::DomainProfileDeclaration::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::DomainProfileSection
+pub fn pure_analyzer_syntax::DomainProfileSection::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::DomainProfileSection::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::DomainProfileSection::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::DomainProfileSection::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::DomainPropertyDeclaration
+pub fn pure_analyzer_syntax::DomainPropertyDeclaration::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::DomainPropertyDeclaration::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::DomainPropertyDeclaration::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::DomainPropertyDeclaration::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::DomainQualifiedName
+pub fn pure_analyzer_syntax::DomainQualifiedName::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::DomainQualifiedName::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::DomainQualifiedName::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::DomainQualifiedName::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::DomainQualifiedPropertyDeclaration
+pub fn pure_analyzer_syntax::DomainQualifiedPropertyDeclaration::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::DomainQualifiedPropertyDeclaration::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::DomainQualifiedPropertyDeclaration::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::DomainQualifiedPropertyDeclaration::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::DomainStereotypeApplications
+pub fn pure_analyzer_syntax::DomainStereotypeApplications::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::DomainStereotypeApplications::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::DomainStereotypeApplications::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::DomainStereotypeApplications::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::DomainStereotypeDeclaration
+pub fn pure_analyzer_syntax::DomainStereotypeDeclaration::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::DomainStereotypeDeclaration::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::DomainStereotypeDeclaration::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::DomainStereotypeDeclaration::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::DomainTypeReference
+pub fn pure_analyzer_syntax::DomainTypeReference::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::DomainTypeReference::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::DomainTypeReference::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::DomainTypeReference::text_range(&self) -> text_size::range::TextRange
 impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::ErrorNode
 pub fn pure_analyzer_syntax::ErrorNode::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
 pub fn pure_analyzer_syntax::ErrorNode::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>

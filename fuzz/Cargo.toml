@@ -31,6 +31,13 @@ test = false
 doc = false
 bench = false
 
+[[bin]]
+name = "domain_parser"
+path = "fuzz_targets/domain_parser.rs"
+test = false
+doc = false
+bench = false
+
 # Fuzz targets are built with sanitizers under a nightly toolchain by
 # `cargo fuzz`; keep them out of the normal workspace build.
 [workspace]
