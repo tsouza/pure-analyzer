@@ -267,7 +267,7 @@ Class demo::Partial
 {
     bad: Foo;
     good: String[1];
-    query(): String[1] {};
+    query(value: String[1]): String[1] {};
 }
 "#,
     );
