@@ -314,6 +314,7 @@ impl<'g> DecoderSession<'g> {
                 &pos,
                 self.tracker.narrow_prefix(),
                 self.tracker.emitted_columns(),
+                self.tracker.bound_variables(),
                 self.grammar.vocab(),
                 self.grammar.eos_bit(),
             ) {

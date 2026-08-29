@@ -202,8 +202,10 @@ struct Baseline {
 const RATCHET_SLACK: usize = 3;
 
 /// Issue #55's criterion baseline, measured live against the pinned Legend
-/// stack (`corpus/legend-stack/docker-compose.yml`) on 2026-08-29: **12/64
-/// total = recipe 5/5 + exploration 7/59**.
+/// stack (`corpus/legend-stack/docker-compose.yml`): **17/64 total = recipe
+/// 5/5 + exploration 12/59** (Phase 1, 2026-08-29 — ratcheted up from Phase
+/// 0's 12/64 = 5/5 + 7/59 by the S2 refVar and N3 classpath-continuation
+/// rules, +5 exploration).
 ///
 /// `world_1`'s corpus-derived vocabulary realizes only five of the six recipe
 /// shapes the eager generator offers; `recipe_walks` drops an unrealizable
@@ -212,18 +214,20 @@ const RATCHET_SLACK: usize = 3;
 const CRITERION_BASELINE: Baseline = Baseline {
     db_id: CRITERION_DB,
     recipe_compiled: 5,
-    exploration_compiled: 7,
+    exploration_compiled: 12,
 };
 
-/// The generalization guard's baseline, measured in the same run: **13/64
-/// total = recipe 6/6 + exploration 7/58**. `car_1` realizes all six eager
-/// recipe shapes, so its partitions split one slot differently from the
-/// criterion's — which is exactly why each floor is stated per database
-/// rather than as a single cross-database number.
+/// The generalization guard's baseline, measured in the same run: **18/64
+/// total = recipe 6/6 + exploration 12/58** (Phase 1, up from Phase 0's 13/64
+/// = 6/6 + 7/58 — the same **+5** the criterion gained, on a database neither
+/// rule was authored against). `car_1` realizes all six eager recipe shapes,
+/// so its partitions split one slot differently from the criterion's — which
+/// is exactly why each floor is stated per database rather than as a single
+/// cross-database number.
 const GENERALIZATION_BASELINE: Baseline = Baseline {
     db_id: GENERALIZATION_DB,
     recipe_compiled: 6,
-    exploration_compiled: 7,
+    exploration_compiled: 12,
 };
 
 /// Decode a walk's token ids back to its Pure text through `grammar`'s own

@@ -30,6 +30,37 @@ struct Node {
     terminal: bool,
 }
 
+/// Which bytes continue a name's own lexeme — the predicate that separates "the
+/// name completed and the byte-PDA will re-vet the tail" from "the token ran off
+/// every legal name".
+///
+/// [`Walk::Complete`]'s contract is a *hand-off*: the trie stops vetting because
+/// the byte-PDA takes over at the boundary. That contract holds only for bytes the
+/// automaton itself treats as ending the lexeme, which is why the shape has to be
+/// stated per rule rather than assumed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum NameShape {
+    /// A plain name (member, column, method): every non-identifier byte ends the
+    /// lexeme, and the byte-PDA re-vets what follows. `InIdent`'s own `:` leaves
+    /// the identifier for `AfterColon` (a binder's type annotation), so a colon is
+    /// a genuine boundary here.
+    Plain,
+    /// A `::`-joined classpath (N3's source rule): `:` keeps the *same* lexeme open
+    /// in the byte-PDA (`InSourceIdent` → `SourceColon` → `SourceColon2` →
+    /// `InSourceIdent`), so nothing re-vets the tail. Treating it as a boundary
+    /// hands a completed path off to an automaton that will happily extend it,
+    /// admitting a fabricated segment (`spider::w::Db` + `::desc`). A colon must
+    /// therefore extend a real path in the trie or the token diverges.
+    ClassPath,
+}
+
+impl NameShape {
+    /// Whether `byte` continues the current name's lexeme rather than ending it.
+    const fn continues(self, byte: u8) -> bool {
+        is_ident_tail(byte) || (matches!(self, Self::ClassPath) && byte == b':')
+    }
+}
+
 /// The outcome of walking a token's bytes from a cursor node.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Walk {
@@ -109,14 +140,15 @@ impl Trie {
 /// longer one (`country` ⊂ `countryName`) keeps walking rather than stopping
 /// short. Only when no edge continues does the terminal decide: a boundary byte
 /// after a complete name is [`Complete`](Walk::Complete) (the name is done, the
-/// tail is the byte-PDA's to vet), an identifier byte past the name is a phantom
-/// extension ([`Diverge`](Walk::Diverge)).
-pub(crate) fn walk(trie: &Trie, mut node: u32, bytes: &[u8]) -> Walk {
+/// tail is the byte-PDA's to vet), a byte that instead *continues* the lexeme past
+/// the name is a phantom extension ([`Diverge`](Walk::Diverge)). `shape` decides
+/// which bytes continue — see [`NameShape`].
+pub(crate) fn walk(trie: &Trie, mut node: u32, bytes: &[u8], shape: NameShape) -> Walk {
     for &byte in bytes {
         match trie.child(node, byte) {
             Some(child) => node = child,
             None => {
-                return if trie.is_terminal(node) && !is_ident_tail(byte) {
+                return if trie.is_terminal(node) && !shape.continues(byte) {
                     Walk::Complete
                 } else {
                     Walk::Diverge
@@ -129,7 +161,7 @@ pub(crate) fn walk(trie: &Trie, mut node: u32, bytes: &[u8]) -> Walk {
 
 #[cfg(test)]
 mod tests {
-    use super::{Trie, Walk, walk};
+    use super::{NameShape, Trie, Walk, walk};
 
     fn member_trie() -> Trie {
         Trie::from_names(["country", "countryName", "countryId", "id"])
@@ -138,9 +170,12 @@ mod tests {
     #[test]
     fn a_whole_name_walks_to_a_terminal_and_stays() {
         let trie = member_trie();
-        assert!(matches!(walk(&trie, trie.root(), b"id"), Walk::Stay(_)));
         assert!(matches!(
-            walk(&trie, trie.root(), b"countryName"),
+            walk(&trie, trie.root(), b"id", NameShape::Plain),
+            Walk::Stay(_)
+        ));
+        assert!(matches!(
+            walk(&trie, trie.root(), b"countryName", NameShape::Plain),
             Walk::Stay(_)
         ));
     }
@@ -149,22 +184,37 @@ mod tests {
     fn a_leading_prefix_stays_alive() {
         // The exact B1 case: the leading BPE sub-token of a multi-token name.
         let trie = member_trie();
-        assert!(matches!(walk(&trie, trie.root(), b"count"), Walk::Stay(_)));
+        assert!(matches!(
+            walk(&trie, trie.root(), b"count", NameShape::Plain),
+            Walk::Stay(_)
+        ));
         // …and a whole-name prefix that is *also* a shorter name still descends to
         // the longer one when more bytes arrive (child preferred over terminal).
-        let Walk::Stay(node) = walk(&trie, trie.root(), b"country") else {
+        let Walk::Stay(node) = walk(&trie, trie.root(), b"country", NameShape::Plain) else {
             panic!("prefix stays");
         };
-        assert!(matches!(walk(&trie, node, b"Name"), Walk::Stay(_)));
-        assert!(matches!(walk(&trie, node, b"Id"), Walk::Stay(_)));
+        assert!(matches!(
+            walk(&trie, node, b"Name", NameShape::Plain),
+            Walk::Stay(_)
+        ));
+        assert!(matches!(
+            walk(&trie, node, b"Id", NameShape::Plain),
+            Walk::Stay(_)
+        ));
     }
 
     #[test]
     fn a_completed_name_then_a_boundary_byte_completes() {
         let trie = member_trie();
         // `id` is a name; a following `.` (a boundary byte) means the name is done.
-        assert_eq!(walk(&trie, trie.root(), b"id."), Walk::Complete);
-        assert_eq!(walk(&trie, trie.root(), b"id("), Walk::Complete);
+        assert_eq!(
+            walk(&trie, trie.root(), b"id.", NameShape::Plain),
+            Walk::Complete
+        );
+        assert_eq!(
+            walk(&trie, trie.root(), b"id(", NameShape::Plain),
+            Walk::Complete
+        );
     }
 
     #[test]
@@ -175,41 +225,117 @@ mod tests {
         // real terminal flag: were it to always answer `true`, this boundary byte
         // would wrongly read as `Complete`.
         let trie = member_trie();
-        assert_eq!(walk(&trie, trie.root(), b"count."), Walk::Diverge);
-        assert_eq!(walk(&trie, trie.root(), b"countr("), Walk::Diverge);
+        assert_eq!(
+            walk(&trie, trie.root(), b"count.", NameShape::Plain),
+            Walk::Diverge
+        );
+        assert_eq!(
+            walk(&trie, trie.root(), b"countr(", NameShape::Plain),
+            Walk::Diverge
+        );
     }
 
     #[test]
     fn a_phantom_extension_diverges() {
         let trie = member_trie();
         // `idx` extends the complete name `id` with an identifier byte — a phantom.
-        assert_eq!(walk(&trie, trie.root(), b"idx"), Walk::Diverge);
+        assert_eq!(
+            walk(&trie, trie.root(), b"idx", NameShape::Plain),
+            Walk::Diverge
+        );
         // A first byte off any name diverges immediately.
-        assert_eq!(walk(&trie, trie.root(), b"z"), Walk::Diverge);
+        assert_eq!(
+            walk(&trie, trie.root(), b"z", NameShape::Plain),
+            Walk::Diverge
+        );
         // A prefix that then leaves every name diverges.
-        assert_eq!(walk(&trie, trie.root(), b"countX"), Walk::Diverge);
+        assert_eq!(
+            walk(&trie, trie.root(), b"countX", NameShape::Plain),
+            Walk::Diverge
+        );
     }
 
     #[test]
     fn a_quoted_column_string_walks_around_its_quotes() {
         let trie = Trie::from_names(["'Name'", "'Result'"]);
         // The opening quote alone is a live prefix (the B1 leading `'`).
-        let Walk::Stay(node) = walk(&trie, trie.root(), b"'") else {
+        let Walk::Stay(node) = walk(&trie, trie.root(), b"'", NameShape::Plain) else {
             panic!("opening quote stays");
         };
-        let Walk::Stay(node) = walk(&trie, node, b"Na") else {
+        let Walk::Stay(node) = walk(&trie, node, b"Na", NameShape::Plain) else {
             panic!("inner prefix stays");
         };
-        assert!(matches!(walk(&trie, node, b"me'"), Walk::Stay(_)));
+        assert!(matches!(
+            walk(&trie, node, b"me'", NameShape::Plain),
+            Walk::Stay(_)
+        ));
         // An unlisted column diverges once its bytes leave every entry.
-        assert_eq!(walk(&trie, trie.root(), b"'Ghost"), Walk::Diverge);
+        assert_eq!(
+            walk(&trie, trie.root(), b"'Ghost", NameShape::Plain),
+            Walk::Diverge
+        );
+    }
+
+    /// The bucket-A mechanism, pinned at its root. `:` is not an identifier tail,
+    /// so under [`NameShape::Plain`] a completed source path hands the tail off to
+    /// the byte-PDA as `Complete` — but `InSourceIdent` keeps the *same* lexeme
+    /// open across `::`, so nothing ever re-vets it and a fabricated segment rides
+    /// in. `ClassPath` is what makes the colon extend a real path or diverge.
+    #[test]
+    fn a_classpath_colon_must_extend_a_real_path() {
+        let trie = Trie::from_names(["spider::w::Db", "spider::w::model::Country"]);
+        // The fabricated extension the live engine rejects as an unknown
+        // packageable element.
+        assert_eq!(
+            walk(&trie, trie.root(), b"spider::w::Db::", NameShape::ClassPath),
+            Walk::Diverge
+        );
+        // …and the same bytes under `Plain` are exactly the leak: a hand-off to an
+        // automaton that does not in fact re-vet.
+        assert_eq!(
+            walk(&trie, trie.root(), b"spider::w::Db::", NameShape::Plain),
+            Walk::Complete
+        );
+        // A colon that *does* extend a real path still walks.
+        assert!(matches!(
+            walk(
+                &trie,
+                trie.root(),
+                b"spider::w::model::",
+                NameShape::ClassPath
+            ),
+            Walk::Stay(_)
+        ));
+        // A genuine boundary byte after a complete path still completes.
+        assert_eq!(
+            walk(&trie, trie.root(), b"spider::w::Db.", NameShape::ClassPath),
+            Walk::Complete
+        );
+    }
+
+    /// A plain name's colon is a real boundary (`InIdent` + `:` leaves the
+    /// identifier for a binder's type annotation, `y: Integer[*]|…`), so the
+    /// classpath rule must not bleed into the member/column tries.
+    #[test]
+    fn a_plain_name_still_completes_at_a_colon() {
+        let trie = member_trie();
+        assert_eq!(
+            walk(&trie, trie.root(), b"id:", NameShape::Plain),
+            Walk::Complete
+        );
     }
 
     #[test]
     fn an_empty_trie_diverges_on_any_byte() {
         let trie = Trie::from_names(Vec::<&str>::new());
-        assert_eq!(walk(&trie, trie.root(), b"x"), Walk::Diverge);
+        assert_eq!(
+            walk(&trie, trie.root(), b"x", NameShape::Plain),
+            Walk::Diverge
+        );
         // An empty token stays at the cursor (no byte can diverge).
-        assert!(matches!(walk(&trie, trie.root(), b""), Walk::Stay(_)));
+        assert!(matches!(
+            walk(&trie, trie.root(), b"", NameShape::Plain),
+            Walk::Stay(_)
+        ));
     }
 }

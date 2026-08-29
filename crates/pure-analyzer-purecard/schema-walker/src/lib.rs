@@ -2109,7 +2109,13 @@ mod tests {
             weight_of(&cands, "x"),
             Some(DEFAULT_WEIGHT + KNOWN_BINDER_BONUS)
         );
-        assert_eq!(weight_of(&cands, "y"), Some(DEFAULT_WEIGHT));
+        // `y` is an identifier L1 admits after `$`, but this stream binds only
+        // `x` — S2 (`L2Position::RefVar`) clears it before the walker ever weighs
+        // it, so the binder bias now operates *within* the schema-legal variable
+        // set rather than over every identifier in the vocabulary. Emitting `$y`
+        // here is precisely the unbound-refVar failure the live engine rejects
+        // with "Can't find variable class for variable 'y' in the graph".
+        assert_eq!(weight_of(&cands, "y"), None);
     }
 
     #[test]

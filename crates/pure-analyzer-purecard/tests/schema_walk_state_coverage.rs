@@ -60,6 +60,27 @@ const STRUCTURAL_BYTES: &[u8] = b"abXY1_ |{}()[].,;:$%'-><=!&+*/";
 ///   of the 8 `FIXTURE_DBS` gold corpora contain an arm-R construct (arm-R is
 ///   exercised elsewhere, e.g. `l2_precision.rs`'s hand-written queries, not
 ///   through this generator).
+/// - `SourceColon`/`SourceColon2`: the `::` separator *inside* a source
+///   classpath, as a token-boundary state. This vocabulary is built at **whole
+///   lexeme granularity** (`support/l2.rs`), so every real classpath
+///   (`spider::world_1::model::default::Country`) is one atomic token — and a
+///   measurement across all 8 fixture DBs confirms **zero** vocabulary tokens
+///   are a proper prefix of any source path. A walk could therefore only *land*
+///   between a path's colons by gluing a `:` from `STRUCTURAL_BYTES` onto a
+///   path that had already ended — which is precisely issue #55's bucket-A
+///   fabrication (`spider::…::Battle::LEFT_OUTER`, `spider::…::CarMakers::row2`,
+///   `spider::…::Stadium::isEmpty`), rejected live as "Can't find the
+///   packageable element". Dumping the pre-rule walks that reached these two
+///   states found **every one** of them to be such a fabrication; N3's
+///   classpath-continuation rule now clears that `:`, so the only route this
+///   generator ever had into these states is gone.
+///
+///   They are *not* unreachable in the product: under a real byte-level BPE
+///   vocabulary a classpath does arrive in fragments, the trie keeps every live
+///   prefix admissible, and `bpe_split_soundness.rs` covers exactly that. This
+///   entry records a property of the test vocabulary, not a grammar or product
+///   restriction — so unlike the entries above it would disappear the moment a
+///   path-prefix token entered the corpus.
 ///
 /// `InMultiplicity` and `InDateLit` were on this list until issue #117's
 /// deeper/broader exploration (a wider `GROW_MIN`/`GROW_MAX`, several new
@@ -68,7 +89,15 @@ const STRUCTURAL_BYTES: &[u8] = b"abXY1_ |{}()[].,;:$%'-><=!&+*/";
 /// longer walk occasionally strings `STRUCTURAL_BYTES`' `[`/`*` or `%`/digit
 /// tokens adjacently by chance. Removed rather than re-added with a now-false
 /// "never reaches" justification.
-const EXPECTED_UNREACHABLE: &[&str] = &["LetLe", "SawExp", "NeedExpDigit", "InExp", "SawTilde"];
+const EXPECTED_UNREACHABLE: &[&str] = &[
+    "LetLe",
+    "SawExp",
+    "NeedExpDigit",
+    "InExp",
+    "SawTilde",
+    "SourceColon",
+    "SourceColon2",
+];
 
 fn corpus_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("corpus/gold_queries.jsonl")

@@ -198,6 +198,16 @@ pub enum L2Position {
     /// N6 (arm-R): a *bare-ident* column access `$row.<Col>` on a relation row
     /// must name an emitted column — the unquoted dual of [`Column`](L2Position::Column).
     RelationColumn,
+    /// S2: the identifier after a `$` sigil must name a variable something in the
+    /// stream has actually bound. Pure resolves `$x` against the lambda/`let`
+    /// bindings in scope, so an unbound name is not a typing error but a missing
+    /// graph element ("Can't find variable class for variable 'code'"). Keyed on
+    /// the *count* of bound names rather than the names themselves: the tracker's
+    /// binder record is deliberately monotonic (see
+    /// [`bound_vars`](ScopeTracker::bound_vars)), so within one stream the count
+    /// pins the set exactly — the same argument that makes
+    /// [`Column`](L2Position::Column)'s count key exact.
+    RefVar,
     /// No L2 constraint here — pass the L1 mask through unchanged.
     None,
 }
@@ -408,6 +418,29 @@ pub(crate) struct ScopeTracker {
     /// previously-emitted name is never masked; the quoted `Column` narrower keys on
     /// `quote(c)` and the bare `RelationColumn` narrower on `c` itself.
     emitted_strings: Vec<Vec<u8>>,
+    /// Every name the stream has bound as a variable — S2's legal `$var` set.
+    ///
+    /// **Monotonic and deliberately a superset**, exactly like
+    /// [`emitted_strings`](Self::emitted_strings). Two reasons, both load-bearing:
+    ///
+    /// * *Soundness.* The scoped maps ([`var_class`](Self::var_class),
+    ///   [`relation_row_vars`](Self::relation_row_vars),
+    ///   [`var_reducer_type`](Self::var_reducer_type)) are restored on scope exit
+    ///   and do not model every binder form the grammar admits — a join lambda's
+    ///   second typed binder (`{row1: …[1], row2: …[1]|…}`) reaches no `on_pipe`
+    ///   binding at all. Narrowing `$var` against them would mask real gold
+    ///   queries. Recording a name wherever the tracker sees a *binder candidate*
+    ///   and never retracting it keeps the set a superset of what is truly in
+    ///   scope, so S2 only ever masks a name **nothing anywhere bound** — which is
+    ///   the whole failure class it targets.
+    /// * *Cache exactness.* A set that only grows is pinned by its length within a
+    ///   stream, so [`L2Position::RefVar`] needs no name fingerprint in its cache
+    ///   key. A shrinking set would alias distinct scopes under one count.
+    ///
+    /// Sacrificing precision here (a name bound in a sibling scope stays
+    /// admissible) is the same trade `emitted_strings` documents: over-recording
+    /// only lets more through, never masks.
+    bound_vars: Vec<String>,
 }
 
 impl ScopeTracker {
@@ -686,6 +719,17 @@ impl ScopeTracker {
             // first-vs-last ambiguity to guard against.
             State::ExpectValue | State::ExpectValueReq => {
                 self.lambda_first_ident = Some(text.to_owned());
+                self.bind_var(text);
+            }
+            // Two binders the grammar fixes by *position*, with no pipe to confirm
+            // them, so neither reaches `on_pipe`'s `lambda_first_ident` path:
+            // `let <name> = …` (which additionally outlives its own statement —
+            // every later statement in the block may reference it, as
+            // `->in($topStates)` does), and a join brace lambda's leading typed
+            // binder (`{row1: …[1], row2: …[1]|…}`, whose *second* binder is caught
+            // by the `ExpectValueReq` arm after the comma).
+            State::ExpectBinder | State::ExpectBraceBinder => {
+                self.bind_var(text);
             }
             // The arm-R map lambda binds its variable *after* a colon
             // (`~[Col: x|…]`, `~'Name': x|…`), which the byte-PDA parks in an
@@ -710,6 +754,7 @@ impl ScopeTracker {
                     }
                 } else if !schema.has_class(text) {
                     self.lambda_first_ident = Some(text.to_owned());
+                    self.bind_var(text);
                 }
             }
             _ => {}
@@ -1037,6 +1082,9 @@ impl ScopeTracker {
             State::ExpectSource | State::BlockStmt | State::BlockStmtClose => {
                 L2Position::SourceIdent
             }
+            // S2: a `$` sigil's identifier names a variable, and the only names in
+            // the graph are the ones this stream bound.
+            State::AfterDollar => L2Position::RefVar,
             State::AfterDot => {
                 if self.awaiting_source_method {
                     L2Position::SourceMethod
@@ -1149,6 +1197,21 @@ impl ScopeTracker {
     /// The N6 legal column set: every string literal emitted so far.
     pub(crate) fn emitted_columns(&self) -> &[Vec<u8>] {
         &self.emitted_strings
+    }
+
+    /// The S2 legal `$var` set: every name the stream has bound (see
+    /// [`bound_vars`](Self::bound_vars)).
+    pub(crate) fn bound_variables(&self) -> &[String] {
+        &self.bound_vars
+    }
+
+    /// Record `name` as a bound variable. Deduplicated so the length stays a
+    /// faithful identity for [`L2Position::RefVar`]'s cache key — a re-recorded
+    /// name must not churn the memo for a set that did not change.
+    fn bind_var(&mut self, name: &str) {
+        if !self.bound_vars.iter().any(|bound| bound == name) {
+            self.bound_vars.push(name.to_owned());
+        }
     }
 }
 

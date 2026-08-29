@@ -26,7 +26,7 @@ use crate::grammar::pda::{is_ident_start, is_ident_tail};
 use crate::mask::BitMask;
 use crate::schema::model::{Schema, TypeClass};
 use crate::schema::scope::{L2Position, Lexeme, SOURCE_METHOD, classify};
-use crate::schema::trie::{Trie, Walk, walk};
+use crate::schema::trie::{NameShape, Trie, Walk, walk};
 use crate::vocab::Vocab;
 
 /// The `let` binder keyword, legal at a block-statement source position alongside
@@ -89,6 +89,10 @@ enum CacheKey {
     /// unquoted dual of [`Column`](CacheKey::Column) (a distinct trie kind, so it
     /// needs its own key).
     RelationColumn(usize),
+    /// S2 refVar set at a given bound-variable count. The tracker's binder record
+    /// is monotonic within a stream (see `ScopeTracker::bound_vars`), so — exactly
+    /// as for [`Column`](CacheKey::Column) — the count pins the set.
+    RefVar(usize),
     /// N1/N2 member set of a class narrowed over a *fused* nav-dot token (`.<member>`
     /// in one BPE token). Same trie as [`Member`](CacheKey::Member), but the
     /// candidate/keep rule differs (it strips a leading `.`), so the per-node mask
@@ -137,6 +141,7 @@ pub(crate) fn narrow_into(
     pos: &L2Position,
     prefix: &[u8],
     columns: &[Vec<u8>],
+    vars: &[String],
     vocab: &Vocab,
     eos_bit: u32,
 ) -> bool {
@@ -178,7 +183,7 @@ pub(crate) fn narrow_into(
             cache,
             CacheKey::Source,
             prefix,
-            TrieKind::Ident,
+            TrieKind::ClassPath,
             vocab,
             eos_bit,
             || Trie::from_names(schema.source_paths().chain(std::iter::once(LET_KEYWORD))),
@@ -228,6 +233,16 @@ pub(crate) fn narrow_into(
             vocab,
             eos_bit,
             || Trie::from_names(columns.iter().cloned()),
+        ),
+        L2Position::RefVar => narrow_trie(
+            dst,
+            cache,
+            CacheKey::RefVar(vars.len()),
+            prefix,
+            TrieKind::Ident,
+            vocab,
+            eos_bit,
+            || Trie::from_names(vars.iter().map(String::as_bytes)),
         ),
     }
 }
@@ -322,7 +337,7 @@ fn fill_fused_trie(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32, trie: &Trie) 
     for id in 0..vocab.len() as u32 {
         let bytes = vocab.bytes(id).unwrap_or(&[]);
         let keep = match fused_post_dot(bytes) {
-            Some(rest) => !matches!(walk(trie, root, rest), Walk::Diverge),
+            Some(rest) => !matches!(walk(trie, root, rest, NameShape::Plain), Walk::Diverge),
             None => true,
         };
         if keep {
@@ -374,7 +389,7 @@ fn narrow_trie(
     let cursor = if prefix.is_empty() {
         entry.trie.root()
     } else {
-        match walk(&entry.trie, entry.trie.root(), prefix) {
+        match walk(&entry.trie, entry.trie.root(), prefix, entry.kind.shape()) {
             Walk::Stay(cursor) => cursor,
             // The prefix already completed a legal name or diverged — the lexeme is
             // done (or was never legal); leave the L1 mask unchanged.
@@ -427,9 +442,17 @@ fn quote(content: &[u8]) -> Vec<u8> {
 /// *candidate* the trie may clear, or a structural token it never touches.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum TrieKind {
-    /// An identifier / classpath (N3, N1/N2): a candidate token starts with an
-    /// identifier-tail byte.
+    /// A plain identifier (N1/N2, N6 arm-R, the refVar set): a candidate token
+    /// starts with an identifier-tail byte.
     Ident,
+    /// N3's `::`-joined source classpath. A candidate additionally includes a
+    /// `:`-led token, because the byte-PDA keeps the classpath lexeme *open* across
+    /// the separator (`InSourceIdent` → `SourceColon` → `SourceColon2`): the `::`
+    /// is inside the name this rule governs, not a boundary handing off to an
+    /// automaton that would re-vet the tail. Leaving it a non-candidate — and
+    /// leaving [`walk`] to read the colon as a completed name's boundary — is what
+    /// let a fabricated segment (`spider::w::Db` + `::desc`) past N3 entirely.
+    ClassPath,
     /// A quoted string (N6): a candidate token opens a string (`'`) or continues
     /// one already in flight.
     Str,
@@ -443,6 +466,17 @@ enum TrieKind {
     /// or it is cleared. A candidate token opens with an identifier-tail byte,
     /// opens a string (`'`), or continues one already in flight.
     IdentOrStr,
+}
+
+impl TrieKind {
+    /// The lexeme shape the rule's names have — the boundary predicate [`walk`]
+    /// applies. Only N3's source rule spells `::` inside its names.
+    const fn shape(self) -> NameShape {
+        match self {
+            Self::ClassPath => NameShape::ClassPath,
+            Self::Ident | Self::Str | Self::IdentOrStr => NameShape::Plain,
+        }
+    }
 }
 
 /// Whether an operand token is kept under a T1 constraint with LHS class `lhs`
@@ -569,7 +603,7 @@ fn fill_trie(
     for id in 0..vocab.len() as u32 {
         let bytes = vocab.bytes(id).unwrap_or(&[]);
         let keep = if is_candidate(bytes, kind, mid) {
-            !matches!(walk(trie, cursor, bytes), Walk::Diverge)
+            !matches!(walk(trie, cursor, bytes, kind.shape()), Walk::Diverge)
         } else {
             // A structural token (whitespace, operator, delimiter) is not the
             // identifier/string the trie governs — it is kept exactly as the
@@ -592,6 +626,7 @@ fn is_candidate(bytes: &[u8], kind: TrieKind, mid_lexeme: bool) -> bool {
         None => false,
         Some(&first) => match kind {
             TrieKind::Ident => is_ident_tail(first),
+            TrieKind::ClassPath => is_ident_tail(first) || first == b':',
             TrieKind::Str => first == b'\'' || mid_lexeme,
             TrieKind::IdentOrStr => is_ident_tail(first) || first == b'\'' || mid_lexeme,
         },
@@ -643,6 +678,7 @@ mod tests {
             pos,
             prefix,
             cols,
+            &[],
             grammar.vocab(),
             grammar.eos_bit(),
         );
@@ -986,6 +1022,7 @@ mod tests {
                 &pos,
                 b"",
                 &[],
+                &[],
                 grammar.vocab(),
                 grammar.eos_bit(),
             );
@@ -1002,6 +1039,7 @@ mod tests {
             &schema(),
             &pos,
             b"",
+            &[],
             &[],
             grammar.vocab(),
             grammar.eos_bit(),
@@ -1025,6 +1063,7 @@ mod tests {
                 &pos,
                 b"country",
                 &[],
+                &[],
                 cont_grammar.vocab(),
                 cont_grammar.eos_bit(),
             );
@@ -1041,6 +1080,7 @@ mod tests {
             &schema(),
             &pos,
             b"country",
+            &[],
             &[],
             cont_grammar.vocab(),
             cont_grammar.eos_bit(),
@@ -1070,6 +1110,7 @@ mod tests {
             &pos,
             b"",
             &[b"cnt".to_vec()],
+            &[],
             grammar.vocab(),
             grammar.eos_bit(),
         );
@@ -1088,6 +1129,7 @@ mod tests {
             &pos,
             b"",
             &[b"ghost".to_vec()],
+            &[],
             grammar.vocab(),
             grammar.eos_bit(),
         );
