@@ -617,7 +617,9 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
 
     fn parse_stereotype_applications(&mut self) {
         self.consume_trivia();
-        while self.at(TokenKind::BRACE_OPEN) || self.at_double_angle_open() {
+        while self.raw_kind().is_some()
+            && (self.at(TokenKind::BRACE_OPEN) || self.at_double_angle_open())
+        {
             let start = self.index;
             let braced = self.at(TokenKind::BRACE_OPEN);
             let structurally_valid = if braced {
@@ -641,8 +643,11 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
                     "parser made no progress while reading Domain stereotype applications",
                 );
                 self.open(SyntaxKind::ERROR_NODE);
-                let _ = self.bump();
+                let advanced = self.bump();
                 self.close();
+                if !advanced {
+                    break;
+                }
             }
             if !structurally_valid || !closed {
                 if closed {
@@ -1341,6 +1346,32 @@ mod tests {
                 span: TextRange::new(TextSize::from(0), TextSize::from(1)),
                 kind: DomainCoverageGapKind::UnsupportedTopLevel,
             }]
+        );
+    }
+
+    #[test]
+    fn exhausted_fuel_stops_stereotype_application_recovery() {
+        let source = "{";
+        let tokens = lex(source);
+        let mut parser = Parser::new(source, FileId::new(0), &tokens);
+        parser.fuel = 0;
+
+        parser.parse_stereotype_applications();
+
+        assert_eq!(parser.index, 0);
+        assert_eq!(
+            parser.diagnostics.len(),
+            1,
+            "fuel exhaustion must stop stereotype recovery after its no-progress diagnostic: {:#?}",
+            parser.diagnostics
+        );
+        assert_eq!(
+            parser
+                .events
+                .iter()
+                .filter(|event| matches!(event, Event::Advance))
+                .count(),
+            0
         );
     }
 }
