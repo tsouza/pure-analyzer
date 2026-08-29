@@ -203,9 +203,17 @@ const RATCHET_SLACK: usize = 3;
 
 /// Issue #55's criterion baseline, measured live against the pinned Legend
 /// stack (`corpus/legend-stack/docker-compose.yml`): **17/64 total = recipe
-/// 5/5 + exploration 12/59** (Phase 1, 2026-08-29 — ratcheted up from Phase
-/// 0's 12/64 = 5/5 + 7/59 by the S2 refVar and N3 classpath-continuation
-/// rules, +5 exploration).
+/// 5/5 + exploration 12/59** (Phase 2, 2026-08-29 — unchanged from Phase 1's
+/// own 12/59, which had itself ratcheted up from Phase 0's 7/59).
+///
+/// Phase 2's rules (mask-aware completion, S1's must-call veto, N7) are
+/// strictly more precise than Phase 1's and closed every bucket-B walk they
+/// were attested against — and this number still did not move. Any rule change
+/// re-rolls the whole chained-SplitMix64 exploration stream, and the
+/// intermediate measurements taken across Phase 2 (12 → 14 → 14 → 12, at
+/// monotonically increasing precision) say plainly that this count is
+/// reshuffle-dominated on `world_1` at single-walk granularity. The floor is
+/// the gate; the count is a measurement, not a score.
 ///
 /// `world_1`'s corpus-derived vocabulary realizes only five of the six recipe
 /// shapes the eager generator offers; `recipe_walks` drops an unrealizable
@@ -217,17 +225,19 @@ const CRITERION_BASELINE: Baseline = Baseline {
     exploration_compiled: 12,
 };
 
-/// The generalization guard's baseline, measured in the same run: **18/64
-/// total = recipe 6/6 + exploration 12/58** (Phase 1, up from Phase 0's 13/64
-/// = 6/6 + 7/58 — the same **+5** the criterion gained, on a database neither
-/// rule was authored against). `car_1` realizes all six eager recipe shapes,
-/// so its partitions split one slot differently from the criterion's — which
-/// is exactly why each floor is stated per database rather than as a single
+/// The generalization guard's baseline, measured in the same run: **23/64
+/// total = recipe 6/6 + exploration 17/58** (Phase 2, up from Phase 1's 18/64
+/// = 6/6 + 12/58 — **+5** on a database none of Phase 2's rules was authored
+/// against, while the criterion they *were* authored against stayed flat; see
+/// [`CRITERION_BASELINE`] on why that asymmetry is reshuffle, not
+/// generalization failure). `car_1` realizes all six eager recipe shapes, so
+/// its partitions split one slot differently from the criterion's — which is
+/// exactly why each floor is stated per database rather than as a single
 /// cross-database number.
 const GENERALIZATION_BASELINE: Baseline = Baseline {
     db_id: GENERALIZATION_DB,
     recipe_compiled: 6,
-    exploration_compiled: 12,
+    exploration_compiled: 17,
 };
 
 /// Decode a walk's token ids back to its Pure text through `grammar`'s own

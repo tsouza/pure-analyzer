@@ -44,13 +44,21 @@ const STRUCTURAL_BYTES: &[u8] = b"abXY1_ |{}()[].,;:$%'-><=!&+*/";
 /// with the concrete reason — a state absent here that the test still finds
 /// unvisited is a real regression, not documented residue.
 ///
-/// - `LetLe`: block-query syntax (`{|let m = …; …}`). The walker is
+/// - `LetL`/`LetLe`: block-query syntax (`{|let m = …; …}`). The walker is
 ///   fundamentally class-anchored (`ClassPath.all()->…`, `docs/spec/grammar.md`
 ///   §5's arm-C shape) — it never opens a block query at all, so no state
-///   reachable only through one can appear (`LetL` itself IS visited: it is
-///   also the incidental first byte of any classpath merely starting with
-///   `l`, a false start into the `let`-candidate path that diverges before
-///   `Le`).
+///   reachable only through one can appear. This test samples the PDA at token
+///   *boundaries*, and every `let` in a fixture vocabulary is one atomic
+///   lexeme, so a walk could only land on `LetL`/`LetLe` by ending a token on a
+///   bare `l`/`le`. `LetL` was visited that way until issue #55's Phase 2:
+///   those states are inside a source identifier (each falls back to
+///   `InSourceIdent` the moment the keyword diverges), but `lexeme_kind`
+///   reported them as inter-lexeme, so N3 released at the first `l` and a bare
+///   `l` read as a finished source — the live-rejected walk `{|l->pair(…)}`
+///   ("Can't find the packageable element 'l'"). With the accumulation kept
+///   open, `l` is a strict prefix of `let` and every boundary token after it is
+///   masked, so the only route this generator had into either state is gone.
+///   `LetLet` stays reachable: `let` is a whole name in N3's own trie.
 /// - `SawExp`/`NeedExpDigit`/`InExp`: scientific-notation numeric literals
 ///   (`1e5`). None of the 8 `FIXTURE_DBS` gold corpora (Spider-derived SQL
 ///   translations) contain one, and the walker only draws numeric tokens from
@@ -90,6 +98,7 @@ const STRUCTURAL_BYTES: &[u8] = b"abXY1_ |{}()[].,;:$%'-><=!&+*/";
 /// tokens adjacently by chance. Removed rather than re-added with a now-false
 /// "never reaches" justification.
 const EXPECTED_UNREACHABLE: &[&str] = &[
+    "LetL",
     "LetLe",
     "SawExp",
     "NeedExpDigit",

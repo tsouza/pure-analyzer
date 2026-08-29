@@ -520,3 +520,152 @@ fn s2_keeps_a_bound_binder_and_masks_its_neighbours() {
         b"nowhereBound",
     );
 }
+
+/// Stream every token of `walk` (each must be admissible) and return whether the
+/// L2 overlay lets the stream **end** there — [`DecoderSession::is_complete`] and
+/// the published EOS bit, asserted to agree.
+///
+/// The completion counterpart of [`assert_walk_is_masked`]: a walk can be
+/// perfectly admissible token-by-token and still be a query no host may stop on,
+/// because the last lexeme is only half a name or owes a mandatory call.
+fn walk_may_end(db_id: &str, walk: &str) -> bool {
+    let vocab = TokenVocab::build(&[walk], &[]);
+    let grammar = CompiledGrammar::compile(vocab.vocab());
+    let schema = load_schema(db_id);
+    let mut session =
+        DecoderSession::with_schema(&grammar, schema).expect("grammar is fixed-engine");
+    for (step, token) in lex(walk).into_iter().enumerate() {
+        let id = vocab
+            .id_of(&token)
+            .unwrap_or_else(|| panic!("token not in vocab: {:?}", bytes_str(&token)));
+        assert!(
+            session.allowed_mask().test(id),
+            "this fixture is about completion, not admissibility, but the rule \
+             masked a token at step {step} ({:?}) in:\n  {walk}",
+            bytes_str(&token)
+        );
+        session
+            .accept_token(id)
+            .unwrap_or_else(|err| panic!("token rejected at step {step}: {err}\n  {walk}"));
+    }
+    let complete = session.is_complete();
+    let eos = session.allowed_mask().test(grammar.vocab().len() as u32);
+    assert_eq!(
+        complete, eos,
+        "is_complete and the published EOS bit disagree for:\n  {walk}"
+    );
+    complete
+}
+
+/// Issue #55 Phase 2, piece 1 — **mask-aware completion**. Both shapes are
+/// L1-accepting (`InIdent` over an empty stack: an identifier has no
+/// self-terminating byte, so L1's lookahead calls any partial name completable)
+/// and both are rejected by a live Legend engine — `Class.a` and `Class.all`
+/// alike with "Can't find property '<name>' in class
+/// 'meta::pure::metamodel::type::Class'". The overlay now clears the EOS bit at a
+/// trie cursor that has reached only a strict prefix of a legal name, and after a
+/// whole niladic method name whose call parens are still owed.
+///
+/// Frozen verbatim (gate (b)); the counterfactual below keeps this from passing
+/// by simply never completing.
+#[test]
+fn a_half_typed_or_uncalled_source_method_can_never_end_a_query() {
+    for walk in [
+        "|spider::world_1::model::default::Country.a",
+        "|spider::world_1::model::default::Country.all",
+    ] {
+        assert!(
+            !walk_may_end("world_1", walk),
+            "PRECISION GAP: the overlay still lets a query end here:\n  {walk}"
+        );
+    }
+    // The counterfactual: the same source, called, compiles live
+    // (=> `spider::world_1::model::default::Country`) and does end.
+    assert!(walk_may_end(
+        "world_1",
+        "|spider::world_1::model::default::Country.all()"
+    ));
+}
+
+/// Issue #55 Phase 2, piece 2 — the **resolved-method must-call veto**. After the
+/// whole name `all`, nothing but its own `(` continues: not EOS, not another hop,
+/// and not whitespace (a space would close the lexeme and hand the escape
+/// straight back).
+#[test]
+fn a_resolved_source_method_admits_nothing_but_its_call() {
+    let walk = "|spider::world_1::model::default::Country.all";
+    for probe in ["->", " ", ".", ")", "x"] {
+        assert_precision("world_1", walk, b"(", probe.as_bytes());
+    }
+}
+
+/// Issue #55 Phase 2 — the `let`-candidate states are inside a source
+/// identifier. This `world_1` walk was produced by the schema walker and
+/// rejected live with "Can't find the packageable element 'l'": `l` is a strict
+/// prefix of the `let` keyword N3 admits, and N3 used to go dark the moment the
+/// byte-PDA entered `LetL`, so a bare `l` read as a finished source.
+#[test]
+fn n3_masks_a_source_that_is_only_a_prefix_of_the_let_keyword() {
+    let masked = assert_walk_is_masked("world_1", "{|l->pair(col>'SUM(SurfaceArea)')}");
+    assert_eq!(
+        masked, "->",
+        "N3 should close the walk at the boundary token that ends the half-typed source"
+    );
+}
+
+/// Issue #55 Phase 2, piece 3 — **N7**, a bare unresolved identifier in a value
+/// position. Every one of these `world_1` walks was produced by the schema walker
+/// and rejected by a live Legend engine with "Can't find the packageable element
+/// '<word>'": a bare word that no lambda arrow, package separator, navigation, or
+/// call ever gives a meaning to resolves to nothing.
+///
+/// Frozen verbatim (gate (b)) — see
+/// [`n3_masks_every_fabricated_classpath_extension_walk`] on why the string, not
+/// the walk index, is the fixture.
+#[test]
+fn n7_masks_every_dangling_value_identifier_walk() {
+    for walk in [
+        "|spider::world_1::model::default::Country->max(language)",
+        "|spider::world_1::model::default::Countrylanguage->pair(code    \n!='Name_T2')",
+        "|spider::world_1::model::default::Country->filter('Percentage_T2_4'<average)",
+        "|spider::world_1::model::default::Countrylanguage->between(renameColumns>'hasDutch')",
+        "{|spider::world_1::model::default::Country->between(join)<LEFT_OUTER}",
+        "|spider::world_1::model::default::Country->tableReference(restrict)",
+        "|spider::world_1::model::default::Countrylanguage\
+         ->groupBy('Gelderland'||'Population_T1_1'&&asc)",
+        "{|spider::world_1::Db->concatenate('IndepYear_T1_1',desc-col=='IndepYear_country')}",
+        "|spider::world_1::model::default::Countrylanguage->tableReference(pair)",
+        "|spider::world_1::model::default::Country->pair(tableReference)&&5",
+        "|spider::world_1::model::default::Country->col(between\n*'District_city')",
+        "|spider::world_1::model::default::Country->filter('SUM(SurfaceArea)'<agg/'_nn__t0anti1')",
+    ] {
+        assert_walk_is_masked("world_1", walk);
+    }
+}
+
+/// N7's soundness edge, pinned alongside its precision (the same counterfactual
+/// discipline S2 carries): at exactly the position where a dangling word's closer
+/// is cleared, every shape that *does* give a bare word a meaning stays
+/// admissible — the lambda arrow, a `::` package separator, a navigation dot, and
+/// a call's own `(`. Without this the rule could pass its fixtures by masking
+/// everything after any identifier.
+#[test]
+fn n7_keeps_every_continuation_that_gives_a_bare_word_a_meaning() {
+    let walk = "|spider::world_1::model::default::Country.all()->filter(x";
+    for legal in ["|", ":", ".", "("] {
+        assert_precision("world_1", walk, legal.as_bytes(), b")");
+    }
+    // A boolean literal is a complete value in its own right, so N7 leaves it and
+    // whatever follows it alone — the gold corpus's own `… == true }` shape.
+    // Stated as a contrast on the *same* closer, since the keyword exemption
+    // means there is no phantom to probe at that one position.
+    let lambda = "|spider::world_1::model::default::Country.all()->filter(x|";
+    assert!(
+        admissible_after("world_1", &format!("{lambda}true"), &[b")"])[0],
+        "N7 masked the closer after a complete boolean literal"
+    );
+    assert!(
+        !admissible_after("world_1", &format!("{lambda}agg"), &[b")"])[0],
+        "N7 GAP: the same closer survived after a dangling bare word"
+    );
+}

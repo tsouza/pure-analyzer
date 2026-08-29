@@ -315,15 +315,6 @@ const NAVIGATION_DOT_BONUS: u32 = 200;
 /// bonus applies that same lesson to random exploration, not just recipes.
 const MEMBER_NUMERIC_BONUS: u32 = 200;
 
-/// Whether the token just emitted (`bytes`) is a bound-variable reference
-/// (`$`), or completes a `->` arrow hop (`emitted`, the full byte run so
-/// far, ends in [`ARROW_BYTES`]) — either marks that the pipeline's source
-/// dot has already been passed, so a later `.` is an ordinary property
-/// access, never the source method's own dot again.
-fn marks_arrow_or_dollar(bytes: &[u8], emitted: &[u8]) -> bool {
-    bytes == b"$" || emitted.ends_with(ARROW_BYTES)
-}
-
 /// A byte that can continue a bare identifier or number lexeme.
 fn is_word_byte(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'_'
@@ -467,40 +458,17 @@ enum PendingCall {
 /// grammar territory the byte-PDA doesn't validate semantically (operator and
 /// predicate chaining — see that function's docs).
 ///
-/// `pending_source_method` guards a third residue, found live against issue
-/// #56's S1 narrowing: `DecoderSession::is_complete()` is
-/// `Pda::is_accepting()` — a pure L1 *lookahead* fact (does a value-boundary
-/// byte from here reach `AfterValue`?) that never consults the L2-narrowed
-/// mask. Any partial identifier is trivially "completable" under that
-/// definition, because an identifier has no self-terminating byte —
-/// `InIdent`'s own rule `goto AfterValue` on any non-continuation byte fires
-/// regardless of how much of the identifier is actually typed. So the moment
-/// the vocabulary happens to hold a standalone token that is *also* a strict
-/// byte-prefix of the one name S1 forces (`"a"` next to `"all"`), the walker
-/// can stop there and call it done — confirmed live: a real walk ended in
-/// `Class.a`, which the engine correctly rejects (`can't find property 'a'`).
-/// No L2 change can fix this (`is_complete()` doesn't read the mask at all);
-/// the walker has to stop trusting it at the one position it's known to be
-/// forced. The first `.` before any `->`/`$` can only be the pipeline
-/// source's own dot (`pipeline = source , { "->" step }`, `source = classpath
-/// ".all()"` — structurally nothing else precedes it), so it needs no L2
-/// visibility to detect. `source_method_progress` accumulates the
-/// non-whitespace bytes emitted since that dot (whitespace before/inside the
-/// identifier is legal Pure and carries no identifier content); once it
-/// exactly matches `SOURCE_METHOD`, the identifier is genuinely done — S1's
-/// narrowing only ever lets an exact match through (anything else diverges
-/// the trie and is excluded from the mask) — and `pending` is armed to
-/// `PendingCall::MustOpen`: `all` is itself a niladic call (`.all()`), the
-/// same "mandatory parens" fact `PendingCall` already enforces for `->` hops
-/// (confirmed live: bare `Class.all` parses as a property read and fails to
-/// compile the same way `Db->tableToTDS` without `()` did), so the fix reuses
-/// that machinery rather than inventing a second one. Matching by accumulated
-/// byte content rather than by re-inspecting `Pda::state()` matters here: the
-/// PDA doesn't reach a clean `AfterValue` boundary until the *next* byte is
-/// processed (an identifier has no self-terminating byte), so checking the
-/// state immediately after accepting `all` itself would still read `InIdent`
-/// and never fire — the exact same lookahead gap `is_complete()` has, one
-/// layer down.
+/// A third residue used to be guarded here, by a per-position
+/// `pending_source_method` flag: `DecoderSession::is_complete()` was pure
+/// `Pda::is_accepting()` — an L1 *lookahead* fact that never consulted the
+/// L2-narrowed mask — so any partial identifier was trivially "completable",
+/// and a walk could stop at `Class.a` or at a bare `Class.all` with its
+/// mandatory parens still owed. That is now fixed **in the decoder** (issue
+/// #55 Phase 2, `schema::narrow`): the overlay clears the EOS bit at a trie
+/// cursor that has only reached a strict prefix of a legal name, admits
+/// nothing but `(` after a resolved niladic method name, and
+/// `is_complete()` reads that same verdict — so the walker can trust it here
+/// and needs no counterpart of its own.
 fn attempt(
     grammar: &CompiledGrammar,
     schema: &Schema,
@@ -524,13 +492,10 @@ fn attempt(
     let mut known_binder: Option<Vec<u8>> = None;
     let mut source_class: Option<Vec<u8>> = None;
     let mut just_navigated_from_binder = false;
-    let mut seen_arrow_or_dollar = false;
-    let mut pending_source_method = false;
-    let mut source_method_progress: Vec<u8> = Vec::new();
 
     for _ in 0..HARD_CAP {
         let growing = is_growing(out.len(), grow_target);
-        if !growing && attempt_may_stop(pending_source_method, &pending, &session, out.len()) {
+        if !growing && walk_is_done(&pending, &session, out.len()) {
             return (Some(out), rng.state);
         }
         // The PDA state *before* this step's token lands — read once here so
@@ -569,7 +534,7 @@ fn attempt(
             // admissible here despite every `->name` production requiring
             // it — a real grammar contradiction, not a dead end to accept
             // silently as complete.
-            return if attempt_may_stop(pending_source_method, &pending, &session, out.len()) {
+            return if walk_is_done(&pending, &session, out.len()) {
                 (Some(out), rng.state)
             } else {
                 (None, rng.state)
@@ -627,63 +592,13 @@ fn attempt(
             PendingCall::None if emitted.ends_with(ARROW_BYTES) => PendingCall::JustArrowed,
             PendingCall::None => PendingCall::None,
         };
-        if marks_arrow_or_dollar(bytes, &emitted) {
-            seen_arrow_or_dollar = true;
-        }
-        if bytes == b"." && !seen_arrow_or_dollar {
-            // The first `.` before any `->`/`$` can only be the pipeline
-            // source's own dot (`pipeline = source , { "->" step }`,
-            // `source = classpath ".all()"` — nothing else precedes it
-            // structurally) — see the doc comment above for why
-            // `is_complete()` cannot be trusted here on its own.
-            pending_source_method = true;
-            source_method_progress.clear();
-        } else if pending_source_method {
-            // Whitespace between the dot and the identifier is legal Pure
-            // and carries no identifier bytes — skip it rather than let it
-            // break the exact-match check below.
-            if !bytes.iter().all(u8::is_ascii_whitespace) {
-                source_method_progress.extend_from_slice(bytes);
-            }
-            if source_method_progress == SOURCE_METHOD.as_bytes() {
-                // The forced identifier exactly matches — S1's narrowing
-                // only ever lets that happen on an exact match (anything
-                // else diverges the trie and is excluded from the mask).
-                // `SOURCE_METHOD` (`all`) is itself a niladic call
-                // (`source = classpath ".all()"`) — the same "every
-                // `->name`/`.name` this grammar admits is a call, parens
-                // mandatory" fact `PendingCall` already enforces for `->`
-                // hops (confirmed live: `Class.all` without `()` parses as
-                // a bare property read and fails to compile the same way
-                // `Db->tableToTDS` without `()` did) — so reuse it here
-                // rather than a second, parallel "force `(`" mechanism.
-                pending_source_method = false;
-                pending = PendingCall::MustOpen;
-            }
-        }
         last_byte = bytes.last().copied();
     }
-    if attempt_may_stop(pending_source_method, &pending, &session, out.len()) {
+    if walk_is_done(&pending, &session, out.len()) {
         (Some(out), rng.state)
     } else {
         (None, rng.state)
     }
-}
-
-/// Whether `attempt` may stop right now — the pipeline-source identifier
-/// isn't mid-match (`pending_source_method`) and [`walk_is_done`] agrees.
-/// Factored out of `attempt`'s three call sites (the top-of-loop early exit,
-/// the dead-end `cands.is_empty()` branch, and the trailing post-loop check)
-/// both to avoid repeating the same condition three times and so it is
-/// directly unit-testable against a hand-driven session, without needing a
-/// specific seed to land in a specific state.
-fn attempt_may_stop(
-    pending_source_method: bool,
-    pending: &PendingCall,
-    session: &DecoderSession,
-    out_len: usize,
-) -> bool {
-    !pending_source_method && walk_is_done(pending, session, out_len)
 }
 
 /// Whether `attempt` may stop here: no `->name` call is still owed, the
@@ -2366,31 +2281,48 @@ mod tests {
     }
 
     #[test]
-    fn attempt_may_stop_requires_both_an_unmatched_source_method_and_walk_is_done() {
+    fn walk_is_done_trusts_a_mask_aware_session_and_still_owes_an_arrow_call() {
         // A hand-driven session (rather than a specific seed happening to
-        // land in a specific state) makes both halves of `attempt_may_stop`
+        // land in a specific state) makes each half of `walk_is_done`
         // directly controllable and deterministic.
         let grammar = CompiledGrammar::compile(vocab_with_source_method_ambiguity());
         let mut session = DecoderSession::with_schema(&grammar, schema()).expect("valid overlay");
         let vocab = grammar.vocab();
         drive(&mut session, vocab, &["|", "A", ".", "all", "(", ")"]);
         assert!(session.is_complete());
+        assert!(walk_is_done(&PendingCall::None, &session, 1));
 
-        // pending_source_method still true (an identifier match in
-        // progress): never allowed to stop, regardless of walk_is_done.
-        assert!(!attempt_may_stop(true, &PendingCall::None, &session, 1));
+        // A `->name` hop still owes its mandatory `(` — the one completion
+        // fact the L1 PDA genuinely cannot express, so `PendingCall` stays.
+        assert!(!walk_is_done(&PendingCall::MustOpen, &session, 1));
+    }
 
-        // pending_source_method resolved and walk_is_done holds: stop.
-        assert!(attempt_may_stop(false, &PendingCall::None, &session, 1));
+    /// The two stops the retired `pending_source_method` walker flag used to
+    /// forbid, now refused by the decoder's own mask-aware completion (issue
+    /// #55 Phase 2) — asserted here, at the walker's own consumer boundary, so
+    /// retiring that flag cannot silently re-open either escape.
+    #[test]
+    fn a_source_method_prefix_or_an_uncalled_source_method_is_never_complete() {
+        let grammar = CompiledGrammar::compile(vocab_with_source_method_ambiguity());
+        let vocab = grammar.vocab();
 
-        // pending_source_method resolved but a call is still owed
-        // (`PendingCall::MustOpen`): walk_is_done is false, so no stop.
-        assert!(!attempt_may_stop(
-            false,
-            &PendingCall::MustOpen,
-            &session,
-            1
-        ));
+        // `|A.a` — a strict byte-prefix of `all`, L1-accepting (`InIdent` over
+        // an empty stack), and rejected live (`can't find property 'a'`).
+        let mut prefix = DecoderSession::with_schema(&grammar, schema()).expect("valid overlay");
+        drive(&mut prefix, vocab, &["|", "A", ".", "a"]);
+        assert!(!prefix.is_complete());
+        assert!(!walk_is_done(&PendingCall::None, &prefix, 1));
+
+        // `|A.all` — a whole name, but a niladic call whose parens are owed.
+        let mut uncalled = DecoderSession::with_schema(&grammar, schema()).expect("valid overlay");
+        drive(&mut uncalled, vocab, &["|", "A", ".", "all"]);
+        assert!(!uncalled.is_complete());
+        assert!(!walk_is_done(&PendingCall::None, &uncalled, 1));
+
+        // …and the counterfactual, so this cannot pass by masking everything:
+        // the same source, properly called, *is* complete.
+        drive(&mut uncalled, vocab, &["(", ")"]);
+        assert!(uncalled.is_complete());
     }
 
     #[test]
@@ -2464,16 +2396,6 @@ mod tests {
         assert!(is_growing(1, 2));
         assert!(!is_growing(2, 2));
         assert!(!is_growing(3, 2));
-    }
-
-    #[test]
-    fn marks_arrow_or_dollar_recognizes_either_signal_independently() {
-        // `$` alone (no arrow in `emitted`): marks.
-        assert!(marks_arrow_or_dollar(b"$", b"x"));
-        // An arrow-completing `emitted` alone (`bytes` isn't `$`): marks.
-        assert!(marks_arrow_or_dollar(b">", b"->"));
-        // Neither: doesn't mark.
-        assert!(!marks_arrow_or_dollar(b"x", b"x"));
     }
 
     #[test]

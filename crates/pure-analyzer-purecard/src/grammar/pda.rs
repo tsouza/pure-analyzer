@@ -343,14 +343,23 @@ impl State {
     /// tracker uses this to buffer a multi-token identifier / string until it
     /// completes (so a byte-level-BPE fragmentation resolves and narrows against
     /// the *whole* lexeme, not a leading sub-token). The `::` classpath-separator
-    /// states stay `Ident` so a source classpath never flushes mid-path.
+    /// states stay `Ident` so a source classpath never flushes mid-path, and so do
+    /// the `let`-candidate states: each is entered on an identifier byte and falls
+    /// back to `InSourceIdent` the moment the keyword diverges (`letters`,
+    /// `let.foo`), so a path merely *beginning* with `l` is still one open lexeme.
+    /// Reporting `None` for them closed the accumulation at that first byte and
+    /// took N3 dark for the whole rest of such a path — confirmed live, the walk
+    /// `{|l->pair(…)}` ("Can't find the packageable element 'l'").
     pub(crate) const fn lexeme_kind(self) -> Option<LexKind> {
         match self {
             State::InIdent
             | State::InSourceIdent
             | State::InBinder
             | State::SourceColon
-            | State::SourceColon2 => Some(LexKind::Ident),
+            | State::SourceColon2
+            | State::LetL
+            | State::LetLe
+            | State::LetLet => Some(LexKind::Ident),
             State::SawNumSign
             | State::InNumberInt
             | State::NeedFracDigit
@@ -1633,6 +1642,9 @@ mod tests {
             State::InBinder,
             State::SourceColon,
             State::SourceColon2,
+            State::LetL,
+            State::LetLe,
+            State::LetLet,
         ] {
             assert_eq!(
                 state.lexeme_kind(),

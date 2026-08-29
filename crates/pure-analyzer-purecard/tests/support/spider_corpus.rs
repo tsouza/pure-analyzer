@@ -102,11 +102,6 @@ impl Check {
 /// follow-up fix; the replay gate pins the exact count per kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GapKind {
-    /// N1 identifier-termination: a phantom that is a strict prefix of a real
-    /// member is admitted, because a valid-prefix token cannot be distinguished
-    /// from one that will continue to the full member (`$x.concert` vs
-    /// `$x.concertName`).
-    N1PrefixNotTerminated,
     /// N2 nav off a name that is *both* an association end and a scalar property:
     /// the scalar reading terminates navigation, so the following `.member` is not
     /// narrowed and a phantom tail leaks (`$x.party.zzbogus`).
@@ -297,14 +292,16 @@ fn generate_n1(
         gap: None,
     });
     // A strict-prefix phantom (a proper prefix of some navigable member that is not
-    // itself a member): the decoder currently admits it (N1 termination gap).
+    // itself a member). The overlay now terminates the identifier: a boundary token
+    // after a cursor that is only a *strict* prefix of a legal name would close the
+    // lexeme on a name that does not exist, so it is masked like any other phantom.
     if let Some((phantom, member)) = strict_prefix_phantom(members, member_set) {
         out.push(Case {
             id: format!("{db}/N1_prefix/{class}.{phantom}(<{member})"),
             db: db.to_owned(),
             query: format!("|{cp}.all()->filter({BINDER}|${BINDER}.{phantom} == 'x')->size()"),
             check: Check::DeadEnds,
-            gap: Some(GapKind::N1PrefixNotTerminated),
+            gap: None,
         });
     }
 }

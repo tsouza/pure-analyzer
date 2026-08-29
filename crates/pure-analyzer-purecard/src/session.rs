@@ -26,7 +26,7 @@ use crate::grammar::pda::{Frame, Pda};
 use crate::mask::BitMask;
 use crate::recognizer::ByteRecognizer;
 use crate::schema::Schema;
-use crate::schema::narrow::{NarrowCache, narrow_fused_into, narrow_into};
+use crate::schema::narrow::{NarrowCache, admits_eos, narrow_fused_into, narrow_into};
 use crate::schema::scope::{L2Position, ScopeTracker};
 
 /// Which automaton a [`DecoderSession`] drives.
@@ -193,6 +193,14 @@ pub struct DecoderSession<'g> {
     /// or member set is a constant, computed once and copied thereafter. Empty and
     /// untouched on the L1-only (`schema` is `None`) path.
     narrow_cache: NarrowCache,
+    /// Whether the L2 overlay permits the stream to end here — the EOS half of
+    /// the narrow, refreshed in lockstep with `tracker` by
+    /// [`accept_token`](DecoderSession::accept_token) so
+    /// [`is_complete`](DecoderSession::is_complete) can stay `&self` while still
+    /// reading it. `true` (unconstrained) on the L1-only path and before the
+    /// first token, which is what keeps the byte-wise [`ByteRecognizer`] surface
+    /// — which never advances `tracker` — on exactly its previous L1 semantics.
+    l2_eos: bool,
 }
 
 impl<'g> DecoderSession<'g> {
@@ -210,6 +218,7 @@ impl<'g> DecoderSession<'g> {
             schema,
             tracker: ScopeTracker::new(),
             narrow_cache: NarrowCache::new(),
+            l2_eos: true,
         }
     }
 
@@ -429,11 +438,34 @@ impl<'g> DecoderSession<'g> {
             // splitting a lexeme-straddling token at its interior boundaries.
             self.tracker.observe(bytes, pda, schema);
             *pda = probe;
+            self.refresh_l2_eos();
         } else if !self.cursor.try_accept_token(bytes) {
             return Err(DecodeError::InadmissibleToken { id });
         }
         self.offset += bytes.len();
         Ok(())
+    }
+
+    /// Re-read the L2 overlay's end-of-stream verdict for the position the last
+    /// accepted token left the session in, caching it in `l2_eos`.
+    ///
+    /// Called only from the schema-active token path, right after the tracker
+    /// advances, so the flag and the tracker never disagree. It walks the rule's
+    /// trie over the open lexeme's prefix — no vocabulary scan — and shares the
+    /// memoized trie with [`allowed_mask`](Self::allowed_mask)'s own narrow.
+    fn refresh_l2_eos(&mut self) {
+        let (Some(schema), Cursor::Fixed { pda, .. }) = (&self.schema, &self.cursor) else {
+            return;
+        };
+        let pos = self.tracker.position(pda.state());
+        self.l2_eos = admits_eos(
+            &mut self.narrow_cache,
+            schema,
+            &pos,
+            self.tracker.narrow_prefix(),
+            self.tracker.emitted_columns(),
+            self.tracker.bound_variables(),
+        );
     }
 
     /// The underlying byte-PDA at its full `(state, stack)` configuration, or
@@ -452,13 +484,26 @@ impl<'g> DecoderSession<'g> {
         }
     }
 
-    /// Whether the stream so far is a complete query (an accepting configuration).
+    /// Whether the stream so far is a complete query: an accepting L1
+    /// configuration **that the L2 overlay also permits ending on**.
     ///
     /// Re-exposed inherently so callers need not import [`ByteRecognizer`]; it
     /// mirrors [`ByteRecognizer::is_complete`].
+    ///
+    /// **Mask-aware (§6.5).** L1 acceptance is a lookahead fact — "would a
+    /// value-boundary byte from here reach a value-terminal state?" — and an
+    /// identifier has no self-terminating byte, so every partial name satisfies
+    /// it. Under an active [`Schema`] this therefore also asks the overlay
+    /// whether the position is one a query may *end* in, which is exactly the
+    /// EOS bit [`allowed_mask`](Self::allowed_mask) publishes: the two now agree
+    /// by construction, where before a stream could stop mid-identifier
+    /// (`Class.a`) or on a bare niladic method name (`Class.all`) and call
+    /// itself complete while the mask said otherwise. With no schema — and on
+    /// the byte-wise [`ByteRecognizer`] path, which never advances the scope
+    /// machine — this is L1 acceptance alone, unchanged.
     #[must_use]
     pub fn is_complete(&self) -> bool {
-        self.cursor.is_accepting()
+        self.cursor.is_accepting() && self.l2_eos
     }
 
     /// Return to a fresh stream, keeping the automaton's stack and the mask
@@ -471,6 +516,7 @@ impl<'g> DecoderSession<'g> {
         // with the stream — a stale entry could otherwise be re-hit at a repeated
         // count over a different column set.
         self.narrow_cache.clear();
+        self.l2_eos = true;
     }
 }
 

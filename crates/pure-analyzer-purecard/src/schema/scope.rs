@@ -17,6 +17,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::grammar::pda::{Frame, LexKind, Pda, State, Step, is_ident_start, is_ident_tail, step};
 use crate::schema::model::{PrimName, Resolved, Schema, TypeClass};
+use crate::schema::narrow::value_ident_constrains;
 
 /// Whether `a`, `b` begin one of the two-byte operators the grammar recognises
 /// (`-> == != <= >= && ||`). A structural-gap walk munches these whole so an
@@ -208,6 +209,16 @@ pub enum L2Position {
     /// pins the set exactly — the same argument that makes
     /// [`Column`](L2Position::Column)'s count key exact.
     RefVar,
+    /// N7: a bare identifier in a **value** position, with its own lexeme still
+    /// open, may only continue into one of the shapes that give a bare word
+    /// meaning in Pure — a lambda binder (`x|…`, `x: T[1]|…`), a package/class
+    /// path (`meta::…::JoinType`), a member/enum-value selection (`.`), or a
+    /// function application (`(`). Anything else ends the word as a standalone
+    /// expression, and a standalone bare word resolves to nothing ("Can't find
+    /// the packageable element 'pair'"). Unlike the trie rules this narrows no
+    /// name **set** — novel binder names must stay admissible — only what may
+    /// follow one, so it is keyed on nothing but the vocabulary.
+    ValueIdent,
     /// No L2 constraint here — pass the L1 mask through unchanged.
     None,
 }
@@ -605,9 +616,15 @@ impl ScopeTracker {
             }
             return;
         }
-        let pos = match self.opening_position(anchor) {
-            L2Position::ReValue(_) | L2Position::SourceMethodArg => L2Position::None,
-            narrowed => narrowed,
+        let pos = match (kind, self.opening_position(anchor)) {
+            // N7 outranks T1 for a bare word: `keeps_operand` narrows a
+            // *literal*'s shape, which this lexeme can no longer become, while
+            // what may follow a bare word still binds — live-rejected,
+            // `->filter('SUM(SurfaceArea)'<agg/'…')` ("Can't find the
+            // packageable element 'agg'").
+            (LexKind::Ident, L2Position::ReValue(_)) => L2Position::ValueIdent,
+            (_, L2Position::ReValue(_) | L2Position::SourceMethodArg) => L2Position::None,
+            (_, narrowed) => narrowed,
         };
         self.pending = Some(Pending {
             kind,
@@ -767,9 +784,7 @@ impl ScopeTracker {
         // identifiers sit behind a `$`/`.`/`|`, never at a bracket-level value anchor,
         // so they are not collected. Over-recording only lets more through, never
         // masks, so the set stays a superset of the columns live on any relation row.
-        let in_tilde_key = matches!(pre_state, State::ExpectValue | State::ExpectValueReq)
-            && self.tilde_open.last() == Some(&true);
-        if pre_state == State::SawTilde || in_tilde_key {
+        if pre_state == State::SawTilde || self.in_tilde_key(pre_state) {
             self.emitted_strings.push(text.as_bytes().to_vec());
         }
         self.last_ident = Some(text.to_owned());
@@ -1049,6 +1064,17 @@ impl ScopeTracker {
         self.pending_arrow_receiver = None;
     }
 
+    /// Whether `state` is a value anchor sitting **directly inside** an arm-R
+    /// tilde bracket (`~[Week, Segment]`, and the name before the `:` in
+    /// `~[Week: …]`) — the position an arm-R column *key* opens at. The first key
+    /// opens at `ExpectValue`, a key after a comma at `ExpectValueReq`; both
+    /// count. Body identifiers sit behind a `$`/`.`/`|`, never at a bracket-level
+    /// value anchor, so they are not keys.
+    fn in_tilde_key(&self, state: State) -> bool {
+        matches!(state, State::ExpectValue | State::ExpectValueReq)
+            && self.tilde_open.last() == Some(&true)
+    }
+
     /// Whether we are inside a column-reference method's arguments *and* a named
     /// relation exists and we are not inside an establishing op's own arguments —
     /// the exact condition for an N6 [`Column`](L2Position::Column) narrowing.
@@ -1065,13 +1091,36 @@ impl ScopeTracker {
     /// only the leading one (B1). An in-lexeme state with no open accumulation, or
     /// an accumulation the anchor did not narrow, is [`None`](L2Position::None).
     pub(crate) fn position(&self, state: State) -> L2Position {
-        if state.lexeme_kind().is_some() {
-            return match &self.pending {
+        let pos = if state.lexeme_kind().is_some() {
+            match &self.pending {
                 Some(pending) => pending.pos.clone(),
                 None => L2Position::None,
-            };
+            }
+        } else {
+            self.opening_position(state)
+        };
+        // N7 has no anchor and no hold on a keyword literal, so report it only
+        // where it actually narrows — a coverage consumer then sees a rule
+        // firing rather than a position merely existing, and the narrower needs
+        // no second copy of the test.
+        if matches!(pos, L2Position::ValueIdent) && !self.value_ident_narrows() {
+            return L2Position::None;
         }
-        self.opening_position(state)
+        pos
+    }
+
+    /// Whether N7 narrows at the current point: a bare **identifier** lexeme is
+    /// open and it is not one of the keyword literals.
+    ///
+    /// The lexeme-kind test is load-bearing. A string, number, or date literal
+    /// opens at the very same value anchor and so carries the very same stamped
+    /// position, but it is not a bare word: under a lexeme-granular vocabulary it
+    /// arrives as one atomic token and the distinction never shows, while
+    /// byte-level BPE fragments it and the rule would mask its own continuation
+    /// bytes (`'default'` → `'def` + `ault'`).
+    fn value_ident_narrows(&self) -> bool {
+        matches!(&self.pending, Some(pending) if pending.kind == LexKind::Ident)
+            && value_ident_constrains(self.narrow_prefix())
     }
 
     /// The L2 rule at the anchor `state` where a lexeme opens — read from the
@@ -1104,10 +1153,27 @@ impl ScopeTracker {
                     L2Position::ReValue(tc)
                 } else if self.in_column_arg() {
                     L2Position::Column
-                } else {
+                } else if self.in_tilde_key(state) {
+                    // An arm-R `~[Col, …]` key is a bare word that *is* a
+                    // complete value, so N7's "a dangling word resolves to
+                    // nothing" premise does not hold for it. None of the 8
+                    // fixture corpora use arm-R at all (`schema_walk_rule_
+                    // coverage.rs`'s `EXPECTED_UNFIRED`), so there is no
+                    // evidence here for what may follow one — and §4's rule is
+                    // to invent no constraint the corpus does not exercise.
                     L2Position::None
+                } else {
+                    L2Position::ValueIdent
                 }
             }
+            // A bare word also opens a value straight after a lambda arrow (the
+            // body) or after an operator that has its own intermediate state
+            // because it may still grow into a longer one (`<` `>` `-` `|`) —
+            // the same N7 position, reached without ever passing through
+            // `ExpectValue`. Live-attested on both routes:
+            // `->col(between|true!='Brazil')` and
+            // `->filter('SUM(SurfaceArea)'<agg/'…')`.
+            State::SawPipe | State::SawLt | State::SawGt | State::SawDash => L2Position::ValueIdent,
             State::AfterValue => match self.last_resolved {
                 Some(tc) => L2Position::Comparator(tc),
                 None => L2Position::None,
