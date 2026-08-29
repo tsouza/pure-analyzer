@@ -188,10 +188,16 @@ fn lower_class(
     let (supertypes, supertype_gap) = lower_supertypes(node, context);
     let (properties, qualified_properties, member_gap, member_diagnostics) =
         lower_class_members(node, &path, name_index, context);
-    let coverage_gap = node_has_coverage_gap(node, context)
-        || annotations.temporal_uncertain
-        || supertype_gap
-        || member_gap;
+    let mut coverage_gap = node_has_coverage_gap(node, context);
+    if annotations.temporal_uncertain {
+        coverage_gap = true;
+    }
+    if supertype_gap {
+        coverage_gap = true;
+    }
+    if member_gap {
+        coverage_gap = true;
+    }
     let mut class = ClassInfo::from_pure(
         path,
         supertypes,
@@ -251,17 +257,21 @@ fn lower_class_members(
                 pending_annotations.merge(annotation_facts(member));
             }
             SyntaxKind::DOMAIN_PROPERTY_DECL => {
-                coverage_gap |= !insert_property(&mut members, member, class, context);
+                if !insert_property(&mut members, member, class, context) {
+                    coverage_gap = true;
+                }
                 pending_annotations = AnnotationFacts::default();
             }
             SyntaxKind::DOMAIN_QUALIFIED_PROPERTY_DECL => {
-                coverage_gap |= !insert_qualified_property(
+                if !insert_qualified_property(
                     &mut members,
                     member,
                     pending_annotations,
                     class,
                     context,
-                );
+                ) {
+                    coverage_gap = true;
+                }
                 pending_annotations = AnnotationFacts::default();
             }
             SyntaxKind::DOMAIN_OPAQUE_NODE | SyntaxKind::ERROR_NODE => {
@@ -506,17 +516,16 @@ impl AnnotationFacts {
     }
 
     fn note_temporal(&mut self, temporal: Temporal) {
-        if self.temporal.is_some() || self.temporal_uncertain {
+        if self.temporal.is_some() {
             self.temporal = None;
             self.temporal_uncertain = true;
-        } else {
-            self.temporal = Some(temporal);
+            return;
         }
-    }
-
-    fn mark_temporal_uncertain(&mut self) {
-        self.temporal = None;
-        self.temporal_uncertain = true;
+        if self.temporal_uncertain {
+            self.temporal = None;
+            return;
+        }
+        self.temporal = Some(temporal);
     }
 }
 
@@ -529,7 +538,10 @@ fn annotation_facts(node: &GreenNode) -> AnnotationFacts {
                 "bitemporal" => facts.note_temporal(Temporal::Bitemporal),
                 "businesstemporal" => facts.note_temporal(Temporal::BusinessTemporal),
                 "processingtemporal" => facts.note_temporal(Temporal::ProcessingTemporal),
-                _ => facts.mark_temporal_uncertain(),
+                _ => {
+                    facts.temporal = None;
+                    facts.temporal_uncertain = true;
+                }
             }
         }
         if milestoning_value(atom) == Some(GENERATED_MILESTONING_PROPERTY) {
@@ -606,9 +618,11 @@ fn multiplicity_from_node(node: &GreenNode) -> Option<Multiplicity> {
 }
 
 fn parse_bound(text: &str) -> Option<u32> {
-    (!text.is_empty() && text.bytes().all(|byte| byte.is_ascii_digit()))
-        .then(|| text.parse().ok())
-        .flatten()
+    if text.bytes().all(|byte| byte.is_ascii_digit()) {
+        text.parse().ok()
+    } else {
+        None
+    }
 }
 
 struct TypeTextParser<'text> {
@@ -628,7 +642,11 @@ impl<'text> TypeTextParser<'text> {
 
     fn parse_type(&mut self) -> Option<TypeRef> {
         let start = self.offset;
-        while let Some(byte) = self.byte_at_offset() {
+        let iteration_budget = self.text.len().saturating_sub(self.offset);
+        for _ in 0..iteration_budget {
+            let Some(byte) = self.byte_at_offset() else {
+                break;
+            };
             if matches!(byte, b'<' | b'>' | b',') {
                 break;
             }
@@ -672,8 +690,18 @@ fn is_simple_name(text: &str) -> bool {
     let Some(first) = bytes.next() else {
         return false;
     };
-    (first.is_ascii_alphabetic() || first == b'_')
-        && bytes.all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+    match first {
+        b'_' => {}
+        _ if first.is_ascii_alphabetic() => {}
+        _ => return false,
+    }
+    bytes.all(|byte| {
+        if byte == b'_' {
+            true
+        } else {
+            byte.is_ascii_alphanumeric()
+        }
+    })
 }
 
 fn compact_text(node: &GreenNode) -> String {
@@ -691,24 +719,32 @@ fn is_trivia(kind: SyntaxKind) -> bool {
 }
 
 fn node_is_unconfirmed(node: &GreenNode, context: LoweringContext<'_>) -> bool {
-    context.gaps.iter().any(|gap| {
-        gap.kind == DomainCoverageGapKind::MalformedDeclaration
-            && range_start(gap.span) == range_start(node.text_range())
-    }) || context
+    if context.gaps.iter().any(|gap| match gap.kind {
+        DomainCoverageGapKind::MalformedDeclaration => {
+            range_start(gap.span) == range_start(node.text_range())
+        }
+        _ => false,
+    }) {
+        return true;
+    }
+    context
         .parser_diagnostics
         .iter()
         .any(|diagnostic| ranges_touch_or_overlap(diagnostic.primary.span, node.text_range()))
 }
 
 fn node_has_coverage_gap(node: &GreenNode, context: LoweringContext<'_>) -> bool {
-    context
+    if context
         .gaps
         .iter()
         .any(|gap| ranges_touch_or_overlap(gap.span, node.text_range()))
-        || context
-            .parser_diagnostics
-            .iter()
-            .any(|diagnostic| ranges_touch_or_overlap(diagnostic.primary.span, node.text_range()))
+    {
+        return true;
+    }
+    context
+        .parser_diagnostics
+        .iter()
+        .any(|diagnostic| ranges_touch_or_overlap(diagnostic.primary.span, node.text_range()))
 }
 
 fn ranges_touch_or_overlap(left: TextRange, right: TextRange) -> bool {
@@ -738,4 +774,17 @@ fn direct_nodes(node: &GreenNode, kind: SyntaxKind) -> impl Iterator<Item = &Gre
         .iter()
         .filter_map(GreenElement::as_node)
         .filter(move |child| child.kind() == kind)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_qualified_name;
+
+    #[test]
+    fn qualified_names_reject_empty_and_non_identifier_segments() {
+        assert!(is_qualified_name("demo::Valid_Name"));
+        assert!(!is_qualified_name("demo::"));
+        assert!(!is_qualified_name("demo::9invalid"));
+        assert!(!is_qualified_name("demo::::invalid"));
+    }
 }

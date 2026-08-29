@@ -5,9 +5,10 @@
 use pure_analyzer_diagnostics::{DiagCode, Severity};
 use pure_analyzer_model::{
     MODEL_MERGE_CONFLICT, ModelDocument, PmcdDocument, Provenance, PureDocument, QpKind, Temporal,
-    load_model_documents, load_pure_documents,
+    load_model_documents, load_pure_documents, load_pure_files,
 };
 use serde_json::json;
+use std::path::PathBuf;
 
 fn pure(source: &str) -> pure_analyzer_model::ModelGraph {
     load_pure_documents(&[PureDocument::new("memory:model.pure", source)]).expect("load Pure")
@@ -30,10 +31,22 @@ fn empty_pmcd_class(name: &str) -> String {
 }
 
 #[test]
+fn pure_document_accessors_preserve_borrowed_input() {
+    let document = PureDocument::new("memory:accessors.pure", "Class demo::Input {}");
+
+    assert_eq!(document.label(), "memory:accessors.pure");
+    assert_eq!(document.source(), "Class demo::Input {}");
+}
+
+#[test]
 fn pure_domain_class_facts_lower_with_source_provenance() {
     let graph = pure(
         r#"
 Class <<temporal.businesstemporal>> demo::Entity
+{
+}
+
+Class <<temporal.processingtemporal>> demo::Processing
 {
 }
 
@@ -52,10 +65,11 @@ Class demo::Order extends demo::Entity
     assert!(!order.coverage_gap());
     assert_eq!(order.properties()["tags"].multiplicity().lower(), 0);
     assert!(order.properties()["tags"].multiplicity().is_unbounded());
+    let price_after = &order.qualified_properties()["priceAfter"];
+    assert_eq!(price_after.multiplicity().lower(), 0);
+    assert_eq!(price_after.multiplicity().upper(), Some(1));
     assert_eq!(
-        order.qualified_properties()["priceAfter"]
-            .signature()
-            .expect("user signature")[0]
+        price_after.signature().expect("user signature")[0]
             .raw_type()
             .as_str(),
         "StrictDate"
@@ -63,7 +77,51 @@ Class demo::Order extends demo::Entity
 
     let entity = graph.class("demo::Entity").expect("entity");
     assert_eq!(entity.temporal(), Some(Temporal::BusinessTemporal));
+    let processing = graph.class("demo::Processing").expect("processing");
+    assert_eq!(processing.temporal(), Some(Temporal::ProcessingTemporal));
     assert_eq!(graph.sources()[0].provenance(), Provenance::PureFile);
+}
+
+#[test]
+fn pure_file_loading_uses_the_same_ingestion_path() {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/complete.pure");
+    let graph = load_pure_files(&[path]).expect("load Pure fixture");
+
+    let class = graph.class("demo::Fixture").expect("fixture class");
+    assert_eq!(class.provenance(), Provenance::PureFile);
+    assert!(class.properties().contains_key("value"));
+}
+
+#[test]
+fn conflicting_temporal_stereotypes_leave_the_class_open_world() {
+    let graph = pure(
+        r#"
+Class <<temporal.bitemporal, temporal.businesstemporal>> demo::Conflicting
+{
+  value: String[1];
+}
+"#,
+    );
+
+    let class = graph.class("demo::Conflicting").expect("conflicting class");
+    assert_eq!(class.temporal(), None);
+    assert!(class.coverage_gap());
+}
+
+#[test]
+fn bitemporal_stereotypes_lower_to_the_bitemporal_variant() {
+    let graph = pure(
+        r#"
+Class <<temporal.bitemporal>> demo::Bitemporal
+{
+  value: String[1];
+}
+"#,
+    );
+
+    let class = graph.class("demo::Bitemporal").expect("bitemporal class");
+    assert_eq!(class.temporal(), Some(Temporal::Bitemporal));
+    assert!(!class.coverage_gap());
 }
 
 #[test]
@@ -91,6 +149,23 @@ Class ::demo::Thing extends ::demo::Base, other::Stamped
     let list = &value.target().type_arguments()[1];
     assert_eq!(list.raw_type().as_str(), "List");
     assert_eq!(list.type_arguments()[0].raw_type().as_str(), "demo::Value");
+}
+
+#[test]
+fn underscores_are_valid_at_the_start_and_inside_pure_names() {
+    let graph = pure(
+        r#"
+Class demo::_Hidden_Class
+{
+  _value_name: String[1];
+}
+"#,
+    );
+
+    let class = graph
+        .class("demo::_Hidden_Class")
+        .expect("underscore class");
+    assert!(class.properties().contains_key("_value_name"));
 }
 
 #[test]
@@ -356,6 +431,31 @@ Class demo::Duplicate
     assert!(diagnostics.iter().any(|diagnostic| {
         diagnostic.message
             == "Pure class `demo::Duplicate` declares qualified property `query` more than once"
+    }));
+}
+
+#[test]
+fn duplicate_pure_associations_report_the_association_collision() {
+    let graph = pure(
+        r#"
+Class demo::Left {}
+Class demo::Right {}
+Association demo::Links
+{
+  left: demo::Left[1];
+  right: demo::Right[1];
+}
+Association demo::Links
+{
+  left: demo::Left[1];
+  right: demo::Right[1];
+}
+"#,
+    );
+
+    assert!(graph.diagnostics().iter().any(|diagnostic| {
+        diagnostic.code == DiagCode::DuplicateModelDeclaration
+            && diagnostic.message == "Pure source declares association `demo::Links` more than once"
     }));
 }
 

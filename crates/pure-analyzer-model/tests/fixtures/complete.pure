@@ -1,0 +1,4 @@
+Class demo::Fixture
+{
+  value: String[1];
+}

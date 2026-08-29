@@ -918,5 +918,9 @@ mod tests {
         let document = PmcdDocument::new("memory:model", "{\"elements\":[]}");
         assert_eq!(document.label(), "memory:model");
         assert_eq!(document.json(), "{\"elements\":[]}");
+
+        let document = PureDocument::new("memory:model.pure", "Class demo::Input {}");
+        assert_eq!(document.label(), "memory:model.pure");
+        assert_eq!(document.source(), "Class demo::Input {}");
     }
 }
