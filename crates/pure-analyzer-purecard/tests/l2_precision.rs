@@ -331,12 +331,22 @@ fn t6_masks_an_ordered_comparator_on_a_non_scalar_nav_expr() {
 /// would be a soundness violation. See `docs/spec/schema.md` §6.6 T7 for the
 /// full probe table.
 ///
-/// Deliberately probed at the position where T7 *would* fire, which is the
-/// very position T6 already occupies (`OrderedOperand` — the overlay does see
-/// "non-scalar here"). The ordered comparator is asserted masked in the same
-/// breath, so this pins a **contrast**: the state T7 needs is available and
-/// the closer is nonetheless kept on purpose. A future T7 implementation
-/// reddens this test rather than shipping quietly.
+/// Probed at **both** anchors a T7 could be written at, because they are
+/// different rules and only one of them is where T6 lives:
+///
+/// - the **member** anchor, `…$x.fk1DefaultCountrylanguage` with the property's
+///   lexeme still open — the spelling real emitted Pure actually uses (`$x.foo]`
+///   has no space in it, and no gold query contains `$x.foo ]`). The active rule
+///   here is `Member`, and the tracker has already resolved the member to a
+///   class, so this is the *natural* place to write a T7 and must be covered.
+/// - the **completed-term** anchor, one space later, where T2/T6 are read. The
+///   active rule here is `OrderedOperand`.
+///
+/// At the completed-term anchor the ordered comparator is additionally asserted
+/// masked on the non-scalar body and admissible on the scalar one, and the
+/// active rule kind is pinned. That is the anti-vacuity contrast: it proves the
+/// overlay genuinely knows "the body is non-scalar here", so T7's abstention is
+/// a decision on the evidence rather than a gap in the tracker.
 #[test]
 fn t7_keeps_a_projection_lambda_closer_on_a_class_typed_or_to_many_body() {
     /// The body-terminating tokens T7 proposed to mask: the column/key list's
@@ -345,74 +355,98 @@ fn t7_keeps_a_projection_lambda_closer_on_a_class_typed_or_to_many_body() {
     /// on a scalar body just as much as a non-scalar one, so it carries no L2
     /// signal to assert on.
     const CLOSERS: &[&[u8]] = &[b"]", b","];
+    /// The rule the overlay must still be running at the completed-term anchor
+    /// on a non-scalar body — T6's. Named so the contrast below asserts the
+    /// mechanism, not merely its effect.
+    const NON_SCALAR_RULE: &str = "OrderedOperand";
     // Each case pairs a **scalar** body with a **non-scalar** one reached
     // through the identical enclosing call, so the only difference between the
     // two prefixes is what the body resolved to. The scalar control navigates
     // to a **numeric** property so T2 leaves the ordered comparator admissible
-    // there, making the `<` contrast below read the body's shape rather than a
-    // String operand's own T2 verdict. Every prefix ends on the space that
-    // closes the property's lexeme — the anchor T2/T6 are read at, one token
-    // past the member position.
+    // there, making the `<` contrast read the body's shape rather than a String
+    // operand's own T2 verdict. Prefixes carry no trailing space; the loop
+    // appends one to reach the second anchor.
     let cases: &[(&str, &str, &str)] = &[
         // Arm-A `project`: a to-many class-typed association end.
         (
             "world_1",
-            "|spider::world_1::model::default::Country.all()->project([x|$x.population ",
+            "|spider::world_1::model::default::Country.all()->project([x|$x.population",
             "|spider::world_1::model::default::Country.all()\
-             ->project([x|$x.fk1DefaultCountrylanguage ",
+             ->project([x|$x.fk1DefaultCountrylanguage",
         ),
         // Arm-A `project`: a to-*one* class-typed association end — class-typed
         // is enough on its own, multiplicity is not the distinguishing fact.
         (
             "world_1",
-            "|spider::world_1::model::default::City.all()->project([x|$x.population ",
-            "|spider::world_1::model::default::City.all()->project([x|$x.fk0DefaultCountry ",
+            "|spider::world_1::model::default::City.all()->project([x|$x.population",
+            "|spider::world_1::model::default::City.all()->project([x|$x.fk0DefaultCountry",
         ),
         // `groupBy`'s key list, with a primitive mapped over a to-many step —
         // T7's other arm ("a body left at a to-many collection").
         (
             "car_1",
-            "|spider::car_1::model::default::Continents.all()->groupBy([x|$x.contId ",
+            "|spider::car_1::model::default::Continents.all()->groupBy([x|$x.contId",
             "|spider::car_1::model::default::Continents.all()\
-             ->groupBy([x|$x.fk0DefaultCountries.countryName ",
+             ->groupBy([x|$x.fk0DefaultCountries.countryName",
         ),
         // Arm-R `project(~[…])`, the relation-API spelling of the same position.
         (
             "world_1",
-            "|spider::world_1::model::default::Country.all()->project(~[col: x|$x.population ",
+            "|spider::world_1::model::default::Country.all()->project(~[col: x|$x.population",
             "|spider::world_1::model::default::Country.all()\
-             ->project(~[col: x|$x.fk1DefaultCountrylanguage ",
+             ->project(~[col: x|$x.fk1DefaultCountrylanguage",
         ),
     ];
-    for (db_id, scalar, non_scalar) in cases {
-        let scalar_verdicts = admissible_after(db_id, scalar, CLOSERS);
-        let non_scalar_verdicts = admissible_after(db_id, non_scalar, CLOSERS);
-        for ((probe, scalar_ok), non_scalar_ok) in
-            CLOSERS.iter().zip(scalar_verdicts).zip(non_scalar_verdicts)
-        {
-            assert_eq!(
-                scalar_ok,
-                non_scalar_ok,
-                "L2 SOUNDNESS: the projection lambda closer `{}` was decided \
-                 differently on a non-scalar body in {db_id} — every such shape \
-                 compiles against the pinned stack, so the two must agree:\n  \
-                 scalar:     {scalar}\n  non-scalar: {non_scalar}",
-                bytes_str(probe)
+    for (db_id, scalar_base, non_scalar_base) in cases {
+        // "" is the member anchor (lexeme still open); " " closes the lexeme and
+        // reaches the completed-term anchor T2/T6 are read at.
+        for anchor in ["", " "] {
+            let scalar = format!("{scalar_base}{anchor}");
+            let non_scalar = format!("{non_scalar_base}{anchor}");
+            let scalar_verdicts = admissible_after(db_id, &scalar, CLOSERS);
+            let non_scalar_verdicts = admissible_after(db_id, &non_scalar, CLOSERS);
+            // Without this the equality below could pass by both sides being
+            // masked — a future L1 change could kill the guard silently.
+            assert!(
+                scalar_verdicts.iter().any(|kept| *kept),
+                "the scalar control must keep at least one closer, or the \
+                 comparison below is vacuous in {db_id}:\n  {scalar}"
             );
+            for ((probe, scalar_ok), non_scalar_ok) in
+                CLOSERS.iter().zip(scalar_verdicts).zip(non_scalar_verdicts)
+            {
+                assert_eq!(
+                    scalar_ok,
+                    non_scalar_ok,
+                    "L2 SOUNDNESS: the projection lambda closer `{}` was decided \
+                     differently on a non-scalar body in {db_id} — every such shape \
+                     compiles against the pinned stack, so the two must agree:\n  \
+                     scalar:     {scalar}\n  non-scalar: {non_scalar}",
+                    bytes_str(probe)
+                );
+            }
         }
-        // The contrast that makes the assertion above meaningful: T6 *does*
-        // fire on the non-scalar prefix and not on the scalar one, so the
-        // overlay genuinely knows "the body is non-scalar here". T7's
-        // abstention is a decision on the evidence, not a gap in the tracker.
+        // The anti-vacuity contrast, at the completed-term anchor where T6 is
+        // read: the overlay does distinguish the two bodies, and does so through
+        // T6's rule specifically.
+        let scalar_term = format!("{scalar_base} ");
+        let non_scalar_term = format!("{non_scalar_base} ");
         assert!(
-            admissible_after(db_id, scalar, &[b"<"])[0],
+            admissible_after(db_id, &scalar_term, &[b"<"])[0],
             "T6 must leave an ordered comparator admissible on a scalar body in \
-             {db_id}:\n  {scalar}"
+             {db_id}:\n  {scalar_term}"
         );
+        let (verdicts, kind) = probe_at(db_id, &non_scalar_term, &[b"<"]);
         assert!(
-            !admissible_after(db_id, non_scalar, &[b"<"])[0],
+            !verdicts[0],
             "T6 must mask an ordered comparator on a non-scalar body in \
-             {db_id}:\n  {non_scalar}"
+             {db_id}:\n  {non_scalar_term}"
+        );
+        assert_eq!(
+            kind,
+            Some(NON_SCALAR_RULE),
+            "the non-scalar body must be recognised by T6's own rule in \
+             {db_id}, so the contrast pins the mechanism:\n  {non_scalar_term}"
         );
     }
 }

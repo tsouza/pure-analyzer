@@ -8,6 +8,7 @@
 #![cfg(feature = "legend")]
 #![forbid(unsafe_code)]
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -33,6 +34,7 @@ use legend::{LegendClient, ReturnTypeOutcome};
 use purecard::CompiledGrammar;
 use schema_context::{first_class_path, full_model_text, pure_model_text};
 use schema_walker::{WALK_COUNT, generate_first_complete_schema_walk_set};
+use serde_json::Value;
 
 const ENGINE_BASE: &str = "http://localhost:6300/api";
 const HEALTH_TIMEOUT: Duration = Duration::from_secs(90);
@@ -120,11 +122,8 @@ fn every_fixture_gold_corpus_compiles_against_its_assembled_store_grammar() {
 /// **to-many collection** compiles against the pinned stack.
 ///
 /// T7 proposed masking such a body's own closing delimiter. The premise is
-/// false. `project`'s column lambda is declared over `Any`, so every shape
-/// below — including the spec's own literal counter-example
-/// `project([x|$x.fk0DefaultCountries], …)`, and a body left at the bare bound
-/// instance — is a legal projection. Masking their closers would be a soundness
-/// violation, not a precision win, so no T7 rule ships.
+/// false: `project`'s column lambda is declared over `Any`. §6.6 T7 carries the
+/// full probe table and the reasoning; this is the executable half of it.
 ///
 /// Pinned here rather than quoted in a PR description for the same reason
 /// `every_fixture_gold_corpus_compiles_against_its_assembled_store_grammar`
@@ -146,21 +145,30 @@ fn a_non_scalar_projection_lambda_body_compiles_so_t7_stays_retired() {
     const CAR_CONTINENTS: &str = "spider::car_1::model::default::Continents";
     const CAR_MODEL_LIST: &str = "spider::car_1::model::default::ModelList";
 
-    let probes: Vec<(&str, String)> = vec![
+    /// The arm-A projection return type, asserted rather than merely "some
+    /// type" so a semantic drift is caught as loudly as an outright rejection.
+    const TDS: &str = "meta::pure::tds::TabularDataSet";
+    /// The arm-R (`~[…]`) projection return type, for the same reason.
+    const RELATION: &str = "meta::pure::metamodel::relation::Relation";
+
+    let probes: Vec<(&str, String, &str)> = vec![
         // Arm-A `project`, to-many class-typed association end (`[1..*]`).
         (
             CRITERION_DB,
             format!("|{WORLD_COUNTRY}.all()->project([x|$x.fk1DefaultCountrylanguage], ['col'])"),
+            TDS,
         ),
         // Arm-A `project`, to-*one* class-typed association end (`[1]`).
         (
             CRITERION_DB,
             format!("|{WORLD_CITY}.all()->project([x|$x.fk0DefaultCountry], ['col'])"),
+            TDS,
         ),
         // Arm-R `project(~[…])`, the relation-API spelling of the same position.
         (
             CRITERION_DB,
             format!("|{WORLD_COUNTRY}.all()->project(~[col: x|$x.fk1DefaultCountrylanguage])"),
+            RELATION,
         ),
         // `groupBy`'s key lambda, class-typed body.
         (
@@ -169,17 +177,20 @@ fn a_non_scalar_projection_lambda_body_compiles_so_t7_stays_retired() {
                 "|{WORLD_COUNTRY}.all()->groupBy([x|$x.fk1DefaultCountrylanguage], \
                  [agg(x|$x.gnp, y|$y->sum())], ['g','s'])"
             ),
+            TDS,
         ),
         // The body left at the bare bound instance — the extreme of the same
         // claim: not even a navigation, just the class itself.
         (
             CRITERION_DB,
             format!("|{WORLD_COUNTRY}.all()->project([x|$x], ['col'])"),
+            TDS,
         ),
         // The spec's own literal T7 counter-example, on the generalization DB.
         (
             GENERALIZATION_DB,
             format!("|{CAR_CONTINENTS}.all()->project([x|$x.fk0DefaultCountries], ['col'])"),
+            TDS,
         ),
         // T7's other arm: a primitive mapped over a to-many step, so the body
         // is a `String[*]` collection rather than a class.
@@ -188,12 +199,14 @@ fn a_non_scalar_projection_lambda_body_compiles_so_t7_stays_retired() {
             format!(
                 "|{CAR_CONTINENTS}.all()->project([x|$x.fk0DefaultCountries.countryName], ['col'])"
             ),
+            TDS,
         ),
         // A to-many/to-many association, the loosest multiplicity available in
         // any committed fixture.
         (
             GENERALIZATION_DB,
             format!("|{CAR_MODEL_LIST}.all()->project([x|$x.fk3DefaultCarNames], ['col'])"),
+            TDS,
         ),
         // `agg`'s own map lambda, class-typed body.
         (
@@ -202,21 +215,30 @@ fn a_non_scalar_projection_lambda_body_compiles_so_t7_stays_retired() {
                 "|{CAR_CONTINENTS}.all()->groupBy([x|$x.continent], \
                  [agg(x|$x.fk0DefaultCountries, y|$y->count())], ['g','s'])"
             ),
+            TDS,
         ),
     ];
 
+    // Assembled per database, not per probe: the model text is identical for
+    // every probe on a database, and parsing it is a live network round-trip.
+    let mut models: BTreeMap<&str, Value> = BTreeMap::new();
     let mut failures: Vec<String> = Vec::new();
-    for (db_id, text) in &probes {
-        let pmcd = client
-            .grammar_to_json_model(&full_model_text(db_id))
-            .unwrap_or_else(|err| panic!("{db_id}: assembled model must parse: {err}"));
+    for (db_id, text, expected) in &probes {
+        let pmcd = models.entry(db_id).or_insert_with(|| {
+            client
+                .grammar_to_json_model(&full_model_text(db_id))
+                .unwrap_or_else(|err| panic!("{db_id}: assembled model must parse: {err}"))
+        });
         match client.grammar_to_json_lambda(text) {
             Err(err) => failures.push(format!("{db_id}: PARSE: {err}\n  {text}")),
             Ok(lambda_json) => match client
-                .lambda_return_type(&lambda_json, &pmcd)
+                .lambda_return_type(&lambda_json, pmcd)
                 .unwrap_or_else(|err| panic!("{db_id} request failed: {err}"))
             {
-                ReturnTypeOutcome::ReturnType(_) => {}
+                ReturnTypeOutcome::ReturnType(actual) if actual == *expected => {}
+                ReturnTypeOutcome::ReturnType(actual) => failures.push(format!(
+                    "{db_id}: returned {actual}, expected {expected}\n  {text}"
+                )),
                 ReturnTypeOutcome::CompileError(message) => {
                     failures.push(format!("{db_id}: COMPILE: {message}\n  {text}"));
                 }
@@ -225,8 +247,8 @@ fn a_non_scalar_projection_lambda_body_compiles_so_t7_stays_retired() {
     }
     assert!(
         failures.is_empty(),
-        "{}/{} non-scalar projection-lambda bodies failed to compile — T7's \
-         premise may have become true under a new engine pin:\n{}",
+        "{}/{} non-scalar projection-lambda bodies failed to compile as expected \
+         — T7's premise may have become true under a new engine pin:\n{}",
         failures.len(),
         probes.len(),
         failures.join("\n\n")

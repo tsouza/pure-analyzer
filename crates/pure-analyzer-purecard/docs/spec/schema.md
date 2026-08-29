@@ -332,8 +332,19 @@ The set is deliberately **monotonic and a superset**: a name is recorded whereve
   class or a to-many collection. The pinned Legend stack refutes it: `project`'s
   column lambda is declared over `Any`, so a class-typed or to-many body is a
   *legal* projection. Masking its closer would be a soundness violation, not a
-  precision win — the same verdict T3's `min`/`max` and T4's `contains` got, and
-  here it consumes the whole rule rather than a corner of it.
+  precision win — the same **kind** of correction T3's `min`/`max` and T4's
+  `contains` got, except that here it consumes the whole rule rather than a
+  corner of it.
+
+  It does **not** rest on the same evidentiary footing as those two, and the
+  difference is worth stating plainly. T3 and T4 each had live probes *and* gold
+  corroboration (66 `->contains` occurrences on a `getString` receiver; the gold
+  `$x.year < 1980`). T7 has live probes **only**: across all 5034 gold queries a
+  navigation terminating a `colLambda`/`keyLambda` body at a class or a to-many
+  collection occurs **zero** times. So the retirement rests on the compile
+  oracle alone. That is enough to *abstain* — §6's core principle forbids
+  inventing constraints the corpus does not exercise, and abstaining is the safe
+  direction — but it would not be enough to *mask*.
 
   **Where the evidence comes from (2026-08-29, #116).** Nine hand-constructed
   probes, sent through `grammarToJson/lambda` → `lambdaReturnType` against the
@@ -363,23 +374,42 @@ The set is deliberately **monotonic and a superset**: a name is recorded whereve
   like: no gold query puts a class-typed body in one of these lambdas, and a
   scan of 1869 class-typed association navigations across four corpora finds
   zero. That absence is a *usage* fact about Spider-derived flat SQL
-  projections, not a legality fact — and the engine, asked directly, says the
-  shape is legal.
+  projections, not a legality fact — and the engine, asked directly, type-checks
+  the shape.
+
+  **What was probed, and what was not.** `lambdaReturnType` is the engine's
+  *compile-time type check*; relational **plan generation** was not probed, and
+  a TDS plan for a class-typed column may well be rejected further down. This
+  cannot make the retirement unsound — the safe direction at an unprobed
+  position is to admit, which is what happens — but it does bound the claim.
+  Should an execution-level rejection ever be found, T7 reopens as a *precision*
+  question about a deeper oracle, not as a contradiction of what is recorded
+  here.
 
   **The mechanism T7 wanted exists; it is deliberately unused.** Masking a
   closing delimiter from scope state is not new architecture — N3d
   (`StoreMethodArgSep`'s arity-based closer mask) and N3g (`ReceiverOnlyArg`)
-  both ship it — and the scope state is already tracked: at the exact position
-  T7 would fire, the overlay's active rule is T6's `OrderedOperand` — i.e. it
-  *knows* the body is non-scalar, and masks the ordered comparators there. T7 abstains on the evidence, not for want of a
-  lever. Two gates keep that abstention honest:
-  `l2_precision::t7_keeps_a_projection_lambda_closer_on_a_class_typed_or_to_many_body`
-  pins that the `]`/`,` verdicts are *identical* for a scalar and a non-scalar
-  body (while asserting T6 still discriminates between them, so the test cannot
-  pass vacuously), and the live lane's
-  `a_non_scalar_projection_lambda_body_compiles_so_t7_stays_retired` re-runs the
-  nine probes above. If a future engine pin ever rejects one, that test reddens
-  and T7 reopens on real evidence — the trigger it always needed.
+  both ship it — and the scope state is already tracked: one token past the
+  member position, on a non-scalar body, the overlay's active rule is T6's
+  `OrderedOperand`, i.e. it *knows* the body is non-scalar and masks the ordered
+  comparators there. T7 abstains on the evidence, not for want of a lever.
+
+  Two gates keep that abstention honest:
+
+  - `l2_precision::t7_keeps_a_projection_lambda_closer_on_a_class_typed_or_to_many_body`
+    pins that the `]`/`,` verdicts are *identical* for a scalar and a non-scalar
+    body. It probes **both** anchors a T7 could be written at — the `Member`
+    anchor with the property's lexeme still open (the spelling emitted Pure
+    actually uses: `$x.foo]`, no space) and the completed-term anchor one space
+    later where T2/T6 are read — because only the second is where T6 lives, and
+    a T7 written at the first would otherwise ship green. At the completed-term
+    anchor it also asserts that T6 still discriminates the two bodies *and* that
+    the active rule is `OrderedOperand`, so the test cannot pass vacuously.
+  - the live lane's
+    `a_non_scalar_projection_lambda_body_compiles_so_t7_stays_retired` re-runs
+    the nine probes above and asserts each one's exact return type. If a future
+    engine pin ever rejects one, it reddens and T7 reopens on real evidence —
+    the trigger it always needed.
 
 ### 6.7 Rule count
 
