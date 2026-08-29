@@ -202,8 +202,13 @@ struct Baseline {
 const RATCHET_SLACK: usize = 3;
 
 /// Issue #55's criterion baseline, measured live against the pinned Legend
-/// stack (`corpus/legend-stack/docker-compose.yml`) on 2026-08-29: **12/64
-/// total = recipe 5/5 + exploration 7/59**.
+/// stack (`corpus/legend-stack/docker-compose.yml`) on 2026-08-29: **24/64
+/// total = recipe 5/5 + exploration 19/59**. Ratcheted up from the phase-0
+/// measurement's 5/5 + 7/59 by `SOURCE_DOT_BONUS` (`schema_walker.rs`):
+/// biasing the position right after a real class token toward `.` (closing
+/// the classpath into `.all()`) over `:` (which could only ever extend it
+/// into a non-existent deeper segment) — the two are equally admissible
+/// there, confirmed by a direct `allowed_mask` probe.
 ///
 /// `world_1`'s corpus-derived vocabulary realizes only five of the six recipe
 /// shapes the eager generator offers; `recipe_walks` drops an unrealizable
@@ -212,18 +217,21 @@ const RATCHET_SLACK: usize = 3;
 const CRITERION_BASELINE: Baseline = Baseline {
     db_id: CRITERION_DB,
     recipe_compiled: 5,
-    exploration_compiled: 7,
+    exploration_compiled: 19,
 };
 
-/// The generalization guard's baseline, measured in the same run: **13/64
-/// total = recipe 6/6 + exploration 7/58**. `car_1` realizes all six eager
-/// recipe shapes, so its partitions split one slot differently from the
-/// criterion's — which is exactly why each floor is stated per database
-/// rather than as a single cross-database number.
+/// The generalization guard's baseline, measured in the same run: **25/64
+/// total = recipe 6/6 + exploration 19/58**. Ratcheted up from 6/6 + 7/58 by
+/// the identical `SOURCE_DOT_BONUS` rule — the +12 exploration gain matches
+/// `world_1`'s own +12 exactly, direct evidence this rule generalizes rather
+/// than overfitting `world_1`'s specific degenerate walks. `car_1` realizes
+/// all six eager recipe shapes, so its partitions split one slot differently
+/// from the criterion's — which is exactly why each floor is stated per
+/// database rather than as a single cross-database number.
 const GENERALIZATION_BASELINE: Baseline = Baseline {
     db_id: GENERALIZATION_DB,
     recipe_compiled: 6,
-    exploration_compiled: 7,
+    exploration_compiled: 19,
 };
 
 /// Decode a walk's token ids back to its Pure text through `grammar`'s own
@@ -363,24 +371,32 @@ fn assert_live_compile_rate(baseline: &Baseline) {
 /// showed only 1/64 compiling at the time — the missing store grammar was
 /// never the dominant cause here; `every_fixture_gold_corpus_compiles_against_its_assembled_store_grammar`
 /// proves that gap is in fact closed (269/269 *real* gold queries compile
-/// against the same grammar this lane uses). What dominates the exploration
-/// partition's residue is instead two causes neither of which
+/// against the same grammar this lane uses). A third, `SOURCE_DOT_BONUS`
+/// (`schema_walker.rs`), closed a specific slice of the "can't find
+/// property/element" cause below: a real, complete class token and a bare
+/// `:` (which could only ever extend it into a non-existent deeper
+/// classpath segment, e.g. `spider::world_1::Db::desc`) were equally
+/// admissible right after the class landed, with nothing biasing toward
+/// closing it into `.all()` instead — worth +12/59 exploration compiles on
+/// both `world_1` and `car_1` alike (the `CRITERION_BASELINE`/
+/// `GENERALIZATION_BASELINE` history). What still dominates the exploration
+/// partition's residue is two further causes neither of which
 /// `schema_walker.rs` can fix by itself:
 ///
-/// - ~1/3 fail to even *parse*: nested predicate/operator combinations
-///   (`&&`, `||`, comparisons, arithmetic) that `docs/spec/grammar.md` §5.7
+/// - Failing to even *parse*: nested predicate/operator combinations (`&&`,
+///   `||`, comparisons, arithmetic) that `docs/spec/grammar.md` §5.7
 ///   explicitly documents as "loosely typed... left to L2/compiler," so L1
 ///   admits shapes real Pure's parser doesn't accept. Closing this means
 ///   L1 modeling real operator/predicate arity, not a walker heuristic.
-/// - ~2/3 parse but fail to *compile*, mostly "can't find property/element":
-///   the walker draws `.`-navigated property names from the whole
-///   cross-schema token vocabulary, unconstrained by which class is actually
-///   being navigated (issue #56's remaining L2 scope), and separately, a
-///   bare classpath followed directly by `.'prop'` (skipping the required
-///   `.all()`) type-checks as a property lookup *on the class metatype*,
-///   never a real one — confirmed live: `Class.all()` and
-///   `Class.all()->filter(...)` both compile; a bare `Class.'name'` never can,
-///   regardless of which name is chosen.
+/// - Parsing but failing to *compile*, mostly the remaining "can't find
+///   property/element" shapes: the walker draws `.`-navigated property
+///   names from the whole cross-schema token vocabulary, unconstrained by
+///   which class is actually being navigated (issue #56's remaining L2
+///   scope), and separately, a bare classpath followed directly by
+///   `.'prop'` (skipping the required `.all()`) type-checks as a property
+///   lookup *on the class metatype*, never a real one — confirmed live:
+///   `Class.all()` and `Class.all()->filter(...)` both compile; a bare
+///   `Class.'name'` never can, regardless of which name is chosen.
 #[test]
 fn schema_aware_walks_compile_against_a_real_pmcd() {
     assert_live_compile_rate(&CRITERION_BASELINE);

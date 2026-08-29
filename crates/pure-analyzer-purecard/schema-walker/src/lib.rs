@@ -315,6 +315,23 @@ const NAVIGATION_DOT_BONUS: u32 = 200;
 /// bonus applies that same lesson to random exploration, not just recipes.
 const MEMBER_NUMERIC_BONUS: u32 = 200;
 
+/// Weight added, right after the source classpath lands on a real schema
+/// class (`attempt`'s `just_completed_real_class_source`), to a `.`
+/// candidate — biasing toward closing the classpath and invoking
+/// `.all()` over extending it further. Issue #55, confirmed live and by a
+/// direct `allowed_mask` probe: a real, complete classpath token (e.g.
+/// `spider::world_1::model::default::Countrylanguage`) and a `:` byte are
+/// *equally* admissible right there, since `classpath` is itself an
+/// arbitrarily-extensible `X::Y::Z…` production the L1 grammar cannot
+/// distinguish from "one more segment of a legitimately deeper real
+/// classpath" without semantic resolution — live-compile failures like
+/// `Can't find the packageable element 'spider::world_1::Db::desc'` and
+/// `'…Countrylanguage::name'` are this residual firing. Same weight as
+/// [`CLASS_SOURCE_BONUS`]/[`NAVIGATION_DOT_BONUS`]: this is the direct
+/// pipeline-source-position analogue of [`NAVIGATION_DOT_BONUS`]'s `$binder.`
+/// case, not a different kind of signal needing its own tuning.
+const SOURCE_DOT_BONUS: u32 = 200;
+
 /// Whether the token just emitted (`bytes`) is a bound-variable reference
 /// (`$`), or completes a `->` arrow hop (`emitted`, the full byte run so
 /// far, ends in [`ARROW_BYTES`]) — either marks that the pipeline's source
@@ -524,6 +541,7 @@ fn attempt(
     let mut known_binder: Option<Vec<u8>> = None;
     let mut source_class: Option<Vec<u8>> = None;
     let mut just_navigated_from_binder = false;
+    let mut just_completed_real_class_source = false;
     let mut seen_arrow_or_dollar = false;
     let mut pending_source_method = false;
     let mut source_method_progress: Vec<u8> = Vec::new();
@@ -563,6 +581,7 @@ fn attempt(
             known_binder.as_deref(),
             just_referenced_binder,
             member_bias_class,
+            just_completed_real_class_source,
         );
         if cands.is_empty() {
             // Under `MustOpen`, an empty `cands` means `(` was not
@@ -597,11 +616,14 @@ fn attempt(
             return (None, rng.state);
         };
         emitted.extend_from_slice(bytes);
-        if accepted_real_class_source(pre_state, schema, bytes) {
+        just_completed_real_class_source = accepted_real_class_source(pre_state, schema, bytes);
+        if just_completed_real_class_source {
             // The source classpath just landed on a real class (as opposed
             // to the store path, also legal here) — remember it so a later
             // `$known_binder.` can bias its member-name choice toward one of
-            // *this* class's numeric members (`MEMBER_NUMERIC_BONUS`).
+            // *this* class's numeric members (`MEMBER_NUMERIC_BONUS`), and
+            // bias *this* step's own next candidate toward `.` rather than
+            // extending the classpath further (`SOURCE_DOT_BONUS`).
             source_class = Some(bytes.to_vec());
         }
         // `$known_binder.` just completed with *this* token: bias the next
@@ -716,6 +738,7 @@ fn build_candidates(
     known_binder: Option<&[u8]>,
     just_referenced_binder: bool,
     member_bias_class: Option<&[u8]>,
+    just_completed_real_class_source: bool,
 ) -> Vec<(u32, u32)> {
     let ids: Vec<u32> = session.allowed_mask().iter_ones().collect();
     // `allowed_mask()`'s exclusive borrow of `session` ends with the
@@ -764,6 +787,7 @@ fn build_candidates(
                     .is_ok_and(|member_text| schema.member_is_numeric(class_text, member_text))
             })
         });
+        let is_source_dot = just_completed_real_class_source && bytes == b".";
         let w = if !growing && ends_with_closer(bytes) {
             DEFAULT_WEIGHT + ACCEPT_BONUS
         } else if is_class_source {
@@ -776,6 +800,8 @@ fn build_candidates(
             DEFAULT_WEIGHT + NAVIGATION_DOT_BONUS
         } else if is_numeric_member {
             DEFAULT_WEIGHT + MEMBER_NUMERIC_BONUS
+        } else if is_source_dot {
+            DEFAULT_WEIGHT + SOURCE_DOT_BONUS
         } else {
             DEFAULT_WEIGHT
         };
@@ -1937,6 +1963,7 @@ mod tests {
             None,
             false,
             None,
+            false,
         );
         assert_eq!(weight_of(&growing, ")"), Some(DEFAULT_WEIGHT));
         assert_eq!(weight_of(&growing, "\n  "), Some(DEFAULT_WEIGHT));
@@ -1953,6 +1980,7 @@ mod tests {
             None,
             false,
             None,
+            false,
         );
         assert_eq!(
             weight_of(&closing, ")"),
@@ -1999,12 +2027,99 @@ mod tests {
             None,
             false,
             None,
+            false,
         );
         assert_eq!(
             weight_of(&cands, "A"),
             Some(DEFAULT_WEIGHT + CLASS_SOURCE_BONUS)
         );
         assert_eq!(weight_of(&cands, "spider::d::Db"), Some(DEFAULT_WEIGHT));
+    }
+
+    /// A vocabulary reaching the position right after a real class token at
+    /// the source position: a `.` (to invoke `.all()`) and a bare `:` (which
+    /// could only ever extend the classpath into a non-existent deeper
+    /// segment) are both admissible there, confirmed by a direct
+    /// `allowed_mask` probe against a real overlay — see
+    /// [`SOURCE_DOT_BONUS`]'s own doc comment.
+    fn vocab_with_source_dot_alternatives() -> Vocab {
+        let tokens: Vec<Vec<u8>> = ["|", "A", ".", "all", "(", ")", ":", "Z"]
+            .iter()
+            .map(|s| s.as_bytes().to_vec())
+            .collect();
+        let eos = tokens.len() as u32;
+        Vocab::from_byte_tokens(tokens, eos)
+    }
+
+    #[test]
+    fn build_candidates_biases_the_dot_right_after_a_real_class_source_completes() {
+        let grammar = CompiledGrammar::compile(vocab_with_source_dot_alternatives());
+        let mut session = DecoderSession::with_schema(&grammar, schema()).expect("valid overlay");
+        let vocab = grammar.vocab();
+        drive(&mut session, vocab, &["|", "A"]);
+        let pending = PendingCall::None;
+
+        let weight_of = |cands: &[(u32, u32)], piece: &str| {
+            cands
+                .iter()
+                .find(|&&(id, _)| vocab.bytes(id) == Some(piece.as_bytes()))
+                .map(|&(_, w)| w)
+        };
+
+        // `just_completed_real_class_source = true`, passed directly (this
+        // signal is computed by `attempt`, not by session state) — biases
+        // `.` over `:`, right at the position both are equally admissible.
+        let cands = build_candidates(
+            &mut session,
+            &schema(),
+            vocab,
+            &pending,
+            true,
+            Some(b'A'),
+            None,
+            false,
+            None,
+            true,
+        );
+        assert_eq!(
+            weight_of(&cands, "."),
+            Some(DEFAULT_WEIGHT + SOURCE_DOT_BONUS)
+        );
+        assert_eq!(weight_of(&cands, ":"), Some(DEFAULT_WEIGHT));
+    }
+
+    #[test]
+    fn build_candidates_does_not_bias_the_dot_without_a_just_completed_class_source() {
+        // Same vocabulary/position, but `just_completed_real_class_source =
+        // false` (the caller determined this step did *not* just complete a
+        // real class token) — the source-dot bonus must not fire.
+        let grammar = CompiledGrammar::compile(vocab_with_source_dot_alternatives());
+        let mut session = DecoderSession::with_schema(&grammar, schema()).expect("valid overlay");
+        let vocab = grammar.vocab();
+        drive(&mut session, vocab, &["|", "A"]);
+        let pending = PendingCall::None;
+
+        let weight_of = |cands: &[(u32, u32)], piece: &str| {
+            cands
+                .iter()
+                .find(|&&(id, _)| vocab.bytes(id) == Some(piece.as_bytes()))
+                .map(|&(_, w)| w)
+        };
+
+        let cands = build_candidates(
+            &mut session,
+            &schema(),
+            vocab,
+            &pending,
+            true,
+            Some(b'A'),
+            None,
+            false,
+            None,
+            false,
+        );
+        assert_eq!(weight_of(&cands, "."), Some(DEFAULT_WEIGHT));
+        assert_eq!(weight_of(&cands, ":"), Some(DEFAULT_WEIGHT));
     }
 
     /// A post-arrow vocabulary offering both a real Pure builtin
@@ -2050,6 +2165,7 @@ mod tests {
             None,
             false,
             None,
+            false,
         );
         assert_eq!(
             weight_of(&cands, "count"),
@@ -2104,6 +2220,7 @@ mod tests {
             Some(b"x"),
             false,
             None,
+            false,
         );
         assert_eq!(
             weight_of(&cands, "x"),
@@ -2148,6 +2265,7 @@ mod tests {
             None,
             true,
             None,
+            false,
         );
         assert_eq!(
             weight_of(&cands, "."),
@@ -2221,6 +2339,7 @@ mod tests {
             None,
             false,
             Some(b"A"),
+            false,
         );
         assert_eq!(
             weight_of(&cands, "n"),
@@ -2264,6 +2383,7 @@ mod tests {
             None,
             false,
             None,
+            false,
         );
         assert_eq!(weight_of(&cands, "n"), Some(DEFAULT_WEIGHT));
         assert_eq!(weight_of(&cands, "label"), Some(DEFAULT_WEIGHT));
