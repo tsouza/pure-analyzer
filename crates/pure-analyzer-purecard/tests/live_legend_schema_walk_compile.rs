@@ -313,17 +313,20 @@ const RATCHET_SLACK: usize = 3;
 /// receiver-category rule reaches.
 ///
 /// **Phase 7 (2026-08-29) ratchets this to 50/64 = recipe 5/5 + exploration
-/// 45/59**, bit-identical across two consecutive runs. The phase is three L1
-/// tightenings of the two `%`-sigil literals and the typed-binder colon, each
-/// live-attested: the symbolic milestoning literal is now the `%latest` keyword
-/// rather than any `%<lowercase>+` run; a numeric date literal must open on a
-/// digit, not on a `-`/`T`/`:` separator; and a binder colon's right-hand side
-/// is a classpath, then its `[mult]`, then exactly one pipe. Live **parse**
-/// failures went 15 → 12 across the two databases with both named sub-shapes
-/// closed outright — zero `%<not-latest>` walks (was 5) and zero
-/// wrong-continuation typed binders (was 4) — while the count moved by only
-/// +1/+1, because a closed class frees an exploration slot for a fresh draw
-/// rather than converting to a compile.
+/// 45/59**, bit-identical across two consecutive runs. The phase is four L1
+/// tightenings, each live-attested: the symbolic milestoning literal is now the
+/// `%latest` keyword rather than any `%<lowercase>+` run; a numeric date literal
+/// must open on a digit, not on a `-`/`T`/`:` separator; a binder colon's
+/// right-hand side is a classpath, then its `[mult]`, then exactly one pipe; and
+/// a `[` no longer follows an arbitrary name, only a binder's type — the arm
+/// that admitted it was left dead by the third change and CI's mutation shard
+/// caught it as an unkillable mutant.
+///
+/// Live **parse** failures went 15 → 13 across the two databases with both
+/// named sub-shapes closed outright — zero `%<not-latest>` walks (was 5) and
+/// zero wrong-continuation typed binders (was 4). The count moves by less than
+/// the classes closed because the exploration stream refills a freed slot from
+/// whatever bucket is next-largest rather than converting it to a compile.
 ///
 /// **Phase 6 (2026-08-29) ratcheted this to 49/64 = recipe 5/5 + exploration
 /// 44/59**, bit-identical across two consecutive runs. Four rules land together,
@@ -367,11 +370,18 @@ const CRITERION_BASELINE: Baseline = Baseline {
 /// criterion (bucket D 3 → 1 here). It moves less in raw count because `car_1`'s
 /// residue is more heavily parse- and operator-shaped to begin with.
 ///
-/// **Phase 7 (2026-08-29) ratchets this to 49/64 = recipe 6/6 + exploration
-/// 43/58**, bit-identical across two consecutive runs. Nothing in the phase is
-/// a rule at all — all three tightenings are L1 productions read straight off
-/// the pinned engine's own parser, so neither database's taxonomy could have
-/// shaped them, and the guard moves by exactly as much as the criterion.
+/// **Phase 7 (2026-08-29) re-measures at 48/64 = recipe 6/6 + exploration
+/// 42/58**, bit-identical across two consecutive runs — level with Phase 6, so
+/// this baseline is *not* raised (floors ratchet upward only, and a re-measure
+/// that does not beat the record does not move it).
+///
+/// Recorded honestly, because the guard is where the phase's one regression
+/// landed. The first three tightenings put this arm at 49/64; removing the dead
+/// `AfterName` `[` arm the third had orphaned — a real L1 over-acceptance, since
+/// Legend has no positional index and answers "Bracket operation is not
+/// supported" — cost it back. A dead arm is not kept to protect a number
+/// (constitution §4/§7); the criterion arm held its +1 and the parse-failure
+/// count fell on both.
 ///
 /// **Phase 6 (2026-08-29) ratcheted this to 48/64 = recipe 6/6 + exploration
 /// 42/58**, bit-identical across two consecutive runs. Every rule in the phase
@@ -382,7 +392,7 @@ const CRITERION_BASELINE: Baseline = Baseline {
 const GENERALIZATION_BASELINE: Baseline = Baseline {
     db_id: GENERALIZATION_DB,
     recipe_compiled: 6,
-    exploration_compiled: 43,
+    exploration_compiled: 42,
 };
 
 /// Decode a walk's token ids back to its Pure text through `grammar`'s own

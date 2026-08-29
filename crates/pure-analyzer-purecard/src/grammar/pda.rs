@@ -827,15 +827,23 @@ fn step_in_ident(stack_top: Option<Frame>, byte: u8) -> Step {
     }
 }
 
-// A completed identifier: the two name-only continuations, then everything a
+// A completed identifier: the one name-only continuation, then everything a
 // completed term admits. Whitespace keeps the position a *name* position, so a
-// call written `foo (x)` or a multiplicity written `Type [1]` still streams —
-// the constraint is on what the `(`/`[` may attach to, never on the spacing.
+// call written `foo (x)` still streams — the constraint is on what the `(` may
+// attach to, never on the spacing.
+//
+// A multiplicity `[` used to be admitted here too, for the typed binder's
+// `row: meta::pure::tds::TDSRow[1]`. That is now its own
+// [`State::ExpectBinderMult`] chain, which is the only construct in the emitted
+// subset where a `[` follows a name at all — Legend has no positional index and
+// says so (live: `{|…::ModelList.all()['MPG_T1_1']}` → "Bracket operation is
+// not supported"). Keeping the arm left a `[` admissible off *any* identifier
+// with nothing left to exercise it: issue #55 Phase 7's mutation shard caught it
+// as an unkillable mutant, which is what a dead arm looks like.
 fn step_after_name(stack_top: Option<Frame>, byte: u8) -> Step {
     match byte {
         b if is_ws(b) => Step::Next(State::AfterName),
         b'(' => Step::Push(Frame::Paren, State::ExpectValue),
-        b'[' => Step::Push(Frame::Bracket, State::ExpectValue),
         _ => step_after_value(stack_top, byte),
     }
 }

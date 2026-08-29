@@ -189,6 +189,12 @@ fn phase_7_literal_and_binder_corpus() -> Vec<String> {
         "|X.all()->extend(a :b [*]|1)".to_owned(),
         "|X.all()->extend(a:b[ 12 ] | 1)".to_owned(),
         "|X.all()->groupBy(~[a:x|$x.b],~'t':y|$y->sum())".to_owned(),
+        // a `[` binds to a binder type and to nothing else
+        "|X.all()->filter(x|$x.a[1] > 1)".to_owned(),
+        "|X.all()->filter(x|foo[1] > 1)".to_owned(),
+        "|X.all()->take(1)['a']".to_owned(),
+        "|X.all()->extend(getFloat[1])".to_owned(),
+        "|X.all()->extend(a:b [1]|1)".to_owned(),
     ]
 }
 

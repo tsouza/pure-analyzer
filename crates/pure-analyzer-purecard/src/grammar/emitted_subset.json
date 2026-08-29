@@ -366,17 +366,6 @@
         },
         {
           "action": {
-            "frame": "Bracket",
-            "kind": "push",
-            "state": "ExpectValue"
-          },
-          "match": {
-            "byte": 91,
-            "kind": "exact"
-          }
-        },
-        {
-          "action": {
             "kind": "goto",
             "state": "AfterValue"
           },

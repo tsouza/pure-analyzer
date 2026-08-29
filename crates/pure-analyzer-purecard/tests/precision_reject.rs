@@ -181,6 +181,27 @@ fn a_typed_binder_type_that_is_not_a_classpath_multiplicity_pipe_dies() {
     }
 }
 
+/// A `[` binds to a typed binder's type and to nothing else. Legend has no
+/// positional index at all — it says so in as many words ("Bracket operation is
+/// not supported") — and the multiplicity is the emitted subset's only `[`-after
+/// -a-name. Pinned here because the arm that used to admit it off *any*
+/// identifier became dead the moment the binder grew its own multiplicity chain,
+/// and a dead arm is a hole nothing else can see (issue #55 Phase 7).
+#[test]
+fn a_bracket_off_anything_but_a_binder_type_dies() {
+    for text in [
+        "|X.all()->filter(x|$x.a[1] > 1)",
+        "|X.all()->filter(x|foo[1] > 1)",
+        "|X.all()->take(1)['a']",
+        "|X.all()->extend(getFloat[1])",
+    ] {
+        assert!(dies(text), "the recogniser still streams {text:?}");
+    }
+    // …while the multiplicity itself, spaced or not, still streams.
+    assert!(!dies("|X.all()->extend(a:b[1]|1)"));
+    assert!(!dies("|X.all()->extend(a:b [1]|1)"));
+}
+
 /// The other half of the pin: every binder shape the engine *does* parse still
 /// streams, so the tightening above cannot have swallowed the production.
 #[test]
