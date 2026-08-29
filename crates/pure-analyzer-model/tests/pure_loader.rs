@@ -265,8 +265,9 @@ fn malformed_or_opaque_pure_regions_preserve_only_confirmed_facts() {
 Enum demo::Future { enabled }
 Class demo::Partial
 {
-  bad: Foo;
-  good: String[1];
+    bad: Foo;
+    good: String[1];
+    query(): String[1] {};
 }
 "#,
     );
@@ -274,6 +275,7 @@ Class demo::Partial
     let partial = graph.class("demo::Partial").expect("partial class");
     assert!(partial.coverage_gap());
     assert!(partial.properties().contains_key("good"));
+    assert!(partial.qualified_properties().contains_key("query"));
     assert!(
         !partial.properties().contains_key("bad"),
         "a malformed property must not become a confirmed graph fact"
