@@ -893,12 +893,20 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
             return false;
         }
         let mut depth = 1usize;
-        while self.raw_kind().is_some() {
+        let iteration_budget = self.tokens.len();
+        for _ in 0..iteration_budget {
+            if self.raw_kind().is_none() {
+                break;
+            }
+            let before = self.index;
             match self.raw_kind() {
                 Some(TokenKind::BRACE_OPEN) => depth = depth.saturating_add(1),
                 Some(TokenKind::BRACE_CLOSE) => {
                     depth = depth.saturating_sub(1);
-                    let _ = self.bump();
+                    let advanced = self.bump();
+                    if !advanced || self.index == before {
+                        break;
+                    }
                     if depth == 0 {
                         return true;
                     }
@@ -906,7 +914,10 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
                 }
                 _ => {}
             }
-            let _ = self.bump();
+            let advanced = self.bump();
+            if !advanced || self.index == before {
+                break;
+            }
         }
         self.syntax_error("expected `}` before end of file");
         false
@@ -918,13 +929,24 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
         let (true, true) = (first, second) else {
             return false;
         };
-        while self.raw_kind().is_some() {
-            if self.at_double_angle_close() {
-                let _ = self.bump();
-                let _ = self.bump();
-                return true;
+        let iteration_budget = self.tokens.len();
+        for _ in 0..iteration_budget {
+            if self.raw_kind().is_none() {
+                break;
             }
-            let _ = self.bump();
+            let before = self.index;
+            if self.at_double_angle_close() {
+                let first = self.bump();
+                let second = self.bump();
+                if first && second && self.index != before {
+                    return true;
+                }
+                break;
+            }
+            let advanced = self.bump();
+            if !advanced || self.index == before {
+                break;
+            }
         }
         self.syntax_error("expected `>>` before end of file");
         false
@@ -1377,5 +1399,33 @@ mod tests {
                 .count(),
             0
         );
+    }
+
+    #[test]
+    fn exhausted_fuel_stops_balanced_brace_consumption() {
+        let source = "{{";
+        let tokens = lex(source);
+        let mut parser = Parser::new(source, FileId::new(0), &tokens);
+        parser.fuel = 1;
+
+        assert!(!parser.consume_balanced_braces());
+        assert_eq!(parser.index, 1);
+        assert_eq!(parser.fuel, 0);
+        assert_eq!(parser.diagnostics.len(), 1);
+        assert_eq!(parser.diagnostics[0].code, DiagCode::MalformedSyntax);
+    }
+
+    #[test]
+    fn exhausted_fuel_stops_double_angle_consumption() {
+        let source = "<<<";
+        let tokens = lex(source);
+        let mut parser = Parser::new(source, FileId::new(0), &tokens);
+        parser.fuel = 2;
+
+        assert!(!parser.consume_double_angle());
+        assert_eq!(parser.index, 2);
+        assert_eq!(parser.fuel, 0);
+        assert_eq!(parser.diagnostics.len(), 1);
+        assert_eq!(parser.diagnostics[0].code, DiagCode::MalformedSyntax);
     }
 }
