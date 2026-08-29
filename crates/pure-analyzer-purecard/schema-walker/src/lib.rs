@@ -205,10 +205,14 @@ const ARROW_BYTES: &[u8] = b"->";
 /// never follow an arrow.
 ///
 /// Biases [`build_candidates`]'s arrow-method-name choice toward these
-/// (issue #117): nothing in this overlay narrows that position at all (it
-/// isn't a schema member lookup, so N1/N2/N6 don't apply, and no rule
-/// enforces "this identifier names a real Pure builtin" — left to the
-/// compiler oracle per the grammar's own over-approximation). Left
+/// (issue #117). The position is very nearly unnarrowed: it is not a schema
+/// member lookup, so N1/N2/N6 do not apply, and no rule enforces "this
+/// identifier names a real Pure builtin" — that is left to the compiler oracle
+/// per the grammar's own over-approximation. The one exception is N3f
+/// (`docs/spec/schema.md` §6.5, issue #55 Phase 5), which at a **class-extent**
+/// arrow denies the names whose every overload wants a receiver an extent
+/// cannot be — and denies them at the call's `(`, not at the name, so this
+/// bias stays a weighting over the whole set rather than a permit list. Left
 /// unconstrained, the position draws uniformly from the *entire* vocabulary,
 /// which is dominated by schema property/association/column names (never
 /// legal there) — confirmed live: walks like
@@ -1132,8 +1136,9 @@ impl GroupbyTokens {
 /// PMCD (`Country.all()->groupBy([a|$a.continent], [agg(a|$a.population,
 /// b|$b->count())], ['continent', 'cnt'])` returns `TabularDataSet`),
 /// mirrored from real gold-corpus examples (e.g. `world_1`'s own
-/// `dev:792`). Unlike [`recipe_reducer`]'s bare `->agg(...)` step, this
-/// wraps it in the `groupBy(...)` real Pure requires.
+/// `dev:792`). The `groupBy(...)` wrapper is not decoration: a bare
+/// `Class.all()->agg(...)` step is not real Pure, and the live engine rejects
+/// it (issue #55, Phase 5 — see [`recipe_reducer`], which used to build one).
 ///
 /// Untyped (`b|$b->count()`, no `PrimName` annotation), so it never arms T3
 /// and does not fire `Reducer` — its purpose is raising the live compile

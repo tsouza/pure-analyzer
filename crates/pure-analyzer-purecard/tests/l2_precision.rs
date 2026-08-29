@@ -2267,7 +2267,7 @@ fn n7_masks_every_dangling_value_identifier_walk() {
 /// |…::Country.all()->max(language)                        => …element 'language'
 /// |…::Country.all()->filter('SUM(SurfaceArea)'<agg/'…')   => …element 'agg'
 /// |…::Country.all()->count(tableReference)&&5             => …element 'tableReference'
-/// |…::Countrylanguage.all()->sort(code    !='Name_T2')    => …element 'code'
+/// |…::Countrylanguage.all()->sort(code    \n!='Name_T2')  => …element 'code'
 /// |…::Country.all()->col(between\n*'District_city')        => …element 'between'
 /// ```
 ///
@@ -2585,10 +2585,17 @@ fn n3f_still_admits_what_a_class_extent_really_accepts() {
 ///
 /// The mask clears the token that closes a denied name; EOS is that same closure
 /// by another route, so the overlay clears the EOS bit at a deny-trie terminal
-/// and leaves it alone everywhere else. The four cases are the whole mechanism —
-/// a strict prefix of a denied name is still an open lexeme and may yet grow into
-/// something legal, a whole denied name may not end a query, and a name the rule
-/// does not deny keeps whatever completion L1 gives it.
+/// and leaves it alone everywhere else. This is also the half of the rule that
+/// is pinned on a closer *other* than a call's `(`, and it covers both receiver
+/// categories: `sum`/`pair` are primitive-scalar entries, `restrict` a
+/// relation one.
+///
+/// L1 admits end-of-stream after any bare arrow-method name (the byte-PDA has no
+/// mandatory-call rule for one), and the engine rejects every such stream — at
+/// the *parser*, live: `|…::Country.all()->restrict` → "no viable alternative at
+/// input '->restrict}'". So the counterfactual below asserts only what it can:
+/// a name this rule does not deny keeps whatever completion L1 gives it, which
+/// is what makes the three denials above the rule's own doing and not L1's.
 #[test]
 fn n3f_forbids_a_stream_ending_on_a_denied_extent_method_name() {
     let extent = "|spider::world_1::model::default::Country.all()";
@@ -2596,8 +2603,12 @@ fn n3f_forbids_a_stream_ending_on_a_denied_extent_method_name() {
         walk_may_end("world_1", &format!("{extent}->su")),
         "a strict prefix of a denied name is an open lexeme, not a denial"
     );
-    assert!(!walk_may_end("world_1", &format!("{extent}->sum")));
-    assert!(!walk_may_end("world_1", &format!("{extent}->pair")));
+    for denied in ["sum", "pair", "restrict"] {
+        assert!(
+            !walk_may_end("world_1", &format!("{extent}->{denied}")),
+            "a stream may not end on the denied name {denied:?}"
+        );
+    }
     assert!(
         walk_may_end("world_1", &format!("{extent}->count")),
         "a name the rule does not deny keeps whatever completion L1 gives it"

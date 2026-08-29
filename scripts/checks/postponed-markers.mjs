@@ -17,11 +17,35 @@ import { $ } from "bun";
 import { stagedFiles, stagedAddedLines } from "../lib/git.mjs";
 import { die } from "../lib/ci.mjs";
 
-// One source of truth for both scan modes: the staged-line filter and the
-// `git grep` both read this, so they can never drift over which markers are
-// banned (they already had.)
-const MARKERS = String.raw`\b(TODO|FIXME|XXX)\b|#\[ignore\]|changed by cargo-mutants`;
-const PATTERN = new RegExp(MARKERS);
+/**
+ * One source of truth for both scan modes: the staged-line filter and the
+ * `git grep` both read this, so they can never drift over which markers are
+ * banned (they already had). It is therefore consumed by **two** regex engines
+ * — JavaScript's and `git grep -E`'s POSIX ERE — and must stay in the subset
+ * both understand; `ereSafe` below is what keeps it there.
+ */
+export const MARKERS = String.raw`\b(TODO|FIXME|XXX)\b|#\[ignore\]|changed by cargo-mutants`;
+
+/**
+ * Regex constructs JavaScript accepts and POSIX ERE does not. A pattern using
+ * one still passes the staged-line filter while `git grep -E` reads it as
+ * literal text, so `--all` would silently stop matching: the CI gate goes green
+ * for the wrong reason. Non-capturing groups and lookaround are the shapes a
+ * refactor reaches for; the shorthand classes are the ones a rewrite reaches
+ * for.
+ */
+const JS_ONLY_CONSTRUCTS = ["(?", "\\d", "\\w", "\\s", "\\D", "\\W", "\\S"];
+
+/** Whether `pattern` stays inside the dialect `git grep -E` also understands. */
+export function ereSafe(pattern) {
+  return !JS_ONLY_CONSTRUCTS.some((construct) => pattern.includes(construct));
+}
+
+/** Whether `line` carries a banned marker. */
+export function hasMarker(line) {
+  return new RegExp(MARKERS).test(line);
+}
+
 const RUST_PATHSPECS = ["crates/**/*.rs", "xtask/**/*.rs", "fuzz/**/*.rs"];
 
 async function hits() {
@@ -33,13 +57,15 @@ async function hits() {
   }
   const files = await stagedFiles({ suffix: ".rs" });
   if (files.length === 0) return [];
-  return (await stagedAddedLines(files)).filter((l) => PATTERN.test(l));
+  return (await stagedAddedLines(files)).filter(hasMarker);
 }
 
-const found = await hits();
-if (found.length) {
-  die(
-    `postponed-work or cargo-mutants markers found — resolve, file an issue, or ` +
-      `restore the mutated source:\n${found.map((h) => `    ${h}`).join("\n")}`,
-  );
+if (import.meta.main) {
+  const found = await hits();
+  if (found.length) {
+    die(
+      `postponed-work or cargo-mutants markers found — resolve, file an issue, or ` +
+        `restore the mutated source:\n${found.map((h) => `    ${h}`).join("\n")}`,
+    );
+  }
 }
