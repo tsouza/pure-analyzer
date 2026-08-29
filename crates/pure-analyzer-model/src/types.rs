@@ -4,7 +4,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
-use pure_analyzer_diagnostics::{Diagnostic, FileId};
+use pure_analyzer_diagnostics::{Diagnostic, FileId, TextRange};
 
 use crate::{MultiplicityError, NameError};
 
@@ -379,6 +379,7 @@ pub struct PropInfo {
     target: TypeRef,
     multiplicity: Multiplicity,
     association: Option<QName>,
+    declaration_span: Option<TextRange>,
 }
 
 impl PropInfo {
@@ -388,7 +389,13 @@ impl PropInfo {
             target,
             multiplicity,
             association: None,
+            declaration_span: None,
         }
+    }
+
+    pub(crate) const fn with_declaration_span(mut self, declaration_span: TextRange) -> Self {
+        self.declaration_span = Some(declaration_span);
+        self
     }
 
     pub(crate) fn with_association(mut self, association: QName) -> Self {
@@ -425,6 +432,12 @@ impl PropInfo {
     pub const fn association(&self) -> Option<&QName> {
         self.association.as_ref()
     }
+
+    /// Exact source range of this declaration when its input preserves one.
+    #[must_use]
+    pub const fn declaration_span(&self) -> Option<TextRange> {
+        self.declaration_span
+    }
 }
 
 /// Semantic classification of a qualified property.
@@ -450,6 +463,7 @@ pub struct QpInfo {
     multiplicity: Multiplicity,
     kind: QpKind,
     signature: Option<Vec<TypeRef>>,
+    declaration_span: Option<TextRange>,
 }
 
 impl QpInfo {
@@ -466,7 +480,13 @@ impl QpInfo {
             multiplicity,
             kind,
             signature,
+            declaration_span: None,
         }
+    }
+
+    pub(crate) const fn with_declaration_span(mut self, declaration_span: TextRange) -> Self {
+        self.declaration_span = Some(declaration_span);
+        self
     }
 
     /// Qualified-property name.
@@ -499,6 +519,12 @@ impl QpInfo {
     pub fn signature(&self) -> Option<&[TypeRef]> {
         self.signature.as_deref()
     }
+
+    /// Exact source range of this declaration when its input preserves one.
+    #[must_use]
+    pub const fn declaration_span(&self) -> Option<TextRange> {
+        self.declaration_span
+    }
 }
 
 /// Normalized facts for one Pure class.
@@ -511,6 +537,7 @@ pub struct ClassInfo {
     qualified_properties: BTreeMap<Name, QpInfo>,
     provenance: Provenance,
     source: SourceId,
+    declaration_span: Option<TextRange>,
     coverage_gap: bool,
 }
 
@@ -531,6 +558,7 @@ impl ClassInfo {
             qualified_properties,
             provenance: Provenance::Pmcd,
             source,
+            declaration_span: None,
             coverage_gap: false,
         }
     }
@@ -551,8 +579,14 @@ impl ClassInfo {
             qualified_properties,
             provenance: Provenance::PureFile,
             source,
+            declaration_span: None,
             coverage_gap: false,
         }
+    }
+
+    pub(crate) const fn with_declaration_span(mut self, declaration_span: TextRange) -> Self {
+        self.declaration_span = Some(declaration_span);
+        self
     }
 
     pub(crate) fn mark_coverage_gap(&mut self) {
@@ -605,6 +639,12 @@ impl ClassInfo {
         self.source
     }
 
+    /// Exact source range of this declaration when its input preserves one.
+    #[must_use]
+    pub const fn declaration_span(&self) -> Option<TextRange> {
+        self.declaration_span
+    }
+
     /// Whether this class has facts the source could not confirm.
     #[must_use]
     pub const fn coverage_gap(&self) -> bool {
@@ -617,11 +657,17 @@ impl ClassInfo {
 pub struct AssociationEndInfo {
     owner: QName,
     property: PropInfo,
+    declaration_span: Option<TextRange>,
 }
 
 impl AssociationEndInfo {
     pub(crate) const fn new(owner: QName, property: PropInfo) -> Self {
-        Self { owner, property }
+        let declaration_span = property.declaration_span;
+        Self {
+            owner,
+            property,
+            declaration_span,
+        }
     }
 
     /// Class from which this end is navigable.
@@ -635,6 +681,12 @@ impl AssociationEndInfo {
     pub const fn property(&self) -> &PropInfo {
         &self.property
     }
+
+    /// Exact source range of this end declaration when its input preserves one.
+    #[must_use]
+    pub const fn declaration_span(&self) -> Option<TextRange> {
+        self.declaration_span
+    }
 }
 
 /// A normalized association and both directed ends.
@@ -646,6 +698,7 @@ pub struct AssocInfo {
     temporal: Option<Temporal>,
     provenance: Provenance,
     source: SourceId,
+    declaration_span: Option<TextRange>,
 }
 
 impl AssocInfo {
@@ -664,7 +717,13 @@ impl AssocInfo {
             temporal,
             provenance,
             source,
+            declaration_span: None,
         }
+    }
+
+    pub(crate) const fn with_declaration_span(mut self, declaration_span: TextRange) -> Self {
+        self.declaration_span = Some(declaration_span);
+        self
     }
 
     /// Fully-qualified association path.
@@ -701,6 +760,12 @@ impl AssocInfo {
     #[must_use]
     pub const fn source(&self) -> SourceId {
         self.source
+    }
+
+    /// Exact source range of this declaration when its input preserves one.
+    #[must_use]
+    pub const fn declaration_span(&self) -> Option<TextRange> {
+        self.declaration_span
     }
 }
 
@@ -857,6 +922,7 @@ mod tests {
             qualified_properties: BTreeMap::new(),
             provenance: Provenance::PureFile,
             source: SourceId::new(0),
+            declaration_span: None,
             coverage_gap: true,
         };
         assert!(class.coverage_gap());

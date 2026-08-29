@@ -262,6 +262,7 @@ pub(super) struct AssocDraft {
     pub(super) temporal: Option<Temporal>,
     pub(super) provenance: Provenance,
     pub(super) source: SourceId,
+    pub(super) declaration_span: Option<TextRange>,
 }
 
 #[derive(Debug)]
@@ -735,6 +736,7 @@ fn lower_association(raw: RawAssociation, source: SourceId) -> Result<AssocDraft
         temporal,
         provenance: Provenance::Pmcd,
         source,
+        declaration_span: None,
     })
 }
 
@@ -753,6 +755,7 @@ struct PreparedAssociation {
     temporal: Option<Temporal>,
     provenance: Provenance,
     source: SourceId,
+    declaration_span: Option<TextRange>,
 }
 
 impl PreparedAssociation {
@@ -764,6 +767,7 @@ impl PreparedAssociation {
             temporal,
             provenance,
             source,
+            declaration_span,
         } = association;
         let first_owner = second.target().raw_type().clone();
         let second_owner = first.target().raw_type().clone();
@@ -778,6 +782,7 @@ impl PreparedAssociation {
             temporal,
             provenance,
             source,
+            declaration_span,
         }
     }
 
@@ -901,6 +906,7 @@ fn materialize_prepared_association(
     classes: &mut BTreeMap<QName, ClassInfo>,
     association: PreparedAssociation,
 ) -> Result<AssocInfo, ModelError> {
+    let declaration_span = association.declaration_span;
     let path = association.path.clone();
     insert_association_end(
         classes,
@@ -916,21 +922,28 @@ fn materialize_prepared_association(
         association.second.clone(),
         &path,
     )?;
-    Ok(AssocInfo::from_source(
+    let materialized = AssocInfo::from_source(
         association.path,
         AssociationEndInfo::new(association.first_owner, association.first),
         AssociationEndInfo::new(association.second_owner, association.second),
         association.temporal,
         association.provenance,
         association.source,
-    ))
+    );
+    Ok(if let Some(span) = declaration_span {
+        materialized.with_declaration_span(span)
+    } else {
+        materialized
+    })
 }
 
 fn pure_association_materialization_diagnostic(
     association: &PreparedAssociation,
     failure: &ModelErrorKind,
 ) -> Diagnostic {
-    let span = TextRange::empty(TextSize::new(0));
+    let span = association
+        .declaration_span
+        .unwrap_or_else(|| TextRange::empty(TextSize::new(0)));
     Diagnostic::builder(
         DiagCode::UnresolvedModelAssociation,
         Severity::Error,

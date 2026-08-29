@@ -2,7 +2,7 @@
 
 #![allow(clippy::disallowed_methods)]
 
-use pure_analyzer_diagnostics::{DiagCode, Severity};
+use pure_analyzer_diagnostics::{DiagCode, Severity, TextRange};
 use pure_analyzer_model::{
     MODEL_MERGE_CONFLICT, ModelDocument, PmcdDocument, Provenance, PureDocument, QpKind, Temporal,
     load_model_documents, load_pure_documents, load_pure_files,
@@ -12,6 +12,15 @@ use std::path::PathBuf;
 
 fn pure(source: &str) -> pure_analyzer_model::ModelGraph {
     load_pure_documents(&[PureDocument::new("memory:model.pure", source)]).expect("load Pure")
+}
+
+fn exact_span(source: &str, declaration: &str) -> TextRange {
+    let start = source.find(declaration).expect("declaration occurs once");
+    let end = start + declaration.len();
+    TextRange::new(
+        u32::try_from(start).expect("source fits TextRange").into(),
+        u32::try_from(end).expect("source fits TextRange").into(),
+    )
 }
 
 fn empty_pmcd_class(name: &str) -> String {
@@ -421,6 +430,130 @@ Class {meta::pure::profiles::temporal.bitemporal} demo::Malformed
 }
 
 #[test]
+fn confirmed_pure_declarations_retain_exact_source_spans() {
+    let left_declaration = "Class demo::Left\n{\n  value: String[1];\n  query(): String[1] {};\n}";
+    let right_declaration = "Class demo::Right\n{\n}";
+    let association_declaration =
+        "Association demo::Links\n{\n  left: demo::Left[1];\n  right: demo::Right[*];\n}";
+    let source = format!("{left_declaration}\n{right_declaration}\n{association_declaration}");
+    let graph = pure(&source);
+
+    let left = graph.class("demo::Left").expect("left");
+    assert_eq!(
+        left.declaration_span(),
+        Some(exact_span(&source, left_declaration))
+    );
+    assert_eq!(
+        left.properties()["value"].declaration_span(),
+        Some(exact_span(&source, "value: String[1];"))
+    );
+    assert_eq!(
+        left.qualified_properties()["query"].declaration_span(),
+        Some(exact_span(&source, "query(): String[1] {};"))
+    );
+
+    let association = graph.associations().first().expect("association");
+    assert_eq!(
+        association.declaration_span(),
+        Some(exact_span(&source, association_declaration))
+    );
+    assert_eq!(
+        association.end_a().declaration_span(),
+        Some(exact_span(&source, "left: demo::Left[1];"))
+    );
+    assert_eq!(
+        association.end_a().property().declaration_span(),
+        association.end_a().declaration_span()
+    );
+    assert_eq!(
+        association.end_b().declaration_span(),
+        Some(exact_span(&source, "right: demo::Right[*];"))
+    );
+    assert_eq!(
+        graph.class("demo::Right").expect("right").properties()["left"].declaration_span(),
+        association.end_a().declaration_span(),
+        "the materialized navigation end retains its source declaration range"
+    );
+    assert_eq!(
+        left.properties()["right"].declaration_span(),
+        association.end_b().declaration_span(),
+        "both materialized navigation ends retain their source declaration ranges"
+    );
+}
+
+#[test]
+fn pmcd_declarations_remain_spanless() {
+    let pmcd = json!({
+        "_type": "data",
+        "elements": [
+            {
+                "_type": "class",
+                "package": "demo",
+                "name": "Left",
+                "superTypes": [],
+                "stereotypes": [],
+                "properties": [{
+                    "name": "value",
+                    "genericType": {"rawType": "String"},
+                    "multiplicity": {"lowerBound": 1, "upperBound": 1}
+                }],
+                "qualifiedProperties": [{
+                    "name": "query",
+                    "returnGenericType": {"rawType": "String"},
+                    "returnMultiplicity": {"lowerBound": 1, "upperBound": 1},
+                    "stereotypes": [],
+                    "parameters": []
+                }]
+            },
+            {
+                "_type": "class",
+                "package": "demo",
+                "name": "Right",
+                "superTypes": [],
+                "stereotypes": [],
+                "properties": [],
+                "qualifiedProperties": []
+            },
+            {
+                "_type": "association",
+                "package": "demo",
+                "name": "Links",
+                "stereotypes": [],
+                "properties": [
+                    {
+                        "name": "left",
+                        "genericType": {"rawType": "demo::Left"},
+                        "multiplicity": {"lowerBound": 1, "upperBound": 1}
+                    },
+                    {
+                        "name": "right",
+                        "genericType": {"rawType": "demo::Right"},
+                        "multiplicity": {"lowerBound": 0, "upperBound": null}
+                    }
+                ]
+            }
+        ]
+    })
+    .to_string();
+    let graph =
+        load_model_documents(&[ModelDocument::Pmcd(PmcdDocument::new("model.json", &pmcd))])
+            .expect("load PMCD");
+
+    let left = graph.class("demo::Left").expect("left");
+    assert_eq!(left.declaration_span(), None);
+    assert_eq!(left.properties()["value"].declaration_span(), None);
+    assert_eq!(
+        left.qualified_properties()["query"].declaration_span(),
+        None
+    );
+    let association = graph.associations().first().expect("association");
+    assert_eq!(association.declaration_span(), None);
+    assert_eq!(association.end_a().declaration_span(), None);
+    assert_eq!(association.end_b().declaration_span(), None);
+    assert_eq!(association.end_a().property().declaration_span(), None);
+}
+
+#[test]
 fn confirmed_generated_milestoning_qps_are_classified_from_stereotypes() {
     let source = r#"
 Class <<temporal.businesstemporal>> demo::Holder
@@ -461,8 +594,7 @@ Class <<temporal.businesstemporal>> demo::Holder
 
 #[test]
 fn malformed_or_opaque_pure_regions_preserve_only_confirmed_facts() {
-    let graph = pure(
-        r#"
+    let source = r#"
 Enum demo::Future { enabled }
 Class demo::Partial
 {
@@ -470,13 +602,25 @@ Class demo::Partial
     good: String[1];
     query(value: String[1]): String[1] {};
 }
-"#,
-    );
+"#;
+    let graph = pure(source);
 
     let partial = graph.class("demo::Partial").expect("partial class");
     assert!(partial.coverage_gap());
+    assert_eq!(
+        partial.declaration_span(),
+        Some(exact_span(
+            source,
+            "Class demo::Partial\n{\n    bad: Foo;\n    good: String[1];\n    query(value: String[1]): String[1] {};\n}"
+        )),
+        "a confirmed class path retains its declaration span despite an open-world coverage gap"
+    );
     assert!(partial.properties().contains_key("good"));
     assert!(partial.qualified_properties().contains_key("query"));
+    assert_eq!(
+        partial.properties()["good"].declaration_span(),
+        Some(exact_span(source, "good: String[1];"))
+    );
     assert!(
         !partial.properties().contains_key("bad"),
         "a malformed property must not become a confirmed graph fact"
@@ -773,8 +917,7 @@ fn unmaterializable_pure_association_supersedes_same_path_pmcd_without_partial_f
 
 #[test]
 fn pure_association_with_a_missing_owner_is_diagnosed_without_partial_facts() {
-    let graph = pure(
-        r#"
+    let source = r#"
 Class demo::Known
 {
 }
@@ -783,8 +926,8 @@ Association demo::Broken
   known: demo::Known[1];
   missing: demo::Missing[1];
 }
-"#,
-    );
+"#;
+    let graph = pure(source);
 
     let known = graph.class("demo::Known").expect("known class");
     assert!(known.coverage_gap());
@@ -797,6 +940,14 @@ Association demo::Broken
         .expect("missing owner diagnostic");
     assert_eq!(diagnostic.severity, Severity::Error);
     assert_eq!(diagnostic.primary.file.index(), 0);
+    assert_eq!(
+        diagnostic.primary.span,
+        exact_span(
+            source,
+            "Association demo::Broken\n{\n  known: demo::Known[1];\n  missing: demo::Missing[1];\n}"
+        ),
+        "the preflight diagnostic retains the confirmed association declaration range"
+    );
     assert!(diagnostic.message.contains("demo::Missing"));
 }
 
@@ -1200,8 +1351,19 @@ Class demo::Winner
     assert_eq!(winner.provenance(), Provenance::PureFile);
     assert_eq!(winner.source().index(), 1);
     assert_eq!(
+        winner.declaration_span(),
+        Some(exact_span(
+            pure_source,
+            "Class demo::Winner\n{\n  value: String[0..1];\n}"
+        ))
+    );
+    assert_eq!(
         winner.properties()["value"].target().raw_type().as_str(),
         "String"
+    );
+    assert_eq!(
+        winner.properties()["value"].declaration_span(),
+        Some(exact_span(pure_source, "value: String[0..1];"))
     );
     assert_eq!(graph.diagnostics().len(), 1);
     let diagnostic = &graph.diagnostics()[0];
