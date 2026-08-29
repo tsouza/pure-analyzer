@@ -632,6 +632,12 @@ Class demo::After
 "#;
     let parsed = parse(source);
 
+    assert_eq!(
+        parsed.diagnostics.len(),
+        1,
+        "header recovery must not create a second no-progress diagnostic: {:#?}",
+        parsed.diagnostics
+    );
     assert_eq!(count_kind(&parsed.green, SyntaxKind::DOMAIN_CLASS_DECL), 2);
     assert_eq!(
         count_kind(&parsed.green, SyntaxKind::DOMAIN_PROPERTY_DECL),
@@ -1452,7 +1458,7 @@ fn generic_type_recovery_consumes_a_separator_before_later_facts() {
     let source = r#"
 Class demo::Broken
 {
-  broken: List<, String junk, Integer>[1];
+  broken: List<, String junk more noise, Integer>[1];
   kept: Boolean[1];
 }
 "#;
