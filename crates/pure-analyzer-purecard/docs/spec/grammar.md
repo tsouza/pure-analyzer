@@ -180,6 +180,32 @@ The grammar over-approximates validity where a CFG cannot cheaply enforce a cons
 - **`restrict`/`groupBy` string-or-list.** The arm-A relational steps accept a bare `strlit` _or_ a bracketed list (`strOrList`); L1 does not require the list form even where a single column would suffice.
 - **Symbolic milestoning literal shape.** `milestoneLit = "%" lower { lower }` admits any `%`-prefixed lowercase run, not only the two known symbols `%latest` / `%latestdate`. This mirrors how the machine already admits _any_ identifier where a reducer/step/property name is expected: L1 fixes the `% <lowercase>+` shape and the compiler/L2 reject an unknown milestone symbol. Uppercase and digit boundaries stay dead (`tests/precision_reject.rs`), so the widening cannot silently grow to `%<anything>`.
 
+
+**Tightened in issue #55 Phase 4 (removed from this list).** Four shapes L1 used
+to over-admit are now dead states, each live-attested against the pinned engine
+and each with its rejecting byte pinned in `tests/precision_reject.rs`:
+
+- **A `,` needs an element list to separate.** It is legal inside a call/group
+  (`Paren`), a collection or multiplicity bracket (`Bracket`) or a brace lambda's
+  binder list (`BraceLambda`) — never at a block query's statement level, whose
+  statements are `;`-separated ("Unexpected token ','").
+- **A lambda binder pipe needs an argument slot.** The same three frames. At a
+  block query's statement level, or on an empty stack, the query's own body is
+  already open, so a second, bodiless pipe is a dead state ("Unexpected token
+  '|'"). A boolean `||` stays legal everywhere.
+- **A typed-binder `:` needs a binder slot.** Likewise the same three frames. The
+  `::` classpath separator is decided *before* the frame test and stays legal
+  wherever a classpath is, so `meta::relational::…::JoinType` in a
+  block-statement-level value position is unaffected ("Unexpected token ':'").
+- **A call's `(` and a multiplicity `[` bind to a name.** Both are admitted from
+  `AfterName` — the state an identifier's completion (past any trailing
+  whitespace) lands in — and not from the generic `AfterValue`, so a juxtaposed
+  application off a call's result, a string or a number dies ("Unexpected token
+  '('"), as does a bracket off anything but a type name ("Bracket operation is
+  not supported" — the engine has no positional index at all). Whitespace keeps
+  the position a *name* position, so `filter (x|…)` and `TDSRow [1]`, both
+  engine-legal, still stream.
+
 ### 5.7 Observed construct inventory (the empirical spec)
 
 Counts in the **Queries** column are **distinct queries containing the construct

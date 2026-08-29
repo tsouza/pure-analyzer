@@ -291,3 +291,244 @@ fn delimiter_and_source_invariants_hold_together() {
     // Unclosed call — incomplete, not dead.
     assert!(dies("|X.all()->take(2"));
 }
+
+/// The byte offset at which the recogniser refuses `text`, or [`None`] when it
+/// streams to the end (whether or not it ends complete).
+fn dead_offset(text: &str) -> Option<usize> {
+    let grammar = l1_grammar();
+    let mut session = DecoderSession::new(&grammar);
+    for (offset, &byte) in text.as_bytes().iter().enumerate() {
+        if let Err(DecodeError::DeadState { .. }) = session.accept_byte(byte) {
+            return Some(offset);
+        }
+    }
+    None
+}
+
+/// Assert `text` is refused **on the byte that opens `at`** — the substring the
+/// rule under test is the one to reject.
+///
+/// The L1 twin of `l2_precision::assert_walk_is_masked`'s `closed_by`, and for
+/// the same reason (issue #55, Phases 1-3): a frozen walk that merely "dies
+/// somewhere" stops being evidence the moment a *different*, earlier rule takes
+/// over its kill — the fixture keeps passing while the rule it was written for
+/// quietly loses its only walk-level coverage. Naming the rejecting byte makes
+/// that takeover redden this fixture at the moment it happens. `at` must occur
+/// exactly once, so the anchor cannot drift either.
+fn assert_dies_at(text: &str, at: &str) {
+    assert_eq!(
+        text.matches(at).count(),
+        1,
+        "the fixture anchor {at:?} is not unique in:\n  {text}"
+    );
+    let want = text.find(at).expect("anchor occurs");
+    match dead_offset(text) {
+        None => panic!("PRECISION GAP: the recogniser still streams past {at:?} in:\n  {text}"),
+        Some(got) if got == want => {}
+        Some(got) => panic!(
+            "the walk was refused at byte {got} ({:?}), not on the {at:?} the rule under test \
+             is supposed to reject:\n  {text}",
+            &text[got..text.len().min(got + 12)]
+        ),
+    }
+}
+
+/// A block query's statements are `;`-separated, so a `,` at its statement level
+/// has no element list to separate. Every walk here came verbatim out of the
+/// live lane (issue #55 Phase 4) with the engine's own "Unexpected token ','.
+/// Valid alternatives: \['&&', '||', '==', '!=', '->', '\[', '.', ';', '+', '*',
+/// '-', '/', '<', '<=', '>', '>='\]" — note the absence of `,` and of `(`.
+#[test]
+fn a_block_query_statement_level_comma_dies() {
+    for (walk, at) in [
+        // world_1
+        (
+            "    \n      {\n  \n    \n    \n         |        spider::world_1::model::default::Countrylanguage.\n    \n    all(\n      ),'Language_T2'}",
+            ",'Language_T2'}",
+        ),
+        // world_1
+        (
+            "     {\n           \n      |    spider::world_1::model::default::Countrylanguage.\n      \n          \n          \n        \n\n        \n        \n        \n      \n    all()<'GovernmentForm_T1_1'&&'Capital_T3_1'\n    ,'Code2_T1_3'}",
+            ",'Code2_T1_3'}",
+        ),
+        // world_1
+        (
+            "    \n        \n        \n  {\n    \n     |\n  spider::world_1::model::default::Countrylanguage.    \n  \n      all()+'Republic','District_T3'('Code_T1_1'\n\n        *getFloat|'Region_T1_1'\n        )>'CountryCode_T2_2'\n    -'_v__t0sc0'}",
+            ",'District_T3'",
+        ),
+        // car_1
+        (
+            "    \n      {\n  \n    \n    \n         |        spider::car_1::model::default::CarMakers.\n    \n    all(\n      ),'Make_t3_5'<'Continent_T2_2'}",
+            ",'Make_t3_5'",
+        ),
+    ] {
+        assert_dies_at(walk, at);
+    }
+}
+
+/// A `|` that follows a completed term is a lambda binder pipe, and a lambda
+/// needs an argument or element slot to sit in. At a block query's statement
+/// level the query body is already open, so a second, bodiless pipe is a dead
+/// state — live-attested on all four walks below. The anchor names the byte
+/// *after* the pipe: the automaton consumes a `|` into its
+/// `SawPipe` lookahead state (a `||` is still legal there), so the refusal lands
+/// on the byte that would have opened the lambda body.
+#[test]
+fn a_lambda_binder_pipe_at_a_block_statement_level_dies() {
+    for (walk, at) in [
+        // world_1
+        (
+            "  \n        \n         {     \n        \n      \n    |spider::world_1::Db->renameColumns('Aruba'&&['GNPOld_T3_1'!='Continent_T1'!=.3000])|'SurfaceArea'}",
+            "'SurfaceArea'}",
+        ),
+        // car_1
+        (
+            "   \n  {\n    \n        \n    |spider::car_1::Db->tableReference('MIN(Weight)'\n      )\n        /String.row|'Country_t1_3'.'CountryId_T1_2'}",
+            "'Country_t1_3'.",
+        ),
+        // car_1
+        (
+            "            \n    \n      \n  \n        {\n  \n        \n        \n    |spider::car_1::Db->count('Edispl'.'150')|'AVG(Weight)'!='Weight_T1_1'&&8,'Year_t1'}",
+            "'AVG(Weight)'",
+        ),
+        // car_1
+        (
+            "  \n      \n    \n\n  \n\n\n       \n  \n      {\n  \n        \n    \n        \n       \n  \n|spider::car_1::Db->tableReference('1970'=='Model_T2_2'*toOne. fk2DefaultCarMakers||'FullName_T1_1'=='_v__t0sc0').exists|'Maker_t1'}",
+            "'Maker_t1'}",
+        ),
+    ] {
+        assert_dies_at(walk, at);
+    }
+}
+
+/// A call's `(` applies a *function*, which is named by an identifier: a
+/// juxtaposed application off a call's own result, a string literal, or a number
+/// is a dead state. Live-attested ("Unexpected token '('").
+#[test]
+fn a_juxtaposed_application_off_a_non_name_dies() {
+    for (walk, at) in [
+        // world_1
+        (
+            "  {|spider::world_1::Db->tableReference()(isEmpty:limit&&'CountryCode_t3')}",
+            "(isEmpty:limit",
+        ),
+        // car_1
+        (
+            "     \n      {\n      \n  \n          \n  |\n            spider::car_1::model::default::CarsData. \n\n        all(\n        )('American Motor Company'\n    )-'Continent_T3'\n        \n}",
+            "('American Motor Company'",
+        ),
+        // car_1
+        (
+            "  {\n          \n    \n\n      \n    \n\n    \n        \n        \n    \n\n\n  \n        \n         \n  \n    \n  \n          \n      \n  \n        \n  \n\n        \n  \n    \n                 \n        |\n      spider::car_1::Db->tableReference(6  (x:horsepower||x(1980    ).'Horsepower_T2_2'\n      &&'Ford Motor Company')<=maker(col:a>'Edispl_T2_2'))}",
+            "(x:horsepower",
+        ),
+    ] {
+        assert_dies_at(walk, at);
+    }
+}
+
+/// A `[` after a completed term is the multiplicity of the type it annotates,
+/// and nothing else — the engine has no positional index at all and says so:
+/// "Bracket operation is not supported". Live-attested on all three walks.
+#[test]
+fn a_bracket_off_a_non_name_dies() {
+    for (walk, at) in [
+        // world_1
+        (
+            "  \n  \n    {\n\n\n  \n    \n    \n    \n    \n     \n\n    \n  \n      \n        \n        \n            \n\n        \n        \n      |spider::world_1::model::default::Countrylanguage.    \n        \n    \n         \n    all()['IsOfficial_t2']}",
+            "['IsOfficial_t2']",
+        ),
+        // car_1
+        (
+            "  \n      \n    \n  \n        \n          \n      {\n  |\n\n      spider::car_1::model::default::ModelList. all()['MPG_T1_1']&&|'Id_T2'}",
+            "['MPG_T1_1']",
+        ),
+        // car_1
+        (
+            "  \n   \n     {        \n              \n     \n        \n    \n    \n\n  \n        \n          \n        \n  \n        \n    \n        \n                   |  \n  \n        spider::car_1::model::default::ModelList.\n  all( \n        )\n  \n      ['CountryId_T1']\n       }",
+            "['CountryId_T1']",
+        ),
+    ] {
+        assert_dies_at(walk, at);
+    }
+}
+
+/// The soundness counterfactual for the four tightenings above: every legal
+/// shape they sit next to still streams, so none of them is passing by rejecting
+/// its whole neighbourhood. Each of these is engine-verified `parse_ok` in
+/// `corpus/differential_l1.jsonl`.
+#[test]
+fn the_shapes_the_name_and_frame_rules_sit_next_to_still_stream() {
+    // A call's paren and a multiplicity bracket, separated from their name by
+    // whitespace — the name position survives it.
+    assert!(!dies("|X.all()->filter (x|$x.v > 1)"));
+    assert!(!dies(
+        "|X.all()->filter(row : meta::pure::tds::TDSRow [1]|$row.getInteger('x') > 0)"
+    ));
+    // A comma, a lambda pipe and a typed-binder colon inside the frames that do
+    // take an element list.
+    assert!(!dies("|X.all()->project([x|$x.a, x|$x.b], ['c','d'])"));
+    assert!(!dies("|X.all()->groupBy(~[desk], ~'total': y|$y->sum())"));
+    assert!(!dies(
+        "|X.all()->groupBy([], agg('c',row: meta::pure::tds::TDSRow[1]|$row, \
+         y: meta::pure::tds::TDSRow[*]|$y->count()))"
+    ));
+    // A block query's own `;`-separated statements, and a value-position `::`
+    // classpath at a statement level — the one `:` continuation that stays legal
+    // wherever a classpath is.
+    assert!(!dies(
+        "{|let m = X.all()->take(1); Y.all()->filter(b|$b.v == $m)->take(1);}"
+    ));
+    assert!(!dies(
+        "{|X.all()->filter(x|$x.t == meta::relational::metamodel::join::JoinType.INNER);}"
+    ));
+}
+
+/// A `:` that follows a completed term is either a `::` classpath separator —
+/// legal wherever a classpath is — or a **typed binder**'s own colon, which needs
+/// an argument or element slot to bind in. A block query's statement level has
+/// neither, so the binder arms die there while `::` keeps streaming. The anchor
+/// names the byte *after* the colon: the automaton consumes a `:` into its
+/// lookahead state (a second `:` is still legal there), so the refusal lands on
+/// the byte that would have opened the binder.
+///
+/// All four walks came verbatim out of the live lane (issue #55 Phase 4) with the
+/// engine's "Unexpected token ':'".
+#[test]
+fn a_typed_binder_colon_at_a_block_statement_level_dies() {
+    for (walk, at) in [
+        // world_1
+        (
+            "  \n  \n    {\n\n\n  \n    \n    \n    \n    \n     \n\n    \n  \n      \n        \n        \n            \n\n        \n        \n      |spider::world_1::model::default::Countrylanguage.    \n        \n    \n         \n    all():language*meta::relational::metamodel::join::JoinType}",
+            "language*meta::",
+        ),
+        // car_1
+        (
+            "  \n    \n  \n      \n    \n        \n       \n      {    \n    \n    \n         \n  \n        \n      \n\n    \n          \n     \n  \n     \n      \n  |\n   spider::car_1::model::default::CarMakers.\n  \n\nall(\n  \n        )<Float:between}",
+            "between}",
+        ),
+        // car_1
+        (
+            "   \n    \n  {|spider::car_1::Db->tableToTDS('Year_T1')>='CountryId_T2'\n    :tableToTDS }",
+            "tableToTDS }",
+        ),
+        // world_1
+        (
+            "     {\n           \n      |    spider::world_1::model::default::Countrylanguage.\n      \n          \n          \n        \n\n        \n        \n        \n      \n    all()=='hasDutch'->filter('US Territory'&&'dutch')!='CountryCode_city'||'GNPOld_t1':row1}",
+            "row1}",
+        ),
+    ] {
+        assert_dies_at(walk, at);
+    }
+}
+
+/// The counterfactual for the rule above: a value-position `::` classpath at the
+/// very same block-statement level still streams, so the colon rule is narrowing
+/// the binder arm and not the separator.
+#[test]
+fn a_value_position_classpath_at_a_block_statement_level_still_streams() {
+    assert!(!dies(
+        "{|X.all()->filter(x|$x.t == meta::relational::metamodel::join::JoinType.INNER)\
+         ->take(1);}"
+    ));
+}

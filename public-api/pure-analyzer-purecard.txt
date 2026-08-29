@@ -312,6 +312,7 @@ pub purecard::grammar::pda::State::AfterColon2
 pub purecard::grammar::pda::State::AfterColonWs
 pub purecard::grammar::pda::State::AfterDollar
 pub purecard::grammar::pda::State::AfterDot
+pub purecard::grammar::pda::State::AfterName
 pub purecard::grammar::pda::State::AfterValue
 pub purecard::grammar::pda::State::BlockStmt
 pub purecard::grammar::pda::State::BlockStmtClose
