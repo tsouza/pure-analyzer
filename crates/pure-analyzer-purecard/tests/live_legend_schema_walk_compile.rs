@@ -115,6 +115,124 @@ fn every_fixture_gold_corpus_compiles_against_its_assembled_store_grammar() {
     );
 }
 
+/// The live attestation that retires §6.6 **T7** (issue #116): a
+/// `project`/`groupBy` column/key lambda whose body is left at a **class** or a
+/// **to-many collection** compiles against the pinned stack.
+///
+/// T7 proposed masking such a body's own closing delimiter. The premise is
+/// false. `project`'s column lambda is declared over `Any`, so every shape
+/// below — including the spec's own literal counter-example
+/// `project([x|$x.fk0DefaultCountries], …)`, and a body left at the bare bound
+/// instance — is a legal projection. Masking their closers would be a soundness
+/// violation, not a precision win, so no T7 rule ships.
+///
+/// Pinned here rather than quoted in a PR description for the same reason
+/// `every_fixture_gold_corpus_compiles_against_its_assembled_store_grammar`
+/// is: an evidence claim that only ever ran once is not a gate. If a future
+/// engine pin ever *does* reject one of these, this reddens and T7 can be
+/// reopened on real evidence — which is exactly the trigger it always needed.
+/// Its L2-side twin,
+/// `l2_precision::t7_keeps_a_projection_lambda_closer_on_a_class_typed_or_to_many_body`,
+/// runs without the stack and reddens if a T7 rule is ever implemented.
+#[test]
+fn a_non_scalar_projection_lambda_body_compiles_so_t7_stays_retired() {
+    let client = LegendClient::new(ENGINE_BASE);
+    client
+        .health_wait(HEALTH_TIMEOUT)
+        .expect("Legend engine must become healthy");
+
+    const WORLD_COUNTRY: &str = "spider::world_1::model::default::Country";
+    const WORLD_CITY: &str = "spider::world_1::model::default::City";
+    const CAR_CONTINENTS: &str = "spider::car_1::model::default::Continents";
+    const CAR_MODEL_LIST: &str = "spider::car_1::model::default::ModelList";
+
+    let probes: Vec<(&str, String)> = vec![
+        // Arm-A `project`, to-many class-typed association end (`[1..*]`).
+        (
+            CRITERION_DB,
+            format!("|{WORLD_COUNTRY}.all()->project([x|$x.fk1DefaultCountrylanguage], ['col'])"),
+        ),
+        // Arm-A `project`, to-*one* class-typed association end (`[1]`).
+        (
+            CRITERION_DB,
+            format!("|{WORLD_CITY}.all()->project([x|$x.fk0DefaultCountry], ['col'])"),
+        ),
+        // Arm-R `project(~[…])`, the relation-API spelling of the same position.
+        (
+            CRITERION_DB,
+            format!("|{WORLD_COUNTRY}.all()->project(~[col: x|$x.fk1DefaultCountrylanguage])"),
+        ),
+        // `groupBy`'s key lambda, class-typed body.
+        (
+            CRITERION_DB,
+            format!(
+                "|{WORLD_COUNTRY}.all()->groupBy([x|$x.fk1DefaultCountrylanguage], \
+                 [agg(x|$x.gnp, y|$y->sum())], ['g','s'])"
+            ),
+        ),
+        // The body left at the bare bound instance — the extreme of the same
+        // claim: not even a navigation, just the class itself.
+        (
+            CRITERION_DB,
+            format!("|{WORLD_COUNTRY}.all()->project([x|$x], ['col'])"),
+        ),
+        // The spec's own literal T7 counter-example, on the generalization DB.
+        (
+            GENERALIZATION_DB,
+            format!("|{CAR_CONTINENTS}.all()->project([x|$x.fk0DefaultCountries], ['col'])"),
+        ),
+        // T7's other arm: a primitive mapped over a to-many step, so the body
+        // is a `String[*]` collection rather than a class.
+        (
+            GENERALIZATION_DB,
+            format!(
+                "|{CAR_CONTINENTS}.all()->project([x|$x.fk0DefaultCountries.countryName], ['col'])"
+            ),
+        ),
+        // A to-many/to-many association, the loosest multiplicity available in
+        // any committed fixture.
+        (
+            GENERALIZATION_DB,
+            format!("|{CAR_MODEL_LIST}.all()->project([x|$x.fk3DefaultCarNames], ['col'])"),
+        ),
+        // `agg`'s own map lambda, class-typed body.
+        (
+            GENERALIZATION_DB,
+            format!(
+                "|{CAR_CONTINENTS}.all()->groupBy([x|$x.continent], \
+                 [agg(x|$x.fk0DefaultCountries, y|$y->count())], ['g','s'])"
+            ),
+        ),
+    ];
+
+    let mut failures: Vec<String> = Vec::new();
+    for (db_id, text) in &probes {
+        let pmcd = client
+            .grammar_to_json_model(&full_model_text(db_id))
+            .unwrap_or_else(|err| panic!("{db_id}: assembled model must parse: {err}"));
+        match client.grammar_to_json_lambda(text) {
+            Err(err) => failures.push(format!("{db_id}: PARSE: {err}\n  {text}")),
+            Ok(lambda_json) => match client
+                .lambda_return_type(&lambda_json, &pmcd)
+                .unwrap_or_else(|err| panic!("{db_id} request failed: {err}"))
+            {
+                ReturnTypeOutcome::ReturnType(_) => {}
+                ReturnTypeOutcome::CompileError(message) => {
+                    failures.push(format!("{db_id}: COMPILE: {message}\n  {text}"));
+                }
+            },
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "{}/{} non-scalar projection-lambda bodies failed to compile — T7's \
+         premise may have become true under a new engine pin:\n{}",
+        failures.len(),
+        probes.len(),
+        failures.join("\n\n")
+    );
+}
+
 /// Every seed in the modern-dialect corpus **parses against the pinned engine**.
 ///
 /// The seed corpus (ADR-0007) is a soundness oracle: `modern_dialect_soundness`

@@ -325,7 +325,61 @@ The set is deliberately **monotonic and a superset**: a name is recorded whereve
   "every FK association across all 8 fixtures is a strict many-to-one pattern"
   — was wrong: it read each association in one direction only.
 
-- **T7 — projection/key lambda return-shape.** `colLambda`/`keyLambda` bodies must resolve to a **scalar** (`upper == 1`) primitive/enum value (a TDS column is scalar); a body left at a class or a to-many collection is masked. (Prevents `project([x|$x.fk0DefaultCountries], …)` — projecting a whole to-many navigation instead of one of its columns.)
+- **T7 — projection/key lambda return-shape. Retired: the premise is false, no
+  rule ships.** The pilot survey read `colLambda`/`keyLambda` bodies as needing
+  to resolve to a **scalar** primitive/enum value ("a TDS column is scalar"), and
+  proposed masking the body's own closing delimiter once it had been left at a
+  class or a to-many collection. The pinned Legend stack refutes it: `project`'s
+  column lambda is declared over `Any`, so a class-typed or to-many body is a
+  *legal* projection. Masking its closer would be a soundness violation, not a
+  precision win — the same verdict T3's `min`/`max` and T4's `contains` got, and
+  here it consumes the whole rule rather than a corner of it.
+
+  **Where the evidence comes from (2026-08-29, #116).** Nine hand-constructed
+  probes, sent through `grammarToJson/lambda` → `lambdaReturnType` against the
+  same assembled model (`full_model_text`) the live compile-rate lane uses.
+  **All nine compile.** They span both criterion databases, both projection
+  arms, and every association multiplicity any committed fixture offers:
+
+  | probe | body resolves to | outcome |
+  | --- | --- | --- |
+  | `Country.all()->project([x\|$x.fk1DefaultCountrylanguage], ['col'])` | `Countrylanguage[1..*]` | `TabularDataSet` |
+  | `City.all()->project([x\|$x.fk0DefaultCountry], ['col'])` | `Country[1]` | `TabularDataSet` |
+  | `Country.all()->project(~[col: x\|$x.fk1DefaultCountrylanguage])` | `Countrylanguage[1..*]` (arm-R) | `Relation` |
+  | `Country.all()->groupBy([x\|$x.fk1DefaultCountrylanguage], [agg(…)], […])` | `Countrylanguage[1..*]` (keyLambda) | `TabularDataSet` |
+  | `Country.all()->project([x\|$x], ['col'])` | the bare bound `Country[1]` | `TabularDataSet` |
+  | `Continents.all()->project([x\|$x.fk0DefaultCountries], ['col'])` | `Countries[1..*]` | `TabularDataSet` |
+  | `Continents.all()->project([x\|$x.fk0DefaultCountries.countryName], ['col'])` | `String[*]` | `TabularDataSet` |
+  | `ModelList.all()->project([x\|$x.fk3DefaultCarNames], ['col'])` | `CarNames[1..*]`, to-many/to-many | `TabularDataSet` |
+  | `Continents.all()->groupBy([x\|$x.continent], [agg(x\|$x.fk0DefaultCountries, y\|$y->count())], […])` | `Countries[1..*]` (agg mapLambda) | `TabularDataSet` |
+
+  The sixth row is the pilot survey's own literal counter-example
+  (`project([x|$x.fk0DefaultCountries], …)`), and it compiles. The fifth is the
+  extreme of the same claim: not even a navigation, just the bound instance.
+  Both T7 arms — "left at a class" and "left at a to-many collection" — are
+  refuted independently.
+
+  The evidentiary gap #116 recorded is real but was never the blocker it looked
+  like: no gold query puts a class-typed body in one of these lambdas, and a
+  scan of 1869 class-typed association navigations across four corpora finds
+  zero. That absence is a *usage* fact about Spider-derived flat SQL
+  projections, not a legality fact — and the engine, asked directly, says the
+  shape is legal.
+
+  **The mechanism T7 wanted exists; it is deliberately unused.** Masking a
+  closing delimiter from scope state is not new architecture — N3d
+  (`StoreMethodArgSep`'s arity-based closer mask) and N3g (`ReceiverOnlyArg`)
+  both ship it — and the scope state is already tracked: at the exact position
+  T7 would fire, the overlay's active rule is T6's `OrderedOperand` — i.e. it
+  *knows* the body is non-scalar, and masks the ordered comparators there. T7 abstains on the evidence, not for want of a
+  lever. Two gates keep that abstention honest:
+  `l2_precision::t7_keeps_a_projection_lambda_closer_on_a_class_typed_or_to_many_body`
+  pins that the `]`/`,` verdicts are *identical* for a scalar and a non-scalar
+  body (while asserting T6 still discriminates between them, so the test cannot
+  pass vacuously), and the live lane's
+  `a_non_scalar_projection_lambda_body_compiles_so_t7_stays_retired` re-runs the
+  nine probes above. If a future engine pin ever rejects one, that test reddens
+  and T7 reopens on real evidence — the trigger it always needed.
 
 ### 6.7 Rule count
 
@@ -372,8 +426,10 @@ unconstrained), **T4** (string-predicate type —
 non-String; `contains` unconstrained, being the generic collection overload),
 and **T6** (the ordered comparators masked on a navExpr that is not a scalar
 primitive). The other named categories are outside the supported overlay and
-pass through without schema narrowing. `src/schema/narrow.rs` is authoritative
-for the executable boundary.
+pass through without schema narrowing — **N4**/**T5** for want of an emitted L1
+position at all, and **T7** because the engine accepts the shape it proposed to
+mask (§6.6 T7). `src/schema/narrow.rs` is authoritative for the executable
+boundary.
 
 ---
 
@@ -396,7 +452,7 @@ L1 and L2 share a **single position vocabulary**: every place L2 narrows must be
 | **T4** string-predicate / string-transform type        | two L1 positions: `valueExpr "->" boolPred` for the predicates `startsWith`/`endsWith`, **and** `valueExpr "->" fn` for the transforms `toLower`/`toUpper` (which are `fn`, not `boolPred`, in §5.3) (§5.3). `contains` shares the first position but is never narrowed — it is the generic collection overload, legal on any receiver (§6.6 T4)                                                                                                                                                                                                                                                                    |
 | **T5** enum-comparison type                            | No emitted L1 position; this category is outside the supported schema overlay.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | **T6** multiplicity / collapse                         | the `cmpop` position right after a `navExpr` that is not a scalar primitive — a collection (upper bound ≠ 1 at any step), an extent navigation, or a class-typed step (§5.3). The collapse operators the rule leaves open (`->toOne()`, `exists`/`isEmpty`/`isNotEmpty`, the aggregates) are what turn such a `navExpr` back into a scalar.                                                                                                                                                                                                                                                                          |
-| **T7** projection/key lambda return-shape              | the `valueExpr` body of `colLambda`/`keyLambda` must be scalar (§5.3)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| **T7** projection/key lambda return-shape              | **No narrowed position — retired (§6.6 T7).** The `colLambda`/`keyLambda` `valueExpr` body (§5.3) is a real L1 position, unlike N4/T5's, but nothing narrows it: `project`'s column lambda is declared over `Any`, so a class-typed or to-many body compiles and masking its closing delimiter would be a soundness violation. Nine live probes, both projection arms and every fixture multiplicity, all compile.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 
 **Two contract points L1 explicitly provides for L2:**
 
