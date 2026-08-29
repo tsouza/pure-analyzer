@@ -2073,6 +2073,16 @@ mod tests {
         Vocab::from_byte_tokens(tokens, eos)
     }
 
+    /// The binder bias must single out the *current* binder among the variables
+    /// that are legal here — so the stream binds **two** (`x` in the first
+    /// lambda, `y` in the second) and the assertion contrasts them.
+    ///
+    /// A one-binder stream cannot test this any more: S2
+    /// (`L2Position::RefVar`) clears every name the stream never bound, so the
+    /// lone binder would be the only candidate left and *any* weighting would
+    /// pass — including `is_known_binder_ref`'s `&&` degrading to `||`, which
+    /// makes every candidate at a `$` read as the known binder. Two bound names
+    /// keep that mutation observable.
     #[test]
     fn build_candidates_biases_the_known_binder_at_a_dollar_reference() {
         let grammar = CompiledGrammar::compile(vocab_with_dollar_reference());
@@ -2082,7 +2092,8 @@ mod tests {
             &mut session,
             vocab,
             &[
-                "|", "A", ".", "all", "(", ")", "-", ">", "filter", "(", "x", "|", "$",
+                "|", "A", ".", "all", "(", ")", "-", ">", "filter", "(", "x", "|", "$", "x", ")",
+                "-", ">", "filter", "(", "y", "|", "$",
             ],
         );
         let pending = PendingCall::None;
@@ -2101,21 +2112,57 @@ mod tests {
             &pending,
             true,
             Some(b'$'),
+            Some(b"y"),
+            false,
+            None,
+        );
+        // The binder this lambda actually declared carries the bonus…
+        assert_eq!(
+            weight_of(&cands, "y"),
+            Some(DEFAULT_WEIGHT + KNOWN_BINDER_BONUS)
+        );
+        // …while `x` — bound by the *enclosing* lambda, so still admissible under
+        // S2's monotonic binder record — carries only the default. This is the
+        // pair that makes the bias, not merely the mask, the thing under test.
+        assert_eq!(weight_of(&cands, "x"), Some(DEFAULT_WEIGHT));
+    }
+
+    /// S2's own effect on the candidate set, kept as its own case now that the
+    /// bias test above needs two bound names: an identifier L1 admits after `$`
+    /// but that nothing in the stream ever bound is gone before the walker
+    /// weighs it. Emitting `$y` here is precisely the unbound-refVar failure the
+    /// live engine rejects with "Can't find variable class for variable 'y' in
+    /// the graph".
+    #[test]
+    fn build_candidates_drops_an_unbound_variable_at_a_dollar_reference() {
+        let grammar = CompiledGrammar::compile(vocab_with_dollar_reference());
+        let mut session = DecoderSession::with_schema(&grammar, schema()).expect("valid overlay");
+        let vocab = grammar.vocab();
+        drive(
+            &mut session,
+            vocab,
+            &[
+                "|", "A", ".", "all", "(", ")", "-", ">", "filter", "(", "x", "|", "$",
+            ],
+        );
+        let cands = build_candidates(
+            &mut session,
+            &schema(),
+            vocab,
+            &PendingCall::None,
+            true,
+            Some(b'$'),
             Some(b"x"),
             false,
             None,
         );
-        assert_eq!(
-            weight_of(&cands, "x"),
-            Some(DEFAULT_WEIGHT + KNOWN_BINDER_BONUS)
-        );
-        // `y` is an identifier L1 admits after `$`, but this stream binds only
-        // `x` — S2 (`L2Position::RefVar`) clears it before the walker ever weighs
-        // it, so the binder bias now operates *within* the schema-legal variable
-        // set rather than over every identifier in the vocabulary. Emitting `$y`
-        // here is precisely the unbound-refVar failure the live engine rejects
-        // with "Can't find variable class for variable 'y' in the graph".
-        assert_eq!(weight_of(&cands, "y"), None);
+        let has = |piece: &str| {
+            cands
+                .iter()
+                .any(|&(id, _)| vocab.bytes(id) == Some(piece.as_bytes()))
+        };
+        assert!(has("x"), "the bound binder stays admissible");
+        assert!(!has("y"), "an unbound name is masked by S2");
     }
 
     #[test]
