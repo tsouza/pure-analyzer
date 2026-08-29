@@ -295,6 +295,26 @@ pub enum L2Position {
         /// must have a multiplicity [1]").
         after_dash: bool,
     },
+    /// N3f: the method-name identifier right after a class extent's own `->` —
+    /// the coarse **receiver-category** position. N3e admits the step arrow off a
+    /// closed `Class.all()`; this decides what that arrow may open.
+    ///
+    /// The mirror image of [`StoreMethod`](L2Position::StoreMethod), and
+    /// deliberately the *opposite* shape. A store path denotes one type with one
+    /// method, so its rule is a permit set. A class extent is a `T[*]` collection,
+    /// and the generic collection builtins that legally operate on one are open-
+    /// ended — `at`, `drop`, `slice`, `init`, `tail`, `first`, `last`, `reverse`,
+    /// `removeDuplicates` and `fold` all compile here and appear in no corpus, so
+    /// §4 forbids the allow-list that would mask them. What *is* closed is the
+    /// complement this rule states: the names whose entire overload set demands a
+    /// relation/store or primitive-scalar receiver, which a class extent can never
+    /// present ([`EXTENT_INCOMPATIBLE_METHODS`]).
+    ///
+    /// A denied name is cleared at the token that **closes its lexeme**, not at
+    /// its first byte — `pair` must stay walkable as the live prefix of a longer
+    /// legal name, exactly as N3c's close policy keeps `Country` walkable inside
+    /// `Countrylanguage`.
+    ExtentMethod,
     /// N1/N2: the identifier after `.` must be a member of `class`.
     Member(String),
     /// T1: the comparison operand's literal type must match `class`.
@@ -357,6 +377,58 @@ pub(crate) const SOURCE_METHOD: &str = "all";
 /// store method cannot be added without stating its own — the arity is a fact
 /// about one method's signature, never about the set.
 pub(crate) const STORE_METHODS: &[(&str, usize)] = &[("tableReference", 2)];
+
+/// N3f's deny set: the vocabulary method names whose **every** overload demands a
+/// receiver category a class extent can never be ([`L2Position::ExtentMethod`]).
+///
+/// Read off the engine's own function registry, never invented. Asked for a name
+/// it cannot match, the compiler prints the whole candidate set it *could* have
+/// matched; for each name below not one candidate's receiver parameter admits the
+/// `T[*]` a `Class.all()` produces, so no argument list can rescue the call. Two
+/// receiver categories account for all of them:
+///
+/// * **relation / store** receivers — `agg(String[1]|FunctionDefinition<…>[1],…)`,
+///   `join(Relation<T>[1]|TabularDataSet[1],…)`,
+///   `renameColumns(TabularDataSet[1],…)`, `restrict(TabularDataSet[1],String[*])`,
+///   `tableReference(Database[1],String[1],String[1])`, `tableToTDS(Table[1])`;
+/// * **primitive scalar** receivers — `average(Float|Integer|Number[*])`,
+///   `between(StrictDate|DateTime|Number|String[0..1],…)`,
+///   `endsWith(String[…],String[1])`, `in(Any[1]|Any[0..1],Any[*])`,
+///   `pair(U[1],V[1])`, `parseFloat(String[1])`,
+///   `startsWith(String[…],String[1])`, `substring(String[1],…)`,
+///   `sum(Float|Integer|Number[*])`, `toLower(String[1])`, `toString(Any[1])`,
+///   `year(Date[1]|Date[0..1])`.
+///
+/// A class extent is neither, which is the whole rule — and why this is a
+/// *deny* set rather than the permit set N3c gets for the store arm. There is no
+/// closed permit set to have: `at`, `drop`, `slice`, `add`, `init`, `tail`,
+/// `first`, `last`, `removeDuplicates`, `reverse` and `fold` all compile on a
+/// class extent while appearing nowhere in the corpus, so an allow-list built
+/// from corpus names would mask eleven legal collection builtins. Every entry
+/// here was sent through the running engine on this branch first, at zero, one
+/// and two literal arguments and with a lambda, before it was written down.
+///
+/// `pub(crate)` so `narrow.rs` builds the rule's trie from the same list.
+pub(crate) const EXTENT_INCOMPATIBLE_METHODS: &[&str] = &[
+    "agg",
+    "average",
+    "between",
+    "endsWith",
+    "in",
+    "join",
+    "pair",
+    "parseFloat",
+    "renameColumns",
+    "restrict",
+    "startsWith",
+    "substring",
+    "sum",
+    "tableReference",
+    "tableToTDS",
+    "toLower",
+    "toString",
+    "year",
+];
 
 /// The lone `-` a vocabulary that splits the step connector offers as its own
 /// token — the one token N3e's extent arming survives (see
@@ -601,6 +673,12 @@ pub(crate) struct ScopeTracker {
     /// [`awaiting_store_method`](Self::awaiting_store_method): the close sets it
     /// and any following non-whitespace token clears it.
     awaiting_extent_step: bool,
+    /// N3f: the `->` just seen was the class extent's own step arrow, so the
+    /// following identifier is an extent method name ([`L2Position::ExtentMethod`]).
+    /// Consumed one token later, exactly like
+    /// [`awaiting_store_method`](Self::awaiting_store_method): the arrow sets it
+    /// and any following non-whitespace token clears it.
+    awaiting_extent_method: bool,
     /// Every column name emitted so far — quoted string literals (arm-A N6,
     /// `~'Gross Credits'`) and arm-R `~`-introduced names (`~Col`, `~[Week, …]`
     /// keys). A superset stored as raw (unquoted) bytes, so a real reference to a
@@ -883,11 +961,12 @@ impl ScopeTracker {
         if !was_cmp {
             self.cmp_pending = None;
         }
-        // The reducer-name and store-method identifiers (any non-arrow token after
-        // an armed arrow) consume their arrow's arming.
+        // The reducer-name, store-method and extent-method identifiers (any
+        // non-arrow token after an armed arrow) consume their arrow's arming.
         if !was_arrow {
             self.awaiting_reducer = None;
             self.awaiting_store_method = false;
+            self.awaiting_extent_method = false;
         }
         // N3e's arming likewise lives exactly one non-whitespace token past the
         // close that set it (a `Lexeme::Ws` returns before reaching here, so
@@ -1077,6 +1156,11 @@ impl ScopeTracker {
         // N3c (store arm): an arrow straight off a store source path opens the
         // one position where a store method name is legal.
         self.awaiting_store_method = self.source_path_seen.take() == Some(SourceKind::Store);
+        // N3f: the mirror arm. N3e's arming is still live at this point —
+        // `dispatch_token` clears it only after this call returns — so an arrow
+        // that N3e itself admitted off a closed `Class.all()` is exactly the one
+        // that opens the extent's method-name position.
+        self.awaiting_extent_method = self.awaiting_extent_step;
         // T3: a bare `$y->` (no intervening dot — `pending_refvar` still names the
         // just-dispatched refVar) where `y` is bound to a primitive element type
         // arms the reducer-name position (`opening_position` reads this one token
@@ -1403,28 +1487,7 @@ impl ScopeTracker {
                     }
                 }
             }
-            State::ExpectValue | State::ExpectValueReq => {
-                if self.in_source_method_args {
-                    L2Position::SourceMethodArg
-                } else if self.store_call_arity.is_some() {
-                    L2Position::StoreMethodArg
-                } else if let Some(tc) = self.cmp_pending {
-                    L2Position::ReValue(tc)
-                } else if self.in_column_arg() {
-                    L2Position::Column
-                } else if self.in_tilde_key(state) {
-                    // An arm-R `~[Col, …]` key is a bare word that *is* a
-                    // complete value, so N7's "a dangling word resolves to
-                    // nothing" premise does not hold for it. None of the 8
-                    // fixture corpora use arm-R at all (`schema_walk_rule_
-                    // coverage.rs`'s `EXPECTED_UNFIRED`), so there is no
-                    // evidence here for what may follow one — and §4's rule is
-                    // to invent no constraint the corpus does not exercise.
-                    L2Position::None
-                } else {
-                    L2Position::ValueIdent
-                }
-            }
+            State::ExpectValue | State::ExpectValueReq => self.value_opening_position(state),
             // A bare word also opens a value straight after a lambda arrow (the
             // body) or after an operator that has its own intermediate state
             // because it may still grow into a longer one (`<` `>` `-` `|`) —
@@ -1452,11 +1515,44 @@ impl ScopeTracker {
             // A method-name identifier right after `->` opens here (distinct from
             // `ExpectValue`/`ExpectValueReq`, which a value/lambda term opens at).
             State::AfterArrow if self.awaiting_store_method => L2Position::StoreMethod,
+            // N3f. Mutually exclusive with the store arm above: a stream reaches
+            // one only off a store path and the other only off a class extent.
+            State::AfterArrow if self.awaiting_extent_method => L2Position::ExtentMethod,
             State::AfterArrow => match self.awaiting_reducer {
                 Some(tc) => L2Position::Reducer(tc),
                 None => L2Position::None,
             },
             _ => L2Position::None,
+        }
+    }
+
+    /// The L2 rule at a **value** anchor (`ExpectValue`/`ExpectValueReq`) — the one
+    /// arm of [`opening_position`](ScopeTracker::opening_position) that is itself a
+    /// cascade rather than a state test, since every rule that governs an argument
+    /// or operand slot competes for the same two states.
+    ///
+    /// Split out so the two stay separately readable: the caller is a table of
+    /// automaton states, this is a precedence order over the open call and
+    /// comparison context.
+    fn value_opening_position(&self, state: State) -> L2Position {
+        if self.in_source_method_args {
+            L2Position::SourceMethodArg
+        } else if self.store_call_arity.is_some() {
+            L2Position::StoreMethodArg
+        } else if let Some(tc) = self.cmp_pending {
+            L2Position::ReValue(tc)
+        } else if self.in_column_arg() {
+            L2Position::Column
+        } else if self.in_tilde_key(state) {
+            // An arm-R `~[Col, …]` key is a bare word that *is* a complete value,
+            // so N7's "a dangling word resolves to nothing" premise does not hold
+            // for it. None of the 8 fixture corpora use arm-R at all
+            // (`schema_walk_rule_coverage.rs`'s `EXPECTED_UNFIRED`), so there is
+            // no evidence here for what may follow one — and §4's rule is to
+            // invent no constraint the corpus does not exercise.
+            L2Position::None
+        } else {
+            L2Position::ValueIdent
         }
     }
 
