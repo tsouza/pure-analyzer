@@ -124,8 +124,9 @@ jobs:
   # The workspace-wide pass is by far the slowest gate in this workflow
   # (~893 mutants, close to an hour run serially) — sharded across a matrix so
   # a PR's total wall-clock wait is bounded by the slowest shard, not the sum
-  # of all of them. 6 shards balances a large speedup against fixed per-job
-  # checkout/build overhead; cargo-mutants' own `--shard` flag splits the
+  # of all of them. 12 shards keeps the healthy mutation wall clock below the
+  # previous 15–22 minute range while preserving the full mutant set;
+  # cargo-mutants' own `--shard` flag splits the
   # mutant list, so shards need no coordination beyond each writing to its own
   # output directory (`test_mutation_shard`'s doc comment in xtask).
   mutation:
@@ -140,7 +141,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1, 2, 3, 4, 5]
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
     env:
       SCCACHE_GHA_ENABLED: "true"
       RUSTC_WRAPPER: sccache
