@@ -461,6 +461,27 @@ fn precedence_pmcd_graph(parents: &[&str]) -> ModelGraph {
             )],
         ),
         pmcd_class(
+            "FarGenerated",
+            &[],
+            None,
+            Vec::new(),
+            vec![pmcd_qualified_property(
+                "hit",
+                "model::Target",
+                0,
+                Some(1),
+                true,
+                &[],
+            )],
+        ),
+        pmcd_class(
+            "NearPlain",
+            &["model::FarGenerated"],
+            None,
+            vec![pmcd_property("hit", "model::Target", 1, Some(1))],
+            Vec::new(),
+        ),
+        pmcd_class(
             "UserParent",
             &[],
             None,
@@ -488,6 +509,13 @@ fn precedence_pmcd_graph(parents: &[&str]) -> ModelGraph {
             pmcd_property("hit", "model::Target", 0, Some(1)),
             None,
         ),
+        pmcd_class(
+            "DirectChild",
+            &["model::GeneratedParent"],
+            None,
+            vec![pmcd_property("hit", "model::Target", 1, Some(2))],
+            Vec::new(),
+        ),
         pmcd_class("Child", parents, None, Vec::new(), Vec::new()),
     ])
 }
@@ -501,6 +529,17 @@ Class model::GeneratedParent
 {
   <<milestoning.generatedmilestoningproperty>>
   hit(): model::Target[0..1] {};
+}
+
+Class model::FarGenerated
+{
+  <<milestoning.generatedmilestoningproperty>>
+  hit(): model::Target[0..1] {};
+}
+
+Class model::NearPlain extends model::FarGenerated
+{
+  hit: model::Target[1];
 }
 
 Class model::UserParent
@@ -521,6 +560,11 @@ Association model::ParentTarget
 {
   otherEnd: model::AssociationParent[1];
   hit: model::Target[0..1];
+}
+
+Class model::DirectChild extends model::GeneratedParent
+{
+  hit: model::Target[1..2];
 }
 
 Class model::Child extends "#;
@@ -578,6 +622,43 @@ fn inherited_member_precedence_has_pmcd_pure_parity() {
             association: qname("ParentTarget"),
         },
     );
+}
+
+#[test]
+fn direct_and_nearest_inheritance_precedence_have_pmcd_pure_parity() {
+    let pmcd = precedence_pmcd_graph(&["model::NearPlain"]);
+    let pure = precedence_pure_graph(&["model::NearPlain"]);
+
+    for (class, owner, expected_lower, expected_upper) in [
+        ("DirectChild", "DirectChild", 1, Some(2)),
+        ("Child", "NearPlain", 1, Some(1)),
+    ] {
+        let pmcd_member = found_member(&pmcd, class, "hit");
+        let pure_member = found_member(&pure, class, "hit");
+
+        assert_fact_parity(&pmcd_member, &pure_member);
+        assert_eq!(pmcd_member.owner().path().as_str(), model_path(owner));
+        assert_eq!(pmcd_member.target().raw_type().as_str(), "model::Target");
+        assert_eq!(pmcd_member.kind(), &ResolvedMemberKind::Property);
+        assert_eq!(pmcd_member.multiplicity().lower(), expected_lower);
+        assert_eq!(pmcd_member.multiplicity().upper(), expected_upper);
+        assert_eq!(pmcd_member.target_temporal_arity(), Some(2));
+
+        let pmcd_navigation = found_navigation_member(&pmcd, class, "hit", 0);
+        let pure_navigation = found_navigation_member(&pure, class, "hit", 0);
+
+        assert_fact_parity(&pmcd_navigation, &pure_navigation);
+        assert_eq!(
+            MemberFacts::from(&pmcd_navigation),
+            MemberFacts::from(&pmcd_member)
+        );
+        assert_eq!(
+            MemberFacts::from(&pure_navigation),
+            MemberFacts::from(&pure_member)
+        );
+        assert_eq!(pmcd_navigation.owner().path().as_str(), model_path(owner));
+        assert_eq!(pmcd_navigation.kind(), &ResolvedMemberKind::Property);
+    }
 }
 
 #[test]
