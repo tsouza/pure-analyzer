@@ -140,6 +140,9 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      # Keep all 12 slices while leaving hosted-runner capacity for the
+      # repository's other required workflows; the matrix runs in two waves.
+      max-parallel: 6
       matrix:
         shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
     env:
