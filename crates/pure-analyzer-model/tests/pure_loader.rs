@@ -287,6 +287,25 @@ Class demo::Partial
 }
 
 #[test]
+fn malformed_but_structurally_complete_property_is_not_lowered() {
+    let graph = pure(
+        r#"
+Class demo::Partial
+{
+    broken: String[1]
+}
+"#,
+    );
+
+    let partial = graph.class("demo::Partial").expect("partial class");
+    assert!(partial.coverage_gap());
+    assert!(
+        !partial.properties().contains_key("broken"),
+        "a property without its required terminator must remain unconfirmed"
+    );
+}
+
+#[test]
 fn pure_associations_are_not_materialized_and_open_same_source_classes() {
     let graph = pure(
         r#"

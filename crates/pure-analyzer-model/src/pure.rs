@@ -327,7 +327,7 @@ fn insert_property(
         .property_declarations
         .insert(name.clone(), node.text_range());
     if context.gaps.iter().any(|gap| {
-        gap.kind == DomainCoverageGapKind::MalformedDeclaration
+        matches!(gap.kind, DomainCoverageGapKind::MalformedDeclaration)
             && range_start(gap.span) == range_start(node.text_range())
     }) {
         return false;
@@ -371,7 +371,7 @@ fn insert_qualified_property(
         .qualified_property_declarations
         .insert(name.clone(), node.text_range());
     if context.gaps.iter().any(|gap| {
-        gap.kind == DomainCoverageGapKind::MalformedDeclaration
+        matches!(gap.kind, DomainCoverageGapKind::MalformedDeclaration)
             && range_start(gap.span) == range_start(node.text_range())
     }) {
         return false;
@@ -468,7 +468,7 @@ fn lower_signature(node: &GreenNode, context: LoweringContext<'_>) -> Option<Vec
     let mut signature = Vec::new();
     for parameter in direct_nodes(node, SyntaxKind::DOMAIN_PARAMETER_DECL) {
         if context.gaps.iter().any(|gap| {
-            gap.kind == DomainCoverageGapKind::MalformedDeclaration
+            matches!(gap.kind, DomainCoverageGapKind::MalformedDeclaration)
                 && range_start(gap.span) == range_start(parameter.text_range())
         }) {
             return None;
