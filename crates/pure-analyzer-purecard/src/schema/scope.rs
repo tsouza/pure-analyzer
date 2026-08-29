@@ -86,17 +86,26 @@ const fn is_two_byte_op(a: u8, b: u8) -> bool {
     )
 }
 
-/// `bytes` as the operator it forms at `anchor`: a two-byte operator split across
-/// two tokens is rejoined with the byte the anchor is holding, exactly as
-/// [`classify_at`] rejoins it. Every other token is returned unchanged.
+/// Whether `bytes` is a [`LOGICAL_OPERATORS`] entry at `anchor` — N4b's arming
+/// test, over both the whole token and the split one.
 ///
-/// Split out rather than folded into [`classify_at`] because N4b needs the
-/// *bytes* (`&&` and `||` both classify as [`Lexeme::Other`], which cannot tell
-/// them apart), while `classify_at` needs the [`Lexeme`].
-fn operator_bytes(bytes: &[u8], anchor: State) -> Vec<u8> {
+/// Its own predicate rather than a reuse of [`classify_at`] because N4b needs the
+/// *bytes*: `&&` and `||` both classify as [`Lexeme::Other`], which cannot tell
+/// them apart.
+///
+/// The split arm carries no `is_two_byte_op` guard, and deliberately: joining is
+/// gated on the joined pair being a logical operator, which is the strictly
+/// stronger test. [`pending_operator_byte`] never yields `&`, so `|` + `|` is the
+/// only split this can accept — and that pair is a two-byte operator anyway. A
+/// guard would be dead weight here, and dead weight in a predicate is a mutant no
+/// test can kill.
+fn is_logical_operator(bytes: &[u8], anchor: State) -> bool {
+    if LOGICAL_OPERATORS.contains(&bytes) {
+        return true;
+    }
     match (pending_operator_byte(anchor), bytes) {
-        (Some(first), [second]) if is_two_byte_op(first, *second) => vec![first, *second],
-        _ => bytes.to_vec(),
+        (Some(first), [second]) => LOGICAL_OPERATORS.contains(&[first, *second].as_slice()),
+        _ => false,
     }
 }
 
@@ -1079,7 +1088,7 @@ impl ScopeTracker {
         // own, and matching the raw bytes would miss the operator entirely and
         // leave N4b unarmed — the very split-token case N4a and N4c go to
         // explicit trouble over.
-        let was_logical = LOGICAL_OPERATORS.contains(&operator_bytes(bytes, pre_state).as_slice());
+        let was_logical = is_logical_operator(bytes, pre_state);
         let mut resolved_now: Option<TypeClass> = None;
 
         match &lex {
@@ -1895,10 +1904,53 @@ impl ScopeTracker {
 #[cfg(test)]
 mod tests {
     use super::{
-        L2Position, Lexeme, SOURCE_METHOD, ScopeTracker, classify, classify_at, is_two_byte_op,
+        L2Position, Lexeme, SOURCE_METHOD, ScopeTracker, classify, classify_at,
+        is_logical_operator, is_two_byte_op,
     };
     use crate::grammar::pda::{Pda, State};
     use crate::schema::model::{Schema, TypeClass};
+
+    /// N4b's arming predicate, over both the shapes a vocabulary can offer a
+    /// logical operator in and the shapes it must not fire on.
+    ///
+    /// The two arms are independently pinned. The whole-token rows fail if the
+    /// direct membership test is dropped; the split row (`|` offered alone at
+    /// `SawPipe`, the anchor holding the operator's first byte) fails if the
+    /// rejoining arm is — which is the case that reached the live lane, where a
+    /// gold-derived vocabulary splits `||` and N4b was silently never armed.
+    ///
+    /// The negative rows are what keep the rejoining from becoming "join
+    /// anything": a pair that is not itself a logical operator must not become
+    /// one, and a lone `|` at an anchor holding nothing is a lambda binder pipe,
+    /// not half of an `||`.
+    #[test]
+    fn n4b_arms_on_a_logical_operator_whole_or_split_and_on_nothing_else() {
+        for (bytes, anchor) in [
+            (b"&&".as_slice(), State::AfterValue),
+            (b"||".as_slice(), State::AfterValue),
+            (b"|".as_slice(), State::SawPipe),
+        ] {
+            assert!(
+                is_logical_operator(bytes, anchor),
+                "N4b must arm on {:?} at {anchor:?}",
+                std::str::from_utf8(bytes)
+            );
+        }
+        for (bytes, anchor) in [
+            (b"|".as_slice(), State::AfterValue),
+            (b"|".as_slice(), State::SawLt),
+            (b"=".as_slice(), State::SawEq),
+            (b">".as_slice(), State::SawDash),
+            (b"&".as_slice(), State::AfterValue),
+            (b"'x'".as_slice(), State::SawPipe),
+        ] {
+            assert!(
+                !is_logical_operator(bytes, anchor),
+                "N4b must not arm on {:?} at {anchor:?}",
+                std::str::from_utf8(bytes)
+            );
+        }
+    }
 
     /// A two-byte operator split across two tokens is classified as the operator
     /// it is, not as its second byte alone — the fix for the leak that let a
