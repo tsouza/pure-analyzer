@@ -502,6 +502,11 @@ const FROZEN_FAMILIES: &[(&str, &str)] = &[
          legal `Class.all()` so no source-level rule reaches them first",
     ),
     (
+        "n3f-extent-method",
+        "Phase 5 · bucket D — a builtin arrowed off a `Class.all()` extent whose \
+         every overload wants a receiver a `T[*]` class collection cannot be",
+    ),
+    (
         "n3c-class",
         "Phase 3 · bucket R1 — a method arrowed off the bare `Class<T>[1]` metatype",
     ),
@@ -822,6 +827,182 @@ static FROZEN_KILLS: &[FrozenKill] = &[
         },
     },
     FrozenKill {
+        fixture: "n3f-extent-method",
+        db: "world_1",
+        closer: Closer::L2("ExtentMethod"),
+        kill: Kill::Walk {
+            walk: "{|spider::world_1::model::default::Countrylanguage.all()\
+             ->pair('LifeExpectancy_T3_1')!='GNP_T3_1'}",
+            closed_by: "(",
+        },
+    },
+    FrozenKill {
+        fixture: "n3f-extent-method",
+        db: "world_1",
+        closer: Closer::L2("ExtentMethod"),
+        kill: Kill::Walk {
+            walk: "{|spider::world_1::model::default::Countrylanguage.all()\
+             ->average('LocalName_T3_1')||'dutch'==160000/'CountryCode_city'\
+             ||'GNPOld_t1'::count&&'ID_T1_1'}",
+            closed_by: "(",
+        },
+    },
+    FrozenKill {
+        fixture: "n3f-extent-method",
+        db: "world_1",
+        closer: Closer::L2("ExtentMethod"),
+        kill: Kill::Walk {
+            walk: "{|spider::world_1::model::default::Countrylanguage.all()->agg(.1950)}",
+            closed_by: "(",
+        },
+    },
+    FrozenKill {
+        fixture: "n3f-extent-method",
+        db: "world_1",
+        closer: Closer::L2("ExtentMethod"),
+        kill: Kill::Walk {
+            walk: "{|spider::world_1::model::default::Country.all()->join('_c1')}",
+            closed_by: "(",
+        },
+    },
+    FrozenKill {
+        fixture: "n3f-extent-method",
+        db: "car_1",
+        closer: Closer::L2("ExtentMethod"),
+        kill: Kill::Walk {
+            walk: "{|spider::car_1::model::default::CarMakers.all()\
+             ->between(max('American Motor Company'))*'cnt'\
+             ::spider::car_1::model::default::CarMakers<=col||'Model_t1'}",
+            closed_by: "(",
+        },
+    },
+    FrozenKill {
+        fixture: "n3f-extent-method",
+        db: "car_1",
+        closer: Closer::L2("ExtentMethod"),
+        kill: Kill::Walk {
+            walk: "{|spider::car_1::model::default::CarMakers.all()->join('car_names')}",
+            closed_by: "(",
+        },
+    },
+    FrozenKill {
+        fixture: "n3f-extent-method",
+        db: "world_1",
+        closer: Closer::L2("ExtentMethod"),
+        kill: Kill::Walk {
+            walk: "{|spider::world_1::model::default::Country.all()->renameColumns('a','b')}",
+            closed_by: "(",
+        },
+    },
+    FrozenKill {
+        fixture: "n3f-extent-method",
+        db: "world_1",
+        closer: Closer::L2("ExtentMethod"),
+        kill: Kill::Walk {
+            walk: "{|spider::world_1::model::default::Country.all()->restrict('Population_T3')}",
+            closed_by: "(",
+        },
+    },
+    FrozenKill {
+        fixture: "n3f-extent-method",
+        db: "world_1",
+        closer: Closer::L2("ExtentMethod"),
+        kill: Kill::Walk {
+            walk: "{|spider::world_1::model::default::Country.all()->tableReference('default','country')}",
+            closed_by: "(",
+        },
+    },
+    FrozenKill {
+        fixture: "n3f-extent-method",
+        db: "world_1",
+        closer: Closer::L2("ExtentMethod"),
+        kill: Kill::Walk {
+            walk: "{|spider::world_1::model::default::Country.all()->tableToTDS()}",
+            closed_by: "(",
+        },
+    },
+    FrozenKill {
+        fixture: "n3f-extent-method",
+        db: "world_1",
+        closer: Closer::L2("ExtentMethod"),
+        kill: Kill::Walk {
+            walk: "{|spider::world_1::model::default::Country.all()->endsWith('a')}",
+            closed_by: "(",
+        },
+    },
+    FrozenKill {
+        fixture: "n3f-extent-method",
+        db: "world_1",
+        closer: Closer::L2("ExtentMethod"),
+        kill: Kill::Walk {
+            walk: "{|spider::world_1::model::default::Country.all()->in('a')}",
+            closed_by: "(",
+        },
+    },
+    FrozenKill {
+        fixture: "n3f-extent-method",
+        db: "world_1",
+        closer: Closer::L2("ExtentMethod"),
+        kill: Kill::Walk {
+            walk: "{|spider::world_1::model::default::Country.all()->parseFloat('1')}",
+            closed_by: "(",
+        },
+    },
+    FrozenKill {
+        fixture: "n3f-extent-method",
+        db: "world_1",
+        closer: Closer::L2("ExtentMethod"),
+        kill: Kill::Walk {
+            walk: "{|spider::world_1::model::default::Country.all()->startsWith('a')}",
+            closed_by: "(",
+        },
+    },
+    FrozenKill {
+        fixture: "n3f-extent-method",
+        db: "world_1",
+        closer: Closer::L2("ExtentMethod"),
+        kill: Kill::Walk {
+            walk: "{|spider::world_1::model::default::Country.all()->substring(1,2)}",
+            closed_by: "(",
+        },
+    },
+    FrozenKill {
+        fixture: "n3f-extent-method",
+        db: "world_1",
+        closer: Closer::L2("ExtentMethod"),
+        kill: Kill::Walk {
+            walk: "{|spider::world_1::model::default::Country.all()->sum('a')}",
+            closed_by: "(",
+        },
+    },
+    FrozenKill {
+        fixture: "n3f-extent-method",
+        db: "world_1",
+        closer: Closer::L2("ExtentMethod"),
+        kill: Kill::Walk {
+            walk: "{|spider::world_1::model::default::Country.all()->toLower('a')}",
+            closed_by: "(",
+        },
+    },
+    FrozenKill {
+        fixture: "n3f-extent-method",
+        db: "world_1",
+        closer: Closer::L2("ExtentMethod"),
+        kill: Kill::Walk {
+            walk: "{|spider::world_1::model::default::Country.all()->toString('a')}",
+            closed_by: "(",
+        },
+    },
+    FrozenKill {
+        fixture: "n3f-extent-method",
+        db: "world_1",
+        closer: Closer::L2("ExtentMethod"),
+        kill: Kill::Walk {
+            walk: "{|spider::world_1::model::default::Country.all()->year('a')}",
+            closed_by: "(",
+        },
+    },
+    FrozenKill {
         fixture: "n7-extent",
         db: "world_1",
         closer: Closer::L2("ValueIdent"),
@@ -845,7 +1026,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
         db: "world_1",
         closer: Closer::L2("ValueIdent"),
         kill: Kill::Walk {
-            walk: "|spider::world_1::model::default::Country.all()->pair(tableReference)&&5",
+            walk: "|spider::world_1::model::default::Country.all()->count(tableReference)&&5",
             closed_by: ")",
         },
     },
@@ -855,7 +1036,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
         closer: Closer::L2("ValueIdent"),
         kill: Kill::Walk {
             walk: "|spider::world_1::model::default::Countrylanguage.all()\
-             ->pair(code    \n!='Name_T2')",
+             ->sort(code    \n!='Name_T2')",
             closed_by: "    \n",
         },
     },
@@ -2085,10 +2266,19 @@ fn n7_masks_every_dangling_value_identifier_walk() {
 /// ```text
 /// |…::Country.all()->max(language)                        => …element 'language'
 /// |…::Country.all()->filter('SUM(SurfaceArea)'<agg/'…')   => …element 'agg'
-/// |…::Country.all()->pair(tableReference)&&5              => …element 'tableReference'
-/// |…::Countrylanguage.all()->pair(code    \n!='Name_T2')   => …element 'code'
+/// |…::Country.all()->count(tableReference)&&5             => …element 'tableReference'
+/// |…::Countrylanguage.all()->sort(code    !='Name_T2')    => …element 'code'
 /// |…::Country.all()->col(between\n*'District_city')        => …element 'between'
 /// ```
+///
+/// **Two payloads were re-rooted again in Phase 5** (issue #55), and the
+/// `closed_by` guard is what forced it: both previously arrived through
+/// `->pair(…)`, and N3f now denies `pair` on a class extent, closing the walk at
+/// the call's `(` — one rule taking over another's kill for the fifth time in
+/// the series. They now arrive through `count` and `sort`, which N3f leaves
+/// alone, so N7 is still the rule under test. Both replacements were sent
+/// through the live engine on this branch and rejected on the dangling word
+/// exactly as their predecessors were.
 #[test]
 fn n7_masks_a_dangling_value_identifier_behind_a_real_extent() {
     assert_frozen("n7-extent");
@@ -2321,6 +2511,126 @@ fn n3e_still_admits_the_step_arrow_and_the_extent_property_dot() {
         "world_1",
         "|spider::world_1::model::default::Country.all().name",
     );
+}
+
+/// Issue #55 Phase 5 — N3f, the extent's **receiver category**. N3e admits the
+/// step arrow off a closed `Class.all()`; this decides what that arrow may open.
+///
+/// The first five walks are the criterion database's own live bucket-D failures
+/// (whitespace normalised — the kill lands on the call's `(`, which no
+/// whitespace run can move; each normalised string was re-sent through the
+/// engine on this branch and rejected identically to the walker's original):
+///
+/// ```text
+/// {|…::Countrylanguage.all()->pair('LifeExpectancy_T3_1')!=…}  pair(Countrylanguage[*],String[1])
+/// {|…::Countrylanguage.all()->average('LocalName_T3_1')||…}    average(Countrylanguage[*],String[1])
+/// {|…::Countrylanguage.all()->agg(.1950)}                      agg(Countrylanguage[*],Float[1])
+/// {|…::Country.all()->join('_c1')}                             join(Country[*],String[1])
+/// {|…::CarMakers.all()->between(max('American Motor…'))*…}     between(CarMakers[*],String[1])
+/// {|…::CarMakers.all()->join('car_names')}                     join(CarMakers[*],String[1])
+/// ```
+///
+/// The rest carry one walk per remaining [`EXTENT_INCOMPATIBLE_METHODS`] entry,
+/// so no name in the set can be dropped without a red test. Each was rejected by
+/// the live engine on this branch with the whole candidate overload set printed
+/// back, and in no candidate does the receiver parameter admit a `T[*]` class
+/// extent — `renameColumns(TabularDataSet[1],Pair<String, String>[*])`,
+/// `restrict(TabularDataSet[1],String[*])`,
+/// `tableReference(Database[1],String[1],String[1])`, `tableToTDS(Table[1])`,
+/// `endsWith(String[…],String[1])`, `in(Any[1]|Any[0..1],Any[*])`,
+/// `parseFloat(String[1])`, `startsWith(String[…],String[1])`,
+/// `substring(String[1],…)`, `sum(Float|Integer|Number[*])`,
+/// `toLower(String[1])`, `toString(Any[1])`, `year(Date[1]|Date[0..1])`.
+#[test]
+fn n3f_masks_every_extent_method_whose_receiver_category_a_class_extent_cannot_be() {
+    assert_frozen("n3f-extent-method");
+}
+
+/// N3f's soundness counterfactuals, and the reason the rule is a *deny* set.
+///
+/// The first block is the permissiveness evidence itself: `take`, `contains` and
+/// `init` all compile on a class extent live on this branch (`init` appears in no
+/// corpus at all, alongside `at`, `drop`, `slice`, `add`, `tail`, `first`,
+/// `last`, `removeDuplicates`, `reverse` and `fold`), so an allow-list built from
+/// corpus method names would have masked eleven legal builtins. They must stream.
+///
+/// `init` is also the prefix trap: `in` **is** denied and is a strict byte prefix
+/// of it. The rule clears a denied name at the token that *closes* its lexeme, so
+/// `in` stays walkable as a live prefix — the same discipline N3c's close policy
+/// needs for `Country` ⊂ `Countrylanguage`.
+///
+/// The last block is the scope counterfactual: the denial belongs to the *class
+/// extent*, so the identical name reached anywhere else still streams — a store
+/// path's own `->tableReference` (N3c's permit set) and a `restrict` applied to a
+/// real TDS, which is the receiver its every overload actually asks for.
+#[test]
+fn n3f_still_admits_what_a_class_extent_really_accepts() {
+    for query in [
+        "|spider::world_1::model::default::Country.all()->take(1)",
+        "|spider::world_1::model::default::Country.all()->contains('x')",
+        "|spider::world_1::model::default::Country.all()->init()",
+        "|spider::world_1::model::default::Country.all()->count()",
+        "|spider::world_1::model::default::Country.all()->filter(x|$x.name == 'Aruba')",
+    ] {
+        assert_streams_soundly_under_l2("world_1", query);
+    }
+    assert_streams_soundly_under_l2(
+        "world_1",
+        "|spider::world_1::Db->tableReference('default','country')->tableToTDS()\
+         ->restrict('name')",
+    );
+}
+
+/// N3f's completion half: a stream may not *end* on a denied whole name either.
+///
+/// The mask clears the token that closes a denied name; EOS is that same closure
+/// by another route, so the overlay clears the EOS bit at a deny-trie terminal
+/// and leaves it alone everywhere else. The four cases are the whole mechanism —
+/// a strict prefix of a denied name is still an open lexeme and may yet grow into
+/// something legal, a whole denied name may not end a query, and a name the rule
+/// does not deny keeps whatever completion L1 gives it.
+#[test]
+fn n3f_forbids_a_stream_ending_on_a_denied_extent_method_name() {
+    let extent = "|spider::world_1::model::default::Country.all()";
+    assert!(
+        walk_may_end("world_1", &format!("{extent}->su")),
+        "a strict prefix of a denied name is an open lexeme, not a denial"
+    );
+    assert!(!walk_may_end("world_1", &format!("{extent}->sum")));
+    assert!(!walk_may_end("world_1", &format!("{extent}->pair")));
+    assert!(
+        walk_may_end("world_1", &format!("{extent}->count")),
+        "a name the rule does not deny keeps whatever completion L1 gives it"
+    );
+}
+
+/// N3f under a vocabulary that splits the step connector. Phase 4 found N3c had
+/// never fired in the live lane at all, because classification read a token's own
+/// bytes and a `-`/`>` split meant no token's bytes were ever `->`. N3f arms on
+/// the same arrow event, so it inherits that hazard and has to pin it the same
+/// way — with an explicit token run, since a lexed walk can never reproduce the
+/// split.
+#[test]
+fn n3f_holds_when_the_step_arrow_is_split_across_tokens() {
+    const EXTENT: &[&str] = &[
+        "|",
+        "spider::world_1::model::default::Country",
+        ".",
+        "all",
+        "(",
+        ")",
+    ];
+    fn run<'a>(tail: &[&'a str]) -> Vec<&'a str> {
+        EXTENT.iter().chain(tail).copied().collect()
+    }
+    // Whole arrow and split arrow alike close the denied name at its call `(`…
+    assert_token_run_is_masked("world_1", &run(&["->", "pair", "("]));
+    assert_token_run_is_masked("world_1", &run(&["-", ">", "pair", "("]));
+    // …including when BPE packs the name's tail and the `(` into one token.
+    assert_token_run_is_masked("world_1", &run(&["-", ">", "pa", "ir("]));
+    // …and a name that merely *starts* with a denied one still streams.
+    assert_token_run_streams("world_1", &run(&["-", ">", "in", "it", "("]));
+    assert_token_run_streams("world_1", &run(&["->", "count", "("]));
 }
 
 /// Issue #55 Phase 4 — N1 over the extent dot. A `.` straight off `Class.all()`

@@ -900,58 +900,85 @@ fn recipe_navigation_predicate(
 }
 
 /// A deterministic, schema-parameterized walk realizing
-/// `Class.all()->agg(a|$a.<member>,b:<PrimType>[*]|$b-><reducer>())` — the
-/// shape that fires T3 (`Reducer`), which issue #117's per-token weight
-/// biases alone could not reliably reach (the walker never got deep enough to
-/// exercise an `agg` aggregation at all). Uses a bare `->agg(...)` step
-/// rather than wrapping it in `groupBy(~[...], ...)`: `agg` is already one of
-/// [`ARROW_METHOD_NAMES`]'s own step names, and none of the 8 fixture
-/// corpora use arm-R's `~[...]` column-set syntax at all (confirmed live —
-/// `schema_walk_state_coverage.rs`'s `SawTilde` residual), so a recipe built
-/// on it would find no vocabulary token for `~` in any of them and never
-/// fire at all. `None` when this db's vocabulary has no admissible
-/// combination of a real member, a primitive type-annotation name, and an
-/// unconstrained reducer name — a documented residual
+/// `Class.all()->groupBy([a|$a.<key>], [agg(a|$a.<val>,
+/// b:<PrimType>[*]|$b-><reducer>())], ['<col1>', '<col2>'])` — the shape that
+/// fires T3 (`Reducer`), which issue #117's per-token weight biases alone could
+/// not reliably reach (the walker never got deep enough to exercise an
+/// aggregation at all).
+///
+/// Identical to [`recipe_groupby`]'s shape but for the reduce lambda's binder,
+/// which carries the `: <PrimType>[*]` annotation T3 arms on — so this file
+/// states the aggregation shape once, in [`GroupbyTokens::tokens`], and the two
+/// recipes differ only in that argument.
+///
+/// **The bare `->agg(...)` step this used to build is not real Pure** (issue
+/// #55, Phase 5). The live engine rejects it — `Country.all()->agg(a|$a.code,
+/// b:Integer[*]|$b->count())` → "Can't find variable class for variable 'a'",
+/// because `agg`'s every overload wants a `String[1]` or a lambda first, never
+/// the `Country[*]` an extent presents — so this recipe was spending a walk slot
+/// on a shape the compiler oracle could never accept, and T3's only coverage sat
+/// on it. `recipe_groupby`'s own doc comment already recorded that `groupBy(...)`
+/// is the wrapper real Pure requires. Live-confirmed on this branch: the
+/// annotated form above returns `TabularDataSet`.
+///
+/// `None` when this db's vocabulary has no admissible combination of a real
+/// class with at least one member, a primitive type-annotation name, an
+/// unconstrained reducer name, and two distinct string-literal tokens for the
+/// output column names — a documented residual
 /// (`schema_walk_rule_coverage.rs`'s `EXPECTED_UNFIRED`), not a bug.
 fn recipe_reducer(grammar: &CompiledGrammar, schema: &Schema, vocab: &Vocab) -> Option<Vec<u32>> {
-    let pipe = find_token(vocab, b"|")?;
-    let dot = find_token(vocab, b".")?;
-    let open = find_token(vocab, b"(")?;
-    let close = find_token(vocab, b")")?;
-    let arrow = find_token(vocab, b"->")?;
-    let comma = find_token(vocab, b",")?;
+    let ids = GroupbyTokens::find(vocab)?;
     let colon = find_token(vocab, b":")?;
     let star = find_token(vocab, b"*")?;
-    let bopen = find_token(vocab, b"[")?;
-    let bclose = find_token(vocab, b"]")?;
-    let agg = find_token(vocab, b"agg")?;
-    let key_binder = find_token(vocab, b"a")?;
-    let val_binder = find_token(vocab, b"b")?;
-    let dollar = find_token(vocab, b"$")?;
-    let all = find_token(vocab, SOURCE_METHOD.as_bytes())?;
+    let cols = find_quoted_string_tokens(vocab, 2)?;
+    let (col1, col2) = (cols[0], cols[1]);
     let candidates = class_member_candidates(schema, vocab, false);
 
     for &prim_name in PRIM_TYPE_NAMES {
         let Some(prim_id) = find_token(vocab, prim_name.as_bytes()) else {
             continue;
         };
+        let annotation = ReduceBinderType {
+            colon,
+            prim: prim_id,
+            star,
+        };
         for &reducer_name in UNCONSTRAINED_REDUCER_NAMES {
             let Some(reducer_id) = find_token(vocab, reducer_name.as_bytes()) else {
                 continue;
             };
-            for &(class_id, member_id) in &candidates {
-                let tokens = [
-                    pipe, class_id, dot, all, open, close, arrow, agg, open, key_binder, pipe,
-                    dollar, key_binder, dot, member_id, comma, val_binder, colon, prim_id, bopen,
-                    star, bclose, pipe, dollar, val_binder, arrow, reducer_id, open, close, close,
-                ];
-                if let Some(walk) = try_walk(grammar, schema, &tokens) {
-                    return Some(walk);
+            for &(key_class, key_member) in &candidates {
+                for &(val_class, val_member) in &candidates {
+                    if val_class != key_class {
+                        continue;
+                    }
+                    let tokens = ids.tokens(
+                        key_class,
+                        key_member,
+                        val_member,
+                        reducer_id,
+                        (col1, col2),
+                        Some(annotation),
+                    );
+                    if let Some(walk) = try_walk(grammar, schema, &tokens) {
+                        return Some(walk);
+                    }
                 }
             }
         }
     }
     None
+}
+
+/// The `: <PrimType>[*]` annotation a reduce lambda's binder carries when the
+/// aggregation walk is built to arm T3 ([`recipe_reducer`]); absent for the
+/// plain compile-rate shape ([`recipe_groupby`]). The surrounding `[`/`]` come
+/// from [`GroupbyTokens`], which already holds them.
+#[derive(Debug, Clone, Copy)]
+struct ReduceBinderType {
+    colon: u32,
+    prim: u32,
+    star: u32,
 }
 
 /// Structural token ids the `groupBy([a|$a.<key>], [agg(a|$a.<val>,
@@ -997,7 +1024,10 @@ impl GroupbyTokens {
     }
 
     /// `|<class>.all()->groupBy([a|$a.<key>], [agg(a|$a.<val>,
-    /// b|$b-><reducer>())], ['<col1>', '<col2>'])`.
+    /// b<annotation>|$b-><reducer>())], ['<col1>', '<col2>'])`, where
+    /// `<annotation>` is `: <PrimType>[*]` when [`ReduceBinderType`] is supplied
+    /// ([`recipe_reducer`], which needs it to arm T3) and empty otherwise
+    /// ([`recipe_groupby`]).
     fn tokens(
         &self,
         key_class: u32,
@@ -1005,9 +1035,13 @@ impl GroupbyTokens {
         val_member: u32,
         reducer_id: u32,
         cols: (u32, u32),
+        reduce_binder_type: Option<ReduceBinderType>,
     ) -> Vec<u32> {
         let (col1, col2) = cols;
-        vec![
+        let annotation: Vec<u32> = reduce_binder_type
+            .map(|t| vec![t.colon, t.prim, self.bopen, t.star, self.bclose])
+            .unwrap_or_default();
+        let mut tokens = vec![
             self.pipe,
             key_class,
             self.dot,
@@ -1037,6 +1071,9 @@ impl GroupbyTokens {
             val_member,
             self.comma,
             self.val_binder,
+        ];
+        tokens.extend(annotation);
+        tokens.extend([
             self.pipe,
             self.dollar,
             self.val_binder,
@@ -1053,7 +1090,8 @@ impl GroupbyTokens {
             col2,
             self.bclose,
             self.close,
-        ]
+        ]);
+        tokens
     }
 
     /// `->restrict(['<col2>', '<col1>'])` — the just-emitted columns subset
@@ -1110,8 +1148,14 @@ fn recipe_groupby(grammar: &CompiledGrammar, schema: &Schema, vocab: &Vocab) -> 
                 if val_class != key_class {
                     continue;
                 }
-                let tokens =
-                    ids.tokens(key_class, key_member, val_member, reducer_id, (col1, col2));
+                let tokens = ids.tokens(
+                    key_class,
+                    key_member,
+                    val_member,
+                    reducer_id,
+                    (col1, col2),
+                    None,
+                );
                 if let Some(walk) = try_walk(grammar, schema, &tokens) {
                     return Some(walk);
                 }
@@ -1218,8 +1262,14 @@ fn recipe_groupby_restrict(
                 if val_class != key_class {
                     continue;
                 }
-                let mut tokens =
-                    ids.tokens(key_class, key_member, val_member, reducer_id, (col1, col2));
+                let mut tokens = ids.tokens(
+                    key_class,
+                    key_member,
+                    val_member,
+                    reducer_id,
+                    (col1, col2),
+                    None,
+                );
                 tokens.extend(ids.restrict_tail(restrict, col1, col2));
                 if let Some(walk) = try_walk(grammar, schema, &tokens) {
                     return Some(walk);
@@ -1268,8 +1318,14 @@ fn recipe_groupby_having_restrict(
                 if val_class != key_class {
                     continue;
                 }
-                let mut tokens =
-                    ids.tokens(key_class, key_member, val_member, reducer_id, (col1, col2));
+                let mut tokens = ids.tokens(
+                    key_class,
+                    key_member,
+                    val_member,
+                    reducer_id,
+                    (col1, col2),
+                    None,
+                );
                 tokens.extend(having.tail(&ids, col1, col2));
                 if let Some(walk) = try_walk(grammar, schema, &tokens) {
                     return Some(walk);
@@ -1922,16 +1978,20 @@ mod tests {
         assert_eq!(weight_of(&cands, "spider::d::Db"), Some(DEFAULT_WEIGHT));
     }
 
-    /// A post-arrow vocabulary offering both a real Pure builtin
-    /// ([`ARROW_METHOD_NAMES`]'s `count`) and an arbitrary identifier
-    /// (`zzz`, not a builtin) — both equally admissible right after `->`,
-    /// since nothing in the L2 overlay narrows that position (see
-    /// [`ARROW_METHOD_NAMES`]'s doc comment).
+    /// A post-arrow vocabulary offering a real Pure builtin
+    /// ([`ARROW_METHOD_NAMES`]'s `count`), an arbitrary identifier (`zzz`, not a
+    /// builtin), and a builtin the L2 overlay denies on a class extent
+    /// (`pair` — N3f, issue #55 Phase 5). All three are admissible *as a name*
+    /// right after `->`: N3f clears a denied name at the token that closes its
+    /// lexeme, not at its first byte, so the bias contrast is read at the name
+    /// and the denial at the call's `(`.
     fn vocab_with_arrow_alternatives() -> Vocab {
-        let tokens: Vec<Vec<u8>> = ["|", "A", ".", "all", "(", ")", "-", ">", "count", "zzz"]
-            .iter()
-            .map(|s| s.as_bytes().to_vec())
-            .collect();
+        let tokens: Vec<Vec<u8>> = [
+            "|", "A", ".", "all", "(", ")", "-", ">", "count", "zzz", "pair",
+        ]
+        .iter()
+        .map(|s| s.as_bytes().to_vec())
+        .collect();
         let eos = tokens.len() as u32;
         Vocab::from_byte_tokens(tokens, eos)
     }
@@ -1971,6 +2031,41 @@ mod tests {
             Some(DEFAULT_WEIGHT + ARROW_METHOD_BONUS)
         );
         assert_eq!(weight_of(&cands, "zzz"), Some(DEFAULT_WEIGHT));
+        // N3f denies `pair` on a class extent but only at the token that closes
+        // the name, so the bias still sees it here — the contrast this test
+        // asserts is a *weighting* one and must not quietly become a masking one.
+        assert_eq!(
+            weight_of(&cands, "pair"),
+            Some(DEFAULT_WEIGHT + ARROW_METHOD_BONUS)
+        );
+
+        // …and one token later the denial is what the walker sees: the call `(`
+        // every method name owes is gone for `pair` and present for `count`.
+        for (method, call_is_offered) in [("pair", false), ("count", true)] {
+            let mut session =
+                DecoderSession::with_schema(&grammar, schema()).expect("valid overlay");
+            drive(
+                &mut session,
+                vocab,
+                &["|", "A", ".", "all", "(", ")", "-", ">", method],
+            );
+            let cands = build_candidates(
+                &mut session,
+                &schema(),
+                vocab,
+                &PendingCall::MustOpen,
+                true,
+                method.as_bytes().last().copied(),
+                None,
+                false,
+                None,
+            );
+            assert_eq!(
+                weight_of(&cands, "(").is_some(),
+                call_is_offered,
+                "the call `(` after `->{method}`"
+            );
+        }
     }
 
     /// A vocabulary reaching a `filter(x|$…)` lambda's binder reference, so a
@@ -2789,8 +2884,10 @@ mod tests {
         let grammar = CompiledGrammar::compile(vocab_for_recipes());
         let vocab = grammar.vocab();
         let expected: Vec<u32> = [
-            "|", "A", ".", "all", "(", ")", "->", "agg", "(", "a", "|", "$", "a", ".", "year", ",",
-            "b", ":", "Integer", "[", "*", "]", "|", "$", "b", "->", "count", "(", ")", ")",
+            "|", "A", ".", "all", "(", ")", "->", "groupBy", "(", "[", "a", "|", "$", "a", ".",
+            "year", "]", ",", "[", "agg", "(", "a", "|", "$", "a", ".", "year", ",", "b", ":",
+            "Integer", "[", "*", "]", "|", "$", "b", "->", "count", "(", ")", ")", "]", ",", "[",
+            "'col1'", ",", "'col2'", "]", ")",
         ]
         .iter()
         .map(|s| id_of(vocab, s))
@@ -2799,6 +2896,30 @@ mod tests {
             recipe_reducer(&grammar, &recipe_schema(), vocab),
             Some(expected)
         );
+    }
+
+    /// The T3 recipe is [`recipe_groupby`]'s shape plus exactly one thing: the
+    /// reduce binder's `: <PrimType>[*]` annotation. Pinning the *difference*
+    /// keeps the two from drifting into separately-maintained token lists, which
+    /// is what let the bare `->agg(...)` shape survive as long as it did.
+    #[test]
+    fn recipe_reducer_is_the_groupby_recipe_plus_the_reduce_binder_annotation() {
+        let grammar = CompiledGrammar::compile(vocab_for_recipes());
+        let vocab = grammar.vocab();
+        let plain = recipe_groupby(&grammar, &recipe_schema(), vocab).expect("realizable");
+        let annotated = recipe_reducer(&grammar, &recipe_schema(), vocab).expect("realizable");
+        let annotation: Vec<u32> = [":", "Integer", "[", "*", "]"]
+            .iter()
+            .map(|s| id_of(vocab, s))
+            .collect();
+        let binder = id_of(vocab, "b");
+        let at = plain
+            .iter()
+            .position(|&id| id == binder)
+            .expect("the reduce binder is in the plain shape");
+        let mut expected = plain;
+        expected.splice(at + 1..at + 1, annotation);
+        assert_eq!(annotated, expected);
     }
 
     #[test]

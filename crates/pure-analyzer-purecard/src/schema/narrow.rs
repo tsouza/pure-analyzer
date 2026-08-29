@@ -27,11 +27,14 @@
 //! unchanged.
 
 use std::collections::HashMap;
+use std::sync::LazyLock;
 
 use crate::grammar::pda::{is_ident_start, is_ident_tail};
 use crate::mask::BitMask;
 use crate::schema::model::{Schema, TypeClass};
-use crate::schema::scope::{L2Position, Lexeme, SOURCE_METHOD, STORE_METHODS, classify};
+use crate::schema::scope::{
+    EXTENT_INCOMPATIBLE_METHODS, L2Position, Lexeme, SOURCE_METHOD, STORE_METHODS, classify,
+};
 use crate::schema::trie::{NameClose, NameShape, Trie, Walk, walk};
 use crate::vocab::Vocab;
 
@@ -91,6 +94,12 @@ enum CacheKey {
     /// N3e's class-extent continuation set, before vs. after the `-` that opens a
     /// step arrow — two whole-vocab constants.
     SourceExtent(bool),
+    /// N3f's extent-method set at a given cursor in the deny trie. The trie is a
+    /// whole-vocab constant ([`EXTENT_INCOMPATIBLE_METHODS`]), so the cursor node
+    /// is the entire identity of the mask — exactly as a trie rule's per-node memo
+    /// is keyed, but the trie lives in [`EXTENT_DENY`] rather than in a
+    /// `RuleCache`, because this rule *clears* names instead of permitting them.
+    ExtentMethod(u32),
     /// N1/N2 member set of a class — one per class.
     Member(String),
     /// T1 operand class — the literal-class lever (cursor-independent).
@@ -227,6 +236,15 @@ pub(crate) fn narrow_into(
             });
             true
         }
+        L2Position::ExtentMethod => {
+            let Some(cursor) = extent_deny_cursor(prefix) else {
+                return false;
+            };
+            with_cache(dst, cache, CacheKey::ExtentMethod(cursor), |dst| {
+                fill_extent_method(dst, vocab, eos_bit, cursor);
+            });
+            true
+        }
         L2Position::ValueIdent => {
             with_cache(dst, cache, CacheKey::ValueIdent, |dst| {
                 fill_value_ident(dst, vocab);
@@ -340,6 +358,12 @@ pub(crate) fn admits_eos(
     columns: &[Vec<u8>],
     vars: &[String],
 ) -> bool {
+    // N3f forbids ending on a *denied* whole name, and constrains nothing else —
+    // the same verdict `fill_extent_method` writes into the EOS bit, read back
+    // here so `is_complete` cannot disagree with the mask.
+    if matches!(pos, L2Position::ExtentMethod) {
+        return extent_deny_cursor(prefix).is_none_or(|cursor| !EXTENT_DENY.is_terminal(cursor));
+    }
     let Some(rule) = TrieRule::of(pos, schema, columns, vars) else {
         // N7 is the one non-trie rule that forbids ending here: a bare word left
         // dangling in a value position is not an expression.
@@ -463,6 +487,7 @@ impl<'a> TrieRule<'a> {
             | L2Position::StoreMethodArg
             | L2Position::StoreMethodArgSep { .. }
             | L2Position::SourceExtent { .. }
+            | L2Position::ExtentMethod
             | L2Position::ReValue(_)
             | L2Position::Comparator(_)
             | L2Position::Reducer(_)
@@ -645,6 +670,7 @@ pub(crate) fn narrow_fused_into(
         | L2Position::StoreMethodArg
         | L2Position::StoreMethodArgSep { .. }
         | L2Position::SourceExtent { .. }
+        | L2Position::ExtentMethod
         | L2Position::Column
         | L2Position::ReValue(_)
         | L2Position::Comparator(_)
@@ -1027,6 +1053,68 @@ fn fill_source_extent(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32, after_dash
         }
     }
     dst.set(eos_bit);
+}
+
+/// N3f's deny trie: the method names no class extent can present a receiver for
+/// ([`EXTENT_INCOMPATIBLE_METHODS`]). Built once — the set is a compile-time
+/// constant with no schema, column or vocabulary input, so it needs neither a
+/// per-session cache entry nor a rebuild.
+static EXTENT_DENY: LazyLock<Trie> =
+    LazyLock::new(|| Trie::from_names(EXTENT_INCOMPATIBLE_METHODS.iter().copied()));
+
+/// The [`EXTENT_DENY`] cursor `prefix` walks to, or `None` once the open method
+/// name has left every denied name — the rule then constrains nothing.
+///
+/// The dual of [`cursor_of`]: a [`Walk::Diverge`] is the *good* case here (the
+/// name being typed is not one this rule denies), and a [`Walk::Complete`] means
+/// a denied name was already closed, which only happens if the closing token was
+/// admitted — it never is, because [`fill_extent_method`] is what clears it.
+fn extent_deny_cursor(prefix: &[u8]) -> Option<u32> {
+    if prefix.is_empty() {
+        return Some(EXTENT_DENY.root());
+    }
+    match walk(&EXTENT_DENY, EXTENT_DENY.root(), prefix, NameShape::Plain) {
+        Walk::Stay(cursor) => Some(cursor),
+        Walk::Complete { .. } | Walk::Diverge => None,
+    }
+}
+
+/// Refill `dst` with [`L2Position::ExtentMethod`]'s set: every vocabulary token,
+/// less the ones that would **close** the open method name on an entry of
+/// [`EXTENT_INCOMPATIBLE_METHODS`].
+///
+/// Subtractive by construction, which is what keeps the rule sound in the
+/// direction that matters. It names no legal set — there is none to name (see
+/// [`L2Position::ExtentMethod`]) — so a builtin the engine does accept on an
+/// extent is never touched, whether or not any corpus has heard of it.
+///
+/// The clear lands on the *closing* token rather than the name's first byte,
+/// because under byte-level BPE a denied name is routinely a live prefix of a
+/// legal one (`in` ⊂ `indexOf`, `pair` ⊂ `pairwise`): [`walk`] descends an edge
+/// in preference to a terminal, so those keep walking and only a boundary byte —
+/// the call's `(`, whitespace, an operator — completes the denied name and is
+/// cleared. EOS is cleared at a terminal cursor for the same reason: a stream
+/// that ends on `->sum` has closed the name just as surely.
+fn fill_extent_method(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32, cursor: u32) {
+    dst.clear_all();
+    for id in 0..vocab.len() as u32 {
+        let bytes = vocab.bytes(id).unwrap_or(&[]);
+        if keeps_extent_method(cursor, bytes) {
+            dst.set(id);
+        }
+    }
+    if !EXTENT_DENY.is_terminal(cursor) {
+        dst.set(eos_bit);
+    }
+}
+
+/// Whether `bytes` may continue an extent method name — see
+/// [`fill_extent_method`].
+fn keeps_extent_method(cursor: u32, bytes: &[u8]) -> bool {
+    !matches!(
+        walk(&EXTENT_DENY, cursor, bytes, NameShape::Plain),
+        Walk::Complete { .. }
+    )
 }
 
 /// Whether `bytes` may continue a class extent — see [`fill_source_extent`].

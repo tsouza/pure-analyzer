@@ -243,10 +243,22 @@ const RATCHET_SLACK: usize = 3;
 /// mask change, so a closed failure class frees a slot for a fresh draw rather
 /// than converting to a compile; the count moved −1 / −2 while the failure
 /// *set* changed shape substantially.
+///
+/// **Phase 5 (2026-08-29) ratchets this to 45/64 = recipe 5/5 + exploration
+/// 40/59**, bit-identical across two consecutive runs — the largest single move
+/// since Phase 3, and the first time in four phases the headline number tracked
+/// the taxonomy. N3f, the extent's receiver-category rule, masks the method
+/// names whose every overload demands a relation or primitive-scalar receiver a
+/// `T[*]` class extent can never present. Bucket D — the wrong-signature call on
+/// an extent, and the largest residual bucket on both databases after Phase 4 —
+/// went **5 → 1** here and **3 → 1** on the generalization guard, live-verified
+/// per walk; the survivors are an arity failure (`isEmpty('…')`, whose name is
+/// legal niladic) and a `groupBy` argument-shape failure, neither of which a
+/// receiver-category rule reaches.
 const CRITERION_BASELINE: Baseline = Baseline {
     db_id: CRITERION_DB,
     recipe_compiled: 5,
-    exploration_compiled: 34,
+    exploration_compiled: 40,
 };
 
 /// The generalization guard's baseline, measured in the same run: **40/64
@@ -264,10 +276,17 @@ const CRITERION_BASELINE: Baseline = Baseline {
 /// bit-identical across two consecutive runs, clearing the 34 − 3 = 31 floor.
 /// Not lowered, for the reason [`CRITERION_BASELINE`] states; the parse-failure
 /// halving it records is, if anything, larger here.
+///
+/// **Phase 5 (2026-08-29) ratchets this to 41/64 = recipe 6/6 + exploration
+/// 35/58**, bit-identical across two consecutive runs. N3f was built from an
+/// engine-attested name set rather than from `world_1`'s taxonomy, so it is not
+/// a rule that *could* be tuned to one database — and the guard moves with the
+/// criterion (bucket D 3 → 1 here). It moves less in raw count because `car_1`'s
+/// residue is more heavily parse- and operator-shaped to begin with.
 const GENERALIZATION_BASELINE: Baseline = Baseline {
     db_id: GENERALIZATION_DB,
     recipe_compiled: 6,
-    exploration_compiled: 34,
+    exploration_compiled: 35,
 };
 
 /// Decode a walk's token ids back to its Pure text through `grammar`'s own
@@ -409,25 +428,32 @@ fn assert_live_compile_rate(baseline: &Baseline) {
 /// proves that gap is in fact closed (269/269 *real* gold queries compile
 /// against the same grammar this lane uses).
 ///
-/// After Phase 4, the exploration residue has inverted again. Of `world_1`'s 26
-/// remaining exploration failures (26 on `car_1`) only **7** (10 on `car_1`)
-/// fail to parse at all, down from 15 / 20 — the four L1 tightenings this phase
-/// shipped (`docs/spec/grammar.md` §5.6) plus N3d/N3e/N1 closed the shapes that
-/// dominated it. What is left is almost entirely the original taxonomy's
-/// buckets D and E, and neither is reachable from L1:
+/// Phase 5 shipped N3f, the coarse receiver-category state Phase 0 named as
+/// bucket D's prevention mechanism, and D is now nearly closed: `world_1` 5 → 1
+/// and `car_1` 3 → 1 of their exploration failures, live-verified per walk. What
+/// remains, across 19 `world_1` / 24 `car_1` exploration failures (5 and 7 of
+/// them parse failures):
 ///
-/// - **Bucket D — wrong method for a `T[*]` extent receiver** (`->pair`,
-///   `->average`, `->isEmpty(x)`, `->agg`, `->join`, `->groupBy`, `->between`):
-///   the receiver is right and the *name* is a real builtin, so nothing about
-///   the shape is wrong — only the signature. N3c's trick does not transfer:
-///   the corpus offers no closed name set here (gold sees `filter`/`project`/
-///   `groupBy`/`map` after an extent, the engine-labelled differential corpus a
-///   dozen more), and §4 forbids inventing one. This needs the coarse
-///   receiver-category state Phase 0 already named as D's prevention mechanism.
+/// - **Bucket D's residue — arity and argument *shape* on a legal name.** The
+///   two survivors are `->isEmpty('…')` (`isEmpty(Any[0..1])`/`isEmpty(Any[*])`
+///   — the name is legal on an extent, niladic, so this is an arity error) and
+///   `->groupBy(desc('…'))` (legal on an extent with the three-argument
+///   colspec/agg/name-list shape, wrong with one). Neither is a receiver-category
+///   fact, so neither is N3f's to close. The engine prints the whole overload set
+///   for both, so the niladic half is well-attested and small: for every name
+///   whose every overload takes the receiver and nothing else, the call's own
+///   argument slot admits only its closer — the treatment N3d already gives the
+///   store method's call, applied to an extent's.
+/// - **A second receiver category, unattested and therefore untouched.** A
+///   *primitive* extent reached by navigating off a class one
+///   (`CarMakers.all().id->tableReference(…)`, live:
+///   `tableReference(Integer[*],String[1],String[1])`) is the same class of
+///   error one receiver category over. N3f fires only at the class extent,
+///   because that is the only receiver its table was verified against.
 /// - **Bucket E — operator/literal type and multiplicity errors**
-///   (`and(String[1],String[1])`, `divide`, `minus(Any[2])`, "Collection element
-///   must have a multiplicity [1]"): L2 literal-kind tracking per operator, also
-///   already named.
+///   (`and(String[1],String[1])`, `minus(Any[2])`, `times(Any[2])`, "Collection
+///   element must have a multiplicity [1]"): L2 literal-kind tracking per
+///   operator, named in Phase 0 and still untouched.
 ///
 /// The named L1 residue that remains is small and each item is its own unit:
 /// the symbolic milestoning literal is still `%<lowercase>+` rather than the two
