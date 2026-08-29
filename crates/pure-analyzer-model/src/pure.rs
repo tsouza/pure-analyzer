@@ -640,10 +640,11 @@ impl AnnotationFacts {
 }
 
 fn annotation_facts(node: &GreenNode) -> AnnotationFacts {
-    let text = compact_text(node).to_ascii_lowercase();
+    let text = compact_text(node);
     let mut facts = AnnotationFacts::default();
     for atom in stereotype_atoms(&text) {
-        if let Some(value) = temporal_value(atom) {
+        let normalized = atom.to_ascii_lowercase();
+        if let Some(value) = temporal_value(&normalized) {
             match value {
                 "bitemporal" => facts.note_temporal(Temporal::Bitemporal),
                 "businesstemporal" => facts.note_temporal(Temporal::BusinessTemporal),

@@ -649,16 +649,13 @@ fn classify_qualified_property(
     multiplicity: Multiplicity,
     stereotypes: &[RawStereotype],
 ) -> QpKind {
-    let milestoning = stereotypes
-        .iter()
-        .any(|stereotype| is_milestoning_profile(&stereotype.profile));
     let generated = stereotypes.iter().any(|stereotype| {
         is_milestoning_profile(&stereotype.profile)
             && stereotype.value == GENERATED_MILESTONING_PROPERTY
     });
-    if milestoning && name.as_str().ends_with(ALL_VERSIONS_IN_RANGE_SUFFIX) {
+    if generated && name.as_str().ends_with(ALL_VERSIONS_IN_RANGE_SUFFIX) {
         QpKind::AllVersionsInRange
-    } else if milestoning && name.as_str().ends_with(ALL_VERSIONS_SUFFIX) {
+    } else if generated && name.as_str().ends_with(ALL_VERSIONS_SUFFIX) {
         QpKind::AllVersions
     } else if generated && multiplicity.is_unbounded() {
         QpKind::EdgePoint
