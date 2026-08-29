@@ -1300,3 +1300,51 @@ fn is_name(kind: TokenKind) -> bool {
             | TokenKind::TO_BYTES_KW
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn exhausted_fuel_stops_top_level_recovery_after_one_error_node() {
+        let source = ";";
+        let tokens = lex(source);
+        let mut parser = Parser::new(source, FileId::new(0), &tokens);
+        parser.fuel = 0;
+
+        let (events, diagnostics, coverage_gaps) = parser.parse();
+
+        assert_eq!(
+            diagnostics.len(),
+            1,
+            "fuel exhaustion must stop recovery rather than emitting duplicate diagnostics: {diagnostics:#?}"
+        );
+        assert_eq!(diagnostics[0].code, DiagCode::MalformedSyntax);
+        assert_eq!(
+            diagnostics[0].primary.span,
+            TextRange::new(TextSize::from(0), TextSize::from(1))
+        );
+        assert_eq!(
+            events
+                .iter()
+                .filter(|event| matches!(event, Event::Open(SyntaxKind::ERROR_NODE)))
+                .count(),
+            1,
+            "fuel exhaustion must close and stop after the first recovery node"
+        );
+        assert_eq!(
+            events
+                .iter()
+                .filter(|event| matches!(event, Event::Advance))
+                .count(),
+            0
+        );
+        assert_eq!(
+            coverage_gaps,
+            vec![DomainCoverageGap {
+                span: TextRange::new(TextSize::from(0), TextSize::from(1)),
+                kind: DomainCoverageGapKind::UnsupportedTopLevel,
+            }]
+        );
+    }
+}
