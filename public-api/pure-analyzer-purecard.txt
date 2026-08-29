@@ -306,6 +306,9 @@ impl<T> pyo3::marker::Ungil for purecard::grammar::pda::Frame where T: core::mar
 #[non_exhaustive] pub enum purecard::grammar::pda::State
 pub purecard::grammar::pda::State::AfterArrow
 pub purecard::grammar::pda::State::AfterBinder
+pub purecard::grammar::pda::State::AfterBinderMult
+pub purecard::grammar::pda::State::AfterBinderMultToken
+pub purecard::grammar::pda::State::AfterBinderType
 pub purecard::grammar::pda::State::AfterBraceOpen
 pub purecard::grammar::pda::State::AfterColon
 pub purecard::grammar::pda::State::AfterColon2
@@ -314,14 +317,20 @@ pub purecard::grammar::pda::State::AfterDollar
 pub purecard::grammar::pda::State::AfterDot
 pub purecard::grammar::pda::State::AfterName
 pub purecard::grammar::pda::State::AfterValue
+pub purecard::grammar::pda::State::BinderTypeColon
+pub purecard::grammar::pda::State::BinderTypeColon2
 pub purecard::grammar::pda::State::BlockStmt
 pub purecard::grammar::pda::State::BlockStmtClose
 pub purecard::grammar::pda::State::ExpectBinder
+pub purecard::grammar::pda::State::ExpectBinderMult
 pub purecard::grammar::pda::State::ExpectBraceBinder
+pub purecard::grammar::pda::State::ExpectLambdaBody
 pub purecard::grammar::pda::State::ExpectSource
 pub purecard::grammar::pda::State::ExpectValue
 pub purecard::grammar::pda::State::ExpectValueReq
 pub purecard::grammar::pda::State::InBinder
+pub purecard::grammar::pda::State::InBinderMult
+pub purecard::grammar::pda::State::InBinderType
 pub purecard::grammar::pda::State::InDateLit
 pub purecard::grammar::pda::State::InExp
 pub purecard::grammar::pda::State::InIdent
@@ -335,6 +344,11 @@ pub purecard::grammar::pda::State::InStrLit::escaped: bool
 pub purecard::grammar::pda::State::LetL
 pub purecard::grammar::pda::State::LetLe
 pub purecard::grammar::pda::State::LetLet
+pub purecard::grammar::pda::State::MilestoneL
+pub purecard::grammar::pda::State::MilestoneLa
+pub purecard::grammar::pda::State::MilestoneLat
+pub purecard::grammar::pda::State::MilestoneLate
+pub purecard::grammar::pda::State::MilestoneLates
 pub purecard::grammar::pda::State::NeedExpDigit
 pub purecard::grammar::pda::State::NeedFracDigit
 pub purecard::grammar::pda::State::SawAmp

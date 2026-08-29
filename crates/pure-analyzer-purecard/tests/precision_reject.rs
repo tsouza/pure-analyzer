@@ -154,45 +154,54 @@ fn a_milestoning_literal_is_exactly_the_latest_symbol() {
 }
 
 /// A typed binder's right-hand side owes a lambda, so only its own `::`
-/// classpath continuation, its multiplicity `[`, and the pipe may follow it.
-/// Every rejection below is a live engine "no viable alternative"; every
-/// admission is a live parse (issue #55 Phase 7).
+/// classpath continuation, its multiplicity `[`, and the pipe may follow it —
+/// and the multiplicity bracket holds a `mult` and nothing else. Every string
+/// here is a live engine "no viable alternative" / "Unexpected token" against
+/// the pinned stack (issue #55 Phase 7).
 #[test]
-fn a_typed_binder_type_is_a_classpath_then_a_multiplicity_then_a_pipe() {
-    assert!(dies("|X.all()->extend(getFloat:row)"));
-    assert!(dies("|X.all()->extend(a:b.c[1]|1)"));
-    assert!(dies("|X.all()->extend(a:b+1)"));
-    assert!(dies("|X.all()->extend(a:b/1)"));
-    assert!(dies("|X.all()->extend(a:'b'|1)"));
-    assert!(dies("|X.all()->extend(a:b : c[1]|1)"));
-    assert!(dies("|X.all()->extend(a:b:::c[1]|1)"));
-    // The multiplicity bracket holds a `mult` and nothing else, and once it
-    // closes the binder owes its pipe — and exactly one pipe.
-    assert!(dies("|X.all()->extend(a:b['europe']|1)"));
-    assert!(dies("|X.all()->extend(a:b[]|1)"));
-    assert!(dies("|X.all()->extend(a:b[**]|1)"));
-    assert!(dies("|X.all()->extend(a:b[1],c)"));
-    assert!(dies("|X.all()->extend(a:b[1]->foo())"));
-    assert!(dies("|X.all()->extend(a:b[1]&&1)"));
-    assert!(dies("|X.all()->extend(a:b[1]||1)"));
-    assert!(dies("|X.all()->extend(a:b||1)"));
-    // …while every shape the engine parses still streams.
-    assert!(!dies(
+fn a_typed_binder_type_that_is_not_a_classpath_multiplicity_pipe_dies() {
+    for text in [
+        "|X.all()->extend(getFloat:row)",
+        "|X.all()->extend(a:b.c[1]|1)",
+        "|X.all()->extend(a:b+1)",
+        "|X.all()->extend(a:b/1)",
+        "|X.all()->extend(a:'b'|1)",
+        "|X.all()->extend(a:b : c[1]|1)",
+        "|X.all()->extend(a:b:::c[1]|1)",
+        "|X.all()->extend(a:b['europe']|1)",
+        "|X.all()->extend(a:b[]|1)",
+        "|X.all()->extend(a:b[**]|1)",
+        "|X.all()->extend(a:b[1],c)",
+        "|X.all()->extend(a:b[1]->foo())",
+        "|X.all()->extend(a:b[1]&&1)",
+        "|X.all()->extend(a:b[1]||1)",
+        "|X.all()->extend(a:b||1)",
+    ] {
+        assert!(dies(text), "the recogniser still streams {text:?}");
+    }
+}
+
+/// The other half of the pin: every binder shape the engine *does* parse still
+/// streams, so the tightening above cannot have swallowed the production.
+#[test]
+fn every_engine_legal_typed_binder_still_streams() {
+    for text in [
         "|db::Db->tableReference('default','T')->tableToTDS()\
-         ->filter(row: meta::pure::tds::TDSRow[1]|$row.getInteger('c') > 1)"
-    ));
-    assert!(!dies("|X.all()->extend(a:b[1]|1)"));
-    assert!(!dies("|X.all()->extend(a:b::c[1]|1)"));
-    assert!(!dies("|X.all()->extend(a :b [*]|1)"));
-    assert!(!dies("|X.all()->extend(a:b[ 12 ] | 1)"));
-    assert!(!dies("|X.all()->groupBy(~[a:x|$x.b],~'t':y|$y->sum())"));
-    assert!(!dies(
+         ->filter(row: meta::pure::tds::TDSRow[1]|$row.getInteger('c') > 1)",
+        "|X.all()->extend(a:b[1]|1)",
+        "|X.all()->extend(a:b::c[1]|1)",
+        "|X.all()->extend(a:b ::c[1]|1)",
+        "|X.all()->extend(a :b [*]|1)",
+        "|X.all()->extend(a:b[ 12 ] | 1)",
+        "|X.all()->groupBy(~[a:x|$x.b],~'t':y|$y->sum())",
         "|a::Db->tableReference('default','A')->tableToTDS()->join(\
          a::Db->tableReference('default','B')->tableToTDS(), \
          meta::relational::metamodel::join::JoinType.INNER, \
          {r1: meta::pure::tds::TDSRow[1], r2: meta::pure::tds::TDSRow[1]|\
-         $r1.getInteger('x') == $r2.getInteger('y')})"
-    ));
+         $r1.getInteger('x') == $r2.getInteger('y')})",
+    ] {
+        assert!(!dies(text), "the recogniser refuses engine-legal {text:?}");
+    }
 }
 
 /// The arm-R `~` sigil (gap report G1) must be followed by a column-set `~[`, a

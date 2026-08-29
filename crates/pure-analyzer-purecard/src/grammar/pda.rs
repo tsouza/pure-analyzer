@@ -2675,9 +2675,10 @@ mod tests {
     }
 
     #[test]
-    fn direct_step_covers_the_saw_percent_and_milestone_branches() {
-        // `%l` opens the milestone keyword; `%` + date char opens the numeric date
-        // lexeme; `%` + anything else — another lowercase letter included — dies.
+    fn direct_step_covers_the_saw_percent_branch() {
+        // `%l` opens the milestone keyword, a digit opens the numeric date lexeme,
+        // and every other byte — another lowercase letter and the date separators
+        // included — dies at the sigil.
         assert!(matches!(
             step(State::SawPercent, None, b'l'),
             Step::Next(State::MilestoneL)
@@ -2686,64 +2687,68 @@ mod tests {
             step(State::SawPercent, None, b'2'),
             Step::Next(State::InDateLit)
         ));
-        assert!(matches!(step(State::SawPercent, None, b'a'), Step::Dead));
-        assert!(matches!(step(State::SawPercent, None, b'Z'), Step::Dead));
-        assert!(matches!(step(State::SawPercent, None, b')'), Step::Dead));
-        // The completed literal is value-terminal: it delegates every byte to
-        // `AfterValue`, so a following `)` pops a frame and a letter dies.
+        for dead in *b"aZ)-T:" {
+            assert!(matches!(step(State::SawPercent, None, dead), Step::Dead));
+        }
+    }
+
+    #[test]
+    fn a_completed_milestone_literal_is_value_terminal() {
+        // It delegates every byte to `AfterValue`, so a following `)` pops a frame
+        // while a letter (the `d` of `%latestdate`) or a digit dies.
         assert!(matches!(
             step(State::InMilestoneLit, Some(Frame::Paren), b')'),
             Step::Pop(State::AfterValue)
         ));
-        assert!(matches!(
-            step(State::InMilestoneLit, None, b'd'),
-            Step::Dead
-        ));
-        assert!(matches!(
-            step(State::InMilestoneLit, None, b'1'),
-            Step::Dead
-        ));
+        for dead in *b"d1" {
+            assert!(matches!(
+                step(State::InMilestoneLit, None, dead),
+                Step::Dead
+            ));
+        }
     }
 
     /// A typed binder's right-hand side owes a lambda, so only the type's own
     /// `::`, its multiplicity `[`, and the pipe may follow it — every other
     /// continuation is a dead state, live-attested against the pinned engine.
+    /// The `::` also resumes across whitespace *before* it (`a:b ::c`) but not
+    /// after (`a:b:: c`), exactly as `AfterColon2` already had it everywhere else.
     #[test]
     fn a_typed_binder_type_admits_only_a_classpath_a_multiplicity_and_a_pipe() {
-        let join = "|db::Db->tableReference('default','T')->tableToTDS()\
-                    ->filter(row: meta::pure::tds::TDSRow[1]|$row.getInteger('c') > 1)";
-        assert!(accepts(join));
-        assert!(accepts("|X.all()->extend(a:b[1]|1)"));
-        assert!(accepts("|X.all()->extend(a:b::c[1]|1)"));
-        assert!(accepts("|X.all()->extend(a:b[*]|1)"));
-        assert!(accepts("|X.all()->extend(a:b[12]|1)"));
-        assert!(accepts("|X.all()->extend(a :b [1]|1)"));
-        assert!(accepts("|X.all()->extend(a:b[ 1 ] | 1)"));
-        // The arm-R column binding omits the multiplicity (`~'t': y|…`).
-        assert!(accepts("|X.all()->groupBy(~[a:x|$x.b],~'t':y|$y->sum())"));
-        // …and every shape the engine refuses now dies here too.
-        assert!(dies("|X.all()->extend(getFloat:row)"));
-        assert!(dies("|X.all()->extend(a:b.c[1]|1)"));
-        // The multiplicity bracket holds a `mult` and nothing else, and once it
-        // closes the binder owes its pipe.
-        assert!(dies("|X.all()->extend(a:b['europe']|1)"));
-        assert!(dies("|X.all()->extend(a:b[1x]|1)"));
-        assert!(dies("|X.all()->extend(a:b[**]|1)"));
-        assert!(dies("|X.all()->extend(a:b[]|1)"));
-        assert!(dies("|X.all()->extend(a:b[1],c)"));
-        assert!(dies("|X.all()->extend(a:b[1]->foo())"));
-        assert!(dies("|X.all()->extend(a:b[1]&&1)"));
-        assert!(dies("|X.all()->extend(a:b+1)"));
-        assert!(dies("|X.all()->extend(a:b/1)"));
-        assert!(dies("|X.all()->extend(a:'b'|1)"));
-        // A lone `:` inside the type is not a separator, and `:::` never is.
-        assert!(dies("|X.all()->extend(a:b : c[1]|1)"));
-        assert!(dies("|X.all()->extend(a:b:::c[1]|1)"));
-        // The classpath resumes across whitespace *before* its `::`, matching the
-        // engine; whitespace *after* it stays dead, exactly as `AfterColon2`
-        // already made it in every other classpath position.
-        assert!(accepts("|X.all()->extend(a:b ::c[1]|1)"));
-        assert!(dies("|X.all()->extend(a:b:: c[1]|1)"));
+        for text in [
+            "|db::Db->tableReference('default','T')->tableToTDS()\
+             ->filter(row: meta::pure::tds::TDSRow[1]|$row.getInteger('c') > 1)",
+            "|X.all()->extend(a:b[1]|1)",
+            "|X.all()->extend(a:b::c[1]|1)",
+            "|X.all()->extend(a:b ::c[1]|1)",
+            "|X.all()->extend(a:b[*]|1)",
+            "|X.all()->extend(a:b[12]|1)",
+            "|X.all()->extend(a :b [1]|1)",
+            "|X.all()->extend(a:b[ 1 ] | 1)",
+            // The arm-R column binding omits the multiplicity (`~'t': y|…`).
+            "|X.all()->groupBy(~[a:x|$x.b],~'t':y|$y->sum())",
+        ] {
+            assert!(accepts(text), "engine-legal binder refused: {text:?}");
+        }
+        for text in [
+            "|X.all()->extend(getFloat:row)",
+            "|X.all()->extend(a:b.c[1]|1)",
+            "|X.all()->extend(a:b['europe']|1)",
+            "|X.all()->extend(a:b[1x]|1)",
+            "|X.all()->extend(a:b[**]|1)",
+            "|X.all()->extend(a:b[]|1)",
+            "|X.all()->extend(a:b[1],c)",
+            "|X.all()->extend(a:b[1]->foo())",
+            "|X.all()->extend(a:b[1]&&1)",
+            "|X.all()->extend(a:b+1)",
+            "|X.all()->extend(a:b/1)",
+            "|X.all()->extend(a:'b'|1)",
+            "|X.all()->extend(a:b : c[1]|1)",
+            "|X.all()->extend(a:b:::c[1]|1)",
+            "|X.all()->extend(a:b:: c[1]|1)",
+        ] {
+            assert!(dies(text), "the recogniser still streams {text:?}");
+        }
     }
 
     #[test]
