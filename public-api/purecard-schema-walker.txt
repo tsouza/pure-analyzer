@@ -1,4 +1,34 @@
 pub mod schema_walker
+pub struct schema_walker::SchemaWalkSet
+impl schema_walker::SchemaWalkSet
+pub fn schema_walker::SchemaWalkSet::recipe_len(&self) -> usize
+pub fn schema_walker::SchemaWalkSet::walks(&self) -> &[alloc::vec::Vec<u32>]
+impl core::fmt::Debug for schema_walker::SchemaWalkSet
+pub fn schema_walker::SchemaWalkSet::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for schema_walker::SchemaWalkSet
+impl core::marker::Send for schema_walker::SchemaWalkSet
+impl core::marker::Sync for schema_walker::SchemaWalkSet
+impl core::marker::Unpin for schema_walker::SchemaWalkSet
+impl core::marker::UnsafeUnpin for schema_walker::SchemaWalkSet
+impl core::panic::unwind_safe::RefUnwindSafe for schema_walker::SchemaWalkSet
+impl core::panic::unwind_safe::UnwindSafe for schema_walker::SchemaWalkSet
+impl<T, U> core::convert::Into<U> for schema_walker::SchemaWalkSet where U: core::convert::From<T>
+pub fn schema_walker::SchemaWalkSet::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for schema_walker::SchemaWalkSet where U: core::convert::Into<T>
+pub type schema_walker::SchemaWalkSet::Error = never
+pub fn schema_walker::SchemaWalkSet::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for schema_walker::SchemaWalkSet where U: core::convert::TryFrom<T>
+pub type schema_walker::SchemaWalkSet::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn schema_walker::SchemaWalkSet::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> core::any::Any for schema_walker::SchemaWalkSet where T: 'static + ?core::marker::Sized
+pub fn schema_walker::SchemaWalkSet::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for schema_walker::SchemaWalkSet where T: ?core::marker::Sized
+pub fn schema_walker::SchemaWalkSet::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for schema_walker::SchemaWalkSet where T: ?core::marker::Sized
+pub fn schema_walker::SchemaWalkSet::borrow_mut(&mut self) -> &mut T
+impl<T> core::convert::From<T> for schema_walker::SchemaWalkSet
+pub fn schema_walker::SchemaWalkSet::from(T) -> T
 pub const schema_walker::WALK_COUNT: usize
+pub fn schema_walker::generate_first_complete_schema_walk_set(&purecard::grammar::compiled::CompiledGrammar, &purecard::schema::model::Schema) -> schema_walker::SchemaWalkSet
 pub fn schema_walker::generate_first_complete_schema_walks(&purecard::grammar::compiled::CompiledGrammar, &purecard::schema::model::Schema) -> alloc::vec::Vec<alloc::vec::Vec<u32>>
 pub fn schema_walker::generate_schema_walks(&purecard::grammar::compiled::CompiledGrammar, &purecard::schema::model::Schema) -> alloc::vec::Vec<alloc::vec::Vec<u32>>

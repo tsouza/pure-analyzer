@@ -1618,16 +1618,51 @@ fn walks_with_recipes(
     grow_target: Option<u64>,
     include_reducer: bool,
     label: &str,
-) -> Vec<Vec<u32>> {
+) -> SchemaWalkSet {
     let vocab = grammar.vocab();
     let mut walks = recipe_walks(grammar, schema, vocab, include_reducer);
     walks.truncate(WALK_COUNT);
-    let target = WALK_COUNT - walks.len();
+    let recipe_len = walks.len();
+    let target = WALK_COUNT - recipe_len;
     let random = collect_walks(target, base_seed, ATTEMPT_LIMIT, label, |seed| {
         attempt(grammar, schema, seed, grow_target)
     });
     walks.extend(random);
-    walks
+    SchemaWalkSet { walks, recipe_len }
+}
+
+/// A generated walk set together with the boundary between its two
+/// partitions: `recipe_walks`'s deterministic, schema-parameterized
+/// constructs first, then the random exploration that pads the set out to
+/// [`WALK_COUNT`].
+///
+/// Issue #55's live-compile-rate lane must report and gate the two
+/// separately — a recipe walk is compile-by-construction, so counting one as
+/// evidence that a decoder rule improved precision would be circular. The
+/// boundary is a positional fact of how `walks_with_recipes` assembles the
+/// set, so it is carried out in the return value rather than recomputed by
+/// each consumer, which could silently drift from the assembly order.
+#[derive(Debug)]
+pub struct SchemaWalkSet {
+    walks: Vec<Vec<u32>>,
+    recipe_len: usize,
+}
+
+impl SchemaWalkSet {
+    /// Every walk, recipe partition first — exactly the sequence
+    /// [`generate_first_complete_schema_walks`] returns.
+    #[must_use]
+    pub fn walks(&self) -> &[Vec<u32>] {
+        &self.walks
+    }
+
+    /// How many leading [`walks`](Self::walks) belong to the recipe
+    /// partition; the rest are exploration walks. Split a set with
+    /// `walks().split_at(recipe_len())`.
+    #[must_use]
+    pub fn recipe_len(&self) -> usize {
+        self.recipe_len
+    }
 }
 
 /// Generate exactly [`WALK_COUNT`] deterministic accepting walks (as
@@ -1649,6 +1684,7 @@ pub fn generate_schema_walks(grammar: &CompiledGrammar, schema: &Schema) -> Vec<
         true,
         "generate_schema_walks",
     )
+    .walks
 }
 
 /// Whether the shared retry loop in [`collect_walks`] should keep going
@@ -1755,6 +1791,24 @@ pub fn generate_first_complete_schema_walks(
     grammar: &CompiledGrammar,
     schema: &Schema,
 ) -> Vec<Vec<u32>> {
+    generate_first_complete_schema_walk_set(grammar, schema).walks
+}
+
+/// [`generate_first_complete_schema_walks`]'s walks with their recipe /
+/// exploration partition boundary attached — the form issue #55's
+/// live-compile-rate lane needs, since it reports and gates the two
+/// partitions separately (a recipe walk compiles by construction and is
+/// therefore never evidence of decoder precision).
+///
+/// # Panics
+///
+/// Panics if fewer than [`WALK_COUNT`] walks are collected within the
+/// internal attempt limit.
+#[must_use]
+pub fn generate_first_complete_schema_walk_set(
+    grammar: &CompiledGrammar,
+    schema: &Schema,
+) -> SchemaWalkSet {
     walks_with_recipes(
         grammar,
         schema,
@@ -3287,5 +3341,37 @@ mod tests {
             walks.contains(&expected_recipe),
             "expected the navigation-predicate recipe walk to be included"
         );
+    }
+
+    #[test]
+    fn the_walk_set_splits_exactly_where_the_recipe_partition_ends() {
+        let grammar = CompiledGrammar::compile(vocab_for_recipes());
+        let schema = recipe_schema();
+        let set = generate_first_complete_schema_walk_set(&grammar, &schema);
+
+        // The boundary is the eager generator's own recipe count
+        // (include_reducer = false), and the two partitions reassemble into
+        // the full, unchanged walk sequence.
+        let recipes = recipe_walks(&grammar, &schema, grammar.vocab(), false);
+        assert_eq!(set.recipe_len(), recipes.len());
+        assert_eq!(set.walks().len(), WALK_COUNT);
+        let (recipe, exploration) = set.walks().split_at(set.recipe_len());
+        assert_eq!(recipe, recipes.as_slice());
+        assert_eq!(exploration.len(), WALK_COUNT - recipes.len());
+        assert_eq!(
+            set.walks(),
+            generate_first_complete_schema_walks(&grammar, &schema).as_slice(),
+            "the set's walks must be the very sequence the Vec-returning generator yields"
+        );
+    }
+
+    #[test]
+    fn a_schema_with_no_admissible_recipe_yields_an_all_exploration_walk_set() {
+        // The minimal vocabulary supports no recipe shape at all, so the
+        // partition boundary sits at zero rather than at a placeholder walk.
+        let grammar = CompiledGrammar::compile(vocab_with_source_method_ambiguity());
+        let set = generate_first_complete_schema_walk_set(&grammar, &schema());
+        assert_eq!(set.recipe_len(), 0);
+        assert_eq!(set.walks().len(), WALK_COUNT);
     }
 }
