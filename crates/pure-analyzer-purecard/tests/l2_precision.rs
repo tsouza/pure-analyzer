@@ -297,6 +297,26 @@ fn t3_masks_a_type_mismatched_aggregation_reducer() {
     assert_frozen("t3-reducer");
 }
 
+/// T6: `< > <= >=` dispatch to `lessThan`/`greaterThan`/…, which the engine
+/// declares only over scalar primitive operands. Each of the three navExpr
+/// shapes that is not one masks them while leaving `==` admissible — Pure's
+/// `equal` is `Any[*]`-generic, and all three compile with it live:
+///
+/// - `$c.fk1DefaultCountrylanguage` is `Countrylanguage[1..*]`
+///   (`lessThan(Countrylanguage[1..*],Integer[1])`);
+/// - `$x.fk3DefaultCarNames.model` is a `String` mapped over a to-many step,
+///   so the chain yields `String[*]` even though `model` is declared `[0..1]`
+///   on its own class (`lessThan(String[*],String[1])`);
+/// - `Country.all().gnp` navigates the extent, itself a `T[*]`
+///   (`lessThan(Float[*],Integer[1])`);
+/// - `$c.fk1DefaultCountry` is `Country[1]` — to-one, but class-typed, and a
+///   class is no ordered operand at any multiplicity
+///   (`lessThan(Country[1],Integer[1])`).
+#[test]
+fn t6_masks_an_ordered_comparator_on_a_non_scalar_nav_expr() {
+    assert_frozen("t6-ordered-operand");
+}
+
 /// After `project(...,['Name','Result'])` the relation columns are exactly
 /// those names; a getInteger of an emitted name is admissible, of an unemitted
 /// one is masked.
@@ -600,6 +620,11 @@ const FROZEN_FAMILIES: &[(&str, &str)] = &[
     (
         "t3-reducer",
         "M3 G3 · a reducer whose kind mismatches the reduce lambda's element",
+    ),
+    (
+        "t6-ordered-operand",
+        "#116 T6 · an ordered comparator on a navExpr that is not a scalar \
+         primitive — a collection, an extent navigation, or a class",
     ),
     (
         "n6-column",
@@ -1703,6 +1728,65 @@ static FROZEN_KILLS: &[FrozenKill] = &[
             prefix: "|spider::car_1::model::default::CarsData.all()->filter(x|$x.horsepower ",
             real: "==",
             phantom: "<",
+        },
+    },
+    FrozenKill {
+        fixture: "t6-ordered-operand",
+        db: "world_1",
+        closer: Closer::L2("OrderedOperand"),
+        kill: Kill::Probe {
+            prefix: "|spider::world_1::model::default::Country.all()\
+                     ->filter(c|$c.fk1DefaultCountrylanguage ",
+            real: "==",
+            phantom: "<",
+        },
+    },
+    FrozenKill {
+        fixture: "t6-ordered-operand",
+        db: "car_1",
+        closer: Closer::L2("OrderedOperand"),
+        kill: Kill::Probe {
+            prefix: "|spider::car_1::model::default::ModelList.all()\
+                     ->filter(x|$x.fk3DefaultCarNames.model ",
+            real: "==",
+            phantom: "<",
+        },
+    },
+    // The collapse the spec names is what a to-many navExpr is *for*, and it is
+    // the shape both gold anchors take (`corpus/gold_queries.jsonl` car_1
+    // `$x.fk3DefaultCarNames->exists(…)`, world_1
+    // `$c.fk1DefaultCountrylanguage->filter(…)->isEmpty()`): the step arrow that
+    // opens it must survive the very mask that clears the comparator.
+    FrozenKill {
+        fixture: "t6-ordered-operand",
+        db: "car_1",
+        closer: Closer::L2("OrderedOperand"),
+        kill: Kill::Probe {
+            prefix: "|spider::car_1::model::default::ModelList.all()\
+                     ->filter(x|$x.fk3DefaultCarNames ",
+            real: "->",
+            phantom: ">",
+        },
+    },
+    FrozenKill {
+        fixture: "t6-ordered-operand",
+        db: "world_1",
+        closer: Closer::L2("OrderedOperand"),
+        kill: Kill::Probe {
+            prefix: "|spider::world_1::model::default::Country.all().gnp ",
+            real: "==",
+            phantom: ">=",
+        },
+    },
+    FrozenKill {
+        fixture: "t6-ordered-operand",
+        db: "world_1",
+        closer: Closer::L2("OrderedOperand"),
+        kill: Kill::Probe {
+            prefix: "|spider::world_1::model::default::Countrylanguage.all()\
+                     ->filter(c|$c.fk1DefaultCountry ",
+            real: "==",
+            phantom: "<=",
         },
     },
     FrozenKill {
