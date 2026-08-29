@@ -98,6 +98,21 @@ fn empty_domain_file_is_lossless_and_diagnostic_free() {
 }
 
 #[test]
+fn nonempty_domain_file_requires_token_progress() {
+    let source = "\nClass demo::C {}\n";
+    let parsed = parse(source);
+
+    assert_lossless(source, &parsed);
+    assert!(parsed.diagnostics.is_empty(), "{:#?}", parsed.diagnostics);
+    assert!(
+        parsed.coverage_gaps.is_empty(),
+        "{:#?}",
+        parsed.coverage_gaps
+    );
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::DOMAIN_CLASS_DECL), 1);
+}
+
+#[test]
 fn parses_model_facts_with_domain_specific_ast_contracts() {
     let source = r#"
 Class {meta::pure::profiles::doc.doc = 'generated'} demo::Person extends demo::Named, demo::Stamped
@@ -637,9 +652,7 @@ Class demo::Computed
 #[test]
 fn missing_declaration_body_recovers_at_the_next_declaration() {
     let source = r#"
-Class demo::MissingBody
-;
-;
+Class demo::MissingBody;;
 Class demo::After
 {
   kept: String[1];
@@ -785,6 +798,29 @@ fn type_nesting_limit_recovers_without_losing_the_input() {
         "{:#?}",
         parsed.coverage_gaps
     );
+    assert_lossless(&source, &parsed);
+}
+
+#[test]
+fn sequential_type_references_do_not_consume_the_nesting_budget() {
+    let members = (0..257)
+        .map(|index| format!("  value{index}: String[1];"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let source = format!("Class demo::FlatTypes {{\n{members}\n}}");
+    let parsed = parse(&source);
+
+    assert!(parsed.diagnostics.is_empty(), "{:#?}", parsed.diagnostics);
+    assert!(
+        parsed.coverage_gaps.is_empty(),
+        "{:#?}",
+        parsed.coverage_gaps
+    );
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_PROPERTY_DECL),
+        257
+    );
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::DOMAIN_TYPE_REF), 257);
     assert_lossless(&source, &parsed);
 }
 
@@ -986,6 +1022,12 @@ Class demo::After
 "#;
     let parsed = parse(source);
 
+    assert_eq!(
+        parsed.diagnostics.len(),
+        1,
+        "header recovery must not create a spurious no-progress diagnostic: {:#?}",
+        parsed.diagnostics
+    );
     assert_eq!(count_kind(&parsed.green, SyntaxKind::DOMAIN_CLASS_DECL), 2);
     assert_eq!(
         count_kind(&parsed.green, SyntaxKind::DOMAIN_PROPERTY_DECL),

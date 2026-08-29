@@ -124,14 +124,20 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
                 if self.index == before {
                     self.syntax_error("parser made no progress while reading a Domain declaration");
                     self.open(SyntaxKind::ERROR_NODE);
-                    let _ = self.bump();
+                    if !self.bump() {
+                        self.close();
+                        break;
+                    }
                     self.close();
                 }
             }
             if self.index == semicolon_start {
                 self.syntax_error("parser made no progress after checking a Domain terminator");
                 self.open(SyntaxKind::ERROR_NODE);
-                let _ = self.bump();
+                if !self.bump() {
+                    self.close();
+                    break;
+                }
                 self.close();
             }
         }
@@ -809,7 +815,9 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
                 && braces == 0;
             let ends_braced_declaration = self.raw_at(TokenKind::BRACE_CLOSE) && braces == 1;
             self.adjust_delimiter_depths(&mut parentheses, &mut brackets, &mut braces);
-            let _ = self.bump();
+            if !self.bump() {
+                break;
+            }
             consumed = true;
             if ends_declaration || ends_braced_declaration {
                 break;
@@ -1057,8 +1065,7 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
     fn expect_keyword(&mut self, keyword: &str) -> bool {
         self.consume_trivia();
         if self.at_keyword(keyword) {
-            let _ = self.bump();
-            true
+            self.bump()
         } else {
             self.syntax_error(&format!("expected `{keyword}`"));
             false
@@ -1101,8 +1108,7 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
     fn expect(&mut self, kind: TokenKind, expected: &str) -> bool {
         self.consume_trivia();
         if self.raw_kind() == Some(kind) {
-            let _ = self.bump();
-            true
+            self.bump()
         } else {
             self.syntax_error(&format!("expected {expected}"));
             false
@@ -1134,7 +1140,9 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
 
     fn consume_trivia(&mut self) {
         while self.raw_kind().is_some_and(is_trivia) {
-            let _ = self.bump();
+            if !self.bump() {
+                break;
+            }
         }
     }
 
