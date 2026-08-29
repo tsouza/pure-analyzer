@@ -5,8 +5,8 @@
 use proptest::prelude::*;
 use pure_analyzer_diagnostics::TextRange;
 use pure_analyzer_model::{
-    ModelGraph, PmcdDocument, Provenance, PureDocument, QName, QpKind, Temporal,
-    load_pmcd_documents, load_pure_documents,
+    ModelDocument, ModelGraph, PmcdDocument, Provenance, PureDocument, QName, QpKind, Temporal,
+    load_model_documents, load_pmcd_documents, load_pure_documents,
 };
 use pure_analyzer_resolve::{
     DefinitionAnchor, Resolution, ResolvedMemberKind, Resolver, UnderResolution,
@@ -35,6 +35,23 @@ fn graph_documents(documents: Vec<Vec<Value>>) -> ModelGraph {
         .map(|(label, source)| PmcdDocument::new(label, source))
         .collect::<Vec<_>>();
     load_pmcd_documents(&documents).expect("fixtures must load")
+}
+
+fn pure_graph(source: &str) -> ModelGraph {
+    load_model_documents(&[ModelDocument::Pure(PureDocument::new(
+        "resolver.pure",
+        source,
+    ))])
+    .expect("Pure fixture must load")
+}
+
+fn exact_span(source: &str, declaration: &str) -> TextRange {
+    let start = source.find(declaration).expect("declaration occurs once");
+    let end = start + declaration.len();
+    TextRange::new(
+        u32::try_from(start).expect("source fits TextRange").into(),
+        u32::try_from(end).expect("source fits TextRange").into(),
+    )
 }
 
 fn path(name: &str) -> String {
@@ -271,6 +288,181 @@ fn resolves_qualified_names_and_class_ids_with_source_metadata() {
         resolver.resolve_class(&qname("Missing")),
         Resolution::Missing
     );
+}
+
+#[test]
+fn pure_classes_and_members_retain_their_own_declaration_metadata() {
+    let base_declaration = "Class model::Base\n{\n  inherited: String[1];\n}";
+    let child_declaration = "Class model::Child extends model::Base\n{\n  direct: Integer[1];\n  query(): Boolean[1] {};\n}";
+    let source = format!("{base_declaration}\n{child_declaration}");
+    let graph = pure_graph(&source);
+    let resolver = Resolver::new(&graph);
+
+    let child = match resolver.resolve_class(&qname("Child")) {
+        Resolution::Found(class) => class,
+        outcome => panic!("expected child, got {outcome:#?}"),
+    };
+    assert_eq!(child.provenance(), Provenance::PureFile);
+    assert_eq!(child.definition().source().index(), 0);
+    assert_eq!(
+        child.definition().span(),
+        Some(exact_span(&source, child_declaration))
+    );
+
+    let direct = found_member(&resolver, "Child", "direct");
+    assert_eq!(direct.provenance(), Provenance::PureFile);
+    assert_eq!(direct.definition().source().index(), 0);
+    assert_eq!(
+        direct.definition().span(),
+        Some(exact_span(&source, "direct: Integer[1];"))
+    );
+
+    let query = found_member(&resolver, "Child", "query");
+    assert_eq!(query.provenance(), Provenance::PureFile);
+    assert_eq!(
+        query.definition().span(),
+        Some(exact_span(&source, "query(): Boolean[1] {};"))
+    );
+
+    let inherited = found_member(&resolver, "Child", "inherited");
+    assert_eq!(inherited.owner().path().as_str(), "model::Base");
+    assert_eq!(inherited.definition().source().index(), 0);
+    assert_eq!(
+        inherited.definition().span(),
+        Some(exact_span(&source, "inherited: String[1];"))
+    );
+}
+
+#[test]
+fn pure_association_ends_use_the_association_source_and_end_span() {
+    let classes = "Class model::Left\n{\n}\nClass model::Right\n{\n}";
+    let association_declaration =
+        "Association model::Link\n{\n  toLeft: model::Left[1];\n  toRight: model::Right[1];\n}";
+    let graph = load_model_documents(&[
+        ModelDocument::Pure(PureDocument::new("classes.pure", classes)),
+        ModelDocument::Pure(PureDocument::new("links.pure", association_declaration)),
+    ])
+    .expect("Pure association graph");
+    let resolver = Resolver::new(&graph);
+    let member = found_member(&resolver, "Left", "toRight");
+
+    assert_eq!(member.provenance(), Provenance::PureFile);
+    assert_eq!(member.owner().definition().source().index(), 0);
+    assert_eq!(member.definition().source().index(), 1);
+    assert_eq!(
+        member.definition().span(),
+        Some(exact_span(
+            association_declaration,
+            "toRight: model::Right[1];"
+        ))
+    );
+    assert_eq!(
+        member.kind(),
+        &ResolvedMemberKind::AssociationEnd {
+            association: QName::new("model::Link").expect("valid association")
+        }
+    );
+}
+
+#[test]
+fn association_ends_retain_the_association_provenance_when_classes_are_pmcd() {
+    let pmcd = json!({
+        "_type": "data",
+        "elements": [
+            class("Left", &[], Vec::new(), Vec::new()),
+            class("Right", &[], Vec::new(), Vec::new()),
+        ]
+    })
+    .to_string();
+    let association_declaration =
+        "Association model::Link\n{\n  toLeft: model::Left[1];\n  toRight: model::Right[1];\n}";
+    let graph = load_model_documents(&[
+        ModelDocument::Pmcd(PmcdDocument::new("classes.json", &pmcd)),
+        ModelDocument::Pure(PureDocument::new("links.pure", association_declaration)),
+    ])
+    .expect("mixed association graph");
+    let member = found_member(&Resolver::new(&graph), "Left", "toRight");
+
+    assert_eq!(member.owner().provenance(), Provenance::Pmcd);
+    assert_eq!(member.owner().definition().source().index(), 0);
+    assert_eq!(member.owner().definition().span(), None);
+    assert_eq!(member.provenance(), Provenance::PureFile);
+    assert_eq!(member.definition().source().index(), 1);
+    assert_eq!(
+        member.definition().span(),
+        Some(exact_span(
+            association_declaration,
+            "toRight: model::Right[1];"
+        ))
+    );
+}
+
+#[test]
+fn ordered_replacement_exposes_only_the_winning_pure_definition_span() {
+    let pmcd = json!({
+        "_type": "data",
+        "elements": [{
+            "_type": "class",
+            "package": "model",
+            "name": "Winner",
+            "superTypes": [],
+            "stereotypes": [],
+            "properties": [],
+            "qualifiedProperties": []
+        }]
+    })
+    .to_string();
+    let pure_source = "Class model::Winner\n{\n}";
+    let graph = load_model_documents(&[
+        ModelDocument::Pmcd(PmcdDocument::new("first.json", &pmcd)),
+        ModelDocument::Pure(PureDocument::new("second.pure", pure_source)),
+    ])
+    .expect("ordered replacement");
+    let winner = match Resolver::new(&graph).resolve_class(&qname("Winner")) {
+        Resolution::Found(class) => class,
+        outcome => panic!("expected winner, got {outcome:#?}"),
+    };
+
+    assert_eq!(winner.provenance(), Provenance::PureFile);
+    assert_eq!(winner.definition().source().index(), 1);
+    assert_eq!(
+        winner.definition().span(),
+        Some(exact_span(pure_source, pure_source))
+    );
+}
+
+#[test]
+fn ordered_replacement_exposes_only_the_winning_pmcd_definition_metadata() {
+    let pure_source = "Class model::Winner\n{\n  value: String[0..1];\n}";
+    let pmcd = json!({
+        "_type": "data",
+        "elements": [class(
+            "Winner",
+            &[],
+            vec![property("value", "Integer")],
+            Vec::new(),
+        )]
+    })
+    .to_string();
+    let graph = load_model_documents(&[
+        ModelDocument::Pure(PureDocument::new("first.pure", pure_source)),
+        ModelDocument::Pmcd(PmcdDocument::new("second.json", &pmcd)),
+    ])
+    .expect("ordered replacement");
+    let resolver = Resolver::new(&graph);
+    let winner = match resolver.resolve_class(&qname("Winner")) {
+        Resolution::Found(class) => class,
+        outcome => panic!("expected winner, got {outcome:#?}"),
+    };
+
+    assert_eq!(winner.provenance(), Provenance::Pmcd);
+    assert_eq!(winner.definition().source().index(), 1);
+    assert_eq!(winner.definition().span(), None);
+
+    let value = found_member(&resolver, "Winner", "value");
+    assert_eq!(value.provenance(), Provenance::Pmcd);
+    assert_eq!(value.definition().source().index(), 1);
+    assert_eq!(value.definition().span(), None);
 }
 
 #[test]
