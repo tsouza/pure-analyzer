@@ -827,6 +827,16 @@ fn is_trivia(kind: SyntaxKind) -> bool {
     )
 }
 
+fn node_is_unconfirmed(node: &GreenNode, context: LoweringContext<'_>) -> bool {
+    context.gaps.iter().any(|gap| {
+        gap.kind == DomainCoverageGapKind::MalformedDeclaration
+            && range_start(gap.span) == range_start(node.text_range())
+    }) || context
+        .parser_diagnostics
+        .iter()
+        .any(|diagnostic| ranges_touch_or_overlap(diagnostic.primary.span, node.text_range()))
+}
+
 fn node_has_coverage_gap(node: &GreenNode, context: LoweringContext<'_>) -> bool {
     if context
         .gaps

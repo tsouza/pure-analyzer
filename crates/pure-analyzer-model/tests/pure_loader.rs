@@ -553,47 +553,84 @@ fn pmcd_association_survives_a_colliding_pure_association_in_either_order() {
     assert_unresolved_pure_collision(&pure_first, 0);
 }
 
+struct AssociationWinnerExpectation<'a> {
+    provenance: Provenance,
+    expected_left_property: &'a str,
+    absent_left_property: &'a str,
+    expected_right_property: &'a str,
+    absent_right_property: &'a str,
+    prior_source: u32,
+}
+
+fn assert_same_path_association_winner(
+    graph: &pure_analyzer_model::ModelGraph,
+    expected: AssociationWinnerExpectation<'_>,
+) {
+    let association = graph.associations().first().expect("association winner");
+    assert_eq!(association.path().as_str(), "demo::ZTrusted");
+    assert_eq!(association.provenance(), expected.provenance);
+    assert_eq!(association.source().index(), 3);
+    let left = graph.class("demo::Left").expect("left");
+    let right = graph.class("demo::Right").expect("right");
+    assert!(
+        left.properties()
+            .contains_key(expected.expected_left_property)
+    );
+    assert!(
+        !left
+            .properties()
+            .contains_key(expected.absent_left_property)
+    );
+    assert!(
+        right
+            .properties()
+            .contains_key(expected.expected_right_property)
+    );
+    assert!(
+        !right
+            .properties()
+            .contains_key(expected.absent_right_property)
+    );
+    let conflicts = graph
+        .diagnostics()
+        .iter()
+        .filter(|diagnostic| diagnostic.code == MODEL_MERGE_CONFLICT)
+        .collect::<Vec<_>>();
+    assert_eq!(conflicts.len(), 1);
+    assert_eq!(conflicts[0].primary.file.index(), 3);
+    assert_eq!(
+        conflicts[0].secondary[0].file.index(),
+        expected.prior_source
+    );
+}
+
 #[test]
 fn same_path_pmcd_and_pure_associations_are_last_source_wins() {
     let pmcd_wins = same_path_association_replacement_graph(true);
-    let association = pmcd_wins.associations().first().expect("PMCD winner");
-    assert_eq!(association.path().as_str(), "demo::ZTrusted");
-    assert_eq!(association.provenance(), Provenance::Pmcd);
-    assert_eq!(association.source().index(), 3);
-    let left = pmcd_wins.class("demo::Left").expect("left");
-    let right = pmcd_wins.class("demo::Right").expect("right");
-    assert!(left.properties().contains_key("shared"));
-    assert!(!left.properties().contains_key("pureShared"));
-    assert!(right.properties().contains_key("lefts"));
-    assert!(!right.properties().contains_key("pureLefts"));
-    let conflicts = pmcd_wins
-        .diagnostics()
-        .iter()
-        .filter(|diagnostic| diagnostic.code == MODEL_MERGE_CONFLICT)
-        .collect::<Vec<_>>();
-    assert_eq!(conflicts.len(), 1);
-    assert_eq!(conflicts[0].primary.file.index(), 3);
-    assert_eq!(conflicts[0].secondary[0].file.index(), 0);
+    assert_same_path_association_winner(
+        &pmcd_wins,
+        AssociationWinnerExpectation {
+            provenance: Provenance::Pmcd,
+            expected_left_property: "shared",
+            absent_left_property: "pureShared",
+            expected_right_property: "lefts",
+            absent_right_property: "pureLefts",
+            prior_source: 0,
+        },
+    );
 
     let pure_wins = same_path_association_replacement_graph(false);
-    let association = pure_wins.associations().first().expect("Pure winner");
-    assert_eq!(association.path().as_str(), "demo::ZTrusted");
-    assert_eq!(association.provenance(), Provenance::PureFile);
-    assert_eq!(association.source().index(), 3);
-    let left = pure_wins.class("demo::Left").expect("left");
-    let right = pure_wins.class("demo::Right").expect("right");
-    assert!(left.properties().contains_key("pureShared"));
-    assert!(!left.properties().contains_key("shared"));
-    assert!(right.properties().contains_key("pureLefts"));
-    assert!(!right.properties().contains_key("lefts"));
-    let conflicts = pure_wins
-        .diagnostics()
-        .iter()
-        .filter(|diagnostic| diagnostic.code == MODEL_MERGE_CONFLICT)
-        .collect::<Vec<_>>();
-    assert_eq!(conflicts.len(), 1);
-    assert_eq!(conflicts[0].primary.file.index(), 3);
-    assert_eq!(conflicts[0].secondary[0].file.index(), 2);
+    assert_same_path_association_winner(
+        &pure_wins,
+        AssociationWinnerExpectation {
+            provenance: Provenance::PureFile,
+            expected_left_property: "pureShared",
+            absent_left_property: "shared",
+            expected_right_property: "pureLefts",
+            absent_right_property: "lefts",
+            prior_source: 2,
+        },
+    );
 }
 
 #[test]
