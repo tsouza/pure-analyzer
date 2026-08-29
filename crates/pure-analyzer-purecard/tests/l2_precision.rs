@@ -1344,4 +1344,12 @@ fn n3e_admits_the_step_arrow_split_or_whole_and_no_other_dash() {
     // …and a longer `-`-led token that is not the arrow never opens at all.
     assert_token_run_is_masked("world_1", &run(&["-'HeadOfState_T1_3'"]));
     assert_token_run_is_masked("world_1", &run(&["-3"]));
+    // The scope counterfactual: the narrowing belongs to the *extent*, so an
+    // arithmetic minus reached anywhere else — a dash mid-predicate, where N7
+    // governs — still streams. Without this the `-` half would silently apply to
+    // every dash in the stream.
+    assert_streams_soundly_under_l2(
+        "car_1",
+        "|spider::car_1::model::default::CarsData.all()->filter(x|$x.horsepower - 3 > 0)",
+    );
 }
