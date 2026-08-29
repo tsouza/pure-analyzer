@@ -374,6 +374,7 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
         let keyword = self.expect_keyword("extends");
         let mut valid = keyword && self.parse_domain_qualified_name("a supertype after `extends`");
         loop {
+            self.consume_trivia();
             let comma_start = self.index;
             self.consume_if_raw(TokenKind::COMMA);
             if self.index == comma_start {

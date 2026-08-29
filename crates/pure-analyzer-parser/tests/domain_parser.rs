@@ -539,7 +539,7 @@ Class demo::Known
 #[test]
 fn generic_types_leading_paths_and_double_angle_stereotypes_are_distinct_contracts() {
     let source = r#"
-Class <<meta::tag>> ::demo::model::Thing extends ::demo::Base, other::Stamped
+Class <<meta::tag>> ::demo::model::Thing extends ::demo::Base , other::Stamped
 {
   value: Map<::demo::Key, List<::demo::Value>>[0..*];
 }
