@@ -1487,28 +1487,7 @@ impl ScopeTracker {
                     }
                 }
             }
-            State::ExpectValue | State::ExpectValueReq => {
-                if self.in_source_method_args {
-                    L2Position::SourceMethodArg
-                } else if self.store_call_arity.is_some() {
-                    L2Position::StoreMethodArg
-                } else if let Some(tc) = self.cmp_pending {
-                    L2Position::ReValue(tc)
-                } else if self.in_column_arg() {
-                    L2Position::Column
-                } else if self.in_tilde_key(state) {
-                    // An arm-R `~[Col, …]` key is a bare word that *is* a
-                    // complete value, so N7's "a dangling word resolves to
-                    // nothing" premise does not hold for it. None of the 8
-                    // fixture corpora use arm-R at all (`schema_walk_rule_
-                    // coverage.rs`'s `EXPECTED_UNFIRED`), so there is no
-                    // evidence here for what may follow one — and §4's rule is
-                    // to invent no constraint the corpus does not exercise.
-                    L2Position::None
-                } else {
-                    L2Position::ValueIdent
-                }
-            }
+            State::ExpectValue | State::ExpectValueReq => self.value_opening_position(state),
             // A bare word also opens a value straight after a lambda arrow (the
             // body) or after an operator that has its own intermediate state
             // because it may still grow into a longer one (`<` `>` `-` `|`) —
@@ -1544,6 +1523,36 @@ impl ScopeTracker {
                 None => L2Position::None,
             },
             _ => L2Position::None,
+        }
+    }
+
+    /// The L2 rule at a **value** anchor (`ExpectValue`/`ExpectValueReq`) — the one
+    /// arm of [`opening_position`](ScopeTracker::opening_position) that is itself a
+    /// cascade rather than a state test, since every rule that governs an argument
+    /// or operand slot competes for the same two states.
+    ///
+    /// Split out so the two stay separately readable: the caller is a table of
+    /// automaton states, this is a precedence order over the open call and
+    /// comparison context.
+    fn value_opening_position(&self, state: State) -> L2Position {
+        if self.in_source_method_args {
+            L2Position::SourceMethodArg
+        } else if self.store_call_arity.is_some() {
+            L2Position::StoreMethodArg
+        } else if let Some(tc) = self.cmp_pending {
+            L2Position::ReValue(tc)
+        } else if self.in_column_arg() {
+            L2Position::Column
+        } else if self.in_tilde_key(state) {
+            // An arm-R `~[Col, …]` key is a bare word that *is* a complete value,
+            // so N7's "a dangling word resolves to nothing" premise does not hold
+            // for it. None of the 8 fixture corpora use arm-R at all
+            // (`schema_walk_rule_coverage.rs`'s `EXPECTED_UNFIRED`), so there is
+            // no evidence here for what may follow one — and §4's rule is to
+            // invent no constraint the corpus does not exercise.
+            L2Position::None
+        } else {
+            L2Position::ValueIdent
         }
     }
 

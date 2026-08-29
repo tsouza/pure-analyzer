@@ -952,14 +952,12 @@ fn recipe_reducer(grammar: &CompiledGrammar, schema: &Schema, vocab: &Vocab) -> 
                     if val_class != key_class {
                         continue;
                     }
-                    let tokens = ids.tokens(
-                        key_class,
-                        key_member,
+                    let agg = AggShape {
                         val_member,
                         reducer_id,
-                        (col1, col2),
-                        Some(annotation),
-                    );
+                        binder_type: Some(annotation),
+                    };
+                    let tokens = ids.tokens(key_class, key_member, agg, (col1, col2));
                     if let Some(walk) = try_walk(grammar, schema, &tokens) {
                         return Some(walk);
                     }
@@ -979,6 +977,20 @@ struct ReduceBinderType {
     colon: u32,
     prim: u32,
     star: u32,
+}
+
+/// The `agg(a|$a.<val>, b<annotation>|$b-><reducer>())` argument of a groupBy
+/// walk — the only part of [`GroupbyTokens::tokens`]'s shape that differs
+/// between the recipes that build one, kept together so the builder takes the
+/// aggregation as one thing rather than three loose ids.
+#[derive(Debug, Clone, Copy)]
+struct AggShape {
+    /// The member the aggregation reads (`$a.<val>`).
+    val_member: u32,
+    /// The reducer the value lambda applies (`$b-><reducer>()`).
+    reducer_id: u32,
+    /// The reduce binder's type annotation, present only where T3 must be armed.
+    binder_type: Option<ReduceBinderType>,
 }
 
 /// Structural token ids the `groupBy([a|$a.<key>], [agg(a|$a.<val>,
@@ -1028,17 +1040,14 @@ impl GroupbyTokens {
     /// `<annotation>` is `: <PrimType>[*]` when [`ReduceBinderType`] is supplied
     /// ([`recipe_reducer`], which needs it to arm T3) and empty otherwise
     /// ([`recipe_groupby`]).
-    fn tokens(
-        &self,
-        key_class: u32,
-        key_member: u32,
-        val_member: u32,
-        reducer_id: u32,
-        cols: (u32, u32),
-        reduce_binder_type: Option<ReduceBinderType>,
-    ) -> Vec<u32> {
+    fn tokens(&self, key_class: u32, key_member: u32, agg: AggShape, cols: (u32, u32)) -> Vec<u32> {
+        let AggShape {
+            val_member,
+            reducer_id,
+            binder_type,
+        } = agg;
         let (col1, col2) = cols;
-        let annotation: Vec<u32> = reduce_binder_type
+        let annotation: Vec<u32> = binder_type
             .map(|t| vec![t.colon, t.prim, self.bopen, t.star, self.bclose])
             .unwrap_or_default();
         let mut tokens = vec![
@@ -1151,10 +1160,12 @@ fn recipe_groupby(grammar: &CompiledGrammar, schema: &Schema, vocab: &Vocab) -> 
                 let tokens = ids.tokens(
                     key_class,
                     key_member,
-                    val_member,
-                    reducer_id,
+                    AggShape {
+                        val_member,
+                        reducer_id,
+                        binder_type: None,
+                    },
                     (col1, col2),
-                    None,
                 );
                 if let Some(walk) = try_walk(grammar, schema, &tokens) {
                     return Some(walk);
@@ -1265,10 +1276,12 @@ fn recipe_groupby_restrict(
                 let mut tokens = ids.tokens(
                     key_class,
                     key_member,
-                    val_member,
-                    reducer_id,
+                    AggShape {
+                        val_member,
+                        reducer_id,
+                        binder_type: None,
+                    },
                     (col1, col2),
-                    None,
                 );
                 tokens.extend(ids.restrict_tail(restrict, col1, col2));
                 if let Some(walk) = try_walk(grammar, schema, &tokens) {
@@ -1321,10 +1334,12 @@ fn recipe_groupby_having_restrict(
                 let mut tokens = ids.tokens(
                     key_class,
                     key_member,
-                    val_member,
-                    reducer_id,
+                    AggShape {
+                        val_member,
+                        reducer_id,
+                        binder_type: None,
+                    },
                     (col1, col2),
-                    None,
                 );
                 tokens.extend(having.tail(&ids, col1, col2));
                 if let Some(walk) = try_walk(grammar, schema, &tokens) {
