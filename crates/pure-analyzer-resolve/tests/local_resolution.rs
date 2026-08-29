@@ -7,12 +7,12 @@ use std::collections::BTreeMap;
 use pure_analyzer_diagnostics::{DiagCode, ReasonCode, TextRange};
 use pure_analyzer_model::{
     ModelDocument, ModelGraph, Multiplicity, Name, PmcdDocument, PureDocument, QName, QpKind,
-    TypeRef, load_model_documents, load_pmcd_documents,
+    TypeRef, load_model_documents, load_pmcd_documents, load_pure_documents,
 };
 use pure_analyzer_resolve::{
     LocalValue, LocalValueKind, NavigationResolution, NavigationResolver, NavigationStep,
     NavigationTarget, NavigationUnderResolution, NavigationUnderResolutionReason, RelationRow,
-    Resolution, TypeEnvironment, UnknownValue,
+    Resolution, ResolvedMemberKind, Resolver, TypeEnvironment, UnknownValue,
 };
 use serde_json::{Value, json};
 
@@ -118,6 +118,40 @@ fn non_generated_milestoning_property(name: &str, target: &str, parameters: &[&s
         "value": "notgenerated",
     }]);
     property
+}
+
+fn pure_non_generated_milestoning_graph() -> ModelGraph {
+    let source = r#"
+Class model::Source
+{
+  <<milestoning.notgenerated>>
+  manualAllVersions(asOf: String[1]): String[0..1] {};
+  <<milestoning.notgenerated>>
+  manualAllVersionsInRange(asOf: String[1]): String[0..1] {};
+}
+
+Class model::GeneratedParent
+{
+  <<milestoning.generatedmilestoningproperty>>
+  manualAllVersions(): String[0..1] {};
+  <<milestoning.generatedmilestoningproperty>>
+  manualAllVersionsInRange(): String[0..1] {};
+}
+
+Class model::ManualParent
+{
+  <<milestoning.notgenerated>>
+  manualAllVersions(asOf: String[1]): String[0..1] {};
+  <<milestoning.notgenerated>>
+  manualAllVersionsInRange(asOf: String[1]): String[0..1] {};
+}
+
+Class model::Child extends model::GeneratedParent, model::ManualParent
+{
+}
+"#;
+    load_pure_documents(&[PureDocument::new("pure-milestoning.pure", source)])
+        .expect("Pure parity fixture must load")
 }
 
 fn association(name: &str, first: Value, second: Value) -> Value {
@@ -612,6 +646,131 @@ fn non_generated_milestoning_suffixes_use_their_declared_signatures() {
         };
         assert_eq!(mismatch.expected(), ONE_ARGUMENT);
         assert_eq!(mismatch.actual(), NO_ARGUMENTS);
+    }
+}
+
+#[test]
+fn non_generated_milestoning_suffixes_match_between_pmcd_and_pure() {
+    let pmcd_graph = graph(vec![
+        class(
+            "Source",
+            &[],
+            Vec::new(),
+            vec![
+                non_generated_milestoning_property("manualAllVersions", "String", &["String"]),
+                non_generated_milestoning_property(
+                    "manualAllVersionsInRange",
+                    "String",
+                    &["String"],
+                ),
+            ],
+        ),
+        class(
+            "GeneratedParent",
+            &[],
+            Vec::new(),
+            vec![
+                generated_property("manualAllVersions", "String"),
+                generated_property("manualAllVersionsInRange", "String"),
+            ],
+        ),
+        class(
+            "ManualParent",
+            &[],
+            Vec::new(),
+            vec![
+                non_generated_milestoning_property("manualAllVersions", "String", &["String"]),
+                non_generated_milestoning_property(
+                    "manualAllVersionsInRange",
+                    "String",
+                    &["String"],
+                ),
+            ],
+        ),
+        class(
+            "Child",
+            &["model::GeneratedParent", "model::ManualParent"],
+            Vec::new(),
+            Vec::new(),
+        ),
+    ]);
+    let pure_graph = pure_non_generated_milestoning_graph();
+
+    for member_name in ["manualAllVersions", "manualAllVersionsInRange"] {
+        let pmcd = &pmcd_graph
+            .class("model::Source")
+            .expect("PMCD source class")
+            .qualified_properties()[member_name];
+        let pure = &pure_graph
+            .class("model::Source")
+            .expect("Pure source class")
+            .qualified_properties()[member_name];
+
+        assert_eq!(pmcd.kind(), QpKind::UserQualified, "PMCD {member_name}");
+        assert_eq!(pure.kind(), QpKind::UserQualified, "Pure {member_name}");
+
+        let pmcd_signature = pmcd.signature().expect("PMCD declared signature");
+        let pure_signature = pure.signature().expect("Pure declared signature");
+        assert_eq!(pmcd_signature.len(), ONE_ARGUMENT, "PMCD {member_name}");
+        assert_eq!(
+            pmcd_signature[NO_ARGUMENTS].raw_type().as_str(),
+            "String",
+            "PMCD {member_name}"
+        );
+        assert_eq!(
+            pure_signature, pmcd_signature,
+            "signature for {member_name}"
+        );
+    }
+
+    for (loader, graph) in [("PMCD", &pmcd_graph), ("Pure", &pure_graph)] {
+        let navigation = NavigationResolver::new(graph);
+        let source = class_value(&navigation, "Source");
+
+        for member_name in ["manualAllVersions", "manualAllVersionsInRange"] {
+            let chain = found(navigation.resolve(
+                &source,
+                &[NavigationStep::call(name(member_name), ONE_ARGUMENT)],
+            ));
+            let NavigationTarget::Member(member) = chain.hops()[NO_ARGUMENTS].target() else {
+                panic!("{loader} {member_name} must resolve a model member");
+            };
+            assert_eq!(
+                member.kind(),
+                &ResolvedMemberKind::Qualified(QpKind::UserQualified),
+                "{loader} {member_name} call"
+            );
+
+            let outcome =
+                navigation.resolve(&source, &[NavigationStep::property(name(member_name))]);
+            let NavigationResolution::WrongArity(mismatch) = outcome else {
+                panic!("{loader} {member_name} property access must reject its missing argument");
+            };
+            assert_eq!(mismatch.expected(), ONE_ARGUMENT, "{loader} {member_name}");
+            assert_eq!(mismatch.actual(), NO_ARGUMENTS, "{loader} {member_name}");
+        }
+
+        let resolver = Resolver::new(graph);
+        for (member_name, generated_kind) in [
+            ("manualAllVersions", QpKind::AllVersions),
+            ("manualAllVersionsInRange", QpKind::AllVersionsInRange),
+        ] {
+            let Resolution::Found(member) =
+                resolver.resolve_member(&qname("Child"), &name(member_name))
+            else {
+                panic!("{loader} {member_name} must resolve the generated parent member");
+            };
+            assert_eq!(
+                member.owner().path().as_str(),
+                "model::GeneratedParent",
+                "{loader} {member_name} precedence"
+            );
+            assert_eq!(
+                member.kind(),
+                &ResolvedMemberKind::Qualified(generated_kind),
+                "{loader} {member_name} precedence"
+            );
+        }
     }
 }
 
