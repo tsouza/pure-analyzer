@@ -138,6 +138,7 @@ jobs:
       needs.changes.outputs.code == 'true' &&
       (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       # Keep all 12 slices while leaving hosted-runner capacity for the
@@ -166,15 +167,15 @@ jobs:
           MUTATION_SHARD_INDEX: ${{ matrix.shard }}
           MUTATION_SHARD_TOTAL: ${{ strategy.job-total }}
         run: >-
-          .github/scripts/run-mutation-shard-debug.sh
+          .github/scripts/run-mutation-debug.sh shard
           "$MUTATION_SHARD_INDEX" "$MUTATION_SHARD_TOTAL"
       - name: Collect mutation diagnostics
         if: always()
         env:
           MUTATION_SHARD_INDEX: ${{ matrix.shard }}
         run: >-
-          .github/scripts/run-mutation-shard-debug.sh
-          --collect "$MUTATION_SHARD_INDEX"
+          .github/scripts/run-mutation-debug.sh
+          --collect shard "$MUTATION_SHARD_INDEX"
       - name: Upload mutation report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
@@ -199,6 +200,7 @@ jobs:
       needs.changes.outputs.code == 'true' &&
       (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       SCCACHE_GHA_ENABLED: "true"
       RUSTC_WRAPPER: sccache
@@ -216,7 +218,10 @@ jobs:
         with:
           tool: cargo-mutants,cargo-nextest,just
       - name: cargo mutants (FFI boundary)
-        run: just test-mutation-ffi
+        run: .github/scripts/run-mutation-debug.sh ffi
+      - name: Collect mutation diagnostics
+        if: always()
+        run: .github/scripts/run-mutation-debug.sh --collect ffi
       - name: Upload mutation report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
@@ -224,6 +229,13 @@ jobs:
           name: mutants-out-ffi
           path: target/mutants-ffi
           if-no-files-found: error
+      - name: Upload mutation diagnostics
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: mutation-diagnostics-ffi
+          path: target/mutation-diagnostics-ffi
+          if-no-files-found: warn
 
   # --- Supply chain: deny + audit + vet + unused deps ----------------------
   supply-chain:

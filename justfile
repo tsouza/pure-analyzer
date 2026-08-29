@@ -134,7 +134,7 @@ test-mutation-shard index total:
 # contracts. This is an inner-loop aid only; the workspace-wide CI matrix
 # remains the authoritative merge gate.
 test-mutation-parser:
-    cargo mutants --package pure-analyzer-parser --file crates/pure-analyzer-parser/src/m3.rs --in-place --output target/mutants-parser
+    cargo xtask test-mutation-parser
 
 # The feature-gated PureCARD FFI-boundary mutation pass alone (fast; never
 # sharded). Split out of `test-mutation` so CI can run it as its own job
