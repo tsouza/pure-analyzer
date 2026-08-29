@@ -243,10 +243,15 @@ pinned engine on the branch and each with its rejecting byte pinned in
 - **A date literal also *ends* on a digit, and its `.` is fractional seconds.**
   Every `-`/`T`/`:` owes a following digit, so a literal can neither end nor
   branch on a separator; the `.` opens the fraction and is legal only in the time
-  half, past at least one `:`. Live: `%2018-`, `%2018-03-17T`, `%2018-03-17T07:`,
-  `%1974.`, `%1974.5`, `%0.0`, `%2018-03-17.000` and
-  `%2018-03-17T07:13:53.000.111` are each "no viable alternative at input", while
-  `%1`, `%1974`, `%1974-1-1` and `%2018-03-17T07:13:53.000` all parse.
+  half, past at least one `:`. The two halves also differ in *which* separators
+  they take: a `T` hands over from the date half to the time half and so may open
+  a field only in the first, while a `-` opens a date field in one and a timezone
+  offset in the other. Live: `%2018-`, `%2018-03-17T`, `%2018-03-17T07:`,
+  `%1974.`, `%1974.5`, `%0.0`, `%2018-03-17.000`,
+  `%2018-03-17T07:13:53.000.111`, `%2018-03-17T07:13:53T1` and `%20:18T3` are
+  each "no viable alternative at input", while `%1`, `%1974`, `%1974-1-1`,
+  `%2018-03-17T07:13:53.000`, `%2018-03-17T07:13:53-0500` and `%20:18-3` all
+  parse.
 - **A `(` at a value position is a parenthesised *group*, not an argument list.**
   A group holds one expression, so it has no `,` to separate: `->limit((1,2))`,
   `->limit(('a','b'))`, `->limit(1+(2,3))` and `->extend(('MPG_T2',extend))` are
