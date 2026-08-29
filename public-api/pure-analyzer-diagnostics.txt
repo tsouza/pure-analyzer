@@ -63,6 +63,7 @@ pub pure_analyzer_diagnostics::DiagCode::ParenthesizedTuple
 pub pure_analyzer_diagnostics::DiagCode::UnknownJoinKind
 pub pure_analyzer_diagnostics::DiagCode::UnknownProperty
 pub pure_analyzer_diagnostics::DiagCode::UnknownSource
+pub pure_analyzer_diagnostics::DiagCode::UnresolvedModelAssociation
 pub pure_analyzer_diagnostics::DiagCode::UnterminatedIsland
 pub pure_analyzer_diagnostics::DiagCode::WrongMilestoningArity
 impl pure_analyzer_diagnostics::DiagCode

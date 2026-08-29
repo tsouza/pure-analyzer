@@ -30,6 +30,164 @@ fn empty_pmcd_class(name: &str) -> String {
     .to_string()
 }
 
+const COLLIDING_PURE_ASSOCIATION: &str = r#"
+Association demo::APure
+{
+ others: demo::Left[*];
+ shared: demo::Right[1];
+}
+"#;
+
+const SECOND_COLLIDING_PURE_ASSOCIATION: &str = r#"
+Association demo::BPure
+{
+ moreOthers: demo::Left[*];
+ shared: demo::Right[1];
+}
+"#;
+
+const REPLACING_PURE_ASSOCIATION: &str = r#"
+Association demo::ZTrusted
+{
+  pureShared: demo::Right[1];
+  pureLefts: demo::Left[*];
+}
+"#;
+
+const UNMATERIALIZABLE_REPLACING_PURE_ASSOCIATION: &str = r#"
+Association demo::ZTrusted
+{
+  pureShared: demo::Right[1];
+  missing: demo::Missing[1];
+}
+"#;
+
+fn trusted_pmcd_association() -> String {
+    json!({
+        "_type": "data",
+        "elements": [{
+            "_type": "association",
+            "package": "demo",
+            "name": "ZTrusted",
+            "stereotypes": [],
+            "properties": [
+                {
+                    "name": "lefts",
+                    "genericType": {"rawType": "demo::Left"},
+                    "multiplicity": {"lowerBound": 0, "upperBound": null}
+                },
+                {
+                    "name": "shared",
+                    "genericType": {"rawType": "demo::Right"},
+                    "multiplicity": {"lowerBound": 1, "upperBound": 1}
+                }
+            ]
+        }]
+    })
+    .to_string()
+}
+
+fn second_pmcd_association() -> String {
+    json!({
+        "_type": "data",
+        "elements": [{
+            "_type": "association",
+            "package": "demo",
+            "name": "Second",
+            "stereotypes": [],
+            "properties": [
+                {
+                    "name": "lefts",
+                    "genericType": {"rawType": "demo::Left"},
+                    "multiplicity": {"lowerBound": 0, "upperBound": null}
+                },
+                {
+                    "name": "shared",
+                    "genericType": {"rawType": "demo::Right"},
+                    "multiplicity": {"lowerBound": 1, "upperBound": 1}
+                }
+            ]
+        }]
+    })
+    .to_string()
+}
+
+fn mixed_association_collision_graph(pure_first: bool) -> pure_analyzer_model::ModelGraph {
+    let left = empty_pmcd_class("Left");
+    let right = empty_pmcd_class("Right");
+    let trusted = trusted_pmcd_association();
+    let pure = ModelDocument::Pure(PureDocument::new(
+        "colliding.pure",
+        COLLIDING_PURE_ASSOCIATION,
+    ));
+    let left = ModelDocument::Pmcd(PmcdDocument::new("left.pmcd.json", &left));
+    let right = ModelDocument::Pmcd(PmcdDocument::new("right.pmcd.json", &right));
+    let trusted = ModelDocument::Pmcd(PmcdDocument::new("trusted.pmcd.json", &trusted));
+    let documents = if pure_first {
+        [pure, left, right, trusted]
+    } else {
+        [left, right, trusted, pure]
+    };
+    load_model_documents(&documents).expect("Pure uncertainty must not invalidate PMCD")
+}
+
+fn same_path_association_replacement_graph(pure_first: bool) -> pure_analyzer_model::ModelGraph {
+    let left = empty_pmcd_class("Left");
+    let right = empty_pmcd_class("Right");
+    let pmcd = trusted_pmcd_association();
+    let pure = ModelDocument::Pure(PureDocument::new(
+        "replacement.pure",
+        REPLACING_PURE_ASSOCIATION,
+    ));
+    let left = ModelDocument::Pmcd(PmcdDocument::new("left.pmcd.json", &left));
+    let right = ModelDocument::Pmcd(PmcdDocument::new("right.pmcd.json", &right));
+    let pmcd = ModelDocument::Pmcd(PmcdDocument::new("trusted.pmcd.json", &pmcd));
+    let documents = if pure_first {
+        [pure, left, right, pmcd]
+    } else {
+        [left, right, pmcd, pure]
+    };
+
+    load_model_documents(&documents).expect("same-path associations must merge")
+}
+
+fn assert_trusted_pmcd_association(graph: &pure_analyzer_model::ModelGraph, trusted_source: u32) {
+    assert_eq!(graph.associations().len(), 1);
+    let trusted = graph.associations().first().expect("trusted association");
+    assert_eq!(trusted.path().as_str(), "demo::ZTrusted");
+    assert_eq!(trusted.provenance(), Provenance::Pmcd);
+    assert_eq!(trusted.source().index(), trusted_source);
+
+    let left = graph.class("demo::Left").expect("left");
+    assert!(left.coverage_gap());
+    assert_eq!(
+        left.properties()["shared"]
+            .association()
+            .expect("PMCD association provenance")
+            .as_str(),
+        "demo::ZTrusted"
+    );
+    let right = graph.class("demo::Right").expect("right");
+    assert!(right.coverage_gap());
+    assert!(!right.properties().contains_key("others"));
+}
+
+fn assert_unresolved_pure_collision(graph: &pure_analyzer_model::ModelGraph, pure_source: u32) {
+    assert_eq!(graph.diagnostics().len(), 1);
+    let diagnostic = &graph.diagnostics()[0];
+    assert_eq!(diagnostic.code, DiagCode::UnresolvedModelAssociation);
+    assert_eq!(diagnostic.severity, Severity::Error);
+    assert_eq!(diagnostic.primary.file.index(), pure_source);
+    assert!(diagnostic.message.contains("demo::APure"));
+    assert!(diagnostic.message.contains("demo::Left.shared"));
+    assert!(
+        graph
+            .diagnostics()
+            .iter()
+            .all(|diagnostic| diagnostic.code != MODEL_MERGE_CONFLICT)
+    );
+}
+
 #[test]
 fn pure_document_accessors_preserve_borrowed_input() {
     let document = PureDocument::new("memory:accessors.pure", "Class demo::Input {}");
@@ -56,9 +214,22 @@ Class demo::Order extends demo::Entity
   tags: List<String>[*];
   priceAfter(asOf: StrictDate[1]): Decimal[0..1] { $this.id; };
 }
+
+Association <<temporal.processingtemporal>> demo::Order_Entity
+{
+  order: demo::Order[1];
+  entities: demo::Entity[*];
+}
 "#,
     );
 
+    assert_pure_order_class_facts(&graph);
+    assert_pure_entity_association_facts(&graph);
+    assert_pure_association_end_facts(&graph);
+    assert_pure_association_metadata(&graph);
+}
+
+fn assert_pure_order_class_facts(graph: &pure_analyzer_model::ModelGraph) {
     let order = graph.class("demo::Order").expect("order");
     assert_eq!(order.supertypes()[0].as_str(), "demo::Entity");
     assert_eq!(order.provenance(), Provenance::PureFile);
@@ -74,11 +245,41 @@ Class demo::Order extends demo::Entity
             .as_str(),
         "StrictDate"
     );
+}
 
+fn assert_pure_entity_association_facts(graph: &pure_analyzer_model::ModelGraph) {
+    let order = graph.class("demo::Order").expect("order");
     let entity = graph.class("demo::Entity").expect("entity");
     assert_eq!(entity.temporal(), Some(Temporal::BusinessTemporal));
     let processing = graph.class("demo::Processing").expect("processing");
     assert_eq!(processing.temporal(), Some(Temporal::ProcessingTemporal));
+    assert!(entity.properties()["order"].from_assoc());
+    assert!(order.properties()["entities"].from_assoc());
+}
+
+fn assert_pure_association_end_facts(graph: &pure_analyzer_model::ModelGraph) {
+    let association = &graph.associations()[0];
+    assert_eq!(association.end_a().owner().as_str(), "demo::Entity");
+    assert_eq!(association.end_a().property().name().as_str(), "order");
+    assert_eq!(
+        association.end_a().property().target().raw_type().as_str(),
+        "demo::Order"
+    );
+    assert_eq!(association.end_a().property().multiplicity().lower(), 1);
+    assert_eq!(association.end_b().owner().as_str(), "demo::Order");
+    assert_eq!(association.end_b().property().name().as_str(), "entities");
+    assert_eq!(
+        association.end_b().property().target().raw_type().as_str(),
+        "demo::Entity"
+    );
+    assert!(association.end_b().property().multiplicity().is_unbounded());
+}
+
+fn assert_pure_association_metadata(graph: &pure_analyzer_model::ModelGraph) {
+    let association = &graph.associations()[0];
+    assert_eq!(association.temporal(), Some(Temporal::ProcessingTemporal));
+    assert_eq!(association.provenance(), Provenance::PureFile);
+    assert_eq!(association.source().index(), 0);
     assert_eq!(graph.sources()[0].provenance(), Provenance::PureFile);
 }
 
@@ -308,7 +509,28 @@ Class demo::Partial
 }
 
 #[test]
-fn pure_associations_are_not_materialized_and_open_same_source_classes() {
+fn unsupported_later_pure_source_opens_prior_unrelated_pmcd_classes() {
+    let existing = empty_pmcd_class("Existing");
+    let graph = load_model_documents(&[
+        ModelDocument::Pmcd(PmcdDocument::new("existing.pmcd.json", &existing)),
+        ModelDocument::Pure(PureDocument::new(
+            "unsupported.pure",
+            r#"
+Enum demo::Unsupported { enabled }
+"#,
+        )),
+    ])
+    .expect("unsupported Pure must preserve prior PMCD facts");
+
+    let existing = graph.class("demo::Existing").expect("prior class");
+    assert!(
+        existing.coverage_gap(),
+        "an unrelated unsupported later Pure source leaves the complete model open-world"
+    );
+}
+
+#[test]
+fn incomplete_associations_open_same_source_classes() {
     let graph = pure(
         r#"
 Class demo::Left
@@ -320,7 +542,6 @@ Class demo::Right
 Association demo::Broken
 {
   left: demo::Left[1];
-  right: demo::Right[1];
 }
 "#,
     );
@@ -335,7 +556,334 @@ Association demo::Broken
 }
 
 #[test]
-fn pure_associations_open_prior_source_classes_without_a_pure_class() {
+fn confirmed_pure_association_materializes_after_later_sources_supply_its_owners() {
+    let left = empty_pmcd_class("Left");
+    let right = empty_pmcd_class("Right");
+    let graph = load_model_documents(&[
+        ModelDocument::Pure(PureDocument::new(
+            "links.pure",
+            r#"
+Association demo::Links
+{
+  left: demo::Left[1];
+  rights: demo::Right[*];
+}
+"#,
+        )),
+        ModelDocument::Pmcd(PmcdDocument::new("left.pmcd.json", &left)),
+        ModelDocument::Pmcd(PmcdDocument::new("right.pmcd.json", &right)),
+    ])
+    .expect("load mixed model");
+
+    let association = graph.associations().first().expect("association");
+    assert_eq!(association.provenance(), Provenance::PureFile);
+    assert_eq!(association.source().index(), 0);
+    assert_eq!(association.end_a().owner().as_str(), "demo::Right");
+    assert_eq!(association.end_b().owner().as_str(), "demo::Left");
+    assert!(
+        graph
+            .class("demo::Right")
+            .expect("right")
+            .properties()
+            .contains_key("left")
+    );
+    assert!(
+        graph
+            .class("demo::Left")
+            .expect("left")
+            .properties()
+            .contains_key("rights")
+    );
+}
+
+#[test]
+fn pmcd_association_survives_a_colliding_pure_association_in_either_order() {
+    let pmcd_first = mixed_association_collision_graph(false);
+    assert_trusted_pmcd_association(&pmcd_first, 2);
+    assert_unresolved_pure_collision(&pmcd_first, 3);
+
+    let pure_first = mixed_association_collision_graph(true);
+    assert_trusted_pmcd_association(&pure_first, 3);
+    assert_unresolved_pure_collision(&pure_first, 0);
+}
+
+#[test]
+fn one_pmcd_association_wins_against_multiple_colliding_pure_ends() {
+    let left = empty_pmcd_class("Left");
+    let right = empty_pmcd_class("Right");
+    let trusted = trusted_pmcd_association();
+    let graph = load_model_documents(&[
+        ModelDocument::Pmcd(PmcdDocument::new("left.pmcd.json", &left)),
+        ModelDocument::Pmcd(PmcdDocument::new("right.pmcd.json", &right)),
+        ModelDocument::Pmcd(PmcdDocument::new("trusted.pmcd.json", &trusted)),
+        ModelDocument::Pure(PureDocument::new(
+            "first-colliding.pure",
+            COLLIDING_PURE_ASSOCIATION,
+        )),
+        ModelDocument::Pure(PureDocument::new(
+            "second-colliding.pure",
+            SECOND_COLLIDING_PURE_ASSOCIATION,
+        )),
+    ])
+    .expect("Pure uncertainty must not invalidate the sole PMCD association");
+
+    assert_trusted_pmcd_association(&graph, 2);
+}
+
+#[test]
+fn two_pmcd_associations_do_not_survive_a_colliding_pure_end() {
+    let left = empty_pmcd_class("Left");
+    let right = empty_pmcd_class("Right");
+    let trusted = trusted_pmcd_association();
+    let second = second_pmcd_association();
+    let error = load_model_documents(&[
+        ModelDocument::Pmcd(PmcdDocument::new("left.pmcd.json", &left)),
+        ModelDocument::Pmcd(PmcdDocument::new("right.pmcd.json", &right)),
+        ModelDocument::Pmcd(PmcdDocument::new("trusted.pmcd.json", &trusted)),
+        ModelDocument::Pmcd(PmcdDocument::new("second.pmcd.json", &second)),
+        ModelDocument::Pure(PureDocument::new(
+            "colliding.pure",
+            COLLIDING_PURE_ASSOCIATION,
+        )),
+    ])
+    .expect_err("two closed-world PMCD ends must not be suppressed by a Pure collision");
+
+    assert!(error.to_string().contains("demo::Second"));
+}
+
+struct AssociationWinnerExpectation<'a> {
+    provenance: Provenance,
+    expected_left_property: &'a str,
+    absent_left_property: &'a str,
+    expected_right_property: &'a str,
+    absent_right_property: &'a str,
+    prior_source: u32,
+}
+
+fn assert_same_path_association_winner(
+    graph: &pure_analyzer_model::ModelGraph,
+    expected: AssociationWinnerExpectation<'_>,
+) {
+    let association = graph.associations().first().expect("association winner");
+    assert_eq!(association.path().as_str(), "demo::ZTrusted");
+    assert_eq!(association.provenance(), expected.provenance);
+    assert_eq!(association.source().index(), 3);
+    let left = graph.class("demo::Left").expect("left");
+    let right = graph.class("demo::Right").expect("right");
+    assert!(
+        left.properties()
+            .contains_key(expected.expected_left_property)
+    );
+    assert!(
+        !left
+            .properties()
+            .contains_key(expected.absent_left_property)
+    );
+    assert!(
+        right
+            .properties()
+            .contains_key(expected.expected_right_property)
+    );
+    assert!(
+        !right
+            .properties()
+            .contains_key(expected.absent_right_property)
+    );
+    let conflicts = graph
+        .diagnostics()
+        .iter()
+        .filter(|diagnostic| diagnostic.code == MODEL_MERGE_CONFLICT)
+        .collect::<Vec<_>>();
+    assert_eq!(conflicts.len(), 1);
+    assert_eq!(conflicts[0].primary.file.index(), 3);
+    assert_eq!(
+        conflicts[0].secondary[0].file.index(),
+        expected.prior_source
+    );
+}
+
+#[test]
+fn same_path_pmcd_and_pure_associations_are_last_source_wins() {
+    let pmcd_wins = same_path_association_replacement_graph(true);
+    assert_same_path_association_winner(
+        &pmcd_wins,
+        AssociationWinnerExpectation {
+            provenance: Provenance::Pmcd,
+            expected_left_property: "shared",
+            absent_left_property: "pureShared",
+            expected_right_property: "lefts",
+            absent_right_property: "pureLefts",
+            prior_source: 0,
+        },
+    );
+
+    let pure_wins = same_path_association_replacement_graph(false);
+    assert_same_path_association_winner(
+        &pure_wins,
+        AssociationWinnerExpectation {
+            provenance: Provenance::PureFile,
+            expected_left_property: "pureShared",
+            absent_left_property: "shared",
+            expected_right_property: "pureLefts",
+            absent_right_property: "lefts",
+            prior_source: 2,
+        },
+    );
+}
+
+#[test]
+fn unmaterializable_pure_association_supersedes_same_path_pmcd_without_partial_facts() {
+    let left = empty_pmcd_class("Left");
+    let right = empty_pmcd_class("Right");
+    let pmcd = trusted_pmcd_association();
+    let graph = load_model_documents(&[
+        ModelDocument::Pmcd(PmcdDocument::new("left.pmcd.json", &left)),
+        ModelDocument::Pmcd(PmcdDocument::new("right.pmcd.json", &right)),
+        ModelDocument::Pmcd(PmcdDocument::new("trusted.pmcd.json", &pmcd)),
+        ModelDocument::Pure(PureDocument::new(
+            "replacement.pure",
+            UNMATERIALIZABLE_REPLACING_PURE_ASSOCIATION,
+        )),
+    ])
+    .expect("unmaterializable replacement remains recoverable");
+
+    assert!(graph.associations().is_empty());
+    let left = graph.class("demo::Left").expect("left");
+    let right = graph.class("demo::Right").expect("right");
+    assert!(left.coverage_gap());
+    assert!(right.coverage_gap());
+    assert!(!left.properties().contains_key("shared"));
+    assert!(!right.properties().contains_key("lefts"));
+    assert!(!right.properties().contains_key("missing"));
+    assert!(
+        graph
+            .diagnostics()
+            .iter()
+            .any(|diagnostic| diagnostic.code == MODEL_MERGE_CONFLICT),
+        "the later same-path declaration must report deterministic replacement"
+    );
+    assert!(
+        graph
+            .diagnostics()
+            .iter()
+            .any(|diagnostic| diagnostic.code == DiagCode::UnresolvedModelAssociation),
+        "the unmaterializable Pure association needs an explicit diagnostic"
+    );
+}
+
+#[test]
+fn pure_association_with_a_missing_owner_is_diagnosed_without_partial_facts() {
+    let graph = pure(
+        r#"
+Class demo::Known
+{
+}
+Association demo::Broken
+{
+  known: demo::Known[1];
+  missing: demo::Missing[1];
+}
+"#,
+    );
+
+    let known = graph.class("demo::Known").expect("known class");
+    assert!(known.coverage_gap());
+    assert!(known.properties().is_empty());
+    assert!(graph.associations().is_empty());
+    let diagnostic = graph
+        .diagnostics()
+        .iter()
+        .find(|diagnostic| diagnostic.code == DiagCode::UnresolvedModelAssociation)
+        .expect("missing owner diagnostic");
+    assert_eq!(diagnostic.severity, Severity::Error);
+    assert_eq!(diagnostic.primary.file.index(), 0);
+    assert!(diagnostic.message.contains("demo::Missing"));
+}
+
+#[test]
+fn pure_association_end_conflicting_with_a_declared_property_is_not_materialized() {
+    let graph = pure(
+        r#"
+Class demo::Left
+{
+  right: String[1];
+}
+Class demo::Right
+{
+}
+Association demo::Broken
+{
+  left: demo::Left[1];
+  right: demo::Right[1];
+}
+"#,
+    );
+
+    let left = graph.class("demo::Left").expect("left class");
+    assert!(left.coverage_gap());
+    assert_eq!(
+        left.properties()["right"].target().raw_type().as_str(),
+        "String"
+    );
+    assert!(!left.properties()["right"].from_assoc());
+    let right = graph.class("demo::Right").expect("right class");
+    assert!(right.coverage_gap());
+    assert!(right.properties().is_empty());
+    assert!(graph.associations().is_empty());
+    assert_eq!(
+        graph
+            .diagnostics()
+            .iter()
+            .filter(|diagnostic| diagnostic.code == DiagCode::UnresolvedModelAssociation)
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn colliding_pure_associations_do_not_choose_a_lexical_winner() {
+    let graph = pure(
+        r#"
+Class demo::Left
+{
+}
+Class demo::Right
+{
+}
+Association demo::First
+{
+  left: demo::Left[1];
+  shared: demo::Right[1];
+}
+Association demo::Second
+{
+  alternate: demo::Left[1];
+  shared: demo::Right[1];
+}
+"#,
+    );
+
+    let left = graph.class("demo::Left").expect("left class");
+    let right = graph.class("demo::Right").expect("right class");
+    assert!(left.coverage_gap());
+    assert!(right.coverage_gap());
+    assert!(left.properties().is_empty());
+    assert!(right.properties().is_empty());
+    assert!(graph.associations().is_empty());
+    let diagnostics = graph
+        .diagnostics()
+        .iter()
+        .filter(|diagnostic| diagnostic.code == DiagCode::UnresolvedModelAssociation)
+        .collect::<Vec<_>>();
+    assert_eq!(diagnostics.len(), 2);
+    assert_eq!(diagnostics[0].severity, Severity::Error);
+    assert_eq!(diagnostics[1].severity, Severity::Error);
+    assert!(diagnostics[0].message.contains("demo::First"));
+    assert!(diagnostics[1].message.contains("demo::Second"));
+}
+
+#[test]
+fn incomplete_pure_association_opens_prior_source_classes_without_a_pure_class() {
     let pmcd = empty_pmcd_class("Existing");
     let graph = load_model_documents(&[
         ModelDocument::Pmcd(PmcdDocument::new("complete.pmcd.json", &pmcd)),

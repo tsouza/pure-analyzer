@@ -59,6 +59,9 @@ pub enum DiagCode {
     /// `PUR9002`: one model source declares the same fact more than once.
     #[serde(rename = "PUR9002")]
     DuplicateModelDeclaration,
+    /// `PUR9003`: a Pure association cannot be materialized without ambiguity.
+    #[serde(rename = "PUR9003")]
+    UnresolvedModelAssociation,
 }
 
 /// The complete diagnostic registry in stable numeric order.
@@ -79,6 +82,7 @@ pub const ALL_DIAG_CODES: &[DiagCode] = &[
     DiagCode::ModelMergeConflict,
     DiagCode::ModelRequired,
     DiagCode::DuplicateModelDeclaration,
+    DiagCode::UnresolvedModelAssociation,
 ];
 
 impl DiagCode {
@@ -102,6 +106,7 @@ impl DiagCode {
             Self::ModelMergeConflict => "PUR9000",
             Self::ModelRequired => "PUR9001",
             Self::DuplicateModelDeclaration => "PUR9002",
+            Self::UnresolvedModelAssociation => "PUR9003",
         }
     }
 
@@ -121,9 +126,10 @@ impl DiagCode {
             | Self::DerivedQualifiedProperty
             | Self::UnknownSource => DiagFamily::Lint,
             Self::EquivalenceVerdict => DiagFamily::Equivalence,
-            Self::ModelMergeConflict | Self::ModelRequired | Self::DuplicateModelDeclaration => {
-                DiagFamily::Tool
-            }
+            Self::ModelMergeConflict
+            | Self::ModelRequired
+            | Self::DuplicateModelDeclaration
+            | Self::UnresolvedModelAssociation => DiagFamily::Tool,
         }
     }
 }
@@ -228,6 +234,11 @@ mod tests {
             (
                 DiagCode::DuplicateModelDeclaration,
                 "PUR9002",
+                DiagFamily::Tool,
+            ),
+            (
+                DiagCode::UnresolvedModelAssociation,
+                "PUR9003",
                 DiagFamily::Tool,
             ),
         ];
