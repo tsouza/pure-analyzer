@@ -131,15 +131,6 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
                     self.close();
                 }
             }
-            if self.index == semicolon_start {
-                self.syntax_error("parser made no progress after checking a Domain terminator");
-                self.open(SyntaxKind::ERROR_NODE);
-                if !self.bump() {
-                    self.close();
-                    break;
-                }
-                self.close();
-            }
         }
 
         self.close();
