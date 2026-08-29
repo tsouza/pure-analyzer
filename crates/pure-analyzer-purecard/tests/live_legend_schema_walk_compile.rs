@@ -349,6 +349,16 @@ const RATCHET_SLACK: usize = 3;
 /// removes illegal walks from the *admissible* set rather than converting a
 /// failing walk into a compiling one. The generalization guard did not move
 /// either — see [`GENERALIZATION_BASELINE`].
+///
+/// **T4 re-measure (2026-08-29, #116): 50/64 = recipe 5/5 + exploration 45/59**,
+/// bit-identical across two consecutive runs — identical to Phase 7 and T6 on
+/// both partitions. `world_1`'s corpus-derived vocabulary has no `toOne` token, so
+/// the new `recipe_collapsed_navigation_predicate` finds nothing to build here
+/// and the recipe partition stays five walks wide; T4's own position (a `->` on
+/// a receiver the overlay has typed) is one this database's exploration stream
+/// does not reach, so no movement was expected or forced. Reported because the
+/// standing regime measures both arms on every rule, not only the ones a rule
+/// was designed to move.
 const CRITERION_BASELINE: Baseline = Baseline {
     db_id: CRITERION_DB,
     recipe_compiled: 5,
@@ -407,9 +417,21 @@ const CRITERION_BASELINE: Baseline = Baseline {
 /// re-measure came back level. A one-walk move that a neighbouring phase
 /// reshuffles away was exploration noise, not the rule's doing — which is what
 /// the criterion arm holding still through both measurements already said.
+///
+/// **T4 re-measure (2026-08-29, #116): 48/64 = recipe 7/7 + exploration 41/57**,
+/// bit-identical across two consecutive runs; the total is unchanged from T6's
+/// own re-measure and one walk moves across the partition boundary. The recipe floor is
+/// **ratcheted 6 → 7**: `car_1`'s vocabulary has the `toOne` token, so this
+/// database realizes the new `recipe_collapsed_navigation_predicate`
+/// (`CarsData.all()->filter(a|$a.cylinders->toOne() < 1)`, live-verified against
+/// a real PMCD before it shipped) and that partition is exact and
+/// deterministic — a compiling recipe walk becomes part of the floor. The
+/// exploration partition gave up the slot the new recipe took (58 → 57) and
+/// reshuffled; 41 clears its 42 − [`RATCHET_SLACK`] = 39 floor, which is
+/// therefore left where Phase 7 set it and T6 confirmed.
 const GENERALIZATION_BASELINE: Baseline = Baseline {
     db_id: GENERALIZATION_DB,
-    recipe_compiled: 6,
+    recipe_compiled: 7,
     exploration_compiled: 42,
 };
 

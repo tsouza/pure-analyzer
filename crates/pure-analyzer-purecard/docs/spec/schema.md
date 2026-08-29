@@ -118,7 +118,8 @@ The decoder never calls Legend; the host builds `Schema` once, at session init, 
 How the PMCD / MCP tools are queried to _populate_ the contract is host-side. This spec defines the contract's _shape and semantics_, not the extraction, and the decoder ingests `Schema` from JSON at session init (`Schema::from_json`, §9).
 
 **L2 enforcement is mask-first.** `allowed_mask()` is the _sole_ point that
-enforces the supported L2 rules (§6.7 — N1/N2/N3/N5/N6, T2, T3, and part of T1): with a
+enforces the supported L2 rules (§6.7 — N1/N2/N3/N5/N6, T2, T3, T4, T6, and part of
+T1): with a
 schema set it intersects the syntactic (L1) mask with that schema-legal set,
 clearing tokens illegal under a covered rule. `accept_token`/`accept_byte` enforce
 only the **grammar** — a schema-masked token that is grammar-legal is still
@@ -227,7 +228,46 @@ The set is deliberately **monotonic and a superset**: a name is recorded whereve
   against the 8 committed `FIXTURE_DBS`. With no counter-evidence to mask any
   type for `min`/`max` instead, they ship unconstrained (§4's corpus-evidence
   discipline: admit rather than invent).
-- **T4 — string-predicate type rule.** `->startsWith(…)`, `->endsWith(…)`, `->contains(…)`, `->toLower()`/`->toUpper()` legal only when the receiver's resolved type is **String**.
+- **T4 — string-predicate type rule.** `->startsWith(…)`, `->endsWith(…)`, `->toLower()`, `->toUpper()` are legal only when the receiver's resolved type is **String**; on a receiver L2 has typed numeric, boolean, or temporal they are masked at the method-name position after `->`.
+  **Implementation note (2026-08-29, #116):** two corrections to the pilot-survey
+  text this rule was originally written from, both live-attested against the
+  pinned Legend stack.
+  1. **`->contains(…)` is not a string predicate and is not masked.** It
+     resolves to the generic collection membership test
+     (`contains(Any[*], Any[1]): Boolean[1]`), and Pure treats a scalar as a
+     collection of one, so it compiles on any receiver:
+     `$x.population->toOne()->contains('A')` and `->contains(1)` both return a
+     type on an `Integer[1]` receiver, while `toUpper`/`toLower`/`startsWith`/
+     `endsWith` are each refused there with `Can't find a match for function
+     '…(Integer[1])'` naming the `String` overload. Masking it would be a
+     soundness regression, and the gold corpus agrees: all 66 `->contains`
+     occurrences sit on a `getString(…)` receiver, which this rule never
+     narrows.
+  2. **The receiver is typed by the method's own signature, not only by a
+     property navigation.** #116 read the gold evidence as "exclusively
+     `getString(…)`-prefixed"; the corpus has three receiver shapes and the rule
+     covers all three — a TDS accessor call
+     (`$row.getString('name')->contains(…)`), a bare primitive property
+     navigation (`$x.name->startsWith(…)`), and a type-preserving `->toOne()`
+     step over either (`$x.name->toOne()->toLower()`, 8 occurrences). The four
+     TDS getters (`getInteger`/`getFloat`/`getString`/`getBoolean`) each fix
+     their return type by signature; `->toOne()` hands back its receiver's type.
+     This is tracked as a **separate** post-call type signal, deliberately not
+     folded into the one T1/T2 read: at an accessor the gold corpus falsifies
+     both of those rules. 6 gold queries apply an ordered comparator to a
+     `getString(…)` (T2 would mask the `<`), and 25 more compare an accessor
+     against a literal of the other kind (`getInteger(…) == '2'` × 20,
+     `getString(…) == 5` × 2, `getBoolean(…) == 1` × 3 — all of which T1 would
+     mask). A Spider-derived model declares column types the engine then coerces
+     at a comparison; only the method-signature lever survives that.
+  3. **Only a scalar receiver is narrowed** (relationship to T6). The tracker's
+     `NavResult` reports a primitive navigation whose chain is not to-one as
+     `NonScalar`, with no type class, and T4 reads nothing there. A String-only
+     method is illegal on such a receiver too, but for its **multiplicity**
+     rather than its type — `toUpper(String[*])` is refused exactly as
+     `toUpper(Integer[*])` is — so masking it under T4 would assert T6's claim
+     through T4's lever on evidence T4 never gathered. T4 narrows only where the
+     type class is the whole reason.
 - **T5 — enum-comparison type rule.** A nav expression resolving to `EnumRef(E)` may be compared only against a value of enum `E` (pairs with N4); comparing it to a string/number literal is masked. Because L1 has no enum-literal operand position, this rule is outside the supported overlay.
 - **T6 — multiplicity / collapse rule.** An **ordered comparator** (`< > <= >=`)
   requires the navExpr on its left to be a **scalar primitive**. Those four
@@ -325,9 +365,13 @@ continuation, its class-vs-store continuation split, and the store-method set),
 **N6** (relation columns), **N7** (bare value-identifier continuation), the
 numeric/string portion of **T1** (comparison
 operand type), **T2** (ordered-comparator restriction, numeric/temporal only —
-boolean/string/enum operands mask `< > <= >=` and keep `== !=`), and **T3**
+boolean/string/enum operands mask `< > <= >=` and keep `== !=`), **T3**
 (aggregation-reducer type — `sum`/`average` numeric-only; `min`/`max`/`count`
-unconstrained). The other named categories are outside the supported overlay and
+unconstrained), **T4** (string-predicate type —
+`toLower`/`toUpper`/`startsWith`/`endsWith` masked on a receiver typed
+non-String; `contains` unconstrained, being the generic collection overload),
+and **T6** (the ordered comparators masked on a navExpr that is not a scalar
+primitive). The other named categories are outside the supported overlay and
 pass through without schema narrowing. `src/schema/narrow.rs` is authoritative
 for the executable boundary.
 
@@ -349,7 +393,7 @@ L1 and L2 share a **single position vocabulary**: every place L2 narrows must be
 | **T1/T2** comparison operand type & ordered-comparator | `cmp = valueExpr cmpop valueExpr` — the `cmpop` + operand positions (§5.3)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | **N4b/N4c** logical-operand and string-literal operator | the operand a `&&`/`\|\|` opens, and the operator position right after a completed `strlit` — both the `valueExpr … op … valueExpr` positions of §5.3, the second additionally read at the byte-PDA's pending-closing-quote state                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | **T3** aggregation-reducer type                        | `reduceExpr = refVar "->" reducer "()"` — the `reducer` position (§5.3)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| **T4** string-predicate / string-transform type        | two L1 positions: `valueExpr "->" boolPred` for the predicates `contains`/`startsWith`/`endsWith`, **and** `valueExpr "->" fn` for the transforms `toLower`/`toUpper` (which are `fn`, not `boolPred`, in §5.3) (§5.3)                                                                                                                                                                                                                                                                                                                                                                                             |
+| **T4** string-predicate / string-transform type        | two L1 positions: `valueExpr "->" boolPred` for the predicates `startsWith`/`endsWith`, **and** `valueExpr "->" fn` for the transforms `toLower`/`toUpper` (which are `fn`, not `boolPred`, in §5.3) (§5.3). `contains` shares the first position but is never narrowed — it is the generic collection overload, legal on any receiver (§6.6 T4)                                                                                                                                                                                                                                                                    |
 | **T5** enum-comparison type                            | No emitted L1 position; this category is outside the supported schema overlay.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | **T6** multiplicity / collapse                         | the `cmpop` position right after a `navExpr` that is not a scalar primitive — a collection (upper bound ≠ 1 at any step), an extent navigation, or a class-typed step (§5.3). The collapse operators the rule leaves open (`->toOne()`, `exists`/`isEmpty`/`isNotEmpty`, the aggregates) are what turn such a `navExpr` back into a scalar.                                                                                                                                                                                                                                                                          |
 | **T7** projection/key lambda return-shape              | the `valueExpr` body of `colLambda`/`keyLambda` must be scalar (§5.3)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
