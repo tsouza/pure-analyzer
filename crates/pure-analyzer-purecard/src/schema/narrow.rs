@@ -506,12 +506,7 @@ impl Names<'_> {
             Self::Member(schema, class) => {
                 let names = schema.member_names(class);
                 let quoted: Vec<Vec<u8>> = names.iter().map(|n| quote(n.as_bytes())).collect();
-                Trie::from_names(
-                    names
-                        .iter()
-                        .map(|n| n.as_bytes().to_vec())
-                        .chain(quoted.into_iter()),
-                )
+                Trie::from_names(names.iter().map(|n| n.as_bytes().to_vec()).chain(quoted))
             }
             Self::Column(columns) => Trie::from_names(columns.iter().map(|c| quote(c))),
             Self::RelationColumn(columns) => Trie::from_names(columns.iter().cloned()),
