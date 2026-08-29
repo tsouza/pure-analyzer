@@ -202,7 +202,22 @@ pub(crate) fn narrow_into(
             });
             true
         }
-        _ => false,
+        // Every trie position already returned above. They are spelled out here
+        // rather than swept up by a `_` arm so this match stays **exhaustive**
+        // over [`L2Position`]: a new variant then has to be classified here
+        // instead of silently passing through, and — the reason this is not
+        // merely style — deleting any arm of an exhaustive match does not
+        // compile, which is what keeps the arms that guard a *no-op* narrow
+        // (`Comparator(Numeric | Temporal)`, whose fall-through builds an
+        // all-ones mask that intersects to nothing) from becoming
+        // behaviourally-equivalent mutants no test can kill.
+        L2Position::None
+        | L2Position::SourceIdent
+        | L2Position::SourceMethod
+        | L2Position::Member(_)
+        | L2Position::Column
+        | L2Position::RelationColumn
+        | L2Position::RefVar => false,
     }
 }
 
@@ -402,7 +417,16 @@ impl<'a> TrieRule<'a> {
                 NameClose::Free,
                 Names::RefVar(vars),
             ),
-            _ => return None,
+            // Exhaustive on purpose, like [`narrow_into`]'s own match: the
+            // non-trie positions are listed rather than swept up by a `_`, so a
+            // new [`L2Position`] must be classified here and no arm can be
+            // deleted without a compile error.
+            L2Position::None
+            | L2Position::SourceMethodArg
+            | L2Position::ReValue(_)
+            | L2Position::Comparator(_)
+            | L2Position::Reducer(_)
+            | L2Position::ValueIdent => return None,
         };
         Some(Self {
             key,
@@ -537,7 +561,19 @@ pub(crate) fn narrow_fused_into(
             eos_bit,
             || Trie::from_names(columns.iter().cloned()),
         ),
-        _ => false,
+        // Exhaustive for the same reason [`narrow_into`] is: a `_` here would
+        // let a deleted arm still compile, and an arm whose fall-through
+        // happens to be a no-op then becomes a mutant no test can kill.
+        L2Position::None
+        | L2Position::SourceIdent
+        | L2Position::SourceMethod
+        | L2Position::SourceMethodArg
+        | L2Position::Column
+        | L2Position::ReValue(_)
+        | L2Position::Comparator(_)
+        | L2Position::Reducer(_)
+        | L2Position::RefVar
+        | L2Position::ValueIdent => false,
     }
 }
 
