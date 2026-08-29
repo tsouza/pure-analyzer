@@ -1252,11 +1252,7 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
                 previous.span.start().min(span.start()),
                 previous.span.end().max(span.end()),
             );
-        } else if self
-            .coverage_gaps
-            .last()
-            .is_none_or(|gap| gap.span != span || gap.kind != kind)
-        {
+        } else {
             self.coverage_gaps.push(DomainCoverageGap { span, kind });
         }
     }

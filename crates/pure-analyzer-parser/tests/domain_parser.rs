@@ -625,6 +625,8 @@ Class demo::Computed
 fn missing_declaration_body_recovers_at_the_next_declaration() {
     let source = r#"
 Class demo::MissingBody
+;
+;
 Class demo::After
 {
   kept: String[1];
