@@ -112,19 +112,24 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
             }
             let semicolon_start = self.index;
             self.consume_if_raw(TokenKind::SEMICOLON);
-            if self.index != semicolon_start {
-                continue;
+            let consumed_semicolon = self.index != semicolon_start;
+            if !consumed_semicolon {
+                let before = self.index;
+                match self.declaration_kind() {
+                    Some(DeclarationKind::Class) => self.parse_class(),
+                    Some(DeclarationKind::Association) => self.parse_association(),
+                    Some(DeclarationKind::Profile) => self.parse_profile(),
+                    None => self.parse_opaque_top_level(),
+                }
+                if self.index == before {
+                    self.syntax_error("parser made no progress while reading a Domain declaration");
+                    self.open(SyntaxKind::ERROR_NODE);
+                    let _ = self.bump();
+                    self.close();
+                }
             }
-
-            let before = self.index;
-            match self.declaration_kind() {
-                Some(DeclarationKind::Class) => self.parse_class(),
-                Some(DeclarationKind::Association) => self.parse_association(),
-                Some(DeclarationKind::Profile) => self.parse_profile(),
-                None => self.parse_opaque_top_level(),
-            }
-            if self.index == before {
-                self.syntax_error("parser made no progress while reading a Domain declaration");
+            if self.index == semicolon_start {
+                self.syntax_error("parser made no progress after checking a Domain terminator");
                 self.open(SyntaxKind::ERROR_NODE);
                 let _ = self.bump();
                 self.close();
@@ -206,14 +211,21 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
             }
             let semicolon_start = self.index;
             self.consume_if_raw(TokenKind::SEMICOLON);
-            if self.index != semicolon_start {
-                continue;
+            let consumed_semicolon = self.index != semicolon_start;
+            if !consumed_semicolon {
+                let before = self.index;
+                self.parse_member(kind);
+                if self.index == before {
+                    self.syntax_error("parser made no progress while reading a Domain member");
+                    self.open(SyntaxKind::ERROR_NODE);
+                    let _ = self.bump();
+                    self.close();
+                }
             }
-
-            let before = self.index;
-            self.parse_member(kind);
-            if self.index == before {
-                self.syntax_error("parser made no progress while reading a Domain member");
+            if self.index == semicolon_start {
+                self.syntax_error(
+                    "parser made no progress after checking a Domain member terminator",
+                );
                 self.open(SyntaxKind::ERROR_NODE);
                 let _ = self.bump();
                 self.close();

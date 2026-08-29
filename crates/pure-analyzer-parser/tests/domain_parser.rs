@@ -1291,9 +1291,9 @@ Class demo::After
 }
 
 #[test]
-fn top_level_semicolon_is_consumed_before_the_next_declaration() {
+fn top_level_semicolons_are_consumed_without_creating_an_opaque_declaration() {
     let source = r#"
-;
+;;
 Class demo::After
 {
   kept: String[1];
@@ -1307,6 +1307,33 @@ Class demo::After
         "{:#?}",
         parsed.coverage_gaps
     );
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::DOMAIN_OPAQUE_NODE), 0);
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::DOMAIN_CLASS_DECL), 1);
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_PROPERTY_DECL),
+        1
+    );
+    assert_lossless(source, &parsed);
+}
+
+#[test]
+fn declaration_body_semicolons_are_consumed_without_creating_an_opaque_member() {
+    let source = r#"
+Class demo::Empty
+{
+  ;;
+  kept: String[1];
+}
+"#;
+    let parsed = parse(source);
+
+    assert!(parsed.diagnostics.is_empty(), "{:#?}", parsed.diagnostics);
+    assert!(
+        parsed.coverage_gaps.is_empty(),
+        "{:#?}",
+        parsed.coverage_gaps
+    );
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::DOMAIN_OPAQUE_NODE), 0);
     assert_eq!(count_kind(&parsed.green, SyntaxKind::DOMAIN_CLASS_DECL), 1);
     assert_eq!(
         count_kind(&parsed.green, SyntaxKind::DOMAIN_PROPERTY_DECL),
@@ -1462,6 +1489,47 @@ Class demo::Broken
 }
 
 #[test]
+fn generic_type_recovery_consumes_adjacent_recovery_commas() {
+    let source = r#"
+Class demo::Broken
+{
+  broken: List<String junk,, Integer>[1];
+  kept: Boolean[1];
+}
+"#;
+    let parsed = panic::catch_unwind(|| parse(source)).expect("Domain parser must not panic");
+
+    assert!(
+        parsed
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == DiagCode::MalformedSyntax),
+        "{:#?}",
+        parsed.diagnostics
+    );
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_PROPERTY_DECL),
+        2
+    );
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_TYPE_REF),
+        5,
+        "recovery must retain the later type argument and following property"
+    );
+    assert_eq!(
+        parsed
+            .coverage_gaps
+            .iter()
+            .map(|gap| gap.kind)
+            .collect::<Vec<_>>(),
+        vec![DomainCoverageGapKind::MalformedDeclaration],
+        "generic recovery must preserve later model facts: {:#?}",
+        parsed.coverage_gaps
+    );
+    assert_lossless(source, &parsed);
+}
+
+#[test]
 fn multiplicity_requires_a_lower_bound_after_its_opening_bracket() {
     let source = r#"
 Class demo::Broken
@@ -1532,6 +1600,41 @@ Profile demo::Broken
             .collect::<Vec<_>>(),
         vec![DomainCoverageGapKind::MalformedDeclaration],
         "a valid stereotype before an omitted one cannot make the section valid: {:#?}",
+        parsed.coverage_gaps
+    );
+    assert_lossless(source, &parsed);
+}
+
+#[test]
+fn malformed_stereotype_tail_consumes_adjacent_recovery_commas() {
+    let source = r#"
+Profile demo::Broken
+{
+  stereotypes: [first junk,,second];
+}
+"#;
+    let parsed = parse(source);
+
+    assert!(
+        parsed
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == DiagCode::MalformedSyntax),
+        "{:#?}",
+        parsed.diagnostics
+    );
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_STEREOTYPE_DECL),
+        3
+    );
+    assert_eq!(
+        parsed
+            .coverage_gaps
+            .iter()
+            .map(|gap| gap.kind)
+            .collect::<Vec<_>>(),
+        vec![DomainCoverageGapKind::MalformedDeclaration],
+        "recovery must not turn the profile tail opaque: {:#?}",
         parsed.coverage_gaps
     );
     assert_lossless(source, &parsed);
