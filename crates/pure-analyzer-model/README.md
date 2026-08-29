@@ -32,10 +32,14 @@ Use `PureDocument` with `load_pure_documents` for in-memory Domain source, or
 PMCD and Pure inputs in one ordered merge.
 
 Sources merge in argument order, regardless of input kind. A later class or
-PMCD association with the same qualified path replaces the earlier element and
-emits one `PUR9000` `Diagnostic`. Classes, properties, qualified properties,
-and path-to-ID indexes use lexical `BTreeMap` order; association output is
-path-sorted. Equivalent source ordering therefore produces the same graph.
+association declaration with the same qualified path supersedes the earlier
+element and emits one `PUR9000` `Diagnostic`. Fully confirmed Pure associations
+then materialize their facts. An incomplete or unmaterializable Pure
+association produces no association or end facts and preserves open-world
+coverage; if it supersedes an earlier same-path association, the earlier facts
+are not retained. Classes, properties, qualified properties, and path-to-ID
+indexes use lexical `BTreeMap` order; association output is path-sorted.
+Equivalent source ordering therefore produces the same graph.
 
 ## Normalized facts
 
