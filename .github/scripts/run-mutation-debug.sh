@@ -436,8 +436,9 @@ set +e
   wall_limit="$2"
   kill_grace="$3"
   shift 3
-  printf "%s\n" "$BASHPID" | sudo -n tee "$cgroup_procs" >/dev/null
-  grep -Fqx "$BASHPID" "$cgroup_procs"
+  child_pid="$BASHPID"
+  printf "%s\n" "$child_pid" | sudo -n tee "$cgroup_procs" >/dev/null
+  grep -Fqx "$child_pid" "$cgroup_procs"
   sccache --start-server
   set +e
   /usr/bin/timeout --verbose --signal=TERM --kill-after="$kill_grace" "$wall_limit" \
