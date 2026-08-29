@@ -505,6 +505,17 @@ const RATCHET_SLACK: usize = 3;
 /// does not reach, so no movement was expected or forced. Reported because the
 /// standing regime measures both arms on every rule, not only the ones a rule
 /// was designed to move.
+///
+/// **Phase 8 (2026-08-29) re-measures at 49/64 = recipe 5/5 + exploration
+/// 44/59**, bit-identical across two consecutive runs — one below Phase 7's
+/// record, so this baseline is *not* raised (floors ratchet upward only) and not
+/// lowered either. Four L1 tightenings land, each a case of L1 spelling a
+/// construct exactly as the pinned engine does: a date literal's fractional
+/// seconds belong to its time half and it ends on a digit; a `(` at a value
+/// position opens a parenthesised *group*, which has no `,` to separate; a lambda
+/// binder pipe binds to a name; and a binder type that has taken a `::` owes its
+/// multiplicity. Live parse failures across both databases fell **13 → 9**, and
+/// the guard arm — where this phase's gain landed — moved +2.
 const CRITERION_BASELINE: Baseline = Baseline {
     db_id: CRITERION_DB,
     recipe_compiled: 5,
@@ -575,10 +586,17 @@ const CRITERION_BASELINE: Baseline = Baseline {
 /// exploration partition gave up the slot the new recipe took (58 → 57) and
 /// reshuffled; 41 clears its 42 − [`RATCHET_SLACK`] = 39 floor, which is
 /// therefore left where Phase 7 set it and T6 confirmed.
+///
+/// **Phase 8 (2026-08-29) ratchets this to 50/64 = recipe 6/6 + exploration
+/// 44/58**, bit-identical across two consecutive runs. None of the phase's four
+/// tightenings was designed against either database's taxonomy — each was read
+/// off the pinned engine's own answers to a probe set on the branch — and the
+/// arm that is not the design target is the one that moved, which is the
+/// generalization evidence.
 const GENERALIZATION_BASELINE: Baseline = Baseline {
     db_id: GENERALIZATION_DB,
     recipe_compiled: 7,
-    exploration_compiled: 42,
+    exploration_compiled: 44,
 };
 
 /// Decode a walk's token ids back to its Pure text through `grammar`'s own
@@ -720,54 +738,42 @@ fn assert_live_compile_rate(baseline: &Baseline) {
 /// proves that gap is in fact closed (269/269 *real* gold queries compile
 /// against the same grammar this lane uses).
 ///
-/// Phase 6 shipped four rules over the *completed term* — N3g (arity), N4a
-/// (the store result's operator set), N4b (the logical operand) and N4c (the
-/// string-literal operator) — and both sub-shapes it targeted are closed
-/// outright. What remains, across 15 `world_1` / 16 `car_1` exploration
-/// failures, taxonomised per walk and summing to exactly 31:
+/// Phase 8 shipped four L1 tightenings, all of them the same shape of finding:
+/// a production the byte-PDA admitted more loosely than the engine's own parser
+/// does, each re-derived live on the branch rather than from either database's
+/// failure taxonomy. Live parse failures fell **13 → 9** across both databases.
+/// What remains, across 15 `world_1` / 14 `car_1` exploration failures,
+/// taxonomised per walk and summing to exactly 29:
 ///
-/// - **L1 parse over-approximation — 7 `world_1` / 8 `car_1`, and now the
-///   largest residue on both databases by a wide margin.** Two shapes account
-///   for ten of the fifteen. Five are the symbolic milestoning literal, still
-///   `%<lowercase>+` rather than the two real symbols (§5.6), so `Class.all(%name)`
-///   walks and the engine answers "no viable alternative at input '.all(%'".
-///   Five more are the typed-binder `:` inside a call, admitted after any
-///   completed term rather than only after the argument's own first identifier.
-///   **That first tightening is the highest-yield item left anywhere in the
-///   taxonomy**, and both are L1 work, not decoder rules. The other five are one
-///   `::`, one `|`, one malformed argument list and two unlabelled parse errors.
-/// - **A dangling bare word or `::` classpath in a value position — 4
-///   `world_1` / 3 `car_1`** ("Can't find the packageable element 'countryCode'",
-///   "'max::extend'", "'String::X'"). N7 governs what may *follow* a bare word
-///   and deliberately narrows no name set, because a novel binder name must stay
-///   admissible; these walks all take a continuation N7 permits (`.`, `::`) into
-///   a name the model does not contain. Closing them means narrowing the *name*
-///   against the schema's own element set at a value position — the first rule in
-///   this series that would have to decide how much of a closed model to assume,
-///   and a scoping question rather than an implementation one.
-/// - **A method or member whose receiver is one category over — 5.** Three
-///   families, each the exact analogue of a rule this phase or Phase 5 already
-///   shipped, one receiver across: a *primitive extent* reached by navigating off
-///   a class one (`CarMakers.all().id->tableReference(…)` →
-///   `tableReference(Integer[*],String[1],String[1])`, and
-///   `ModelList.all().fk3DefaultCarNames <= …` →
-///   `lessThanEqual(CarNames[*],Boolean[1])` — N3f's and N4a's error one category
-///   over); a store method arrowed off a *`Table`* rather than the `Database`
-///   (`…->tableReference('T','S')->tableReference(…)`, reachable because N4a
-///   deliberately keeps the `->` that `->tableToTDS()` needs); and a member taken
-///   off a `Table` or a string literal (`…->tableReference('T','S').'CountryCode_T1_1'`,
-///   `'Maker_t1'.'MPG'`), which N4a and N4c likewise keep because `.name` really
-///   does resolve on the metamodel `Table`. All five were live-probed on this
-///   branch and all five are real; each wants its own attested table.
-/// - **Bucket E's remainder — 2, both on the guard.** `plus(Any[2])` on a
-///   `count()` result, and `and(String[1],Boolean[1])` where the *left* operand is
-///   the literal and no left-hand rule reaches it. Down from 9.
+/// - **L1 parse over-approximation — 9.** Four are a `::` off a term that cannot
+///   carry a package path (a call's `)`, a `.property`, a `$`-variable, a number,
+///   a date, a `]`) — a rule that is written, live-attested and offline-green on
+///   this branch but is **not shipped here**: it moves the criterion arm +5 and
+///   the guard arm −8, breaching the guard's floor, so it is a re-scope for the
+///   maintainer rather than a merge (see the PR). Two are the arm-R carve-out
+///   (a `:` that needs a slot-initial bare name, and a binder with no
+///   multiplicity), which needs the `~` sigil tracked as *mutable per-frame*
+///   state — a `Step`/`Action` the declarative spec (ADR-0010) has no V1 form
+///   for. One is the milestoning slot's content, and two are argument-shape
+///   garbage with no labelled token.
+/// - **A bare word or `::` classpath in a value position — 8.** Unchanged in
+///   kind: closing them means narrowing a *name* against the schema's own element
+///   set at a value position, the product question about how much of a closed
+///   model the decoder may assume. A scoping decision, not effort.
+/// - **A receiver / signature one category over — 5.**
+///   `project(Countrylanguage[*],Boolean[1])`, `tableReference(Table[1],…)`,
+///   `divide(Integer[*],String[1])`, `col(CarsData[*],String[1])`, and a property
+///   off a `Table`. **Mechanically addressable**; each wants its own attested
+///   table.
+/// - **A property or operator on an inferred primitive — 3.** `District_T1_1` on
+///   a `DateTime`, `Cylinders` on a `String`, `divide(DateTime[1],DateTime[1])`.
+///   These need the left operand's inferred type, i.e. #116's blocked scope.
+/// - **Bucket E's remainder — 2.** `plus(Any[2])` on a `count()` result, and
+///   `and(String[1],String[1])`. Both need left-operand reasoning.
 /// - **A wrong-shaped argument on a legal name — 1**
-///   (`sort(Countrylanguage[*],Boolean[1])`): the name is legal, the arity is
-///   legal, only the argument's *type* is not — the residue N3g's arity half does
-///   not reach.
-/// - **One engine-internal rejection — 1** (`RuntimeException: Not possible!`),
-///   which states no candidate set and so gives the overlay nothing to encode.
+///   (`sort(Countrylanguage[*],Boolean[1])`), and **one engine-internal
+///   rejection** (`RuntimeException: Not possible!`), which states no candidate
+///   set and so gives the overlay nothing to encode.
 #[test]
 fn schema_aware_walks_compile_against_a_real_pmcd() {
     assert_live_compile_rate(&CRITERION_BASELINE);

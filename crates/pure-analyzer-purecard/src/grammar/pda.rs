@@ -131,12 +131,13 @@ pub enum State {
     /// Having just completed a term; an operator, separator, or closer may
     /// follow.
     AfterValue,
-    /// Having just completed an **identifier** term (past any trailing
-    /// whitespace). Everything [`AfterValue`](State::AfterValue) admits, plus the
-    /// two continuations only a *name* can carry: a call's own `(` and a
-    /// multiplicity `[`.
+    /// Having just completed a **term-start identifier** (past any trailing
+    /// whitespace) — a word that opened at a value position or continued a `::`
+    /// classpath, and so is still a *package path* candidate. Everything
+    /// [`AfterValue`](State::AfterValue) admits, plus a call's own `(` and the
+    /// `::` that continues a classpath.
     ///
-    /// Both bind to a name and to nothing else. A call applies a *function*,
+    /// The `(` binds to a name and to nothing else. A call applies a *function*,
     /// named by an identifier — the engine rejects a juxtaposed application off
     /// any other term (live: `|…::ModelList.all()(Float(…))` → "Unexpected token
     /// '('"). A `[…]` after a term is only ever the multiplicity of the type it
@@ -146,8 +147,30 @@ pub enum State {
     /// supported"). A list literal `[…]` and a relation column set `~[…]` open at
     /// a *value* position, never here, so neither is affected.
     AfterName,
-    /// Inside an identifier or classpath segment (`[A-Za-z_][A-Za-z0-9_]*`).
+    /// Having just completed a **member name** — an identifier reached through a
+    /// `.` navigation, a `->` arrow call, or a `$` variable sigil. Identical to
+    /// [`AfterName`](State::AfterName) except that a `::` may not follow: a
+    /// classpath segment is never a property, a method, or a variable. Live:
+    /// `…->join('x'.meta::pure::tds::TDSRow)`, `…->getInteger::foo` and
+    /// `…!=$x.foo::bar` are each "no viable alternative", while
+    /// `…!=mpg::getInteger` parses.
+    AfterMemberName,
+    /// Having just completed a **string literal**. Everything
+    /// [`AfterValue`](State::AfterValue) admits, plus the `::` a quoted name may
+    /// still carry — live-attested, `…!='europe'::makeId` and `…!='a b'::c` both
+    /// parse, where the same `::` off a `)`, a number, a date or a `]` does not.
+    /// A call's `(` stays out: an application off a string is a dead state
+    /// (§5.6, issue #55 Phase 4).
+    AfterStrLit,
+    /// Inside a term-start identifier or classpath segment
+    /// (`[A-Za-z_][A-Za-z0-9_]*`).
     InIdent,
+    /// Inside a **member** identifier — the same byte class as
+    /// [`InIdent`](State::InIdent), reached from a `.`, a `->` or a `$` instead
+    /// of from a value position, and completing into
+    /// [`AfterMemberName`](State::AfterMemberName) rather than
+    /// [`AfterName`](State::AfterName).
+    InMemberIdent,
     /// Just consumed the `-` sign of a numeric literal in value position; a digit
     /// must follow (a digit for `-5`, or a `.` for the leading-dot float `-.5`), so
     /// a bare `-` or `--5` is a dead state.
@@ -179,8 +202,29 @@ pub enum State {
     /// Just consumed `%`; at least one date character must follow, so a bare `%`
     /// (`take(%)`) is a dead state.
     SawPercent,
-    /// Inside a `%`-prefixed date/time literal (`%2018-03-17T07:13:53`).
+    /// Inside a `%`-prefixed date literal's **date half**, on a digit and with no
+    /// `:` seen yet (`%1974`, `%2018-03-17`). Value-terminal: a date literal ends
+    /// on a digit, never on a separator (live: `%2018-`, `%2018-03-17T` and
+    /// `%2018-03-17T07:` are each "no viable alternative").
     InDateLit,
+    /// Just consumed a `-` or `T` in a date literal's date half; a digit must
+    /// follow, so the literal cannot end — or continue — on the separator.
+    DateSep,
+    /// Inside a date literal's **time half**, on a digit and past at least one
+    /// `:` (`%2018-03-17T07:13:53`). This is the only place a `.` may open the
+    /// fractional seconds: `%1974.5`, `%0.0` and `%2018-03-17.000` are each dead
+    /// against the pinned engine, while `%2018-03-17T07:13:53.000` parses.
+    InDateTime,
+    /// Just consumed a `-`, `T` or `:` in a date literal's time half; a digit
+    /// must follow.
+    DateTimeSep,
+    /// Just consumed the `.` that opens a date literal's fractional seconds; at
+    /// least one digit must follow, so a trailing `%2018-03-17T07:13:53.` dies.
+    DateFrac,
+    /// Inside a date literal's fractional-seconds digits — the literal's last
+    /// field, so only more digits may follow (live: a second `.` is dead,
+    /// `%2018-03-17T07:13:53.000.111` → "no viable alternative").
+    InDateFrac,
     /// Consumed `%l`, the first byte of the engine's one symbolic milestoning
     /// literal. The chain spells `MILESTONE_LATEST` one state per byte, exactly
     /// as [`LetL`](State::LetL)/[`LetLe`](State::LetLe)/[`LetLet`](State::LetLet)
@@ -238,6 +282,17 @@ pub enum State {
     /// Just consumed the second `:` of a binder type classpath's `::`; a
     /// classpath identifier must follow, keeping the type in its own chain.
     BinderTypeColon2,
+    /// Inside a binder type that has taken a `::` — so it is a **package path**,
+    /// which settles the one ambiguity [`InBinderType`](State::InBinderType)
+    /// carries. A path is never an arm-R column binding's bare variable, so the
+    /// multiplicity the engine requires of a typed binder is no longer optional
+    /// and the lambda pipe is a dead state: `->max(getFloat:row ::weight|…)` is
+    /// "Unexpected token '|'. Valid alternatives: \['\[', '(', '<'\]", while
+    /// `extend(a:b::c[1]|1)` parses.
+    InBinderTypePath,
+    /// A completed `::`-bearing binder type, past its trailing whitespace. Like
+    /// [`AfterBinderType`](State::AfterBinderType) minus the pipe.
+    AfterBinderTypePath,
     /// Right after the `[` of a typed binder's **multiplicity** — a bracket that
     /// holds `1`, `*`, or another integer (`mult`, §5.4) and nothing else.
     /// Distinct from the generic list bracket a `[` opens elsewhere, which is
@@ -263,9 +318,17 @@ pub enum State {
     ExpectLambdaBody,
     /// Just consumed `-`; a `>` completes `->`, anything else is arithmetic minus.
     SawDash,
-    /// Just consumed `|`; a second `|` is boolean `||`, anything else is the
-    /// lambda-binder pipe and starts the body.
+    /// Just consumed `|` after a **name** or a string literal; a second `|` is
+    /// boolean `||`, anything else is the lambda-binder pipe and starts the body.
     SawPipe,
+    /// Just consumed `|` after a term that is **not** a name — a closed
+    /// `(…)`/`[…]`, a number, a date, a `$`-variable, or a member name. A lambda
+    /// binder is named by an identifier, so the only reading left here is the
+    /// boolean `||`. Live-attested: `->filter(f()|1)`, `->filter(1|1)`,
+    /// `->filter($x.a|1)`, `->filter(extend.min|'d')`, `->filter([1]|1)` and
+    /// `->filter(%2018-01-01|1)` are each "no viable alternative at input '…|'",
+    /// while `->filter(x|1)`, `->filter('a'|1)` and `->filter(a&&b|1)` parse.
+    SawValuePipe,
     /// Just consumed `=`; an optional second `=` completes `==` (vs. `let x =`).
     SawEq,
     /// Just consumed `!`; a `=` must follow to complete `!=`.
@@ -314,7 +377,10 @@ impl State {
             State::ExpectValueReq => "ExpectValueReq",
             State::AfterValue => "AfterValue",
             State::AfterName => "AfterName",
+            State::AfterMemberName => "AfterMemberName",
+            State::AfterStrLit => "AfterStrLit",
             State::InIdent => "InIdent",
+            State::InMemberIdent => "InMemberIdent",
             State::SawNumSign => "SawNumSign",
             State::InNumberInt => "InNumberInt",
             State::NeedFracDigit => "NeedFracDigit",
@@ -326,6 +392,11 @@ impl State {
             State::InStrLit { escaped: true } => "InStrLit(pendingQuote)",
             State::SawPercent => "SawPercent",
             State::InDateLit => "InDateLit",
+            State::DateSep => "DateSep",
+            State::InDateTime => "InDateTime",
+            State::DateTimeSep => "DateTimeSep",
+            State::DateFrac => "DateFrac",
+            State::InDateFrac => "InDateFrac",
             State::MilestoneL => "MilestoneL",
             State::MilestoneLa => "MilestoneLa",
             State::MilestoneLat => "MilestoneLat",
@@ -341,6 +412,8 @@ impl State {
             State::AfterBinderType => "AfterBinderType",
             State::BinderTypeColon => "BinderTypeColon",
             State::BinderTypeColon2 => "BinderTypeColon2",
+            State::InBinderTypePath => "InBinderTypePath",
+            State::AfterBinderTypePath => "AfterBinderTypePath",
             State::ExpectBinderMult => "ExpectBinderMult",
             State::InBinderMult => "InBinderMult",
             State::AfterBinderMultToken => "AfterBinderMultToken",
@@ -348,6 +421,7 @@ impl State {
             State::ExpectLambdaBody => "ExpectLambdaBody",
             State::SawDash => "SawDash",
             State::SawPipe => "SawPipe",
+            State::SawValuePipe => "SawValuePipe",
             State::SawEq => "SawEq",
             State::SawBang => "SawBang",
             State::SawGt => "SawGt",
@@ -431,13 +505,41 @@ impl State {
             State::AfterBinderMultToken => 59,
             State::AfterBinderMult => 60,
             State::ExpectLambdaBody => 61,
+            State::AfterMemberName => 62,
+            State::InMemberIdent => 63,
+            State::AfterStrLit => 64,
+            State::DateSep => 65,
+            State::InDateTime => 66,
+            State::DateTimeSep => 67,
+            State::DateFrac => 68,
+            State::InDateFrac => 69,
+            State::SawValuePipe => 70,
+            State::InBinderTypePath => 71,
+            State::AfterBinderTypePath => 72,
         }
     }
 
     /// The number of distinct automaton states — the length a per-state cache
     /// (`Vec<_>` keyed by [`index`](State::index)) must have. One more than the
     /// largest [`index`](State::index).
-    pub const COUNT: usize = 62;
+    pub const COUNT: usize = 73;
+
+    /// Whether this state is a **completed-term hub** — an inter-lexeme position
+    /// the automaton reaches by finishing a term, whichever kind of term it was.
+    ///
+    /// The four differ only in what may *follow* them (a call's `(`, a classpath
+    /// `::`), never in whether a term is behind them, so every consumer that asks
+    /// "is a term complete here" — [`Pda::is_accepting`], and the L2 scope
+    /// tracker's operand rules — asks it once, here (constitution §4). A new
+    /// terminal hub is then a one-line change, not a hunt for enumerations that
+    /// silently take a rule dark.
+    #[must_use]
+    pub(crate) const fn completes_a_term(self) -> bool {
+        matches!(
+            self,
+            State::AfterValue | State::AfterName | State::AfterMemberName | State::AfterStrLit
+        )
+    }
 
     /// The lexeme class this state is *inside*, if any (`None` = an inter-lexeme
     /// or structural position).
@@ -457,6 +559,7 @@ impl State {
     pub(crate) const fn lexeme_kind(self) -> Option<LexKind> {
         match self {
             State::InIdent
+            | State::InMemberIdent
             | State::InSourceIdent
             | State::InBinder
             | State::InBinderType
@@ -464,6 +567,7 @@ impl State {
             | State::SourceColon2
             | State::BinderTypeColon
             | State::BinderTypeColon2
+            | State::InBinderTypePath
             | State::LetL
             | State::LetLe
             | State::LetLet => Some(LexKind::Ident),
@@ -476,6 +580,11 @@ impl State {
             | State::InExp => Some(LexKind::Number),
             State::SawPercent
             | State::InDateLit
+            | State::DateSep
+            | State::InDateTime
+            | State::DateTimeSep
+            | State::DateFrac
+            | State::InDateFrac
             | State::MilestoneL
             | State::MilestoneLa
             | State::MilestoneLat
@@ -507,8 +616,9 @@ pub(crate) enum LexKind {
 /// decide whether a byte that dies against an *empty* local scratch would have
 /// lived against *some* ambient frame (i.e. its admissibility is
 /// stack-dependent).
-const ALL_FRAMES: [Frame; 4] = [
+const ALL_FRAMES: [Frame; 5] = [
     Frame::Paren,
+    Frame::Group,
     Frame::Bracket,
     Frame::Brace,
     Frame::BraceLambda,
@@ -524,8 +634,15 @@ const ALL_FRAMES: [Frame; 4] = [
 /// [`State::AfterValue`] hubs already encode "what may come next" without one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Frame {
-    /// An open `(` — a call's argument list or a parenthesised expression.
+    /// An open `(` that follows a *name* — a call's own argument list, the only
+    /// `(` whose contents are a comma-separated element list.
     Paren,
+    /// An open `(` at a *value* position — a parenthesised **group**, which
+    /// holds one expression and so has no `,` to separate. Live-attested:
+    /// `->limit((1,2))` and `->limit(1+(2,3))` are "no viable alternative",
+    /// while `->limit((1))`, `->limit((x|1))` and `->limit((a:b[1]|1))` all
+    /// parse — a group still opens a lambda and a typed-binder slot.
+    Group,
     /// An open `[` — a list literal or a `[mult]` multiplicity bracket.
     Bracket,
     /// An open `{` of a block query (`{|…}`). The `let`/`;`/`=` block rules key on
@@ -546,6 +663,7 @@ impl Frame {
     pub const fn name(self) -> &'static str {
         match self {
             Frame::Paren => "Paren",
+            Frame::Group => "Group",
             Frame::Bracket => "Bracket",
             Frame::Brace => "Brace",
             Frame::BraceLambda => "BraceLambda",
@@ -599,10 +717,13 @@ pub(crate) const fn is_ident_tail(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || byte == b'_'
 }
 
-/// The bytes that may appear inside a `%`-prefixed date/time literal: digits and
-/// the `-`, `T`, `:` separators (`%2018-03-17T07:13:53`).
-const fn is_date_char(byte: u8) -> bool {
-    byte.is_ascii_digit() || matches!(byte, b'-' | b'T' | b':')
+/// The separators that may appear *between* a date literal's fields: `-` and `T`
+/// in the date half, and a `:` that additionally opens the time half. Each is an
+/// interior byte that owes a digit — a date literal opens on a digit and ends on
+/// one (live: `%2018-`, `%2018-03-17T` and `%2018-03-17T07:` are each "no viable
+/// alternative at input").
+const fn is_date_field_sep(byte: u8) -> bool {
+    matches!(byte, b'-' | b'T')
 }
 
 /// The engine's one symbolic milestoning literal, spelled without its `%` sigil.
@@ -615,16 +736,18 @@ const fn is_date_char(byte: u8) -> bool {
 const MILESTONE_LATEST: &[u8] = b"latest";
 
 /// Whether `top` is a frame whose contents are a **comma-separated element
-/// list** — a call's argument list or a parenthesised group ([`Frame::Paren`]),
-/// a collection or multiplicity bracket ([`Frame::Bracket`]), or a brace
-/// lambda's typed-binder list ([`Frame::BraceLambda`]).
+/// list** — a call's argument list ([`Frame::Paren`]), a collection or
+/// multiplicity bracket ([`Frame::Bracket`]), or a brace lambda's typed-binder
+/// list ([`Frame::BraceLambda`]).
 ///
-/// The two excluded configurations are the ones where a `,` has no list to
-/// separate: an empty stack (a simple query's top level) and [`Frame::Brace`]
-/// (a block query, whose statements are separated by `;`, never `,`). Both are
+/// The three excluded configurations are the ones where a `,` has no list to
+/// separate: an empty stack (a simple query's top level), [`Frame::Brace`] (a
+/// block query, whose statements are separated by `;`, never `,`), and
+/// [`Frame::Group`] (a parenthesised expression holds one term). All three are
 /// live-attested engine rejections — `{|…::Countrylanguage.all(),'Language_T2'}`
 /// → "Unexpected token ','. Valid alternatives: ['&&', '||', '==', '!=', '->',
-/// '[', '.', ';', '+', '*', '-', '/', '<', '<=', '>', '>=']".
+/// '[', '.', ';', '+', '*', '-', '/', '<', '<=', '>', '>=']", and
+/// `->limit((1,2))` / `->extend(('MPG_T2',extend))` → "no viable alternative".
 ///
 /// A `,` inside a brace lambda's *body* is still admitted: the PDA cannot see
 /// the binder pipe from the frame alone, and §4 forbids inventing a constraint
@@ -636,6 +759,18 @@ const fn separates_elements(top: Option<Frame>) -> bool {
     )
 }
 
+/// Whether `top` is a frame that opens a **lambda slot** — a position a lambda
+/// binder's pipe or a typed binder's colon may sit in.
+///
+/// Every [`separates_elements`] frame, plus [`Frame::Group`]: a parenthesised
+/// group takes no `,`, but it does hold a whole lambda (live: `->limit((x|1))`
+/// and `->limit((a:b[1]|1))` both parse). The excluded configurations are the
+/// ones where the query's own body is already open — an empty stack and a block
+/// query's [`Frame::Brace`], whose statements are not binders.
+const fn holds_a_lambda_slot(top: Option<Frame>) -> bool {
+    separates_elements(top) || matches!(top, Some(Frame::Group))
+}
+
 /// Close `top` if `byte` is its matching closer, resuming in `resume`, else
 /// [`Step::Dead`].
 ///
@@ -645,7 +780,7 @@ const fn separates_elements(top: Option<Frame>) -> bool {
 /// it closes, where every other closer yields a completed value.
 const fn close_to(top: Option<Frame>, byte: u8, resume: State) -> Step {
     match (top, byte) {
-        (Some(Frame::Paren), b')')
+        (Some(Frame::Paren | Frame::Group), b')')
         | (Some(Frame::Bracket), b']')
         | (Some(Frame::Brace), b'}')
         | (Some(Frame::BraceLambda), b'}') => Step::Pop(resume),
@@ -684,7 +819,10 @@ fn value_position(stack_top: Option<Frame>, byte: u8, allow_close: bool) -> Step
         // A `~` is the Relation/Function API sigil (arm-R): a relation column-set
         // `~[…]` or a column reference `~Week` / `~'Gross Credits'`.
         b'~' => Step::Next(State::SawTilde),
-        b'(' => Step::Push(Frame::Paren, State::ExpectValue),
+        // A `(` here is a parenthesised *group*, not a call: it opens at a value
+        // position, with no name in front of it to apply. Its own frame is what
+        // keeps a `,` out of it (`separates_elements`).
+        b'(' => Step::Push(Frame::Group, State::ExpectValue),
         b'[' => Step::Push(Frame::Bracket, State::ExpectValue),
         // A `{` in value position opens a `join` brace lambda; it must begin with a
         // typed binder identifier (`{r1: …[1], … | body}`), so a literal body like
@@ -796,7 +934,9 @@ fn step_after_value(stack_top: Option<Frame>, byte: u8) -> Step {
         b'=' => Step::Next(State::SawEq),
         b'!' => Step::Next(State::SawBang),
         b'&' => Step::Next(State::SawAmp),
-        b'|' => Step::Next(State::SawPipe),
+        // A lambda binder is named by an identifier, so a pipe off any other
+        // completed term can only be the boolean `||`.
+        b'|' => Step::Next(State::SawValuePipe),
         // Binary arithmetic: an operand is required, so a closer cannot follow.
         b'+' | b'*' | b'/' => Step::Next(State::ExpectValueReq),
         b'.' => Step::Next(State::AfterDot),
@@ -827,6 +967,14 @@ fn step_in_ident(stack_top: Option<Frame>, byte: u8) -> Step {
     }
 }
 
+fn step_in_member_ident(stack_top: Option<Frame>, byte: u8) -> Step {
+    if is_ident_tail(byte) {
+        Step::Next(State::InMemberIdent)
+    } else {
+        step(State::AfterMemberName, stack_top, byte)
+    }
+}
+
 // A completed identifier: the one name-only continuation, then everything a
 // completed term admits. Whitespace keeps the position a *name* position, so a
 // call written `foo (x)` still streams — the constraint is on what the `(` may
@@ -844,6 +992,33 @@ fn step_after_name(stack_top: Option<Frame>, byte: u8) -> Step {
     match byte {
         b if is_ws(b) => Step::Next(State::AfterName),
         b'(' => Step::Push(Frame::Paren, State::ExpectValue),
+        // The one continuation a *term-start* name has and a completed value does
+        // not: the lambda binder pipe that makes it a parameter.
+        b'|' => Step::Next(State::SawPipe),
+        _ => step_after_value(stack_top, byte),
+    }
+}
+
+// A completed *member* name — an identifier reached through a `.`, a `->` or a
+// `$`. It carries a call's `(` (a milestoned property `$x.facet(%latest)`, an
+// arrow step `->filter(…)`) but never the `::` of a classpath: live-attested,
+// `…->join('x'.meta::pure::tds::TDSRow)`, `…->getInteger::foo` and
+// `…!=$x.foo::bar` are each "no viable alternative at input '…::'".
+fn step_after_member_name(stack_top: Option<Frame>, byte: u8) -> Step {
+    match byte {
+        b if is_ws(b) => Step::Next(State::AfterMemberName),
+        b'(' => Step::Push(Frame::Paren, State::ExpectValue),
+        _ => step_after_value(stack_top, byte),
+    }
+}
+
+// A completed string literal. Like a term-start name it may still take a `::`
+// — live-attested, `…!='europe'::makeId` and `…!='a b'::c` both parse — but
+// never a call's `(`, which binds to an identifier alone (§5.6, Phase 4).
+fn step_after_str_lit(stack_top: Option<Frame>, byte: u8) -> Step {
+    match byte {
+        b if is_ws(b) => Step::Next(State::AfterStrLit),
+        b'|' => Step::Next(State::SawPipe),
         _ => step_after_value(stack_top, byte),
     }
 }
@@ -1048,7 +1223,7 @@ fn step_in_str_lit(escaped: bool, stack_top: Option<Frame>, byte: u8) -> Step {
         if byte == b'\'' {
             Step::Next(State::InStrLit { escaped: false })
         } else {
-            step(State::AfterValue, stack_top, byte)
+            step(State::AfterStrLit, stack_top, byte)
         }
     } else if byte == b'\'' {
         Step::Next(State::InStrLit { escaped: true })
@@ -1084,13 +1259,60 @@ fn milestone_link(expected: u8, next: State, byte: u8) -> Step {
     }
 }
 
+// A date literal's **date half**, on a digit. A `-`/`T` continues it, a `:`
+// opens the time half, and the literal is terminal here — it ends on a digit.
+// A `.` is *not* admitted: fractional seconds belong to the time half alone
+// (live: `%1974.5`, `%0.0` and `%2018-03-17.000` are each "no viable
+// alternative", while `%2018-03-17T07:13:53.000` parses).
 fn step_in_date_lit(stack_top: Option<Frame>, byte: u8) -> Step {
-    // A `.` inside a date literal is the fractional-seconds separator
-    // (`%2020-01-01T10:00:00.000`). Kept out of `is_date_char` so `%.` at the
-    // sigil is still a dead state; admitted only once a date run is underway,
-    // matching the existing flat-run over-approximation of date syntax.
-    if is_date_char(byte) || byte == b'.' {
-        Step::Next(State::InDateLit)
+    match byte {
+        b if b.is_ascii_digit() => Step::Next(State::InDateLit),
+        b if is_date_field_sep(b) => Step::Next(State::DateSep),
+        b':' => Step::Next(State::DateTimeSep),
+        _ => step(State::AfterValue, stack_top, byte),
+    }
+}
+
+/// One field separator of a date literal: the field it opens owes at least one
+/// digit, so the literal can neither end nor branch here. `next` is the digit
+/// state of the half the separator leaves the literal in.
+fn date_field(next: State, byte: u8) -> Step {
+    if byte.is_ascii_digit() {
+        Step::Next(next)
+    } else {
+        Step::Dead
+    }
+}
+
+fn step_date_sep(byte: u8) -> Step {
+    date_field(State::InDateLit, byte)
+}
+
+fn step_date_time_sep(byte: u8) -> Step {
+    date_field(State::InDateTime, byte)
+}
+
+// A date literal's **time half**, on a digit and past at least one `:`. This is
+// the only place fractional seconds may open.
+fn step_in_date_time(stack_top: Option<Frame>, byte: u8) -> Step {
+    match byte {
+        b if b.is_ascii_digit() => Step::Next(State::InDateTime),
+        b if is_date_field_sep(b) => Step::Next(State::DateTimeSep),
+        b':' => Step::Next(State::DateTimeSep),
+        b'.' => Step::Next(State::DateFrac),
+        _ => step(State::AfterValue, stack_top, byte),
+    }
+}
+
+fn step_date_frac(byte: u8) -> Step {
+    date_field(State::InDateFrac, byte)
+}
+
+// The fractional seconds are a date literal's last field: only more digits may
+// follow, so a second `.` dies (live: `%2018-03-17T07:13:53.000.111`).
+fn step_in_date_frac(stack_top: Option<Frame>, byte: u8) -> Step {
+    if byte.is_ascii_digit() {
+        Step::Next(State::InDateFrac)
     } else {
         step(State::AfterValue, stack_top, byte)
     }
@@ -1102,7 +1324,7 @@ fn step_in_milestone_lit(stack_top: Option<Frame>, byte: u8) -> Step {
 
 fn step_after_dollar(byte: u8) -> Step {
     if is_ident_start(byte) {
-        Step::Next(State::InIdent)
+        Step::Next(State::InMemberIdent)
     } else {
         Step::Dead
     }
@@ -1111,7 +1333,7 @@ fn step_after_dollar(byte: u8) -> Step {
 fn step_after_dot(byte: u8) -> Step {
     match byte {
         b if is_ws(b) => Step::Next(State::AfterDot),
-        b if is_ident_start(b) => Step::Next(State::InIdent),
+        b if is_ident_start(b) => Step::Next(State::InMemberIdent),
         // A quoted member/column name (`$x.'Gross Credits'`): a relation column
         // whose name is not a bare identifier. Reuse the string-literal body
         // (`''` doubling, §5.5); it closes into `AfterValue`, so the quoted
@@ -1124,7 +1346,7 @@ fn step_after_dot(byte: u8) -> Step {
 fn step_after_arrow(byte: u8) -> Step {
     match byte {
         b if is_ws(b) => Step::Next(State::AfterArrow),
-        b if is_ident_start(b) => Step::Next(State::InIdent),
+        b if is_ident_start(b) => Step::Next(State::InMemberIdent),
         _ => Step::Dead,
     }
 }
@@ -1144,7 +1366,7 @@ fn step_after_colon(stack_top: Option<Frame>, byte: u8) -> Step {
         // binder arms — and unguarded, since a value-position classpath
         // (`meta::relational::metamodel::join::JoinType`) is legal anywhere.
         b':' => Step::Next(State::AfterColon2),
-        _ if !separates_elements(stack_top) => Step::Dead,
+        _ if !holds_a_lambda_slot(stack_top) => Step::Dead,
         // Whitespace after the first `:` splits off into [`AfterColonWs`], where a
         // second `:` is no longer legal — `::` must be contiguous, so `meta: :pure`
         // dies while the typed binder `row: Type` still streams.
@@ -1225,9 +1447,32 @@ fn step_binder_type_colon(byte: u8) -> Step {
 
 fn step_binder_type_colon2(byte: u8) -> Step {
     if is_ident_start(byte) {
-        Step::Next(State::InBinderType)
+        Step::Next(State::InBinderTypePath)
     } else {
         Step::Dead
+    }
+}
+
+// A binder type that has taken a `::`. The `::` settles what the name is — a
+// package path, never an arm-R column binding's bare variable — so the
+// multiplicity Legend requires of a typed binder is mandatory here and the
+// lambda pipe is dead.
+fn step_in_binder_type_path(byte: u8) -> Step {
+    match byte {
+        b if is_ident_tail(b) => Step::Next(State::InBinderTypePath),
+        b':' => Step::Next(State::BinderTypeColon),
+        b if is_ws(b) => Step::Next(State::AfterBinderTypePath),
+        b'[' => Step::Push(Frame::Bracket, State::ExpectBinderMult),
+        _ => Step::Dead,
+    }
+}
+
+fn step_after_binder_type_path(byte: u8) -> Step {
+    match byte {
+        b if is_ws(b) => Step::Next(State::AfterBinderTypePath),
+        b':' => Step::Next(State::BinderTypeColon),
+        b'[' => Step::Push(Frame::Bracket, State::ExpectBinderMult),
+        _ => Step::Dead,
     }
 }
 
@@ -1306,10 +1551,20 @@ fn step_saw_dash(stack_top: Option<Frame>, byte: u8) -> Step {
 fn step_saw_pipe(stack_top: Option<Frame>, byte: u8) -> Step {
     if byte == b'|' {
         Step::Next(State::ExpectValueReq)
-    } else if !separates_elements(stack_top) {
+    } else if !holds_a_lambda_slot(stack_top) {
         Step::Dead
     } else {
         step(State::ExpectValueReq, stack_top, byte)
+    }
+}
+
+// The same pipe, taken after a term that cannot name a binder: only the second
+// `|` of a boolean `||` is left, so every other byte is a dead state.
+fn step_saw_value_pipe(byte: u8) -> Step {
+    if byte == b'|' {
+        Step::Next(State::ExpectValueReq)
+    } else {
+        Step::Dead
     }
 }
 
@@ -1395,7 +1650,10 @@ pub fn step(state: State, stack_top: Option<Frame>, byte: u8) -> Step {
         State::ExpectValueReq => step_expect_value_req(stack_top, byte),
         State::AfterValue => step_after_value(stack_top, byte),
         State::AfterName => step_after_name(stack_top, byte),
+        State::AfterMemberName => step_after_member_name(stack_top, byte),
+        State::AfterStrLit => step_after_str_lit(stack_top, byte),
         State::InIdent => step_in_ident(stack_top, byte),
+        State::InMemberIdent => step_in_member_ident(stack_top, byte),
         State::SawNumSign => step_saw_num_sign(byte),
         State::InNumberInt => step_in_number_int(stack_top, byte),
         State::NeedFracDigit => step_need_frac_digit(byte),
@@ -1406,6 +1664,11 @@ pub fn step(state: State, stack_top: Option<Frame>, byte: u8) -> Step {
         State::InStrLit { escaped } => step_in_str_lit(escaped, stack_top, byte),
         State::SawPercent => step_saw_percent(byte),
         State::InDateLit => step_in_date_lit(stack_top, byte),
+        State::DateSep => step_date_sep(byte),
+        State::InDateTime => step_in_date_time(stack_top, byte),
+        State::DateTimeSep => step_date_time_sep(byte),
+        State::DateFrac => step_date_frac(byte),
+        State::InDateFrac => step_in_date_frac(stack_top, byte),
         State::MilestoneL => milestone_link(MILESTONE_LATEST[1], State::MilestoneLa, byte),
         State::MilestoneLa => milestone_link(MILESTONE_LATEST[2], State::MilestoneLat, byte),
         State::MilestoneLat => milestone_link(MILESTONE_LATEST[3], State::MilestoneLate, byte),
@@ -1421,6 +1684,8 @@ pub fn step(state: State, stack_top: Option<Frame>, byte: u8) -> Step {
         State::AfterBinderType => step_after_binder_type(byte),
         State::BinderTypeColon => step_binder_type_colon(byte),
         State::BinderTypeColon2 => step_binder_type_colon2(byte),
+        State::InBinderTypePath => step_in_binder_type_path(byte),
+        State::AfterBinderTypePath => step_after_binder_type_path(byte),
         State::ExpectBinderMult => step_expect_binder_mult(byte),
         State::InBinderMult => step_in_binder_mult(stack_top, byte),
         State::AfterBinderMultToken => step_after_binder_mult_token(stack_top, byte),
@@ -1428,6 +1693,7 @@ pub fn step(state: State, stack_top: Option<Frame>, byte: u8) -> Step {
         State::ExpectLambdaBody => step_expect_lambda_body(stack_top, byte),
         State::SawDash => step_saw_dash(stack_top, byte),
         State::SawPipe => step_saw_pipe(stack_top, byte),
+        State::SawValuePipe => step_saw_value_pipe(byte),
         State::SawEq => step_saw_eq(byte),
         State::SawBang => step_saw_bang(byte),
         State::SawGt => step_saw_gt(stack_top, byte),
@@ -1550,7 +1816,7 @@ impl Pda {
         self.stack.is_empty()
             && matches!(
                 step(self.state, None, VALUE_BOUNDARY),
-                Step::Next(State::AfterValue | State::AfterName)
+                Step::Next(next) if next.completes_a_term()
             )
     }
 
@@ -1699,7 +1965,10 @@ pub const ALL_STATES: [State; State::COUNT] = [
     State::ExpectValueReq,
     State::AfterValue,
     State::AfterName,
+    State::AfterMemberName,
+    State::AfterStrLit,
     State::InIdent,
+    State::InMemberIdent,
     State::SawNumSign,
     State::InNumberInt,
     State::NeedFracDigit,
@@ -1711,6 +1980,11 @@ pub const ALL_STATES: [State; State::COUNT] = [
     State::InStrLit { escaped: true },
     State::SawPercent,
     State::InDateLit,
+    State::DateSep,
+    State::InDateTime,
+    State::DateTimeSep,
+    State::DateFrac,
+    State::InDateFrac,
     State::MilestoneL,
     State::MilestoneLa,
     State::MilestoneLat,
@@ -1726,6 +2000,8 @@ pub const ALL_STATES: [State; State::COUNT] = [
     State::AfterBinderType,
     State::BinderTypeColon,
     State::BinderTypeColon2,
+    State::InBinderTypePath,
+    State::AfterBinderTypePath,
     State::ExpectBinderMult,
     State::InBinderMult,
     State::AfterBinderMultToken,
@@ -1733,6 +2009,7 @@ pub const ALL_STATES: [State; State::COUNT] = [
     State::ExpectLambdaBody,
     State::SawDash,
     State::SawPipe,
+    State::SawValuePipe,
     State::SawEq,
     State::SawBang,
     State::SawGt,
@@ -1747,7 +2024,7 @@ mod tests {
 
     use super::{
         ALL_FRAMES, ALL_STATES, Frame, LexKind, MILESTONE_LATEST, Pda, State, Step, WS,
-        is_date_char, is_ident_start, is_ident_tail, step,
+        is_date_field_sep, is_ident_start, is_ident_tail, step,
     };
 
     /// The deepest stack included in the bounded reachability regression.
@@ -2170,10 +2447,10 @@ mod tests {
         assert!(!is_ident_start(b'0') && !is_ident_start(b'$'));
         assert!(is_ident_tail(b'0') && is_ident_tail(b'z') && is_ident_tail(b'_'));
         assert!(!is_ident_tail(b'-'));
-        assert!(
-            is_date_char(b'0') && is_date_char(b'-') && is_date_char(b'T') && is_date_char(b':')
-        );
-        assert!(!is_date_char(b'Z'));
+        assert!(is_date_field_sep(b'-') && is_date_field_sep(b'T'));
+        // A `:` opens the *time* half rather than continuing the date half, and a
+        // digit is a field body, not a separator — neither is a field separator.
+        assert!(!is_date_field_sep(b':') && !is_date_field_sep(b'0') && !is_date_field_sep(b'Z'));
     }
 
     #[test]
@@ -2421,7 +2698,7 @@ mod tests {
         for &byte in b"|X.all()->name" {
             pda.advance(byte).expect("live");
         }
-        assert_eq!(pda.state(), State::InIdent);
+        assert_eq!(pda.state(), State::InMemberIdent);
         assert!(pda.stack_top().is_none());
         assert!(pda.is_accepting());
     }

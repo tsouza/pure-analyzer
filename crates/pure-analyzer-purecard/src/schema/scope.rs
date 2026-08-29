@@ -1800,19 +1800,17 @@ impl ScopeTracker {
     }
 
     /// N3d's separator position, when `state` is one of the two the open
-    /// store-method call decides: right after a completed argument
-    /// ([`State::AfterValue`]/[`State::AfterName`]), or on an argument literal's
-    /// pending closing quote
+    /// store-method call decides: right after a completed argument (any
+    /// [`State::completes_a_term`] hub), or on an argument literal's pending
+    /// closing quote
     /// ([`State::InStrLit`] with a quote awaiting its disambiguating byte).
     ///
     /// One derivation for both, so the arity fact — how many arguments
     /// [`STORE_METHODS`] declares for the open call, against how many commas it
     /// has emitted — is stated exactly once.
     fn store_method_arg_sep(&self, state: State) -> Option<L2Position> {
-        let decided = matches!(
-            state,
-            State::AfterValue | State::AfterName | State::InStrLit { escaped: true }
-        );
+        let decided =
+            state.completes_a_term() || matches!(state, State::InStrLit { escaped: true });
         let arity = self.store_call_arity?;
         // A `,` only ever follows a completed argument, so the call has completed
         // one more argument than it has emitted commas.
@@ -1945,30 +1943,10 @@ impl ScopeTracker {
                 L2Position::StrOperator { after_dash: true }
             }
             State::SawPipe | State::SawLt | State::SawGt | State::SawDash => L2Position::ValueIdent,
-            // T2's comparator lever reads a *completed* term, whichever of the
-            // two terminal hubs it landed in — a navExpr ends on its property
-            // name, so `$x.population > 5` reaches the comparator through
-            // `AfterName`, not `AfterValue`.
             State::AfterValue if self.awaiting_extent_step => {
                 L2Position::SourceExtent { after_dash: false }
             }
-            // N4a. Mutually exclusive with N3e above — one arming is set by the
-            // source method's close, the other by the store method's — and it
-            // outranks the T2/T6 levers below, which read a *member navigation*
-            // and so are never armed on a `Table[1]` a store call returned.
-            State::AfterValue | State::AfterName if self.awaiting_store_result => {
-                L2Position::StoreResult { after_dash: false }
-            }
-            // N4c. Mutually exclusive with N4a above: a store call's `)` clears
-            // the string arming its last argument set, so only one can hold.
-            State::AfterValue | State::AfterName if self.awaiting_str_operator => {
-                L2Position::StrOperator { after_dash: false }
-            }
-            State::AfterValue | State::AfterName => match self.last_nav {
-                Some(NavResult::Scalar(tc)) => L2Position::Comparator(tc),
-                Some(NavResult::NonScalar) => L2Position::OrderedOperand,
-                None => L2Position::None,
-            },
+            _ if state.completes_a_term() => self.completed_term_position(),
             // A method-name identifier right after `->` opens here (distinct from
             // `ExpectValue`/`ExpectValueReq`, which a value/lambda term opens at).
             State::AfterArrow if self.awaiting_store_method => L2Position::StoreMethod,
@@ -1986,6 +1964,41 @@ impl ScopeTracker {
                 (None, None) => L2Position::None,
             },
             _ => L2Position::None,
+        }
+    }
+
+    /// The L2 rule at a **completed-term** anchor — every
+    /// [`State::completes_a_term`] hub, whichever kind of term landed there. A
+    /// navExpr ends on its property name and so reaches this through
+    /// [`State::AfterMemberName`], a store call through
+    /// [`State::AfterValue`] and a string operand through
+    /// [`State::AfterStrLit`]; the rule does not depend on which, which is
+    /// exactly why the hub set is a single predicate on `State` rather than an
+    /// enumeration each caller repeats (constitution §4).
+    ///
+    /// Split out of [`opening_position`](ScopeTracker::opening_position) for the
+    /// same reason
+    /// [`value_opening_position`](ScopeTracker::value_opening_position) is: the
+    /// caller is a table of automaton states, this is a precedence order over the
+    /// armings a completed term can carry.
+    fn completed_term_position(&self) -> L2Position {
+        if self.awaiting_store_result {
+            // N4a. Mutually exclusive with N3e — one arming is set by the source
+            // method's close, the other by the store method's — and it outranks
+            // the T2/T6 levers below, which read a *member navigation* and so are
+            // never armed on a `Table[1]` a store call returned.
+            L2Position::StoreResult { after_dash: false }
+        } else if self.awaiting_str_operator {
+            // N4c. Mutually exclusive with N4a above: a store call's `)` clears
+            // the string arming its last argument set, so only one can hold.
+            L2Position::StrOperator { after_dash: false }
+        } else {
+            // T2's comparator lever, and T6's ordered-operand mask.
+            match self.last_nav {
+                Some(NavResult::Scalar(tc)) => L2Position::Comparator(tc),
+                Some(NavResult::NonScalar) => L2Position::OrderedOperand,
+                None => L2Position::None,
+            }
         }
     }
 
@@ -2787,7 +2800,11 @@ mod tests {
             b".n",
         ];
         let (tracker, pda) = run(tokens);
-        assert_eq!(pda.state(), State::InIdent, "landed mid-identifier `n`");
+        assert_eq!(
+            pda.state(),
+            State::InMemberIdent,
+            "landed mid-identifier `n`"
+        );
         assert_eq!(
             tracker.position(pda.state()),
             L2Position::Member("A".to_owned()),

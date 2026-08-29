@@ -225,6 +225,46 @@ fn every_engine_legal_typed_binder_still_streams() {
     }
 }
 
+/// The counterfactual for the three tightenings issue #55 Phase 8 shipped: every
+/// shape the engine *does* parse must still stream, so none of them swallowed a
+/// production. Each line was probed against the pinned engine on the branch.
+#[test]
+fn every_engine_legal_date_group_and_pipe_still_streams() {
+    for text in [
+        // A date literal: a bare year run, a date, and a full timestamp whose
+        // fractional seconds follow the seconds field.
+        "|X.all(%1)",
+        "|X.all(%1974)",
+        "|X.all(%1974-1-1)",
+        "|X.all(%2018-03-17T07:13:53.000)",
+        "|X.all(%latest, %latest)",
+        // A parenthesised group: one expression, and every nesting it may hold.
+        "|X.all()->limit((1))",
+        "|X.all()->limit(((1)))",
+        "|X.all()->limit(('a'))",
+        "|X.all()->limit(([1,2]))",
+        "|X.all()->limit((x|1))",
+        "|X.all()->limit((a:b[1]|1))",
+        "|X.all()->limit((a::b))",
+        // A lambda pipe off a name or a string, including the one that reads as
+        // a bare name only because it is an operand.
+        "|X.all()->filter(x|1)",
+        "|X.all()->filter('a'|1)",
+        "|X.all()->filter(a&&b|1)",
+        // …and the boolean `||`, which is what a pipe off any *other* term is.
+        "|X.all()->filter(f()||1)",
+        "|X.all()->filter($x.a||1)",
+        "|X.all()->filter([1]||1)",
+        // Arm-R's column binding still has no multiplicity: it is a bare
+        // variable, never a `::` path, which is what keeps the two apart.
+        "|X.all()->project(~[Total: y|$y->sum()])",
+        "|X.all()->groupBy(~[],~'G': x|$x.v : y|$y->sum())",
+        "|X.all()->extend(over(~a),~[agg:{p,w,r|$r.n}:y|$y->sum()])",
+    ] {
+        assert!(!dies(text), "the recogniser refuses engine-legal {text:?}");
+    }
+}
+
 /// The arm-R `~` sigil (gap report G1) must be followed by a column-set `~[`, a
 /// bare column reference `~ident`, or a quoted `~'…'`. A dangling `~`, a spaced
 /// `~ [`, a doubled `~~`, or a `~` in source position all die — the widening
@@ -570,32 +610,117 @@ fn a_typed_binder_type_that_is_not_a_classpath_dies() {
     }
 }
 
-/// Once a binder's colon is open the binder owes exactly one pipe: a second `|`
-/// is neither a boolean `||` (the binder is not an operand) nor a zero-arg
-/// lambda. Three walks verbatim from the live lane's second Phase 7 measurement,
-/// each rejected as "Unexpected token '||'. Valid alternatives: \['|'\]" or
-/// "Unexpected token '|'. Valid alternatives: \['\[', '(', '<'\]".
+/// A binder type that has taken a `::` is a **package path**, which settles the
+/// one ambiguity a bare binder type carries: it is not an arm-R column binding's
+/// variable, so the multiplicity Legend requires of a typed binder is mandatory
+/// and the lambda pipe cannot follow the type directly. Live-attested on this
+/// branch — `->filter(row: meta::pure::tds::TDSRow|1)` and `->extend(a:b::c|1)`
+/// are each "no viable alternative at input '…|'", while the same walks with a
+/// `[1]` in front of the pipe parse.
+///
+/// The first two walks came to this fixture from
+/// `a_binder_that_owes_its_lambda_pipe_dies` (issue #55 Phase 7), whose rule used
+/// to take their kill one byte later, at the second `|` of the `||`; this rule
+/// now rejects the first. That is a takeover, so the walks move with it rather
+/// than having their anchors quietly re-pointed — the Phase 7 rule keeps its own
+/// walk (a multiplicity-bearing binder, which this rule cannot reach) below.
 #[test]
-fn a_binder_that_owes_its_lambda_pipe_dies() {
+fn a_binder_type_classpath_that_skips_its_multiplicity_dies() {
     for (walk, at) in [
-        // world_1 (live walk 63)
+        // world_1 (issue #55 Phase 7 live walk 63)
         (
             "  \n    \n\n      {\n\n\n     \n         \n  \n      \n      \n        \n      \n \n          |spider::world_1::model::default::Countrylanguage.\nall(\n)->count()->sort('Name_t1'&&'Percentage_T2_2'    &&'CountryCode_city'>'LifeExpectancy_t1'<'GovernmentForm_T3_1'>'Percentage_T2'!=']==}INNER!name)[.)Float}spider::world_1::model::default::Countrylanguage}row%max*)a&5    '&&row1('_c0__t0r0'.'LifeExpectancy_T1':meta::pure::tds::TDSRow\n      \n||x.'Name_t1'\n+\n  fk1DefaultCountrylanguage.b\n        &&'_nn')->extend('ID_T2'))  !=('Code2_T1'->count()+'CountryCode_T2')||fk1DefaultCountrylanguage}",
-            "|x.'Name_t1'\n+",
+            "||x.'Name_t1'",
         ),
-        // car_1 (live walk 35)
+        // car_1 (issue #55 Phase 7 live walk 35)
         (
             "\n  \n          \n          { \n  \n      \n        |spider::car_1::model::default::CarMakers.\n      \n           all(\n  \n        )\n    ->groupBy(desc('Horsepower_T1'=='FullName_t1_1'||model/all:id::col||desc>='Make_t2'<parseFloat|'Horsepower_T1_1'!=min.'FullName_T2_3'    !='Id_T2_3'\n\n) &&countryId>='Weight_T4')<asc.'Model_t1'}",
-            "|desc>='Make_t",
+            "||desc>='Make_t",
         ),
-        // car_1 (live walk 45)
+        // car_1 (issue #55 Phase 8 live walk 42)
         (
-            "  \n      {\n  \n    \n    \n         |        spider::car_1::model::default::CarMakers.\n    \n    all(\n      )\n        ->extend(getFloat:row[    2\n        ]    \n        \n  \n  \n        ||desc\n      )}",
-            "|desc\n      )}",
+            "  \n      {\n  \n    \n    \n         |        spider::car_1::model::default::CarMakers.\n    \n    all(\n      )\n        ->max(getFloat:row \n      ::weight\n    |'Model_T1_1'<'Horsepower_T2')\n      }",
+            "|'Model_T1_1'",
         ),
     ] {
         assert_dies_at(walk, at);
     }
+}
+
+/// Once a binder's colon is open the binder owes exactly one pipe: a second `|`
+/// is neither a boolean `||` (the binder is not an operand) nor a zero-arg
+/// lambda. Verbatim from the live lane's second Phase 7 measurement, rejected as
+/// "Unexpected token '||'. Valid alternatives: \['|'\]".
+#[test]
+fn a_binder_that_owes_its_lambda_pipe_dies() {
+    // car_1 (live walk 45)
+    assert_dies_at(
+        "  \n      {\n  \n    \n    \n         |        spider::car_1::model::default::CarMakers.\n    \n    all(\n      )\n        ->extend(getFloat:row[    2\n        ]    \n        \n  \n  \n        ||desc\n      )}",
+        "|desc\n      )}",
+    );
+}
+
+/// A date literal's fractional seconds belong to its **time** half, and the
+/// literal ends on a digit. Live-attested on this branch: `%1974.5`, `%0.0` and
+/// `%2018-03-17.000` are each "no viable alternative at input", as are `%2018-`,
+/// `%2018-03-17T` and `%2018-03-17T07:` — while `%1974`, `%1974-1-1` and
+/// `%2018-03-17T07:13:53.000` all parse. The three walks are verbatim from the
+/// live lane (issue #55 Phase 8); the anchor is the byte *after* the `.`, because
+/// the `.` itself is still a legal navigation dot off a completed literal.
+#[test]
+fn a_date_literal_whose_fraction_has_no_seconds_dies() {
+    for (walk, at) in [
+        // car_1 (live walk 11)
+        (
+            "|spider::car_1::model::default::ModelList.\nall(\n    %3!=\n            %0.0!= \n    \n   \n      \n        \n         \n\n      \n    \n  \n      \n%4->agg('Continent_t1'=='Cylinders_T3'):max|'id'&&'Make')",
+            "0!= \n",
+        ),
+        // car_1 (live walk 36)
+        (
+            "|spider::car_1::model::default::CarMakers.\n\nall(%4*\n    \n  \n   \n  \n      \n%4000!=  \n     \n    \n    \n    \n  \n    \n      \n  \n      \n  \n      \n            \n        \n          %0.0)",
+            "0)",
+        ),
+        // car_1 (live walk 52) — a date literal may not end on its separator
+        // either, so `%1974.` dies on the `)` the dangling dot can never reach.
+        (
+            "\n        \n      \n  \n|spider::car_1::model::default::CarMakers.\n          \n         \n  \n      \n\n  all(%1974.)",
+            ")",
+        ),
+    ] {
+        assert_dies_at(walk, at);
+    }
+}
+
+/// A `(` at a **value** position opens a parenthesised group, which holds one
+/// expression and so has no `,` to separate — unlike the `(` that follows a name,
+/// which opens a call's argument list. Live-attested on this branch:
+/// `->limit((1,2))`, `->limit(('a','b'))`, `->limit(1+(2,3))` and
+/// `->extend(('MPG_T2',extend))` are each "no viable alternative at input", while
+/// `->limit((1))`, `->limit([1,2])`, `->limit((x|1))` and `->limit((a:b[1]|1))`
+/// all parse — a group still opens a lambda and a typed-binder slot, which is why
+/// only the comma moved.
+#[test]
+fn a_comma_inside_a_parenthesised_group_dies() {
+    assert_dies_at(
+        "    \n    \n        {      \n        \n        \n       \n  \n      \n      \n  \n        \n           \n      \n      \n      \n        |\n      \n      \n       \n        spider::car_1::model::default::ModelList. \n    \n        \n        \n          \n  all()\n\n      \n->extend(('MPG_T2',extend.'Model_T2_2'>=countryId|'FullName_T2_3'||Integer!=meta::relational::metamodel::join::JoinType*extend('CountryId_T2') .\n    true!='Accelerate'   \n)>'Cylinders_T1')>=m::col\n*b.'Continent_t1'}",
+        ",extend.'Model_T2_2'",
+    );
+}
+
+/// A lambda binder is named by an **identifier**, so a pipe off any other
+/// completed term can only be the boolean `||`. Live-attested on this branch:
+/// `->filter(f()|1)`, `->filter(1|1)`, `->filter($x.a|1)`, `->filter(x.y|1)`,
+/// `->filter(extend.min|'d')`, `->filter([1]|1)` and `->filter(%2018-01-01|1)`
+/// are each "no viable alternative at input '…|'", while `->filter(x|1)`,
+/// `->filter('a'|1)` and `->filter(a&&b|1)` parse — the last because `b` is
+/// itself a bare name in operand position. The anchor is the byte *after* the
+/// pipe: the automaton holds the `|` open for a possible `||`.
+#[test]
+fn a_lambda_pipe_off_a_term_that_is_not_a_name_dies() {
+    assert_dies_at(
+        "  \n    \n\n      {\n\n\n     \n         \n  \n      \n      \n        \n      \n \n          |spider::world_1::model::default::Countrylanguage.\nall(\n)->filter('Name_city'\n    +'CountryCode_T2'.'LifeExpectancy_T1'&&extend.min|'default')\n  \n    }",
+        "'default')",
+    );
 }
 
 /// A `%` date literal opens on a digit; the `-`/`T`/`:` separators are interior
@@ -711,10 +836,11 @@ fn the_shapes_the_name_and_frame_rules_sit_next_to_still_stream() {
 /// A `:` that follows a completed term is either a `::` classpath separator —
 /// legal wherever a classpath is — or a **typed binder**'s own colon, which needs
 /// an argument or element slot to bind in. A block query's statement level has
-/// neither, so the binder arms die there while `::` keeps streaming. The anchor
-/// names the byte *after* the colon: the automaton consumes a `:` into its
-/// lookahead state (a second `:` is still legal there), so the refusal lands on
-/// the byte that would have opened the binder.
+/// neither, so the binder arms die there while `::` keeps streaming.
+///
+/// The anchor names the byte *after* the colon: the automaton consumes a `:` into
+/// its lookahead state (a second `:` is still legal there), so the refusal lands
+/// on the byte that would have opened the binder.
 ///
 /// All four walks came verbatim out of the live lane (issue #55 Phase 4) with the
 /// engine's "Unexpected token ':'".
