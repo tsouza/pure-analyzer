@@ -223,6 +223,12 @@ fn every_engine_legal_typed_binder_still_streams() {
         "|X.all()->extend(a :b [*]|1)",
         "|X.all()->extend(a:b[ 12 ] | 1)",
         "|X.all()->groupBy(~[a:x|$x.b],~'t':y|$y->sum())",
+        // Arm-R's column binding, spaced: its variable owes no multiplicity, so
+        // the pipe follows the *name past its whitespace* rather than a closed
+        // `[…]`. Live-attested, as is the two-colon aggregate form.
+        "|X.all()->project(~[Total: y |$y->sum()])",
+        "|X.all()->groupBy(~[],~'G': x |$x.v : y |$y->sum())",
+        "|X.all()->filter(row : meta::pure::tds::TDSRow [1] |$row)",
         "|a::Db->tableReference('default','A')->tableToTDS()->join(\
          a::Db->tableReference('default','B')->tableToTDS(), \
          meta::relational::metamodel::join::JoinType.INNER, \
