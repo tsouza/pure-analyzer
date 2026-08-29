@@ -717,15 +717,6 @@ pub(crate) const fn is_ident_tail(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || byte == b'_'
 }
 
-/// The separators that may appear *between* a date literal's fields: `-` and `T`
-/// in the date half, and a `:` that additionally opens the time half. Each is an
-/// interior byte that owes a digit — a date literal opens on a digit and ends on
-/// one (live: `%2018-`, `%2018-03-17T` and `%2018-03-17T07:` are each "no viable
-/// alternative at input").
-const fn is_date_field_sep(byte: u8) -> bool {
-    matches!(byte, b'-' | b'T')
-}
-
 /// The engine's one symbolic milestoning literal, spelled without its `%` sigil.
 ///
 /// Legend 4.113.0 lexes `%latest` as a single `LATEST_DATE` token and knows no
@@ -1267,7 +1258,8 @@ fn milestone_link(expected: u8, next: State, byte: u8) -> Step {
 fn step_in_date_lit(stack_top: Option<Frame>, byte: u8) -> Step {
     match byte {
         b if b.is_ascii_digit() => Step::Next(State::InDateLit),
-        b if is_date_field_sep(b) => Step::Next(State::DateSep),
+        // `-` separates the date's own fields; `T` hands over to the time half.
+        b'-' | b'T' => Step::Next(State::DateSep),
         b':' => Step::Next(State::DateTimeSep),
         _ => step(State::AfterValue, stack_top, byte),
     }
@@ -1297,8 +1289,11 @@ fn step_date_time_sep(byte: u8) -> Step {
 fn step_in_date_time(stack_top: Option<Frame>, byte: u8) -> Step {
     match byte {
         b if b.is_ascii_digit() => Step::Next(State::InDateTime),
-        b if is_date_field_sep(b) => Step::Next(State::DateTimeSep),
-        b':' => Step::Next(State::DateTimeSep),
+        // `:` separates the time's own fields and `-` opens a timezone offset
+        // (`%2018-03-17T07:13:53-0500` parses). A `T` is dead: the date/time
+        // handover happens once, so `%2018-03-17T07:13:53T1` and `%20:18T3` are
+        // each "no viable alternative at input".
+        b'-' | b':' => Step::Next(State::DateTimeSep),
         b'.' => Step::Next(State::DateFrac),
         _ => step(State::AfterValue, stack_top, byte),
     }
@@ -2024,7 +2019,7 @@ mod tests {
 
     use super::{
         ALL_FRAMES, ALL_STATES, Frame, LexKind, MILESTONE_LATEST, Pda, State, Step, WS,
-        is_date_field_sep, is_ident_start, is_ident_tail, step,
+        is_ident_start, is_ident_tail, step,
     };
 
     /// The deepest stack included in the bounded reachability regression.
@@ -2447,10 +2442,13 @@ mod tests {
         assert!(!is_ident_start(b'0') && !is_ident_start(b'$'));
         assert!(is_ident_tail(b'0') && is_ident_tail(b'z') && is_ident_tail(b'_'));
         assert!(!is_ident_tail(b'-'));
-        assert!(is_date_field_sep(b'-') && is_date_field_sep(b'T'));
-        // A `:` opens the *time* half rather than continuing the date half, and a
-        // digit is a field body, not a separator — neither is a field separator.
-        assert!(!is_date_field_sep(b':') && !is_date_field_sep(b'0') && !is_date_field_sep(b'Z'));
+        // The date halves' separators differ: a `T` hands over to the time half,
+        // so it may open a field in the date half and never in the time half.
+        assert!(matches!(
+            step(State::InDateLit, None, b'T'),
+            Step::Next(State::DateSep)
+        ));
+        assert!(matches!(step(State::InDateTime, None, b'T'), Step::Dead));
     }
 
     #[test]

@@ -245,6 +245,9 @@ fn every_engine_legal_date_group_and_pipe_still_streams() {
         "|X.all(%1974)",
         "|X.all(%1974-1-1)",
         "|X.all(%2018-03-17T07:13:53.000)",
+        // A `-` in the *time* half opens a timezone offset, not a date field.
+        "|X.all(%2018-03-17T07:13:53-0500)",
+        "|X.all(%20:18-3)",
         "|X.all(%latest, %latest)",
         // A parenthesised group: one expression, and every nesting it may hold.
         "|X.all()->limit((1))",
@@ -694,6 +697,10 @@ fn a_date_literal_whose_fraction_has_no_seconds_dies() {
             "\n        \n      \n  \n|spider::car_1::model::default::CarMakers.\n          \n         \n  \n      \n\n  all(%1974.)",
             ")",
         ),
+        // The date/time handover happens once, so a `T` past the time's first
+        // `:` is dead where a `-` (a timezone offset) is not.
+        ("|X.all(%2018-03-17T07:13:53T1)", "T1)"),
+        ("|X.all(%20:18T3)", "T3)"),
     ] {
         assert_dies_at(walk, at);
     }
