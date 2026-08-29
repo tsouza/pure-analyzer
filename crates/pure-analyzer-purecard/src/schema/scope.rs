@@ -451,6 +451,13 @@ pub enum L2Position {
     /// element type is numeric; `min`/`max`/`count` are unconstrained (see
     /// `narrow::keeps_reducer`'s doc comment for the corpus evidence).
     Reducer(TypeClass),
+    /// T4: the method name after a `->` whose receiver the overlay has already
+    /// typed. The String-only builtins (`narrow::STRING_ONLY_METHODS`) are
+    /// legal only on a `String` receiver; every other type class rejects them
+    /// by signature. See `narrow::keeps_string_method` for the live evidence,
+    /// and [`arrow_receiver_type`](ScopeTracker::arrow_receiver_type) for the
+    /// three routes a receiver gets its type from.
+    StringMethod(TypeClass),
     /// N6: a relation-column string reference must name an emitted column.
     Column,
     /// N6 (arm-R): a *bare-ident* column access `$row.<Col>` on a relation row
@@ -659,6 +666,36 @@ const REF_METHODS: &[&str] = &[
     "restrict",
 ];
 
+/// The TDS accessors whose return type their own signature fixes, independent
+/// of the row they read (§6.6 T4). The engine states each one back in its own
+/// rejection (`getInteger(TDSRow[1],String[1]):Integer[1]`), and the gold
+/// corpus never uses another getter: across the 5034 gold queries these four
+/// are the only `$row.get…(…)` accessors that appear.
+///
+/// The type travels *with* the name, like [`STORE_METHODS`]'s arity, so a fifth
+/// getter cannot be added without stating what it returns.
+const TYPED_ACCESSORS: &[(&str, TypeClass)] = &[
+    ("getInteger", TypeClass::Numeric),
+    ("getFloat", TypeClass::Numeric),
+    ("getString", TypeClass::Str),
+    ("getBoolean", TypeClass::Boolean),
+];
+
+/// The methods that hand back their receiver's own type, so a chain through one
+/// carries the receiver's type class forward (§6.6 T4). `toOne` collapses
+/// `T[*]`/`T[0..1]` to `T[1]` and is the only one the gold corpus puts between a
+/// typed navExpr and a string method (`$x.name->toOne()->toLower()`, 8
+/// occurrences).
+const TYPE_PRESERVING_METHODS: &[&str] = &["toOne"];
+
+/// `name`'s fixed return type if it is a [`TYPED_ACCESSORS`] entry.
+fn accessor_return_type(name: &str) -> Option<TypeClass> {
+    TYPED_ACCESSORS
+        .iter()
+        .find(|(method, _)| *method == name)
+        .map(|(_, tc)| *tc)
+}
+
 /// An identifier / string lexeme being accumulated across BPE sub-tokens (§6.4).
 ///
 /// Byte-level BPE fragments a schema identifier (`countryName` → `country` +
@@ -765,6 +802,42 @@ pub(crate) struct ScopeTracker {
     /// primitive element type, so the next identifier is a reducer-method name
     /// legal only for that type.
     awaiting_reducer: Option<TypeClass>,
+    /// The type class of the call that just closed, when the overlay can read it
+    /// off the method's own signature — a [`TYPED_ACCESSORS`] getter, or a
+    /// [`TYPE_PRESERVING_METHODS`] step over an already-typed receiver. This is
+    /// what makes T4 reach *past* a call: [`last_nav`](Self::last_nav) is set by
+    /// a property name and cleared by the very next token, so it is `None` by
+    /// the time a `)` closes.
+    ///
+    /// Deliberately **not** folded into `last_nav`, even though both name "what
+    /// the completed navExpr left on the stream". `last_nav` also arms T1
+    /// (`cmp_pending`), T2 (`Comparator`) and T6 (`OrderedOperand`), and the
+    /// gold corpus falsifies the first two at an accessor: 6 gold queries
+    /// compare a `getString(…)` with an ordered comparator (T2 would mask the
+    /// `<`), and 25 more compare an accessor against a literal of the other kind
+    /// (`getInteger(…) == '2'`, 20; `getString(…) == 5`, 2;
+    /// `getBoolean(…) == 1`, 3 — all of which T1 would mask). A SQL-derived
+    /// model declares column types the engine then coerces; only the *method
+    /// signature* lever survives that, so only T4 reads this. It is also the
+    /// wrong shape for T6: a getter's declared multiplicity is not tracked here
+    /// at all, so reporting one as a `NavResult` would assert a scalar-ness
+    /// this field never establishes.
+    last_call_type: Option<TypeClass>,
+    /// The receiver type captured at a `->`, awaiting the method's `(` so a
+    /// [`TYPE_PRESERVING_METHODS`] call can carry it through to its own close.
+    /// The type-level twin of
+    /// [`pending_arrow_receiver`](Self::pending_arrow_receiver), and consumed at
+    /// the same place.
+    pending_arrow_type: Option<TypeClass>,
+    /// T4 is armed: a `->` was just seen on a receiver whose type class the
+    /// overlay knows, so the next identifier is a method name whose legality
+    /// depends on that type. Consumed one token later, exactly like
+    /// [`awaiting_reducer`](Self::awaiting_reducer).
+    awaiting_string_method: Option<TypeClass>,
+    /// Per-open-delimiter return type of the call that delimiter opened, pushed
+    /// and popped in lockstep with [`paren_receiver`](Self::paren_receiver) so a
+    /// nested call cannot hand its own type to the enclosing one.
+    call_return: Vec<Option<TypeClass>>,
     /// The first identifier of the current lambda argument (its binder name).
     lambda_first_ident: Option<String>,
     /// Receiver class captured at a `->`, awaiting the method's `(` to become the
@@ -1197,6 +1270,13 @@ impl ScopeTracker {
             self.awaiting_reducer = None;
             self.awaiting_store_method = false;
             self.awaiting_extent_method = false;
+            self.awaiting_string_method = None;
+        }
+        // T4's post-call type likewise lives exactly one non-whitespace token past
+        // the close that set it — long enough for the `->` that reads it, never
+        // long enough to type an unrelated later navExpr.
+        if !was_close {
+            self.last_call_type = None;
         }
         // N4b's operand (any non-operator token after an armed logical operator)
         // clears the arming, exactly as a comparison operand clears T1's.
@@ -1428,6 +1508,11 @@ impl ScopeTracker {
         {
             self.awaiting_reducer = Some(*tc);
         }
+        // T4: the arrow's receiver type, where the overlay knows it — read by the
+        // method-name position one token on, and by that method's own call if it
+        // is type-preserving.
+        self.pending_arrow_type = self.arrow_receiver_type();
+        self.awaiting_string_method = self.pending_arrow_type;
         // The arrow ends the current navExpr; capture the receiver for a possible
         // following method lambda, then reset the nav cursor.
         let receiver = self
@@ -1438,6 +1523,45 @@ impl ScopeTracker {
         self.pending_refvar = None;
         self.nav_cursor = None;
         self.last_ident = None;
+    }
+
+    /// The type class of the navExpr an arrow is being applied to, on the three
+    /// routes the corpus actually produces one (§6.6 T4):
+    ///
+    /// * a completed [`TYPED_ACCESSORS`] call — `$row.getString('name')->…`,
+    ///   read from [`last_call_type`](Self::last_call_type);
+    /// * a bare primitive property navigation — `$x.name->…`, read from
+    ///   [`last_nav`](Self::last_nav);
+    /// * a [`TYPE_PRESERVING_METHODS`] step over either — `$x.name->toOne()->…`,
+    ///   which reaches this through `last_call_type` again.
+    ///
+    /// The call route takes precedence: where both are set the call is the more
+    /// recent navExpr, and `last_nav` is stale by construction (it survives
+    /// exactly one token, so any accessor call has already outlived it).
+    ///
+    /// [`NavResult::NonScalar`] yields nothing, on purpose. It covers two
+    /// shapes — a class-typed step, which has no primitive type class at all,
+    /// and a primitive whose chain is not to-one. On the second, a String-only
+    /// method is indeed illegal, but for its *multiplicity* rather than its
+    /// type (`toUpper(String[*])` is refused exactly as `toUpper(Integer[*])`
+    /// is), so masking it here would be T6's claim asserted through T4's lever
+    /// on evidence T4 never gathered. T4 narrows only where the type class is
+    /// the whole reason, and leaves the rest to the compiler oracle.
+    fn arrow_receiver_type(&self) -> Option<TypeClass> {
+        self.last_call_type.or(match self.last_nav {
+            Some(NavResult::Scalar(tc)) => Some(tc),
+            Some(NavResult::NonScalar) | None => None,
+        })
+    }
+
+    /// The type class a call to `method` returns, given the receiver type its
+    /// own arrow carried in — [`None`] where the overlay cannot read it off the
+    /// signature, which leaves the position unnarrowed rather than guessed.
+    fn call_return_type(method: &str, receiver: Option<TypeClass>) -> Option<TypeClass> {
+        if TYPE_PRESERVING_METHODS.contains(&method) {
+            return receiver;
+        }
+        accessor_return_type(method)
     }
 
     fn on_pipe(&mut self, pre_state: State) {
@@ -1555,6 +1679,14 @@ impl ScopeTracker {
             .take()
             .unwrap_or_else(|| self.cur_class.clone());
         self.paren_receiver.push(receiver);
+        // T4: carry this call's own return type to its close, so the navExpr the
+        // call *is* can be typed by the arrow that follows it.
+        let receiver_type = self.pending_arrow_type.take();
+        self.call_return.push(
+            method
+                .as_deref()
+                .and_then(|name| Self::call_return_type(name, receiver_type)),
+        );
         self.lambda_first_ident = None;
     }
 
@@ -1640,6 +1772,11 @@ impl ScopeTracker {
             self.cur_class = None;
         }
         self.paren_receiver.pop();
+        // T4: the call this delimiter opened is now a completed navExpr of its
+        // own declared type. Assigned rather than or-ed, so an untyped call
+        // closing over a typed inner one (`->isEmpty()` around a getter) reports
+        // its own unknown type instead of inheriting the inner one.
+        self.last_call_type = self.call_return.pop().flatten();
         self.depth = self.depth.saturating_sub(1);
         self.pending_arrow_receiver = None;
     }
@@ -1838,9 +1975,15 @@ impl ScopeTracker {
             // N3f. Mutually exclusive with the store arm above: a stream reaches
             // one only off a store path and the other only off a class extent.
             State::AfterArrow if self.awaiting_extent_method => L2Position::ExtentMethod,
-            State::AfterArrow => match self.awaiting_reducer {
-                Some(tc) => L2Position::Reducer(tc),
-                None => L2Position::None,
+            // T3 outranks T4 where both could arm: a bare `$y->` reducer position
+            // is typed by the binder's *declared element* type, which is the
+            // stronger claim. The two are in fact disjoint — a reducer arrow
+            // follows a refVar, never a completed navExpr — so the order only
+            // fixes the reading, it does not decide any real position.
+            State::AfterArrow => match (self.awaiting_reducer, self.awaiting_string_method) {
+                (Some(tc), _) => L2Position::Reducer(tc),
+                (None, Some(tc)) => L2Position::StringMethod(tc),
+                (None, None) => L2Position::None,
             },
             _ => L2Position::None,
         }

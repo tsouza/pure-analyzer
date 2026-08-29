@@ -23,10 +23,12 @@
 //! (relation-column strings), **N7** (what may follow a bare value-position
 //! identifier), **T1** (comparison operand type-class — the
 //! `car_1` `horsepower:String` lever), **T2** (ordered-comparator restriction),
-//! and **T3** (aggregation-reducer type). T1 applies its **string/numeric**
+//! **T3** (aggregation-reducer type), and **T4** (string-predicate type —
+//! `toLower`/`toUpper`/`startsWith`/`endsWith` on a receiver typed non-String).
+//! T1 applies its **string/numeric**
 //! levers; Boolean and Temporal operands pass through (see `narrow`). The
 //! `ScopeTracker` (S1–S3) is whole — a partial scope machine is a soundness
-//! hazard. N5 as a distinct rule, T4/T6/T7, and N4/T5 pass through; the
+//! hazard. N5 as a distinct rule, T6/T7, and N4/T5 pass through; the
 //! `navigable` map is retained because N1/N2 need it.
 
 pub(crate) mod model;

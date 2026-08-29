@@ -879,6 +879,46 @@ fn recipe_navigation_predicate(
     schema: &Schema,
     vocab: &Vocab,
 ) -> Option<Vec<u32>> {
+    navigation_predicate_walk(grammar, schema, vocab, None)
+}
+
+/// The niladic collapse step [`recipe_collapsed_navigation_predicate`] inserts
+/// between the navigation and its comparator. `toOne` is the one
+/// type-preserving builtin the gold corpus puts there (`$x.name->toOne()->…`),
+/// and the shipped overlay reads its signature to carry the member's type
+/// across the call (`schema::scope`'s `TYPE_PRESERVING_METHODS`).
+const COLLAPSE_STEP: &[u8] = b"toOne";
+
+/// [`recipe_navigation_predicate`]'s shape with a `->toOne()` collapse between
+/// the navigation and the comparator — `Class.all()->filter(a|$a.<member>->toOne()
+/// < <digit>)`, confirmed live against a real PMCD.
+///
+/// The shape that fires T4 (`StringMethod`): the `->` after a resolved numeric
+/// member is the position where the overlay knows the receiver's type and
+/// masks the String-only methods, and no other recipe or random walk reaches
+/// it (issue #116 — the arrow-after-navigation shape needs the same alignment
+/// of nested-grammar branches that #117/#119 found random weighting cannot
+/// reliably hit). `None` on the same conditions as
+/// [`recipe_navigation_predicate`], plus a vocabulary with no [`COLLAPSE_STEP`]
+/// token — three of the eight fixture corpora have one, which is what this
+/// recipe needs to fire at all.
+fn recipe_collapsed_navigation_predicate(
+    grammar: &CompiledGrammar,
+    schema: &Schema,
+    vocab: &Vocab,
+) -> Option<Vec<u32>> {
+    navigation_predicate_walk(grammar, schema, vocab, Some(COLLAPSE_STEP))
+}
+
+/// Shared builder behind [`recipe_navigation_predicate`] and
+/// [`recipe_collapsed_navigation_predicate`], which differ only by the niladic
+/// `collapse` step spliced in after the member.
+fn navigation_predicate_walk(
+    grammar: &CompiledGrammar,
+    schema: &Schema,
+    vocab: &Vocab,
+    collapse: Option<&[u8]>,
+) -> Option<Vec<u32>> {
     let pipe = find_token(vocab, b"|")?;
     let dot = find_token(vocab, b".")?;
     let open = find_token(vocab, b"(")?;
@@ -891,11 +931,17 @@ fn recipe_navigation_predicate(
     let digit = find_digit_token(vocab)?;
     let ws = find_whitespace_token(vocab)?;
     let all = find_token(vocab, SOURCE_METHOD.as_bytes())?;
+    let collapse_tokens: Vec<u32> = match collapse {
+        Some(name) => vec![arrow, find_token(vocab, name)?, open, close],
+        None => Vec::new(),
+    };
     for (class_id, member_id) in class_member_candidates(schema, vocab, true) {
-        let tokens = [
+        let mut tokens = vec![
             pipe, class_id, dot, all, open, close, arrow, filter, open, binder, pipe, dollar,
-            binder, dot, member_id, ws, lt, ws, digit, close,
+            binder, dot, member_id,
         ];
+        tokens.extend_from_slice(&collapse_tokens);
+        tokens.extend_from_slice(&[ws, lt, ws, digit, close]);
         if let Some(walk) = try_walk(grammar, schema, &tokens) {
             return Some(walk);
         }
@@ -1558,6 +1604,7 @@ fn recipe_walks(
 ) -> Vec<Vec<u32>> {
     let mut walks: Vec<Vec<u32>> = [
         recipe_navigation_predicate(grammar, schema, vocab),
+        recipe_collapsed_navigation_predicate(grammar, schema, vocab),
         recipe_groupby(grammar, schema, vocab),
         recipe_groupby_scalar_multi_agg(grammar, schema, vocab),
         recipe_groupby_restrict(grammar, schema, vocab),
@@ -2713,6 +2760,7 @@ mod tests {
             "restrict",
             "project",
             "==",
+            "toOne",
         ]
         .iter()
         .map(|s| s.as_bytes().to_vec())
@@ -2895,6 +2943,43 @@ mod tests {
         let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens, eos));
         assert_eq!(
             recipe_navigation_predicate(&grammar, &recipe_schema(), grammar.vocab()),
+            None
+        );
+    }
+
+    #[test]
+    fn recipe_collapsed_navigation_predicate_builds_the_expected_walk_from_a_real_schema() {
+        let grammar = CompiledGrammar::compile(vocab_for_recipes());
+        let vocab = grammar.vocab();
+        let expected: Vec<u32> = [
+            "|", "A", ".", "all", "(", ")", "->", "filter", "(", "a", "|", "$", "a", ".", "year",
+            "->", "toOne", "(", ")", " ", "<", " ", "1", ")",
+        ]
+        .iter()
+        .map(|s| id_of(vocab, s))
+        .collect();
+        assert_eq!(
+            recipe_collapsed_navigation_predicate(&grammar, &recipe_schema(), vocab),
+            Some(expected)
+        );
+    }
+
+    #[test]
+    fn recipe_collapsed_navigation_predicate_is_none_without_the_collapse_step_in_vocab() {
+        // Everything `recipe_navigation_predicate` needs — which still
+        // succeeds here — but no `COLLAPSE_STEP` token, which is the one
+        // thing this variant adds.
+        let tokens: Vec<Vec<u8>> = [
+            "|", "A", ".", "all", "(", ")", "->", "filter", "a", "$", "year", "<", " ", "1",
+        ]
+        .iter()
+        .map(|s| s.as_bytes().to_vec())
+        .collect();
+        let eos = tokens.len() as u32;
+        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens, eos));
+        assert!(recipe_navigation_predicate(&grammar, &recipe_schema(), grammar.vocab()).is_some());
+        assert_eq!(
+            recipe_collapsed_navigation_predicate(&grammar, &recipe_schema(), grammar.vocab()),
             None
         );
     }
@@ -3398,14 +3483,14 @@ mod tests {
 
     #[test]
     fn recipe_walks_includes_only_the_recipes_that_actually_succeed() {
-        // The full vocabulary with include_reducer: all seven recipes succeed.
+        // The full vocabulary with include_reducer: all eight recipes succeed.
         let full = CompiledGrammar::compile(vocab_for_recipes());
-        let all_seven = recipe_walks(&full, &recipe_schema(), full.vocab(), true);
-        assert_eq!(all_seven.len(), 7);
+        let all_eight = recipe_walks(&full, &recipe_schema(), full.vocab(), true);
+        assert_eq!(all_eight.len(), 8);
 
-        // Missing "agg"/"groupBy"/"restrict"/quoted strings: only the
-        // navigation-predicate recipe can succeed regardless of
-        // include_reducer.
+        // Missing "agg"/"groupBy"/"restrict"/quoted strings and the collapse
+        // step: only the navigation-predicate recipe can succeed regardless
+        // of include_reducer.
         let tokens: Vec<Vec<u8>> = [
             "|", "A", ".", "all", "(", ")", "->", "filter", "a", "$", "year", "<", " ", "1",
         ]
@@ -3420,16 +3505,17 @@ mod tests {
 
     #[test]
     fn recipe_walks_excludes_only_the_reducer_recipe_when_include_reducer_is_false() {
-        // The full vocabulary supports all seven recipes, but
+        // The full vocabulary supports all eight recipes, but
         // include_reducer=false (issue #55: the reducer recipe's bare
         // `->agg(...)` step is L1/L2-admissible but not real, compilable
-        // Pure) drops only that one — `recipe_groupby`,
+        // Pure) drops only that one — `recipe_collapsed_navigation_predicate`,
+        // `recipe_groupby`,
         // `recipe_groupby_scalar_multi_agg`, `recipe_groupby_restrict`,
         // `recipe_groupby_having_restrict`, and `recipe_filter_project` (all
         // real, compilable) stay included.
         let full = CompiledGrammar::compile(vocab_for_recipes());
-        let six = recipe_walks(&full, &recipe_schema(), full.vocab(), false);
-        assert_eq!(six.len(), 6);
+        let seven = recipe_walks(&full, &recipe_schema(), full.vocab(), false);
+        assert_eq!(seven.len(), 7);
     }
 
     #[test]

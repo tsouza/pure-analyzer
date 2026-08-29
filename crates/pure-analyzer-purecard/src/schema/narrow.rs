@@ -128,6 +128,8 @@ enum CacheKey {
     OrderedOperand,
     /// T3 reducer class — the aggregation-reducer lever (cursor-independent).
     Reducer(TypeClass),
+    /// T4 receiver class — the string-method lever (cursor-independent).
+    StringMethod(TypeClass),
     /// N6 column set at a given emitted-column count (monotonic within a stream,
     /// so the count pins the set exactly).
     Column(usize),
@@ -228,6 +230,16 @@ pub(crate) fn narrow_into(
             let masked_by = *tc;
             with_cache(dst, cache, CacheKey::Reducer(masked_by), |dst| {
                 fill_reducer(dst, vocab, eos_bit, masked_by);
+            })
+        }
+        L2Position::StringMethod(TypeClass::Str) => {
+            // The receiver a String-only method wants — no constraint to apply.
+            false
+        }
+        L2Position::StringMethod(tc) => {
+            let masked_by = *tc;
+            with_cache(dst, cache, CacheKey::StringMethod(masked_by), |dst| {
+                fill_string_method(dst, vocab, eos_bit, masked_by);
             })
         }
         L2Position::SourceMethodArg => with_cache(dst, cache, CacheKey::SourceMethodArg, |dst| {
@@ -534,6 +546,7 @@ impl<'a> TrieRule<'a> {
             | L2Position::Comparator(_)
             | L2Position::OrderedOperand
             | L2Position::Reducer(_)
+            | L2Position::StringMethod(_)
             | L2Position::ValueIdent => return None,
         };
         Some(Self { key, kind, names })
@@ -723,6 +736,7 @@ pub(crate) fn narrow_fused_into(
         | L2Position::Comparator(_)
         | L2Position::OrderedOperand
         | L2Position::Reducer(_)
+        | L2Position::StringMethod(_)
         | L2Position::RefVar
         | L2Position::ValueIdent => false,
     }
@@ -990,6 +1004,49 @@ fn fill_comparator(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32, masked_by: Ty
 /// (§4, "do not invent constraints the corpus does not exercise").
 fn keeps_reducer(bytes: &[u8], tc: TypeClass) -> bool {
     !matches!(bytes, b"sum" | b"average") || matches!(tc, TypeClass::Numeric)
+}
+
+/// The method names §6.6 T4 masks off a non-`String` receiver: the engine
+/// declares each one only over `String`, and states that back in its own
+/// rejection of every other type class.
+///
+/// **`contains` is deliberately absent**, correcting the pilot survey #116
+/// quotes. It is not a string method at all in the engine's vocabulary but the
+/// generic collection membership test, and Pure treats a scalar as a collection
+/// of one — live-attested against the pinned engine:
+/// `$x.population->toOne()->contains('A')` and `->contains(1)` both **compile**
+/// on an `Integer[1]` receiver, while `toUpper`/`toLower`/`startsWith`/
+/// `endsWith` are each refused there with `Can't find a match for function
+/// '…(Integer[1])'` naming the `String` overload. Masking `contains` would be
+/// unsound; the gold corpus agrees, using it 66 times and every one of them on
+/// a `getString(…)` receiver, which this rule never narrows.
+///
+/// A *longer* name this list prefixes is masked too where a tokenizer splits it
+/// (`toUpper` + `FirstCharacter`). That costs no soundness: the engine's whole
+/// `toUpperFirstCharacter`/`startsWith…` family is String-only as well
+/// (live: `toUpperFirstCharacter(Integer[1])` is refused the same way), so no
+/// legal continuation of one of these prefixes exists on a receiver this rule
+/// narrows.
+const STRING_ONLY_METHODS: &[&[u8]] = &[b"toLower", b"toUpper", b"startsWith", b"endsWith"];
+
+/// Whether a method-name token is kept under a T4 constraint with receiver
+/// class `tc` (§6.6 T4). A [`STRING_ONLY_METHODS`] name is kept only on a
+/// `String` receiver; every other name is unconstrained here, since the rule
+/// knows the receiver's type, not the vocabulary of methods it admits.
+fn keeps_string_method(bytes: &[u8], tc: TypeClass) -> bool {
+    !STRING_ONLY_METHODS.contains(&bytes) || matches!(tc, TypeClass::Str)
+}
+
+/// Refill `dst` with the T4 method set for receiver class `masked_by`, plus EOS.
+fn fill_string_method(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32, masked_by: TypeClass) {
+    dst.clear_all();
+    for id in 0..vocab.len() as u32 {
+        let bytes = vocab.bytes(id).unwrap_or(&[]);
+        if keeps_string_method(bytes, masked_by) {
+            dst.set(id);
+        }
+    }
+    dst.set(eos_bit);
 }
 
 /// Refill `dst` with the T3 reducer set for element class `masked_by`, plus EOS.

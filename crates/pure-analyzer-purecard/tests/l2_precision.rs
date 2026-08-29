@@ -317,6 +317,59 @@ fn t6_masks_an_ordered_comparator_on_a_non_scalar_nav_expr() {
     assert_frozen("t6-ordered-operand");
 }
 
+/// T4 narrows the method name after a `->` whose receiver the overlay has
+/// already typed, on all three routes that produce one: a TDS accessor call
+/// (`$row.getInteger('Cylinders')->`), a bare primitive property navigation
+/// (`$x.cylinders->`), and a type-preserving `toOne()` over either
+/// (`$x.cylinders->toOne()->`).
+///
+/// `toUpper`/`toLower`/`startsWith`/`endsWith` are String-only in the engine's
+/// own signature table, so each is masked on the Integer receiver while a
+/// type-agnostic step (`toOne`) stays admissible. `contains` is *not* masked:
+/// it matches the generic collection overload on any receiver (see
+/// `narrow::keeps_string_method`'s doc comment for the live evidence).
+#[test]
+fn t4_masks_a_string_method_on_a_non_string_receiver() {
+    assert_frozen("t4-string-method");
+}
+
+/// T4's soundness edge: on a receiver the overlay types `String` — a
+/// `getString(…)` accessor or a `String` property navigation, the two shapes
+/// the gold corpus actually puts a string method on — every one of those
+/// methods stays admissible, and so does `contains`, which the engine's
+/// generic collection overload makes legal on *any* receiver.
+#[test]
+fn t4_keeps_every_string_method_on_a_string_receiver() {
+    let probes: &[&[u8]] = &[
+        b"toLower",
+        b"toUpper",
+        b"startsWith",
+        b"endsWith",
+        b"contains",
+    ];
+    let accessor = "|spider::car_1::model::default::CarsData.all()\
+        ->project([x|$x.horsepower], ['Horsepower'])\
+        ->filter(row: meta::pure::tds::TDSRow[1]|$row.getString('Horsepower')->";
+    let property = "|spider::car_1::model::default::CarsData.all()->filter(x|$x.horsepower->";
+    for prefix in [accessor, property] {
+        for (probe, admitted) in probes.iter().zip(admissible_after("car_1", prefix, probes)) {
+            assert!(
+                admitted,
+                "L2 SOUNDNESS: `{}` was masked on a String receiver in car_1:\n  {prefix}",
+                bytes_str(probe)
+            );
+        }
+    }
+    // `contains` is unconstrained on a *non*-String receiver too — the generic
+    // collection overload compiles there (live-attested; see
+    // `narrow::keeps_string_method`).
+    let numeric = "|spider::car_1::model::default::CarsData.all()->filter(x|$x.cylinders->";
+    assert!(
+        admissible_after("car_1", numeric, &[b"contains"])[0],
+        "L2 SOUNDNESS: `contains` was masked on a numeric receiver in car_1:\n  {numeric}"
+    );
+}
+
 /// After `project(...,['Name','Result'])` the relation columns are exactly
 /// those names; a getInteger of an emitted name is admissible, of an unemitted
 /// one is masked.
@@ -625,6 +678,11 @@ const FROZEN_FAMILIES: &[(&str, &str)] = &[
         "t6-ordered-operand",
         "#116 T6 · an ordered comparator on a navExpr that is not a scalar \
          primitive — a collection, an extent navigation, or a class",
+    ),
+    (
+        "t4-string-method",
+        "#116 T4 · a String-only method arrowed off a receiver the overlay has \
+         typed non-String",
     ),
     (
         "n6-column",
@@ -1799,6 +1857,39 @@ static FROZEN_KILLS: &[FrozenKill] = &[
          y: String[*]|$y->",
             real: "min",
             phantom: "sum",
+        },
+    },
+    FrozenKill {
+        fixture: "t4-string-method",
+        db: "car_1",
+        closer: Closer::L2("StringMethod"),
+        kill: Kill::Probe {
+            prefix: "|spider::car_1::model::default::CarsData.all()\
+         ->project([x|$x.cylinders], ['Cylinders'])\
+         ->filter(row: meta::pure::tds::TDSRow[1]|$row.getInteger('Cylinders')->",
+            real: "toOne",
+            phantom: "toUpper",
+        },
+    },
+    FrozenKill {
+        fixture: "t4-string-method",
+        db: "car_1",
+        closer: Closer::L2("StringMethod"),
+        kill: Kill::Probe {
+            prefix: "|spider::car_1::model::default::CarsData.all()->filter(x|$x.cylinders->",
+            real: "toOne",
+            phantom: "startsWith",
+        },
+    },
+    FrozenKill {
+        fixture: "t4-string-method",
+        db: "car_1",
+        closer: Closer::L2("StringMethod"),
+        kill: Kill::Probe {
+            prefix: "|spider::car_1::model::default::CarsData.all()\
+         ->filter(x|$x.cylinders->toOne()->",
+            real: "toString",
+            phantom: "toLower",
         },
     },
     FrozenKill {
