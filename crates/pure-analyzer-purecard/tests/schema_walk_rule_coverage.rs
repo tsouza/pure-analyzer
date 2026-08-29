@@ -93,6 +93,7 @@ const ALL_RULE_KINDS: &[&str] = &[
     "Reducer",
     "Column",
     "RelationColumn",
+    "RefVar",
 ];
 
 /// [`L2Position`]'s stable display name, ignoring any payload (a `Member("A")`
@@ -109,6 +110,7 @@ fn rule_kind(pos: &L2Position) -> Option<&'static str> {
         L2Position::Reducer(_) => Some("Reducer"),
         L2Position::Column => Some("Column"),
         L2Position::RelationColumn => Some("RelationColumn"),
+        L2Position::RefVar => Some("RefVar"),
         L2Position::None => None,
     }
 }

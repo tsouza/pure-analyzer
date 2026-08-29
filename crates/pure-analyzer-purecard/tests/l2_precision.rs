@@ -405,3 +405,118 @@ fn precision_generalizes_to_oos_held_out_schemas() {
         b"nonexistent",
     );
 }
+
+/// Replay `walk`'s tokens through a schema-aware session and assert the stream
+/// **cannot** be produced: at some step the walk's own next token is absent from
+/// `allowed_mask`, so `accept_token` would be the only way forward and the rule
+/// governing that position has closed it.
+///
+/// The assertion is on the frozen walk **string**, never a walk index: any rule
+/// change reshuffles the whole chained-SplitMix64 exploration stream, so an index
+/// names a different query after the very next PR while the text stays exactly
+/// the degenerate shape that was proven to fail live.
+///
+/// Returns the masked token so a caller can report which one closed the walk.
+fn assert_walk_is_masked(db_id: &str, walk: &str) -> String {
+    let vocab = TokenVocab::build(&[walk], &[]);
+    let grammar = CompiledGrammar::compile(vocab.vocab());
+    let schema = load_schema(db_id);
+    let mut session =
+        DecoderSession::with_schema(&grammar, schema).expect("grammar is fixed-engine");
+    for (step, token) in lex(walk).into_iter().enumerate() {
+        let id = vocab
+            .id_of(&token)
+            .unwrap_or_else(|| panic!("token not in vocab: {:?}", bytes_str(&token)));
+        if !session.allowed_mask().test(id) {
+            return bytes_str(&token);
+        }
+        session.accept_token(id).unwrap_or_else(|err| {
+            panic!("L1 rejected an L2-admitted token at step {step}: {err}\n  {walk}")
+        });
+    }
+    panic!(
+        "PRECISION GAP: {db_id} walk still streams end-to-end — the rule that was \
+         supposed to close it does not fire:\n  {walk}"
+    );
+}
+
+/// Issue #55 bucket A — a fabricated `::` segment glued onto a source classpath
+/// that had already ended. Every one of these nine `world_1` walks was produced
+/// by the schema walker and rejected by a live Legend engine with "Can't find the
+/// packageable element '<path>'"; N3's classpath-continuation rule now clears the
+/// `:` that starts the phantom segment, so none of them can be emitted at all.
+///
+/// Frozen verbatim (issue #55 Phase 1, gate (b)): these strings are the
+/// class-killing evidence constitution §5 requires, and they must survive any
+/// future corpus or vocabulary reshuffle.
+#[test]
+fn n3_masks_every_fabricated_classpath_extension_walk() {
+    for walk in [
+        "{|spider::world_1::Db::desc->min('_v')}",
+        "\n|spider::world_1::model::default::Countrylanguage::name\
+         ->distinct('asia'!='GovernmentForm_T1_3')",
+        "{\n    |spider::world_1::model::default::Countrylanguage::pair\
+         ->concatenate(c)+Integer}",
+        "|spider::world_1::model::default::Countrylanguage::limit\
+         ->isEmpty('GovernmentForm_T1')",
+        "{     \n    |spider::world_1::Db::name::language->distinct(row!=.3000)*limit}",
+        "|spider::world_1::model::default::Country::distinct::Y->min()",
+        "{\n    |l::filter->project(renameColumns)}",
+        "|spider::world_1::model::default::Country::min->limit('Capital_t1')",
+        "|spider::world_1::model::default::Country::row1\
+         ::spider::world_1::model::default::Countrylanguage::pair::groupBy\
+         ->restrict('IndepYear'&&'_nn'!='_ord0'+'Percentage_T2_2'!='GNPOld_T1_1')",
+    ] {
+        let masked = assert_walk_is_masked("world_1", walk);
+        assert!(
+            masked.contains("::"),
+            "the token N3 closed should be the fabricated classpath itself, got {masked:?}"
+        );
+    }
+}
+
+/// Issue #55 bucket C — a `$var` reference to a name nothing in the stream ever
+/// bound. Both `world_1` walks were rejected by a live Legend engine with "Can't
+/// find variable class for variable '<name>' in the graph"; S2
+/// (`L2Position::RefVar`) now admits only names the tracker has actually seen
+/// bound, and neither walk binds anything at all.
+///
+/// Frozen verbatim (issue #55 Phase 1, gate (b)) — see
+/// [`n3_masks_every_fabricated_classpath_extension_walk`] on why the string, not
+/// the walk index, is the fixture.
+#[test]
+fn s2_masks_every_unbound_refvar_walk() {
+    for (walk, name) in [
+        ("{|\n        $code\n      /'IsOfficial_t2'}", "code"),
+        ("{\n|      $name}", "name"),
+    ] {
+        let masked = assert_walk_is_masked("world_1", walk);
+        assert_eq!(
+            masked, name,
+            "S2 should close the walk at the unbound variable name itself"
+        );
+    }
+}
+
+/// S2's soundness edge, pinned alongside its precision: the *bound* name stays
+/// admissible at exactly the position where the unbound one is cleared. Without
+/// this the rule could pass its precision fixtures by masking every `$`
+/// reference — the failure mode gate (a)'s gold replay catches in bulk, pinned
+/// here as a directed counterfactual.
+#[test]
+fn s2_keeps_a_bound_binder_and_masks_its_neighbours() {
+    assert_precision(
+        "world_1",
+        "|spider::world_1::model::default::Country.all()->filter(x|$",
+        b"x",
+        b"y",
+    );
+    // A `let` binder is bound by position with no pipe to confirm it, and it
+    // outlives its own statement — the gold corpus's `->in($topStates)` shape.
+    assert_precision(
+        "world_1",
+        "{|let topStates = spider::world_1::model::default::Country.all();\n  $",
+        b"topStates",
+        b"nowhereBound",
+    );
+}
