@@ -128,7 +128,10 @@ impl Trie {
             .map(|i| edges[i].1)
     }
 
-    fn is_terminal(&self, node: u32) -> bool {
+    /// Whether a legal name ends exactly at `node` — the fact that separates a
+    /// whole name from a strict prefix of one, read by the narrower to decide
+    /// whether the open lexeme may end here (`docs/spec/schema.md` §6.5).
+    pub(crate) fn is_terminal(&self, node: u32) -> bool {
         self.nodes[node as usize].terminal
     }
 }

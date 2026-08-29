@@ -3,10 +3,16 @@
 //! the model vocabulary that the per-step mask is intersected with.
 //!
 //! The mask is built so L2 **only clears bits, never sets** them: every token the
-//! rule does not specifically constrain is *kept* (its bit set), and the reserved
-//! EOS bit is always kept so a complete query stays completable (§4.3 guard).
-//! Intersecting such a mask can only remove admissible tokens — the structural
-//! `L2 ⊆ L1` guarantee (§6, G4) is a property of the operation, not merely a test.
+//! rule does not specifically constrain is *kept* (its bit set). Intersecting such
+//! a mask can only remove admissible tokens — the structural `L2 ⊆ L1` guarantee
+//! (§6, G4) is a property of the operation, not merely a test.
+//!
+//! The reserved EOS bit is kept wherever the overlay can see no reason to forbid
+//! ending the stream, and cleared where it can: a trie rule with its lexeme open
+//! on a **strict prefix** of a legal name, or on a whole name whose call parens
+//! are mandatory ([`NameClose::MustCall`]). [`admits_eos`] exposes that same
+//! verdict to [`is_complete`](crate::DecoderSession::is_complete), which would
+//! otherwise call a stream ending mid-identifier complete on L1 lookahead alone.
 //!
 //! The identifier/string rules (N3, N1/N2, N6) narrow over **reachable byte
 //! prefixes**, not whole classified lexemes: a token is kept while it can still
@@ -85,6 +91,10 @@ enum CacheKey {
     /// N6 column set at a given emitted-column count (monotonic within a stream,
     /// so the count pins the set exactly).
     Column(usize),
+    /// N7's continuation set for an open bare value-position identifier — a
+    /// whole-vocab constant (it narrows no name set, only what may follow one),
+    /// so one key suffices.
+    ValueIdent,
     /// N6 arm-R bare-ident column set at a given emitted-column count — the
     /// unquoted dual of [`Column`](CacheKey::Column) (a distinct trie kind, so it
     /// needs its own key).
@@ -145,8 +155,10 @@ pub(crate) fn narrow_into(
     vocab: &Vocab,
     eos_bit: u32,
 ) -> bool {
+    if let Some(rule) = TrieRule::of(pos, schema, columns, vars) {
+        return narrow_trie(dst, cache, &rule, prefix, vocab, eos_bit);
+    }
     match pos {
-        L2Position::None => false,
         L2Position::ReValue(TypeClass::Boolean | TypeClass::Temporal) => {
             // Boolean/temporal operand narrowing is deferred (§6.6 T1 ships only
             // the string/numeric levers) — keep the L1 mask unchanged.
@@ -178,72 +190,303 @@ pub(crate) fn narrow_into(
             });
             true
         }
-        L2Position::SourceIdent => narrow_trie(
-            dst,
-            cache,
-            CacheKey::Source,
-            prefix,
-            TrieKind::ClassPath,
-            vocab,
-            eos_bit,
-            || Trie::from_names(schema.source_paths().chain(std::iter::once(LET_KEYWORD))),
-        ),
-        L2Position::SourceMethod => narrow_trie(
-            dst,
-            cache,
-            CacheKey::SourceMethod,
-            prefix,
-            TrieKind::IdentOrStr,
-            vocab,
-            eos_bit,
-            || Trie::from_names(std::iter::once(SOURCE_METHOD)),
-        ),
         L2Position::SourceMethodArg => {
             with_cache(dst, cache, CacheKey::SourceMethodArg, |dst| {
                 fill_source_method_arg(dst, vocab, eos_bit);
             });
             true
         }
-        L2Position::Member(class) => narrow_trie(
-            dst,
-            cache,
-            CacheKey::Member(class.clone()),
-            prefix,
-            TrieKind::Ident,
-            vocab,
-            eos_bit,
-            || Trie::from_names(schema.member_names(class)),
-        ),
-        L2Position::Column => narrow_trie(
-            dst,
-            cache,
-            CacheKey::Column(columns.len()),
-            prefix,
-            TrieKind::Str,
-            vocab,
-            eos_bit,
-            || Trie::from_names(columns.iter().map(|c| quote(c))),
-        ),
-        L2Position::RelationColumn => narrow_trie(
-            dst,
-            cache,
-            CacheKey::RelationColumn(columns.len()),
-            prefix,
-            TrieKind::Ident,
-            vocab,
-            eos_bit,
-            || Trie::from_names(columns.iter().cloned()),
-        ),
-        L2Position::RefVar => narrow_trie(
-            dst,
-            cache,
-            CacheKey::RefVar(vars.len()),
-            prefix,
-            TrieKind::Ident,
-            vocab,
-            eos_bit,
-            || Trie::from_names(vars.iter().map(String::as_bytes)),
-        ),
+        L2Position::ValueIdent => {
+            with_cache(dst, cache, CacheKey::ValueIdent, |dst| {
+                fill_value_ident(dst, vocab);
+            });
+            true
+        }
+        _ => false,
+    }
+}
+
+/// Whether N7 actually constrains a value position that has emitted `prefix`:
+/// a bare word is open, and it is not one of the [`VALUE_KEYWORDS`].
+///
+/// At the anchor there is no word yet, so every value shape — a literal, a
+/// `$var`, a nested opener, a lambda — is still legal and the rule stays out of
+/// the way. `ScopeTracker::position` applies this so
+/// [`L2Position::ValueIdent`] is only ever *reported* where it narrows;
+/// [`narrow_into`] and [`admits_eos`] then need no second copy of the test.
+pub(crate) fn value_ident_constrains(prefix: &[u8]) -> bool {
+    !prefix.is_empty() && !VALUE_KEYWORDS.iter().any(|kw| kw.as_bytes() == prefix)
+}
+
+/// Bare words that *are* complete values in their own right, so N7 leaves them
+/// and whatever follows them alone. `docs/spec/grammar.md`'s `booleanLit` is the
+/// whole set the emitted subset admits; the corpus exercises both (`… == true }`,
+/// `pair(…, false)`).
+const VALUE_KEYWORDS: &[&str] = &["true", "false"];
+
+/// Refill `dst` with N7's continuation set for an open bare value-position
+/// identifier: the token either continues the word itself, or is one of the
+/// shapes that give a bare word a meaning — `.` (a nested pipeline source's own
+/// dot, `…->filter(x|B.all()->isEmpty())`, or an enum-path value selection),
+/// `:` (a `::` package separator, or a typed binder's annotation), `(` (a
+/// function application), or `|` (the lambda arrow that makes the word a
+/// binder).
+///
+/// Everything else is cleared, EOS included: whitespace, `,`, every closer, and
+/// every operator would end the word as a standalone expression that resolves to
+/// nothing. **Whitespace is deliberately in that set** even though `x |` is
+/// legal Pure — admitting it would let a single space close the lexeme, drop
+/// this rule out of scope, and hand the whole escape straight back (the same
+/// reason [`NameClose::MustCall`] excludes it). Confirmed live on both counts:
+/// `->col(between *'District_city')` and `->pair(code !='Name_T2')` are rejected
+/// exactly as their space-free siblings are, and no in-scope gold query separates
+/// a bare word from its continuation with whitespace.
+///
+/// `||` is excluded despite its leading `|`: it is boolean-or, never a lambda
+/// arrow, and the vocabulary carries it as one token.
+fn fill_value_ident(dst: &mut BitMask, vocab: &Vocab) {
+    dst.clear_all();
+    for id in 0..vocab.len() as u32 {
+        if keeps_value_ident(vocab.bytes(id).unwrap_or(&[])) {
+            dst.set(id);
+        }
+    }
+}
+
+/// Whether `bytes` may follow an open bare value-position identifier (N7).
+fn keeps_value_ident(bytes: &[u8]) -> bool {
+    match bytes.first() {
+        Some(&byte) if is_ident_tail(byte) => true,
+        Some(&(b'.' | b':' | b'(')) => true,
+        Some(&b'|') => !bytes.starts_with(BOOLEAN_OR),
+        _ => false,
+    }
+}
+
+/// Boolean-or — the one `|`-led shape that is not a lambda arrow.
+const BOOLEAN_OR: &[u8] = b"||";
+
+/// Whether the L2 overlay permits the stream to **end** at this position — the
+/// completion half of the same trie walk [`narrow_into`] masks with
+/// (`docs/spec/schema.md` §6.5).
+///
+/// L1 acceptance is a pure lookahead fact ("does a value-boundary byte from
+/// here reach a value-terminal state?"), and an identifier has no
+/// self-terminating byte, so *any* partial name is trivially "completable"
+/// under it: the moment the vocabulary holds a token that is a strict byte
+/// prefix of a legal name (`"a"` beside `"all"`), a stream could stop
+/// mid-identifier and call itself done — confirmed live, a walk ending in
+/// `Class.a`, which the engine rejects. Reading the same [`NamePoint`] the mask
+/// is built from is what makes
+/// [`is_complete`](crate::DecoderSession::is_complete) agree with
+/// [`allowed_mask`](crate::DecoderSession::allowed_mask)'s own EOS bit instead
+/// of contradicting it.
+///
+/// Positions no trie rule governs are unconstrained (`true`): the type levers
+/// (T1/T2/T3) and the source-method argument slot all sit inside an open
+/// delimiter or right after an operator, where L1 does not accept anyway.
+pub(crate) fn admits_eos(
+    cache: &mut NarrowCache,
+    schema: &Schema,
+    pos: &L2Position,
+    prefix: &[u8],
+    columns: &[Vec<u8>],
+    vars: &[String],
+) -> bool {
+    let Some(rule) = TrieRule::of(pos, schema, columns, vars) else {
+        // N7 is the one non-trie rule that forbids ending here: a bare word left
+        // dangling in a value position is not an expression.
+        return !matches!(pos, L2Position::ValueIdent);
+    };
+    let entry = rule.entry(cache);
+    // A completed or diverged prefix hands the tail back to the byte-PDA — the
+    // same no-constraint verdict `narrow_trie` returns for it.
+    let Some(cursor) = cursor_of(entry, prefix) else {
+        return true;
+    };
+    name_point(&entry.trie, cursor, rule.close).admits_eos()
+}
+
+/// The legal-name set a trie rule narrows against, plus how that rule's memo is
+/// keyed, which lexeme shape it governs, and what it admits once its name is
+/// whole.
+///
+/// One description read by both [`narrow_into`]'s mask fill and [`admits_eos`]'s
+/// completion check, so the two can never disagree about where a name legally
+/// ends.
+struct TrieRule<'a> {
+    key: CacheKey,
+    kind: TrieKind,
+    close: NameClose,
+    names: Names<'a>,
+}
+
+/// Which rule's names a [`TrieRule`] builds from — the borrow the trie is built
+/// out of on a cache miss, kept separate from the memo key so the (cheap) key
+/// can be formed without touching the schema.
+enum Names<'a> {
+    /// N3: every source classpath, plus the block-statement `let` keyword.
+    Source(&'a Schema),
+    /// S1: the single source method [`SOURCE_METHOD`].
+    SourceMethod,
+    /// N1/N2: one class's member names.
+    Member(&'a Schema, &'a str),
+    /// N6: the emitted relation columns, quoted as the model writes them.
+    Column(&'a [Vec<u8>]),
+    /// N6 arm-R: the same columns, bare.
+    RelationColumn(&'a [Vec<u8>]),
+    /// S2: every variable name the stream has bound.
+    RefVar(&'a [String]),
+}
+
+/// What a trie rule admits once the emitted prefix is a **whole** legal name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NameClose {
+    /// The name stands on its own: whatever L1 admits after it is legal, and the
+    /// stream may end on it.
+    Free,
+    /// The name is a niladic method whose call parens are mandatory, so the only
+    /// legal continuation is its own `(` — not EOS, not another hop, and not even
+    /// whitespace: a space would close the lexeme, drop this rule out of scope,
+    /// and hand the same escape back (confirmed live: bare `Class.all` parses as
+    /// a property read and fails to compile, exactly as `Db->tableToTDS` without
+    /// its `()` did).
+    MustCall,
+}
+
+/// The byte a [`NameClose::MustCall`] name's mandatory call must open with.
+const CALL_OPEN: u8 = b'(';
+
+impl<'a> TrieRule<'a> {
+    /// The trie rule governing `pos`, or `None` where no trie rule applies.
+    fn of(
+        pos: &'a L2Position,
+        schema: &'a Schema,
+        columns: &'a [Vec<u8>],
+        vars: &'a [String],
+    ) -> Option<Self> {
+        let (key, kind, close, names) = match pos {
+            L2Position::SourceIdent => (
+                CacheKey::Source,
+                TrieKind::ClassPath,
+                NameClose::Free,
+                Names::Source(schema),
+            ),
+            L2Position::SourceMethod => (
+                CacheKey::SourceMethod,
+                TrieKind::IdentOrStr,
+                NameClose::MustCall,
+                Names::SourceMethod,
+            ),
+            L2Position::Member(class) => (
+                CacheKey::Member(class.clone()),
+                TrieKind::Ident,
+                NameClose::Free,
+                Names::Member(schema, class),
+            ),
+            L2Position::Column => (
+                CacheKey::Column(columns.len()),
+                TrieKind::Str,
+                NameClose::Free,
+                Names::Column(columns),
+            ),
+            L2Position::RelationColumn => (
+                CacheKey::RelationColumn(columns.len()),
+                TrieKind::Ident,
+                NameClose::Free,
+                Names::RelationColumn(columns),
+            ),
+            L2Position::RefVar => (
+                CacheKey::RefVar(vars.len()),
+                TrieKind::Ident,
+                NameClose::Free,
+                Names::RefVar(vars),
+            ),
+            _ => return None,
+        };
+        Some(Self {
+            key,
+            kind,
+            close,
+            names,
+        })
+    }
+
+    /// This rule's cache entry, building its trie on first use.
+    fn entry<'c>(&self, cache: &'c mut NarrowCache) -> &'c mut RuleCache {
+        cache
+            .tries
+            .entry(self.key.clone())
+            .or_insert_with(|| RuleCache {
+                trie: self.names.build(),
+                kind: self.kind,
+                masks: HashMap::new(),
+            })
+    }
+}
+
+impl Names<'_> {
+    /// Build this rule's legal-name trie.
+    fn build(&self) -> Trie {
+        match self {
+            Self::Source(schema) => {
+                Trie::from_names(schema.source_paths().chain(std::iter::once(LET_KEYWORD)))
+            }
+            Self::SourceMethod => Trie::from_names(std::iter::once(SOURCE_METHOD)),
+            Self::Member(schema, class) => Trie::from_names(schema.member_names(class)),
+            Self::Column(columns) => Trie::from_names(columns.iter().map(|c| quote(c))),
+            Self::RelationColumn(columns) => Trie::from_names(columns.iter().cloned()),
+            Self::RefVar(vars) => Trie::from_names(vars.iter().map(String::as_bytes)),
+        }
+    }
+}
+
+/// Where a trie rule's cursor sits relative to a whole legal name — the single
+/// fact the mask fill and the completion check both read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NamePoint {
+    /// No lexeme is open yet (the cursor is still the trie root).
+    Anchor,
+    /// A **strict** prefix of some legal name: no name ends here, so the lexeme
+    /// must keep going. Every boundary token — and EOS — would close it on a
+    /// name that does not exist.
+    Partial,
+    /// A whole legal name that stands on its own.
+    Whole,
+    /// A whole legal name that must be followed by its mandatory call `(`
+    /// ([`NameClose::MustCall`]).
+    WholeMustCall,
+}
+
+impl NamePoint {
+    /// Whether the stream may end here.
+    const fn admits_eos(self) -> bool {
+        matches!(self, Self::Anchor | Self::Whole)
+    }
+}
+
+/// Classify `cursor` against the rule's names and its [`NameClose`] policy.
+fn name_point(trie: &Trie, cursor: u32, close: NameClose) -> NamePoint {
+    if cursor == trie.root() {
+        return NamePoint::Anchor;
+    }
+    match (trie.is_terminal(cursor), close) {
+        (false, _) => NamePoint::Partial,
+        (true, NameClose::Free) => NamePoint::Whole,
+        (true, NameClose::MustCall) => NamePoint::WholeMustCall,
+    }
+}
+
+/// The trie cursor `prefix` walks to, or `None` when the prefix already
+/// completed a legal name at a boundary byte (the byte-PDA takes the tail) or
+/// diverged from every name — either way the rule stops constraining.
+fn cursor_of(entry: &RuleCache, prefix: &[u8]) -> Option<u32> {
+    if prefix.is_empty() {
+        return Some(entry.trie.root());
+    }
+    match walk(&entry.trie, entry.trie.root(), prefix, entry.kind.shape()) {
+        Walk::Stay(cursor) => Some(cursor),
+        Walk::Complete | Walk::Diverge => None,
     }
 }
 
@@ -370,36 +613,29 @@ fn fused_post_dot(bytes: &[u8]) -> Option<&[u8]> {
 /// its cursor node, then copy the memoized mask for that cursor or fill and
 /// memoize it. The trie is cursor-independent, so it is built once per key; only
 /// the cursor moves with the emitted prefix.
-#[allow(clippy::too_many_arguments)]
+///
+/// The per-cursor memo stays exact under the [`NameClose`] policy because that
+/// policy is fixed per [`CacheKey`] — the same rule always classifies the same
+/// cursor node the same way.
 fn narrow_trie(
     dst: &mut BitMask,
     cache: &mut NarrowCache,
-    key: CacheKey,
+    rule: &TrieRule,
     prefix: &[u8],
-    kind: TrieKind,
     vocab: &Vocab,
     eos_bit: u32,
-    build: impl FnOnce() -> Trie,
 ) -> bool {
-    let entry = cache.tries.entry(key).or_insert_with(|| RuleCache {
-        trie: build(),
-        kind,
-        masks: HashMap::new(),
-    });
-    let cursor = if prefix.is_empty() {
-        entry.trie.root()
-    } else {
-        match walk(&entry.trie, entry.trie.root(), prefix, entry.kind.shape()) {
-            Walk::Stay(cursor) => cursor,
-            // The prefix already completed a legal name or diverged — the lexeme is
-            // done (or was never legal); leave the L1 mask unchanged.
-            Walk::Complete | Walk::Diverge => return false,
-        }
+    let close = rule.close;
+    let entry = rule.entry(cache);
+    // The prefix already completed a legal name or diverged — the lexeme is done
+    // (or was never legal); leave the L1 mask unchanged.
+    let Some(cursor) = cursor_of(entry, prefix) else {
+        return false;
     };
     if let Some(cached) = entry.masks.get(&cursor) {
         dst.copy_from(cached);
     } else {
-        fill_trie(dst, vocab, eos_bit, &entry.trie, cursor, entry.kind);
+        fill_trie(dst, vocab, eos_bit, &entry.trie, cursor, entry.kind, close);
         entry.masks.insert(cursor, dst.clone());
     }
     true
@@ -587,9 +823,21 @@ fn fill_source_method_arg(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32) {
     dst.set(eos_bit);
 }
 
-/// Refill `dst` from a trie walk: keep the reserved EOS bit and every vocab token
-/// that is either a *non-candidate* (a structural/whitespace token the rule does
-/// not govern) or a candidate that can still reach a legal name from `cursor`.
+/// Refill `dst` from a trie walk: keep every vocab token that can still reach a
+/// legal name from `cursor`, plus the reserved EOS bit — both subject to where
+/// `cursor` sits relative to a whole name ([`NamePoint`]).
+///
+/// A *non-candidate* (a structural/whitespace token the rule does not govern) is
+/// kept at the anchor and after a whole name, exactly as the whole-lexeme
+/// narrower kept every non-`Ident`/`Str` lexeme. It is **cleared** at a
+/// [`NamePoint::Partial`] cursor: the rule's own lexeme is open on a strict
+/// prefix of some legal name, so a boundary token would end the lexeme on a name
+/// that does not exist (confirmed live: a walk `l->pair(…)`, where `l` is a
+/// strict prefix of the `let` keyword the source rule admits — "Can't find the
+/// packageable element 'l'"). The reserved EOS bit follows the same rule, which
+/// is what [`admits_eos`] reads back for
+/// [`is_complete`](crate::DecoderSession::is_complete).
+#[allow(clippy::too_many_arguments)]
 fn fill_trie(
     dst: &mut BitMask,
     vocab: &Vocab,
@@ -597,25 +845,29 @@ fn fill_trie(
     trie: &Trie,
     cursor: u32,
     kind: TrieKind,
+    close: NameClose,
 ) {
     dst.clear_all();
-    let mid = cursor != trie.root();
+    let point = name_point(trie, cursor, close);
+    let mid = point != NamePoint::Anchor;
     for id in 0..vocab.len() as u32 {
         let bytes = vocab.bytes(id).unwrap_or(&[]);
-        let keep = if is_candidate(bytes, kind, mid) {
-            !matches!(walk(trie, cursor, bytes, kind.shape()), Walk::Diverge)
-        } else {
-            // A structural token (whitespace, operator, delimiter) is not the
-            // identifier/string the trie governs — it is kept exactly as the
-            // whole-lexeme narrower kept every non-`Ident`/`Str` lexeme, so L2
-            // never masks a token L1 would allow through a boundary.
-            true
+        let keep = match point {
+            // The whole name is a niladic call: nothing but its own `(` continues
+            // it, whatever lexeme shape the token would otherwise be.
+            NamePoint::WholeMustCall => bytes.first() == Some(&CALL_OPEN),
+            _ if is_candidate(bytes, kind, mid) => {
+                !matches!(walk(trie, cursor, bytes, kind.shape()), Walk::Diverge)
+            }
+            _ => point != NamePoint::Partial,
         };
         if keep {
             dst.set(id);
         }
     }
-    dst.set(eos_bit);
+    if point.admits_eos() {
+        dst.set(eos_bit);
+    }
 }
 
 /// Whether `bytes` is a token the `kind` trie may clear: an identifier-tail start

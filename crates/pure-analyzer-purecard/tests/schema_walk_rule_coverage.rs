@@ -94,6 +94,7 @@ const ALL_RULE_KINDS: &[&str] = &[
     "Column",
     "RelationColumn",
     "RefVar",
+    "ValueIdent",
 ];
 
 /// [`L2Position`]'s stable display name, ignoring any payload (a `Member("A")`
@@ -111,6 +112,7 @@ fn rule_kind(pos: &L2Position) -> Option<&'static str> {
         L2Position::Column => Some("Column"),
         L2Position::RelationColumn => Some("RelationColumn"),
         L2Position::RefVar => Some("RefVar"),
+        L2Position::ValueIdent => Some("ValueIdent"),
         L2Position::None => None,
     }
 }

@@ -20,7 +20,8 @@
 //!
 //! This overlay applies the rules the 8 committed schema fixtures exercise and
 //! precise: **N3** (source-class exists), **N1/N2** (member/nav after `.`), **N6**
-//! (relation-column strings), **T1** (comparison operand type-class — the
+//! (relation-column strings), **N7** (what may follow a bare value-position
+//! identifier), **T1** (comparison operand type-class — the
 //! `car_1` `horsepower:String` lever), **T2** (ordered-comparator restriction),
 //! and **T3** (aggregation-reducer type). T1 applies its **string/numeric**
 //! levers; Boolean and Temporal operands pass through (see `narrow`). The

@@ -72,10 +72,12 @@ impl CaseVocab {
 const EXPECTED_TOTAL: usize = 31633;
 /// Soundness cases (real members / navigations / legal fused dots) — must all pass.
 const EXPECTED_SOUNDNESS: usize = 9284;
-/// Precision cases the decoder currently masks correctly (no gap tag).
-const EXPECTED_PRECISION_CLEAN: usize = 21493;
-/// Known N1 identifier-termination leaks (`$x.<prefix-of-member>`).
-const EXPECTED_N1_PREFIX_LEAKS: usize = 833;
+/// Precision cases the decoder currently masks correctly (no gap tag). Includes
+/// the 833 `N1_prefix` strict-prefix phantoms that were a documented leak until
+/// the overlay learned to terminate an open identifier (`docs/spec/schema.md`
+/// §6.5): a boundary token is now masked at a cursor that has only reached a
+/// strict prefix of a legal name.
+const EXPECTED_PRECISION_CLEAN: usize = 22326;
 /// Known N2 ambiguous-scalar-end leaks (`$x.<scalar-and-end>.<phantom>`).
 const EXPECTED_N2_AMBIG_LEAKS: usize = 23;
 
@@ -267,10 +269,6 @@ fn spider_corpus_replays_with_pinned_soundness_and_documented_precision() {
         .iter()
         .filter(|o| !o.soundness && o.gap.is_none())
         .count();
-    let n1_prefix = outcomes
-        .iter()
-        .filter(|o| o.gap == Some(GapKind::N1PrefixNotTerminated))
-        .count();
     let n2_ambig = outcomes
         .iter()
         .filter(|o| o.gap == Some(GapKind::N2AmbiguousScalarEnd))
@@ -281,10 +279,6 @@ fn spider_corpus_replays_with_pinned_soundness_and_documented_precision() {
     assert_eq!(
         precision_clean, EXPECTED_PRECISION_CLEAN,
         "clean-precision case count moved"
-    );
-    assert_eq!(
-        n1_prefix, EXPECTED_N1_PREFIX_LEAKS,
-        "N1 identifier-termination leak count moved"
     );
     assert_eq!(
         n2_ambig, EXPECTED_N2_AMBIG_LEAKS,
