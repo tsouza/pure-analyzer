@@ -12,7 +12,9 @@
 //!
 //! Every fixture that freezes a *kill* — a walk the decoder must never emit, or
 //! a decision point where a phantom must be cleared — lives in one table,
-//! [`FROZEN_KILLS`], and records the rule that closes it. The per-rule tests
+//! [`FROZEN_KILLS`], and records the rule that closes it, together with whether
+//! the overlay or the byte-PDA is what does the refusing ([`Closer`]). The
+//! per-rule tests
 //! read slices of that table; [`every_rule_kind_has_a_frozen_walk_that_it_closes`]
 //! reads all of it and fails when a shipped rule has no frozen evidence left.
 //! See [`FrozenKill`] for why (issue #55: four repeats of one regression class).
@@ -182,6 +184,7 @@ fn assert_precision(db_id: &str, prefix: &str, real: &[u8], phantom: &[u8]) {
 
 /// A real class heads `.all()`; a non-existent path in the same namespace does
 /// not — N3 clears it at the source position.
+///
 /// The store path is a legal source (arm-A), a phantom store is not.
 #[test]
 fn n3_masks_a_phantom_source_class() {
@@ -193,6 +196,7 @@ fn n3_masks_a_phantom_source_class() {
 /// exactly the shape the schema walker was observed emitting
 /// (`Class.all('French')`, `Class.all(all)`, both confirmed live to fail
 /// Legend compilation) — must be masked at the argument position.
+///
 /// Bitemporal milestoning's exception: a milestone/date literal is a real
 /// argument here (corpus `differential_l1.jsonl`'s `Firm.all(%latest)`), so it
 /// must stay admissible — the phantom above is the identifier/string shape,
@@ -203,6 +207,7 @@ fn source_method_arg_masks_a_phantom_argument_but_keeps_the_closer_and_a_milesto
 }
 
 /// `$x` is bound to CarsData; `cylinders` is a real property, `sallary` is not.
+///
 /// A sibling class's property is equally phantom on CarsData (`maker` is a
 /// CarMakers/ModelList property, not a CarsData one).
 #[test]
@@ -217,6 +222,7 @@ fn n1_masks_a_phantom_property_after_a_bound_var() {
 /// unconstrained (the mask is read at the pre-dot anchor, where the member
 /// position is not yet active). Prefix ends at `$c` (the dot is NOT a separate
 /// token), so the decision point is the fused `.<char>` token itself.
+///
 /// Real Concert properties fused with the dot stay admissible…
 /// …and a phantom whose leading char begins no property (`m…`) is masked — the
 /// exact class the split-token path (`$c.` then `maker`) already catches.
@@ -258,6 +264,7 @@ fn n2_masks_a_phantom_after_an_association_step() {
 
 /// `cylinders` is Integer (numeric): a bare number is admissible, a
 /// single-quoted string literal is masked.
+///
 /// The `horsepower:String` lever (§6.2.2 declared-type caveat): a string
 /// literal is admissible, a number literal is masked — the SQL-numeric column
 /// is correctly constrained as String by the model.
@@ -268,6 +275,7 @@ fn t1_masks_a_type_mismatched_comparison_operand() {
 
 /// `cylinders` is Integer (numeric): ordered comparators are legal, so `<`
 /// stays admissible after the property navExpr.
+///
 /// `horsepower` is String (declared-type caveat, §6.2.2): T2 restricts ordered
 /// comparators to numeric/temporal operands, so `<` is masked while the
 /// equality comparator `==` stays admissible.
@@ -278,6 +286,7 @@ fn t2_masks_an_ordered_comparator_on_a_non_ordered_operand() {
 
 /// `getInteger('Cylinders')` types the reduce lambda's `y: Integer[*]`
 /// element as numeric: every reducer, including `sum`, stays admissible.
+///
 /// `getString('Horsepower')` types the reduce lambda's `y: String[*]`
 /// element as String: `sum` (numeric-only) is masked. `min` stays
 /// admissible — a real gold query uses `->min()` on a `String[*]` element
@@ -353,7 +362,9 @@ fn arm_r_project_map_lambda_binder_stays_narrowed_to_the_source() {
 /// world_1: Country is a real class; a phantom is masked at the source, and a
 /// phantom property is masked after a bound var — on a schema no rule was
 /// authored against (G5).
+///
 /// dog_kennels: a phantom property after a bound var is masked.
+///
 /// student_transcripts_tracking: same, on the third held-out schema.
 #[test]
 fn precision_generalizes_to_oos_held_out_schemas() {
@@ -409,21 +420,60 @@ struct FrozenKill {
     fixture: &'static str,
     /// The fixture database the walk or probe is replayed against.
     db: &'static str,
-    /// The [`ALL_RULE_KINDS`] name of the rule that clears the mask bit — the
-    /// recorded closer, re-derived from the live session on every run by
-    /// [`assert_frozen_kill`] and compared against this claim.
+    /// The rule that governs the position where this fixture is refused, and
+    /// whether the overlay is what actually refuses it. Both halves are
+    /// re-derived from the shipped decoder on every run by
+    /// [`assert_frozen_kill`] and checked against this claim.
+    closer: Closer,
+    /// The frozen input itself.
+    kill: Kill,
+}
+
+/// Which layer refuses a [`FrozenKill`], and under which rule.
+///
+/// The distinction is load-bearing. `DecoderSession::active_l2_position` names
+/// the rule that *governs* a position; it does not say the overlay is what
+/// cleared the bit. A token the byte-PDA already refuses reads back with an L2
+/// position all the same, so recording that position alone would let an
+/// L1-dead fixture stand in as an L2 rule's evidence — and
+/// [`every_rule_kind_has_a_frozen_walk_that_it_closes`] would then certify a
+/// rule as covered by a fixture the rule does not close. Both variants are
+/// verified in both directions against a schema-less session, so neither label
+/// can be applied to the other's fixture.
+enum Closer {
+    /// The overlay is what refuses it: with the schema removed, the same token
+    /// is still admitted. This is a rule's frozen evidence, and only this
+    /// counts toward rule coverage.
     ///
-    /// It names the rule active *where the mask is read*, which is the position
-    /// the decoder is at when the offending token is offered. For a fused
-    /// `.<char>` token — byte-level BPE packs the navigation dot and the
+    /// The name is the rule active *where the mask is read*, which is the
+    /// position the decoder is at when the offending token is offered. For a
+    /// fused `.<char>` token — byte-level BPE packs the navigation dot and the
     /// member's first byte into one token — that position is still the pre-dot
     /// anchor, so those fixtures record `RefVar` rather than the `Member` or
     /// `RelationColumn` rule whose *narrowing* rejects them. That is the honest
     /// reading of the mechanism, not a mislabel: at the pre-dot anchor the
     /// fused pass is what the mask depends on.
-    closer: &'static str,
-    /// The frozen input itself.
-    kill: Kill,
+    L2(&'static str),
+    /// The byte-PDA refuses it too, so the fixture pins a shape the decoder
+    /// must never emit and names the rule that governs the position — but it is
+    /// **not** evidence that the rule fires, and never counts toward coverage.
+    /// Kept rather than deleted: the walk is still frozen, and demoting a
+    /// fixture to this variant cannot buy a rule its coverage.
+    AlsoL1(&'static str),
+}
+
+impl Closer {
+    /// The rule name, whichever layer refuses the fixture.
+    fn rule(&self) -> &'static str {
+        match self {
+            Closer::L2(rule) | Closer::AlsoL1(rule) => rule,
+        }
+    }
+
+    /// Whether the offending token must still be admitted with no schema.
+    fn expects_l1_to_admit(&self) -> bool {
+        matches!(self, Closer::L2(_))
+    }
 }
 
 /// Each fixture family's provenance: the issue #55 phase and failure bucket it
@@ -560,7 +610,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3-classpath",
         db: "world_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "{|spider::world_1::Db::desc->min('_v')}",
             closed_by: "spider::world_1::Db::desc",
@@ -569,7 +619,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3-classpath",
         db: "world_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "\n|spider::world_1::model::default::Countrylanguage::name\
              ->distinct('asia'!='GovernmentForm_T1_3')",
@@ -579,7 +629,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3-classpath",
         db: "world_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "{\n    |spider::world_1::model::default::Countrylanguage::pair\
              ->concatenate(c)+Integer}",
@@ -589,7 +639,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3-classpath",
         db: "world_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "|spider::world_1::model::default::Countrylanguage::limit\
              ->isEmpty('GovernmentForm_T1')",
@@ -599,7 +649,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3-classpath",
         db: "world_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "{     \n    |spider::world_1::Db::name::language->distinct(row!=.3000)*limit}",
             closed_by: "spider::world_1::Db::name::language",
@@ -608,7 +658,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3-classpath",
         db: "world_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "|spider::world_1::model::default::Country::distinct::Y->min()",
             closed_by: "spider::world_1::model::default::Country::distinct::Y",
@@ -617,7 +667,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3-classpath",
         db: "world_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "{\n    |l::filter->project(renameColumns)}",
             closed_by: "l::filter",
@@ -626,7 +676,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3-classpath",
         db: "world_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "|spider::world_1::model::default::Country::min->limit('Capital_t1')",
             closed_by: "spider::world_1::model::default::Country::min",
@@ -635,7 +685,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3-classpath",
         db: "world_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "|spider::world_1::model::default::Country::row1\
              ::spider::world_1::model::default::Countrylanguage::pair::groupBy\
@@ -647,7 +697,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "s2-refvar",
         db: "world_1",
-        closer: "RefVar",
+        closer: Closer::L2("RefVar"),
         kill: Kill::Walk {
             walk: "{|\n        $code\n      /'IsOfficial_t2'}",
             closed_by: "code",
@@ -656,7 +706,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "s2-refvar",
         db: "world_1",
-        closer: "RefVar",
+        closer: Closer::L2("RefVar"),
         kill: Kill::Walk {
             walk: "{\n|      $name}",
             closed_by: "name",
@@ -665,7 +715,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n7-bare-source",
         db: "world_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "|spider::world_1::model::default::Country->max(language)",
             closed_by: "->",
@@ -674,7 +724,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n7-bare-source",
         db: "world_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "|spider::world_1::model::default::Countrylanguage->pair(code    \n!='Name_T2')",
             closed_by: "->",
@@ -683,7 +733,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n7-bare-source",
         db: "world_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "|spider::world_1::model::default::Country->filter('Percentage_T2_4'<average)",
             closed_by: "->",
@@ -692,7 +742,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n7-bare-source",
         db: "world_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "|spider::world_1::model::default::Countrylanguage->between(renameColumns>'hasDutch')",
             closed_by: "->",
@@ -701,7 +751,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n7-bare-source",
         db: "world_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "{|spider::world_1::model::default::Country->between(join)<LEFT_OUTER}",
             closed_by: "->",
@@ -710,7 +760,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n7-bare-source",
         db: "world_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "|spider::world_1::model::default::Country->tableReference(restrict)",
             closed_by: "->",
@@ -719,7 +769,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n7-bare-source",
         db: "world_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "|spider::world_1::model::default::Countrylanguage\
              ->groupBy('Gelderland'||'Population_T1_1'&&asc)",
@@ -729,7 +779,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n7-bare-source",
         db: "world_1",
-        closer: "StoreMethod",
+        closer: Closer::L2("StoreMethod"),
         kill: Kill::Walk {
             walk: "{|spider::world_1::Db->concatenate('IndepYear_T1_1',desc-col=='IndepYear_country')}",
             closed_by: "concatenate",
@@ -738,7 +788,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n7-bare-source",
         db: "world_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "|spider::world_1::model::default::Countrylanguage->tableReference(pair)",
             closed_by: "->",
@@ -747,7 +797,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n7-bare-source",
         db: "world_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "|spider::world_1::model::default::Country->pair(tableReference)&&5",
             closed_by: "->",
@@ -756,7 +806,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n7-bare-source",
         db: "world_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "|spider::world_1::model::default::Country->col(between\n*'District_city')",
             closed_by: "->",
@@ -765,7 +815,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n7-bare-source",
         db: "world_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "|spider::world_1::model::default::Country->filter('SUM(SurfaceArea)'<agg/'_nn__t0anti1')",
             closed_by: "->",
@@ -774,7 +824,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n7-extent",
         db: "world_1",
-        closer: "ValueIdent",
+        closer: Closer::L2("ValueIdent"),
         kill: Kill::Walk {
             walk: "|spider::world_1::model::default::Country.all()->max(language)",
             closed_by: ")",
@@ -783,7 +833,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n7-extent",
         db: "world_1",
-        closer: "ValueIdent",
+        closer: Closer::L2("ValueIdent"),
         kill: Kill::Walk {
             walk: "|spider::world_1::model::default::Country.all()\
              ->filter('SUM(SurfaceArea)'<agg/'_nn__t0anti1')",
@@ -793,7 +843,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n7-extent",
         db: "world_1",
-        closer: "ValueIdent",
+        closer: Closer::L2("ValueIdent"),
         kill: Kill::Walk {
             walk: "|spider::world_1::model::default::Country.all()->pair(tableReference)&&5",
             closed_by: ")",
@@ -802,7 +852,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n7-extent",
         db: "world_1",
-        closer: "ValueIdent",
+        closer: Closer::L2("ValueIdent"),
         kill: Kill::Walk {
             walk: "|spider::world_1::model::default::Countrylanguage.all()\
              ->pair(code    \n!='Name_T2')",
@@ -812,7 +862,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n7-extent",
         db: "world_1",
-        closer: "ValueIdent",
+        closer: Closer::L2("ValueIdent"),
         kill: Kill::Walk {
             walk: "|spider::world_1::model::default::Country.all()->col(between\n*'District_city')",
             closed_by: "\n",
@@ -821,7 +871,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3c-class",
         db: "world_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "\n        |spider::world_1::model::default::Countrylanguage->agg('Central Africa')",
             closed_by: "->",
@@ -830,7 +880,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3c-class",
         db: "world_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "\n\n \n       \n           |spider::world_1::model::default::Country->col(between.'HeadOfState_T1'!='Brazil')",
             closed_by: "->",
@@ -839,7 +889,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3c-class",
         db: "world_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "\n              \n    \n        \n  \n    \n        |spider::world_1::model::default::Countrylanguage->count('Beatrix'&&'AVG(LifeExpectancy)')",
             closed_by: "->",
@@ -848,7 +898,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3c-class",
         db: "world_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "\n\n    \n|spider::world_1::model::default::Country->distinct('Angola')",
             closed_by: "->",
@@ -857,7 +907,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3c-class",
         db: "world_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "\n    \n  \n        \n        |spider::world_1::model::default::Country->filter('Percentage_T2_4'<average.'HeadOfState_country')",
             closed_by: "->",
@@ -866,7 +916,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3c-class",
         db: "world_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "\n|spider::world_1::model::default::Country->groupBy('CountryCode_T2_2')",
             closed_by: "->",
@@ -875,7 +925,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3c-class",
         db: "world_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "|spider::world_1::model::default::Countrylanguage->isEmpty('_k0')",
             closed_by: "->",
@@ -884,7 +934,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3c-class",
         db: "world_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "  |spider::world_1::model::default::Countrylanguage->join('District_city'\n  .renameColumns||'Europe')",
             closed_by: "->",
@@ -893,7 +943,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3c-class",
         db: "world_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "|spider::world_1::model::default::Countrylanguage->max(b.'Region_T3_1')",
             closed_by: "->",
@@ -902,7 +952,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3c-class",
         db: "world_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "\n             |spider::world_1::model::default::Country->restrict()",
             closed_by: "->",
@@ -911,7 +961,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3c-class",
         db: "world_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "\n    \n    |spider::world_1::model::default::Country->sort('Population_T3_1')",
             closed_by: "->",
@@ -920,7 +970,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3c-class",
         db: "world_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "\n    \n         \n  \n        \n      |spider::world_1::model::default::Countrylanguage->sum('GNPOld_T1_3'>'country')",
             closed_by: "->",
@@ -929,7 +979,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3c-class",
         db: "world_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "\n           |spider::world_1::model::default::Countrylanguage->tableReference(pair|'Angola'\n    )",
             closed_by: "->",
@@ -938,7 +988,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3c-class",
         db: "car_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "|spider::car_1::model::default::CarsData->col(3,'FullName_t1_1')",
             closed_by: "->",
@@ -947,7 +997,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3c-class",
         db: "car_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "\n\n    |spider::car_1::model::default::CarsData->count('CountryName'<='Model_T1')",
             closed_by: "->",
@@ -956,7 +1006,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3c-class",
         db: "car_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "|spider::car_1::model::default::CarMakers->extend('Continent_T3')",
             closed_by: "->",
@@ -965,7 +1015,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3c-class",
         db: "car_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "  \n      \n        \n  \n        \n    \n\n \n       \n           |spider::car_1::model::default::ModelList->filter('null')",
             closed_by: "->",
@@ -974,7 +1024,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3c-class",
         db: "car_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "    |spider::car_1::model::default::ModelList->groupBy('Maker_T2_3'>|'Accelerate_T2_2'    )",
             closed_by: "->",
@@ -983,7 +1033,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3c-class",
         db: "car_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "\n        \n    \n      \n\n\n        \n  |spider::car_1::model::default::CarsData->project('CountryName')",
             closed_by: "->",
@@ -992,7 +1042,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3c-class",
         db: "car_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "|spider::car_1::model::default::ModelList->restrict(fk4DefaultCarsData.'Maker_t2_4')",
             closed_by: "->",
@@ -1001,7 +1051,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3c-class",
         db: "car_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "\n        \n  |spider::car_1::model::default::CarsData->year('Horsepower_T1'\n=='cars_data'||'_c0__t0l0'!='cars_data'\n  *'Country_T1'    )",
             closed_by: "->",
@@ -1010,7 +1060,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3c-store-all",
         db: "world_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "\n    {\n          \n          |\n        \n    spider::world_1::Db.\n    \n    \n      \n  all()}",
             closed_by: ".",
@@ -1019,7 +1069,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3c-store-all",
         db: "car_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "          \n    \n      \n  \n        {\n  \n        \n        \n    |spider::car_1::Db.all()}",
             closed_by: ".",
@@ -1028,7 +1078,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3c-store-method",
         db: "world_1",
-        closer: "StoreMethod",
+        closer: Closer::L2("StoreMethod"),
         kill: Kill::Walk {
             walk: "{|spider::world_1::Db->max('CountryCode_T2_2')(isEmpty:limit&&'CountryCode_t3')}",
             closed_by: "max",
@@ -1037,7 +1087,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3c-store-method",
         db: "world_1",
-        closer: "StoreMethod",
+        closer: Closer::L2("StoreMethod"),
         kill: Kill::Walk {
             walk: "\n  \n      \n{\n      |spider::world_1::Db->String('GNP_t1'*'HeadOfState_T3_1' )!=getFloat('CountryCode_t2'  \n      )==getInteger|'AVG(GNP)'!='Continent_T1_1'}",
             closed_by: "String",
@@ -1046,7 +1096,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3c-store-method",
         db: "car_1",
-        closer: "StoreMethod",
+        closer: Closer::L2("StoreMethod"),
         kill: Kill::Walk {
             walk: "\n    \n\n        {\n\n      |spider::car_1::Db->project('MakeId_T1'\n         =='MPG')  }",
             closed_by: "project",
@@ -1055,7 +1105,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3c-store-method",
         db: "car_1",
-        closer: "StoreMethod",
+        closer: Closer::L2("StoreMethod"),
         kill: Kill::Walk {
             walk: "\n    {|spider::car_1::Db->exists()|year('ModelId'<='MPG_T1'.'Country'-weight('Id_T1_1','volvo'\n    )&&'Model_T2'+'car_names'    !='$)a)parseFloat<,4000}(tableToTDS)]}else",
             closed_by: "exists",
@@ -1064,7 +1114,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3c-cost",
         db: "world_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "\n        |spider::world_1::model::default::Country->pair('US Territory')",
             closed_by: "->",
@@ -1073,7 +1123,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3c-cost",
         db: "world_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "\n        |spider::world_1::model::default::Country->limit(1930)",
             closed_by: "->",
@@ -1082,7 +1132,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3c-cost",
         db: "car_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "\n        \n    |spider::car_1::model::default::ModelList->max()",
             closed_by: "->",
@@ -1091,7 +1141,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3c-cost",
         db: "car_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "\n  |spider::car_1::model::default::CarsData->concatenate(3  )",
             closed_by: "->",
@@ -1100,7 +1150,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3c-cost",
         db: "car_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "\n    \n      \n      \n        \n        |\n      spider::car_1::model::default::ModelList->concatenate('CountryId_T1'+'Id_T2_3'\n  )",
             closed_by: "->",
@@ -1109,7 +1159,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3d-arg-separator",
         db: "world_1",
-        closer: "StoreMethodArgSep",
+        closer: Closer::L2("StoreMethodArgSep"),
         kill: Kill::Walk {
             walk: "  \n      \n        \n         \n     \n        \n     \n            \n         \n    \n  \n        \n        \n            \n     \n      \n    \n    \n  \n        \n          \n    {    \n    \n      \n      \n    \n        \n   \n            |    \n        spider::world_1::Db->tableReference('Code_T1_3') }",
             closed_by: ")",
@@ -1118,7 +1168,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3d-arg-separator",
         db: "world_1",
-        closer: "StoreMethodArgSep",
+        closer: Closer::L2("StoreMethodArgSep"),
         kill: Kill::Walk {
             walk: "  \n    \n    \n  \n    \n        \n\n        \n        {\n      | \n        \n\n    spider::world_1::Db->tableReference('Continent_T1_3'=='GovernmentForm_T3_1'>'dutch')&&'IndepYear_country'&&'_c0__t0r0'}",
             closed_by: "==",
@@ -1127,7 +1177,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3d-arg-separator",
         db: "car_1",
-        closer: "StoreMethodArgSep",
+        closer: Closer::L2("StoreMethodArgSep"),
         kill: Kill::Walk {
             walk: "   {    \n         \n  \n\n      |spider::car_1::Db->tableReference('MakeId_T1'\n         =='MPG')  }",
             closed_by: "==",
@@ -1145,7 +1195,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3d-open-arg-slot",
         db: "world_1",
-        closer: "StoreMethodArg",
+        closer: Closer::L2("StoreMethodArg"),
         kill: Kill::Walk {
             walk: "  {|spider::world_1::Db->tableReference()(isEmpty:limit&&'CountryCode_t3')}",
             closed_by: ")",
@@ -1154,19 +1204,9 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     // The same rule at its other anchor: the slot a `,` opens owes an argument
     // too, so a one-argument call cannot be closed there either.
     FrozenKill {
-        fixture: "n3d-open-arg-slot",
-        db: "world_1",
-        closer: "StoreMethodArg",
-        kill: Kill::Probe {
-            prefix: "|spider::world_1::Db->tableReference('default',",
-            real: "'country'",
-            phantom: ")",
-        },
-    },
-    FrozenKill {
         fixture: "n3e-extent-operator",
         db: "car_1",
-        closer: "SourceExtent",
+        closer: Closer::L2("SourceExtent"),
         kill: Kill::Walk {
             walk: "  {\n\n  \n      \n      \n  \n        \n    \n      \n    |spider::car_1::model::default::ModelList.    \n    \n  all()&&'usa'}",
             closed_by: "&&",
@@ -1175,7 +1215,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3e-extent-operator",
         db: "car_1",
-        closer: "SourceExtent",
+        closer: Closer::L2("SourceExtent"),
         kill: Kill::Walk {
             walk: "  {\n          \n        \n        |spider::car_1::model::default::ModelList.   all(  )&&'MPG_T3'}",
             closed_by: "&&",
@@ -1184,7 +1224,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n1-extent-dot",
         db: "world_1",
-        closer: "Member",
+        closer: Closer::L2("Member"),
         kill: Kill::Walk {
             walk: "   \n       \n      \n    \n      {      \n|\n\n          spider::world_1::model::default::Countrylanguage.\n  \n    \n  \n        all(\n    \n\n)\n    .'Capital_T1'  }",
             closed_by: "'Capital_T1'",
@@ -1193,7 +1233,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n1-extent-dot",
         db: "world_1",
-        closer: "Member",
+        closer: Closer::L2("Member"),
         kill: Kill::Walk {
             walk: "  \n  \n          \n          { \n  \n      \n        |spider::world_1::model::default::Countrylanguage.\n      \n           all(\n  \n        ).'Code';}",
             closed_by: "'Code'",
@@ -1202,7 +1242,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n1-extent-dot",
         db: "car_1",
-        closer: "Member",
+        closer: Closer::L2("Member"),
         kill: Kill::Walk {
             walk: "  \n      \n\n    \n    \n      \n      {\n    \n      \n        \n        \n  \n        \n        \n \n        \n       \n\n\n          \n        \n        |spider::car_1::model::default::ModelList.   all(  ).'_c1'}",
             closed_by: "'_c1'",
@@ -1211,7 +1251,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n1-extent-dot",
         db: "car_1",
-        closer: "Member",
+        closer: Closer::L2("Member"),
         kill: Kill::Walk {
             walk: "  \n      \n    \n  \n        \n          \n      {\n  |\n\n      spider::car_1::model::default::ModelList. all()\n    \n\n      .'Id_T2_2'}",
             closed_by: "'Id_T2_2'",
@@ -1220,7 +1260,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n1-extent-dot",
         db: "world_1",
-        closer: "Member",
+        closer: Closer::L2("Member"),
         kill: Kill::Walk {
             walk: "  \n    \n        \n\n      {|       \n      \n  \n        \n    \n     \n        spider::world_1::model::default::Country.\n        \n      \n         all(\n  \n      ).sort ||'Language_t2'=='Code2_T1_3'\n+'countrylanguage'-getInteger||spider::world_1::model::default::Countrylanguage}",
             closed_by: "sort",
@@ -1229,7 +1269,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n1-extent-dot",
         db: "car_1",
-        closer: "Member",
+        closer: Closer::L2("Member"),
         kill: Kill::Walk {
             walk: "   \n       \n      \n    \n      {      \n|\n\n          spider::car_1::model::default::CarMakers.\n  \n    \n  \n        all(\n    \n\n)\n      \n     \n        \n.col    ->tableReference('Horsepower_T1'   ,'_v__t0sc0'  )*concatenate('CountryName_T1_2').'COUNT()'\n        \n}",
             closed_by: "col",
@@ -1238,7 +1278,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3-let-prefix",
         db: "world_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "{|l->pair(col>'SUM(SurfaceArea)')}",
             closed_by: "->",
@@ -1247,7 +1287,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3-source-class",
         db: "car_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Probe {
             prefix: "|",
             real: "spider::car_1::model::default::CarsData",
@@ -1257,7 +1297,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n3-source-class",
         db: "car_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Probe {
             prefix: "|",
             real: "spider::car_1::Db",
@@ -1267,7 +1307,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "source-method",
         db: "world_1",
-        closer: "SourceMethod",
+        closer: Closer::L2("SourceMethod"),
         kill: Kill::Probe {
             prefix: "|spider::world_1::model::default::Country.all",
             real: "(",
@@ -1277,7 +1317,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "source-method",
         db: "world_1",
-        closer: "SourceMethod",
+        closer: Closer::L2("SourceMethod"),
         kill: Kill::Probe {
             prefix: "|spider::world_1::model::default::Country.all",
             real: "(",
@@ -1287,17 +1327,20 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "source-method",
         db: "world_1",
-        closer: "SourceMethod",
+        closer: Closer::L2("SourceMethod"),
         kill: Kill::Probe {
             prefix: "|spider::world_1::model::default::Country.all",
             real: "(",
             phantom: ".",
         },
     },
+    // A closer cannot follow a bare name at all, so the byte-PDA refuses this one
+    // before S1 is consulted: kept as the frozen contrast it always was, but it
+    // is not what proves S1 fires — the other four probes in this family are.
     FrozenKill {
         fixture: "source-method",
         db: "world_1",
-        closer: "SourceMethod",
+        closer: Closer::AlsoL1("SourceMethod"),
         kill: Kill::Probe {
             prefix: "|spider::world_1::model::default::Country.all",
             real: "(",
@@ -1307,7 +1350,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "source-method",
         db: "world_1",
-        closer: "SourceMethod",
+        closer: Closer::L2("SourceMethod"),
         kill: Kill::Probe {
             prefix: "|spider::world_1::model::default::Country.all",
             real: "(",
@@ -1317,7 +1360,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "source-method-arg",
         db: "car_1",
-        closer: "SourceMethodArg",
+        closer: Closer::L2("SourceMethodArg"),
         kill: Kill::Probe {
             prefix: "|spider::car_1::model::default::CarsData.all(",
             real: ")",
@@ -1327,7 +1370,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "source-method-arg",
         db: "car_1",
-        closer: "SourceMethodArg",
+        closer: Closer::L2("SourceMethodArg"),
         kill: Kill::Probe {
             prefix: "|spider::car_1::model::default::CarsData.all(",
             real: ")",
@@ -1337,7 +1380,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "source-method-arg",
         db: "car_1",
-        closer: "SourceMethodArg",
+        closer: Closer::L2("SourceMethodArg"),
         kill: Kill::Probe {
             prefix: "|spider::car_1::model::default::CarsData.all(",
             real: "%latest",
@@ -1347,7 +1390,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n1-member",
         db: "car_1",
-        closer: "Member",
+        closer: Closer::L2("Member"),
         kill: Kill::Probe {
             prefix: "|spider::car_1::model::default::CarsData.all()->filter(x|$x.",
             real: "cylinders",
@@ -1357,7 +1400,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n1-member",
         db: "car_1",
-        closer: "Member",
+        closer: Closer::L2("Member"),
         kill: Kill::Probe {
             prefix: "|spider::car_1::model::default::CarsData.all()->filter(x|$x.",
             real: "horsepower",
@@ -1367,7 +1410,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n1-fused-navdot",
         db: "concert_singer",
-        closer: "RefVar",
+        closer: Closer::L2("RefVar"),
         kill: Kill::Probe {
             prefix: "|spider::concert_singer::model::default::Concert.all()->filter(c|$c",
             real: ".theme",
@@ -1377,7 +1420,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n1-fused-navdot",
         db: "concert_singer",
-        closer: "RefVar",
+        closer: Closer::L2("RefVar"),
         kill: Kill::Probe {
             prefix: "|spider::concert_singer::model::default::Concert.all()->filter(c|$c",
             real: ".concertName",
@@ -1387,7 +1430,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n1-fused-nav-hop",
         db: "concert_singer",
-        closer: "Member",
+        closer: Closer::L2("Member"),
         kill: Kill::Probe {
             prefix: "|spider::concert_singer::model::default::SingerInConcert.all()\
              ->filter(x|$x.fk2DefaultConcert",
@@ -1398,7 +1441,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n2-association",
         db: "car_1",
-        closer: "Member",
+        closer: Closer::L2("Member"),
         kill: Kill::Probe {
             prefix: "|spider::car_1::model::default::ModelList.all()->filter(x|$x.fk2DefaultCarMakers.",
             real: "fullName",
@@ -1408,7 +1451,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "t1-revalue",
         db: "car_1",
-        closer: "ReValue",
+        closer: Closer::L2("ReValue"),
         kill: Kill::Probe {
             prefix: "|spider::car_1::model::default::CarsData.all()->filter(x|$x.cylinders == ",
             real: "4",
@@ -1418,27 +1461,32 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "t1-revalue",
         db: "car_1",
-        closer: "ReValue",
+        closer: Closer::L2("ReValue"),
         kill: Kill::Probe {
             prefix: "|spider::car_1::model::default::CarsData.all()->filter(x|$x.horsepower == ",
             real: "'150'",
             phantom: "150",
         },
     },
+    // `<<` is no comparator the emitted subset spells, so L1 refuses it on its
+    // own; T2's own evidence is the ordered-comparator row above, where L1 admits
+    // `<` and only the operand's declared type clears it.
     FrozenKill {
         fixture: "t2-comparator",
         db: "car_1",
-        closer: "Comparator",
+        closer: Closer::AlsoL1("Comparator"),
         kill: Kill::Probe {
             prefix: "|spider::car_1::model::default::CarsData.all()->filter(x|$x.cylinders ",
             real: "<",
             phantom: "<<",
         },
     },
+    // An open reduce lambda owes a term, so L1 refuses its closer whatever the
+    // element type; T3's own evidence is the `sum`-on-`String[*]` row above.
     FrozenKill {
         fixture: "t3-reducer",
         db: "car_1",
-        closer: "Reducer",
+        closer: Closer::AlsoL1("Reducer"),
         kill: Kill::Probe {
             prefix: "|spider::car_1::model::default::CarsData.all()->groupBy([], \
          [agg('X', row: meta::pure::tds::TDSRow[1]|$row.getInteger('Cylinders'), \
@@ -1450,7 +1498,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "t2-comparator",
         db: "car_1",
-        closer: "Comparator",
+        closer: Closer::L2("Comparator"),
         kill: Kill::Probe {
             prefix: "|spider::car_1::model::default::CarsData.all()->filter(x|$x.horsepower ",
             real: "==",
@@ -1460,7 +1508,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "t3-reducer",
         db: "car_1",
-        closer: "Reducer",
+        closer: Closer::L2("Reducer"),
         kill: Kill::Probe {
             prefix: "|spider::car_1::model::default::CarsData.all()->groupBy([], \
          [agg('X', row: meta::pure::tds::TDSRow[1]|$row.getString('Horsepower'), \
@@ -1472,7 +1520,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n6-column",
         db: "battle_death",
-        closer: "Column",
+        closer: Closer::L2("Column"),
         kill: Kill::Probe {
             prefix: "|spider::battle_death::model::default::Battle.all()\
          ->project([x|$x.name, x|$x.result], ['Name', 'Result'])\
@@ -1484,7 +1532,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n6-relation-column",
         db: "car_1",
-        closer: "RelationColumn",
+        closer: Closer::L2("RelationColumn"),
         kill: Kill::Probe {
             prefix: "|spider::car_1::model::default::CarsData.all()\
          ->filter(x|$x.cylinders >= 0)\
@@ -1497,7 +1545,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n6-relation-column-fused",
         db: "car_1",
-        closer: "RefVar",
+        closer: Closer::L2("RefVar"),
         kill: Kill::Probe {
             prefix: "|spider::car_1::model::default::CarsData.all()\
          ->filter(x|$x.cylinders >= 0)\
@@ -1510,7 +1558,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "n1-project-map-binder",
         db: "car_1",
-        closer: "Member",
+        closer: Closer::L2("Member"),
         kill: Kill::Probe {
             prefix: "|spider::car_1::model::default::CarsData.all()\
          ->filter(x|$x.cylinders >= 0)\
@@ -1522,7 +1570,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "oos-held-out",
         db: "world_1",
-        closer: "SourceIdent",
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Probe {
             prefix: "|",
             real: "spider::world_1::model::default::Country",
@@ -1532,7 +1580,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "oos-held-out",
         db: "world_1",
-        closer: "Member",
+        closer: Closer::L2("Member"),
         kill: Kill::Probe {
             prefix: "|spider::world_1::model::default::Country.all()->filter(x|$x.",
             real: "name",
@@ -1542,7 +1590,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "oos-held-out",
         db: "dog_kennels",
-        closer: "Member",
+        closer: Closer::L2("Member"),
         kill: Kill::Probe {
             prefix: "|spider::dog_kennels::model::default::Professionals.all()->filter(x|$x.",
             real: "lastName",
@@ -1552,7 +1600,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "oos-held-out",
         db: "student_transcripts_tracking",
-        closer: "Member",
+        closer: Closer::L2("Member"),
         kill: Kill::Probe {
             prefix: "|spider::student_transcripts_tracking::model::default::Transcripts.all()\
          ->filter(x|$x.",
@@ -1587,9 +1635,10 @@ fn frozen(fixture: &'static str) -> Vec<&'static FrozenKill> {
 }
 
 /// Replay one frozen fixture, assert it is still refused exactly as recorded,
-/// and return the rule kind observed closing it.
-fn assert_frozen_kill(kill: &FrozenKill) -> &'static str {
-    let observed = match &kill.kill {
+/// and return the rule kind it is **evidence** for — `None` when the byte-PDA
+/// refuses it too, since a rule that does not do the refusing is not exercised.
+fn assert_frozen_kill(kill: &FrozenKill) -> Option<&'static str> {
+    let (observed, l1_admits) = match &kill.kill {
         Kill::Walk { walk, closed_by } => walk_closer(kill.db, walk, closed_by),
         Kill::Probe {
             prefix,
@@ -1597,25 +1646,41 @@ fn assert_frozen_kill(kill: &FrozenKill) -> &'static str {
             phantom,
         } => probe_closer(kill.db, prefix, real.as_bytes(), phantom.as_bytes()),
     };
+    let rule = kill.closer.rule();
     let observed = observed.unwrap_or_else(|| {
         panic!(
-            "no L2 rule is active where this fixture is refused, so the byte-PDA \
-             alone now closes it and {} is no longer exercised here — {} [{}]",
-            kill.closer,
+            "no L2 rule is active where this fixture is refused, so {rule} is no \
+             longer exercised here — {} [{}]",
             origin_of(kill.fixture),
             kill.fixture
         )
     });
     assert_eq!(
         observed,
-        kill.closer,
-        "a different rule now closes this fixture — {observed} took over {}'s \
+        rule,
+        "a different rule now closes this fixture — {observed} took over {rule}'s \
          recorded kill: {} [{}]",
-        kill.closer,
         origin_of(kill.fixture),
         kill.fixture
     );
-    observed
+    // The half `active_l2_position` alone cannot answer: it names the rule that
+    // *governs* the position, not the layer that cleared the bit. Checked in
+    // both directions, so neither label can be worn by the other's fixture.
+    assert_eq!(
+        l1_admits,
+        kill.closer.expects_l1_to_admit(),
+        "{}: the byte-PDA {} this fixture's own token, so it is recorded under \
+         the wrong Closer variant — {} [{}]",
+        rule,
+        if l1_admits {
+            "admits (the overlay is what refuses it: this is Closer::L2)"
+        } else {
+            "already refuses (so it is not this rule's evidence: this is Closer::AlsoL1)"
+        },
+        origin_of(kill.fixture),
+        kill.fixture
+    );
+    kill.closer.expects_l1_to_admit().then_some(rule)
 }
 
 /// [`FROZEN_KILLS`] and [`FROZEN_FAMILIES`] name exactly the same families, each
@@ -1647,9 +1712,12 @@ fn assert_frozen(fixture: &'static str) {
 
 /// Replay `walk`'s tokens through a schema-aware session and assert the stream
 /// **cannot** be produced: at some step the walk's own next token is absent from
-/// `allowed_mask`, and that token is exactly `closed_by`. Returns the rule kind
-/// active at that step — the mechanism that cleared the bit.
-fn walk_closer(db_id: &str, walk: &str, closed_by: &str) -> Option<&'static str> {
+/// `allowed_mask`, and that token is exactly `closed_by`.
+///
+/// Returns the rule active at that step, and whether a **schema-less** session
+/// still admits the offending token there — the second half being what separates
+/// "the overlay refuses this" from "the byte-PDA already did".
+fn walk_closer(db_id: &str, walk: &str, closed_by: &str) -> (Option<&'static str>, bool) {
     let vocab = TokenVocab::build(&[walk], &[]);
     let grammar = CompiledGrammar::compile(vocab.vocab());
     let schema = load_schema(db_id);
@@ -1665,7 +1733,8 @@ fn walk_closer(db_id: &str, walk: &str, closed_by: &str) -> Option<&'static str>
                 closed_by,
                 "the walk was closed by a different token than the rule under test's:\n  {walk}"
             );
-            return session.active_l2_position().as_ref().and_then(rule_kind);
+            let kind = session.active_l2_position().as_ref().and_then(rule_kind);
+            return (kind, l1_admits_at(&grammar, &vocab, &lex(walk)[..step], id));
         }
         session.accept_token(id).unwrap_or_else(|err| {
             panic!("L1 rejected an L2-admitted token at step {step}: {err}\n  {walk}")
@@ -1677,9 +1746,16 @@ fn walk_closer(db_id: &str, walk: &str, closed_by: &str) -> Option<&'static str>
     );
 }
 
-/// Assert `real` stays admissible and `phantom` is cleared after `prefix`, and
-/// return the rule kind active at that decision point.
-fn probe_closer(db_id: &str, prefix: &str, real: &[u8], phantom: &[u8]) -> Option<&'static str> {
+/// Assert `real` stays admissible and `phantom` is cleared after `prefix`.
+///
+/// Returns the rule active at that decision point, and whether a schema-less
+/// session still admits `phantom` there (see [`walk_closer`]).
+fn probe_closer(
+    db_id: &str,
+    prefix: &str,
+    real: &[u8],
+    phantom: &[u8],
+) -> (Option<&'static str>, bool) {
     let (verdicts, kind) = probe_at(db_id, prefix, &[real, phantom]);
     assert!(
         verdicts[0],
@@ -1691,7 +1767,29 @@ fn probe_closer(db_id: &str, prefix: &str, real: &[u8], phantom: &[u8]) -> Optio
         "precision GAP: phantom token {:?} survived after prefix in {db_id}:\n  {prefix}",
         bytes_str(phantom)
     );
-    kind
+    let extras: Vec<Vec<u8>> = [real, phantom].iter().map(|p| p.to_vec()).collect();
+    let vocab = TokenVocab::build(&[prefix], &extras);
+    let grammar = CompiledGrammar::compile(vocab.vocab());
+    let id = vocab.id_of(phantom).expect("probe token in vocab");
+    (kind, l1_admits_at(&grammar, &vocab, &lex(prefix), id))
+}
+
+/// Whether the **schema-less** recognizer — L1 alone, no overlay — still admits
+/// token `id` after streaming `lead`.
+///
+/// L1 is a strict over-approximation of L2, so `lead` is always admissible here;
+/// the answer is entirely about the one token under test.
+fn l1_admits_at(grammar: &CompiledGrammar, vocab: &TokenVocab, lead: &[Vec<u8>], id: u32) -> bool {
+    let mut session = DecoderSession::new(grammar);
+    for token in lead {
+        let tid = vocab
+            .id_of(token)
+            .unwrap_or_else(|| panic!("token not in vocab: {:?}", bytes_str(token)));
+        session
+            .accept_token(tid)
+            .expect("L1 admits every token L2 already admitted");
+    }
+    session.allowed_mask().test(id)
 }
 
 /// Rule kinds [`ALL_RULE_KINDS`] lists that no frozen fixture currently closes.
@@ -1729,10 +1827,10 @@ fn rule_kinds_without_a_frozen_kill(recorded: &BTreeSet<&'static str>) -> Vec<&'
 fn every_recorded_closer_names_a_shipped_rule() {
     for kill in FROZEN_KILLS {
         assert!(
-            ALL_RULE_KINDS.contains(&kill.closer),
+            ALL_RULE_KINDS.contains(&kill.closer.rule()),
             "FROZEN_KILLS records a closer that is not a shipped rule kind: \
              {:?} — {} [{}]",
-            kill.closer,
+            kill.closer.rule(),
             origin_of(kill.fixture),
             kill.fixture
         );
@@ -1755,9 +1853,15 @@ fn every_recorded_closer_names_a_shipped_rule() {
 /// older rule has no walk-level evidence left anywhere. This does — the closers
 /// are re-derived live from the shipped decoder on every run, so a takeover
 /// removes the stolen-from rule from the set the moment it happens.
+///
+/// Only [`Closer::L2`] fixtures count. A shape the byte-PDA refuses on its own
+/// is still frozen, but it is not evidence that the rule governing that position
+/// fires, and letting it stand in as evidence would be the same false green this
+/// gate exists to prevent.
 #[test]
 fn every_rule_kind_has_a_frozen_walk_that_it_closes() {
-    let observed: BTreeSet<&'static str> = FROZEN_KILLS.iter().map(assert_frozen_kill).collect();
+    let observed: BTreeSet<&'static str> =
+        FROZEN_KILLS.iter().filter_map(assert_frozen_kill).collect();
     let mut expected = EXPECTED_WITHOUT_A_FROZEN_KILL.to_vec();
     expected.sort_unstable();
     assert_eq!(
@@ -1775,7 +1879,14 @@ fn every_rule_kind_has_a_frozen_walk_that_it_closes() {
 /// gate could pass by never reporting anything.
 #[test]
 fn the_frozen_kill_gate_reddens_when_a_rule_loses_its_last_fixture() {
-    let observed: BTreeSet<&'static str> = FROZEN_KILLS.iter().map(|kill| kill.closer).collect();
+    let observed: BTreeSet<&'static str> = FROZEN_KILLS
+        .iter()
+        .filter_map(|kill| {
+            kill.closer
+                .expects_l1_to_admit()
+                .then_some(kill.closer.rule())
+        })
+        .collect();
     assert!(
         rule_kinds_without_a_frozen_kill(&observed).len() < ALL_RULE_KINDS.len(),
         "the table covers no rule at all, so the gate below proves nothing"
@@ -1796,7 +1907,11 @@ fn the_frozen_kill_gate_reddens_when_a_rule_loses_its_last_fixture() {
     let without_n7: BTreeSet<&'static str> = FROZEN_KILLS
         .iter()
         .filter(|kill| kill.fixture != "n7-extent")
-        .map(|kill| kill.closer)
+        .filter_map(|kill| {
+            kill.closer
+                .expects_l1_to_admit()
+                .then_some(kill.closer.rule())
+        })
         .collect();
     assert!(
         rule_kinds_without_a_frozen_kill(&without_n7).contains(&"ValueIdent"),
@@ -1858,7 +1973,7 @@ fn s2_keeps_a_bound_binder_and_masks_its_neighbours() {
 /// L2 overlay lets the stream **end** there — [`DecoderSession::is_complete`] and
 /// the published EOS bit, asserted to agree.
 ///
-/// The completion counterpart of [`assert_walk_is_masked`]: a walk can be
+/// The completion counterpart of [`walk_closer`]: a walk can be
 /// perfectly admissible token-by-token and still be a query no host may stop on,
 /// because the last lexeme is only half a name or owes a mandatory call.
 fn walk_may_end(db_id: &str, walk: &str) -> bool {
@@ -2234,7 +2349,7 @@ fn n1_still_admits_a_real_member_after_the_extent_dot() {
 /// Drive an explicit token run through a schema-aware session for `db_id`,
 /// asserting every token but the last is admitted and the last one is masked.
 ///
-/// Unlike [`assert_walk_is_masked`], which lexes the walk and so always offers a
+/// Unlike [`Kill::Walk`], which is lexed and so always offers a
 /// whole `->`, this pins behaviour under a vocabulary that splits the step
 /// connector into `-` and `>` — the split that let a store path be arrowed into
 /// an arbitrary method past N3c (live:

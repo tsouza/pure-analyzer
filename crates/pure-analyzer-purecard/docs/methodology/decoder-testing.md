@@ -83,8 +83,12 @@ counterfactual cases where byte-level BPE tokens cross Pure lexeme boundaries.
 
 Every fixture in `l2_precision.rs` that freezes a **kill** — a walk the decoder
 must never emit, or a decision point where a phantom must be cleared — lives in
-one table, `FROZEN_KILLS`, and records the `L2Position` rule that closes it. A
-new fixture is a row in that table, never a new list, because
+one table, `FROZEN_KILLS`, and records the `L2Position` rule governing the
+position where it is refused, plus whether the *overlay* is what refuses it —
+verified against a schema-less session, because `active_l2_position` names the
+rule at a position without saying which layer cleared the bit, and a shape the
+byte-PDA already refuses is not evidence that an L2 rule fires. A new fixture is
+a row in that table, never a new list, because
 `every_rule_kind_has_a_frozen_walk_that_it_closes` reads the whole table and
 fails when a shipped rule is no longer the recorded closer of anything. It
 exists because a newly landed rule silently taking over an earlier rule's kill —
