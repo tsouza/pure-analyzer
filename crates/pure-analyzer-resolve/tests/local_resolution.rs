@@ -46,10 +46,7 @@ fn arity_mismatch_retains_the_resolved_generated_member() {
     let NavigationResolution::WrongArity(mismatch) = mismatch else {
         panic!("a generated point property without its date must be wrong arity");
     };
-    assert!(matches!(
-        mismatch.member().map(|member| member.kind()),
-        Some(ResolvedMemberKind::Qualified(QpKind::MilestonedPoint))
-    ));
+    assert!(mismatch.is_generated_milestoned());
 }
 
 fn exact_span(source: &str, declaration: &str) -> TextRange {

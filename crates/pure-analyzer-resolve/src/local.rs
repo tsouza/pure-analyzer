@@ -428,7 +428,7 @@ pub struct NavigationArityMismatch {
     failure: NavigationFailure,
     expected: usize,
     actual: usize,
-    member: Option<ResolvedMember>,
+    generated_milestoned: bool,
     definition: Option<DefinitionAnchor>,
 }
 
@@ -451,10 +451,10 @@ impl NavigationArityMismatch {
         self.actual
     }
 
-    /// Return the resolved model member when this mismatch is model-backed.
+    /// Return whether the resolved member is generated milestoned navigation.
     #[must_use]
-    pub const fn member(&self) -> Option<&ResolvedMember> {
-        self.member.as_ref()
+    pub const fn is_generated_milestoned(&self) -> bool {
+        self.generated_milestoned
     }
 
     /// Return the contributing model definition anchor when there is one.
@@ -617,14 +617,14 @@ impl<'model> NavigationResolver<'model> {
                 }
                 StepResolution::WrongArity {
                     expected,
-                    member,
+                    generated_milestoned,
                     definition,
                 } => {
                     return NavigationResolution::WrongArity(NavigationArityMismatch {
                         failure: NavigationFailure::new(chain, step.clone()),
                         expected,
                         actual: step.argument_count(),
-                        member,
+                        generated_milestoned,
                         definition,
                     });
                 }
@@ -666,7 +666,10 @@ impl<'model> NavigationResolver<'model> {
         if step.argument_count() != expected {
             return StepResolution::WrongArity {
                 expected,
-                member: Some(member.clone()),
+                generated_milestoned: matches!(
+                    member.kind(),
+                    ResolvedMemberKind::Qualified(QpKind::MilestonedPoint | QpKind::EdgePoint)
+                ),
                 definition: Some(member.definition()),
             };
         }
@@ -681,7 +684,7 @@ impl<'model> NavigationResolver<'model> {
         if step.argument_count() != NO_ARGUMENTS {
             return StepResolution::WrongArity {
                 expected: NO_ARGUMENTS,
-                member: None,
+                generated_milestoned: false,
                 definition: None,
             };
         }
@@ -725,7 +728,7 @@ enum StepResolution {
     Cycle(Vec<QName>),
     WrongArity {
         expected: usize,
-        member: Option<ResolvedMember>,
+        generated_milestoned: bool,
         definition: Option<DefinitionAnchor>,
     },
 }
