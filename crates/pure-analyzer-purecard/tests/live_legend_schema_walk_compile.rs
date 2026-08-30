@@ -794,7 +794,7 @@ fn assert_live_compile_rate(baseline: &Baseline) {
 /// Phase 9 ships the one L1 tightening Phase 8 wrote, attested and escalated
 /// rather than merged: a `::` binds to a term-start name or a string literal.
 /// Live parse failures fell **9 → 7** across both databases, and the class the
-/// rule names went **3 → 0**. What remains, across 10 `world_1` / 22 `car_1`
+/// rule names went **4 → 0**. What remains, across 10 `world_1` / 22 `car_1`
 /// exploration failures, taxonomised per walk and summing to exactly 32:
 ///
 /// - **L1 parse over-approximation — 7.** None is a `::` any more. Two are the

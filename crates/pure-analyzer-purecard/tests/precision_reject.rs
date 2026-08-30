@@ -918,9 +918,9 @@ fn a_value_position_classpath_at_a_block_statement_level_still_streams() {
 /// the colon has no reading at all and the refusal lands on the first. Both
 /// refusal points are frozen below.
 ///
-/// All three walks came verbatim out of the live lane on this branch, each with
+/// All four walks came verbatim out of the live lane on this branch, each with
 /// the pinned engine's own rejection: walk 1 "no viable alternative at input
-/// '…->extend('Code_T1'&&code&&'Republic')::'", walks 2 and 3 "Unexpected token
+/// '…->extend('Code_T1'&&code&&'Republic')::'", walks 2-4 "Unexpected token
 /// '::'".
 #[test]
 fn a_classpath_separator_off_a_non_name_dies() {
@@ -941,6 +941,14 @@ fn a_classpath_separator_off_a_non_name_dies() {
         (
             "      \n      {|\n        spider::car_1::Db->tableReference('Continent_t1'\n  \n    \n\n        \n      \n            \n        \n        \n  \n \n        \n             \n        \n      \n    \n       \n  ,'Accelerate_T3')->join('ContId_T1'&&'MPG_T1_1'.meta::pure::tds::TDSRow)}",
             ":pure::tds",
+        ),
+        // car_1 (live walk 41) — the same `)`-then-`::`, in a walk whose four
+        // *binder-type* `::`es (`getFloat:row ::weight ::project …`) all stream
+        // past first: that path is a separate, still-open over-approximation and
+        // this rule does not touch it
+        (
+            "    \n      {\n  \n    \n    \n         |        spider::car_1::model::default::CarMakers.\n    \n    all(\n      )\n        ->extend(getFloat:row \n      ::weight\n      \n        \n\n\n          \n      ::project ::fk4DefaultCarsData\n          \n\n        \n  \n      \n        ::parseFloat[\n      1974]\n          \n\n\n\n  \n    \n         \n        \n\n\n    \n \n            \n        \n  \n      \n        |'Year_T3')    ::meta::relational::metamodel::join::JoinType\n        |||y}",
+            "::meta::relational",
         ),
     ] {
         assert_dies_at(walk, at);
