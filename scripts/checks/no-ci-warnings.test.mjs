@@ -31,6 +31,14 @@ describe("findWarnings — benign allowlisted matches", () => {
     expect(findWarnings(log)).toEqual([]);
   });
 
+  test("the pure-analyzer-analysis Severity::Warning enum variant is NOT an offender (regression)", () => {
+    // `Severity::Warning => 1,` (crates/pure-analyzer-analysis/src/pass.rs) is a
+    // Rust enum path, not a GitHub Actions `::warning` annotation — but WARNING's
+    // `::warning` branch matches it case-insensitively regardless.
+    const log = line("        Severity::Warning => 1,");
+    expect(findWarnings(log)).toEqual([]);
+  });
+
   test("every ALLOWLIST entry is a documented, non-empty exception", () => {
     for (const entry of ALLOWLIST) {
       expect(entry.re).toBeInstanceOf(RegExp);
