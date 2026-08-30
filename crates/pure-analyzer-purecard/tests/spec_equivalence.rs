@@ -13,8 +13,17 @@
 //! offset (or neither dies) and the same end-of-stream completeness. A
 //! divergence names the exact query and byte offset to fix in
 //! `src/grammar/emitted_subset.json`, never a reason to weaken this test.
+//!
+//! Every corpus here is a set of *strings*, and a string only ever contains
+//! bytes that continue it legally — which left the two engines free to disagree
+//! about what they **reject**, invisibly (issue #55 Phase 9 walked into exactly
+//! that). [`every_reachable_configuration_agrees_on_every_byte_across_both_engines`]
+//! closes that off: it sweeps every reachable `(state, stack-top)` pair against
+//! all 256 bytes, which is the transition relation in full. The corpora remain
+//! for what they are good at — naming shapes a human can read.
 #![forbid(unsafe_code)]
 
+use std::collections::{BTreeMap, VecDeque};
 use std::path::PathBuf;
 
 #[path = "support/corpus.rs"]
@@ -26,11 +35,19 @@ mod walker;
 
 use corpus::load_gold;
 use purecard::grammar::EMITTED_SUBSET_SPEC;
+use purecard::grammar::pda::Frame;
 use purecard::{ByteRecognizer, CompiledGrammar, DecodeError, DecoderSession, Vocab};
 
 /// The `Vocab` EOS-token id an empty test vocabulary is built with — the
 /// byte-recognizer lanes this suite drives never consult the vocab.
 const EMPTY_VOCAB_EOS: u32 = 0;
+
+/// The number of reachable `(state, stack-top)` pairs
+/// [`every_reachable_configuration_agrees_on_every_byte_across_both_engines`]
+/// sweeps. Pinned so a state or frame that silently stops being reachable — the
+/// way a rule change can orphan one — reddens this suite instead of quietly
+/// shrinking its coverage.
+const EXPECTED_REACHABLE_CONFIGURATIONS: usize = 323;
 
 /// Arm-A (relational envelope) gold record count (mirrors
 /// `tests/soundness_replay.rs`).
@@ -149,6 +166,49 @@ fn modern_dialect_seed_corpus_is_equivalent_across_both_engines() {
         count, EXPECTED_SEED_RECORDS,
         "modern-dialect seed record count"
     );
+}
+
+/// The value-position `::` strings issue #55 Phase 9 pinned, in their own
+/// function for the same reason as [`phase_7_literal_and_binder_corpus`].
+///
+/// This family exists because the shape it covers found a real hole in *this*
+/// suite: with `pda.rs` tightened and `emitted_subset.json` left untouched, the
+/// two engines disagreed outright on `|Country.all()->filter(c|$c.name!=f()::a)`
+/// (fixed `Dead(38)`, spec `Complete`) while every corpus above stayed green —
+/// no gold, seed or precision string puts a `::` on a term that is not a name,
+/// so nothing here could see the divergence.
+///
+/// These strings pin the *instance*, in the readable, shape-named form the rest
+/// of this file is written in.
+/// [`every_reachable_configuration_agrees_on_every_byte_across_both_engines`]
+/// is what closes the *class* (constitution §5) — a curated corpus can always
+/// be missing tomorrow's shape, and that is the defect this one exposed.
+fn phase_9_value_position_classpath_corpus() -> Vec<String> {
+    vec![
+        // a `::` binds to a term-start name or a string literal
+        "|X.all()->filter(c|$c.n!=mpg::getInteger)".to_owned(),
+        "|X.all()->filter(c|$c.n!=meta::pure::tds::TDSRow)".to_owned(),
+        "|X.all()->filter(c|$c.n!='europe'::makeId)".to_owned(),
+        "|X.all()->filter(c|$c.n!='a b'::c)".to_owned(),
+        "|X.all()->filter(c|$c.n!=mpg ::getInteger)".to_owned(),
+        // and to nothing else — the exact shape that exposed the gap first
+        "|X.all()->filter(c|$c.n!=f()::a)".to_owned(),
+        "|X.all()->filter(c|$c.n!=[1]::a)".to_owned(),
+        "|X.all()->filter(c|$c.n!=1::a)".to_owned(),
+        "|X.all()->filter(c|$c.n!=%2018-03-17::a)".to_owned(),
+        "|X.all()->filter(c|$c.n!=$x::a)".to_owned(),
+        "|X.all()->filter(c|$c.n!=$x.foo::a)".to_owned(),
+        "|X.all()->filter(c|$c.n!=x->getInteger()::a)".to_owned(),
+        "|X.all()->filter(c|$c.n!=x->getInteger::a)".to_owned(),
+        // the same colon with no binder slot open, where the refusal moves onto
+        // the first `:` instead of the second
+        "{|X.all():language*meta::pure::tds::TDSRow}".to_owned(),
+        "|X.all():a".to_owned(),
+        // the typed-binder arms the rule leaves in place
+        "|X.all()->groupBy(~[K], ~'Agg': x|$x.v : y|$y->sum())".to_owned(),
+        "|X.all()->project(~[N: x|$x.a])->extend(over(~N), ~[agg:{p,w,r|$r.v}:y|$y->sum()])"
+            .to_owned(),
+    ]
 }
 
 /// The `%`-literal and typed-binder strings issue #55 Phase 7 pinned, kept in
@@ -329,9 +389,10 @@ fn precision_corpus() -> Vec<String> {
         "|X.all())".to_owned(),
         "|X.all()->take(2".to_owned(),
     ];
+    cases.extend(phase_7_literal_and_binder_corpus());
+    cases.extend(phase_9_value_position_classpath_corpus());
     cases.sort();
     cases.dedup();
-    cases.extend(phase_7_literal_and_binder_corpus());
     cases
 }
 
@@ -366,5 +427,124 @@ fn randomized_accepting_walks_are_equivalent_across_both_engines() {
             "a generated walk must be accepting under the fixed engine by construction"
         );
         assert_same_verdict(walk, &fixed, &spec);
+    }
+}
+
+/// The longest witness prefix [`reachable_configurations`] will extend. Every
+/// `(state, stack-top)` pair the automaton has is reached well inside this;
+/// the cap only stops the BFS from chasing an unbounded stack.
+const MAX_WITNESS_LEN: usize = 64;
+
+/// The `(state, stack-top)` pair that, with the byte, wholly determines the
+/// fixed PDA's next move — the exact argument tuple of its `step` function, and
+/// therefore the only axis along which the two engines can disagree at all.
+type ConfigKey = (&'static str, &'static str);
+
+/// The key `session` is currently in, or [`None`] once it has left the
+/// byte-PDA (a state the recognizer no longer tracks a `Pda` for).
+fn config_key(session: &DecoderSession<'_>) -> Option<ConfigKey> {
+    let pda = session.pda()?;
+    Some((pda.state().name(), pda.stack_top().map_or("-", Frame::name)))
+}
+
+/// Drive `prefix` through a fresh session over `grammar`, returning it if every
+/// byte was accepted.
+fn session_after<'g>(prefix: &[u8], grammar: &'g CompiledGrammar) -> Option<DecoderSession<'g>> {
+    let mut session = DecoderSession::new(grammar);
+    for &byte in prefix {
+        session.accept_byte(byte).ok()?;
+    }
+    Some(session)
+}
+
+/// Breadth-first search of the fixed engine's reachable `(state, stack-top)`
+/// pairs, returning the shortest witness byte string that reaches each.
+///
+/// Uses only the public recognizer surface — feed bytes, read
+/// [`DecoderSession::pda`] — so it observes the shipped decoder, not an
+/// internal table.
+fn reachable_configurations(grammar: &CompiledGrammar) -> BTreeMap<ConfigKey, Vec<u8>> {
+    let mut witnesses = BTreeMap::new();
+    let mut queue = VecDeque::new();
+
+    let start = DecoderSession::new(grammar);
+    if let Some(key) = config_key(&start) {
+        witnesses.insert(key, Vec::new());
+        queue.push_back(Vec::new());
+    }
+
+    while let Some(prefix) = queue.pop_front() {
+        for byte in 0..=u8::MAX {
+            let Some(mut session) = session_after(&prefix, grammar) else {
+                continue;
+            };
+            if session.accept_byte(byte).is_err() {
+                continue;
+            }
+            let Some(key) = config_key(&session) else {
+                continue;
+            };
+            if witnesses.contains_key(&key) {
+                continue;
+            }
+            let mut next = prefix.clone();
+            next.push(byte);
+            witnesses.insert(key, next.clone());
+            if next.len() < MAX_WITNESS_LEN {
+                queue.push_back(next);
+            }
+        }
+    }
+    witnesses
+}
+
+/// **The gate that closes the class, not the instance** (issue #55 Phase 9,
+/// constitution §5).
+///
+/// Every corpus above — gold, seed, precision, randomized walks — is a set of
+/// *strings*, and every string only ever contains bytes that continue it
+/// legally. That leaves the two engines free to disagree about which bytes are
+/// **rejected**, and they did: Phase 9 tightened `pda.rs` without
+/// `emitted_subset.json` and the suite stayed green while
+/// `|Country.all()->filter(c|$c.name!=f()::a)` was `Dead` under one engine and
+/// `Complete` under the other. Adding strings for that shape closes the
+/// instance; it does not stop the next production from drifting the same way.
+///
+/// This does. The fixed PDA's move is a pure function of `(state, stack-top,
+/// byte)`, so sweeping **every** reachable `(state, stack-top)` pair against
+/// **every** one of the 256 bytes covers the transition relation exhaustively
+/// along the only axis on which a transcription can differ. Push and pop
+/// targets are covered too, because the configuration a move lands in is itself
+/// a pair the search reaches. A divergence names the witness, the byte and the
+/// two verdicts.
+#[test]
+fn every_reachable_configuration_agrees_on_every_byte_across_both_engines() {
+    let fixed = fixed_grammar();
+    let spec = spec_grammar();
+
+    let witnesses = reachable_configurations(&fixed);
+    assert_eq!(
+        witnesses.len(),
+        EXPECTED_REACHABLE_CONFIGURATIONS,
+        "reachable (state, stack-top) pair count — a change here is a real \
+         automaton change and wants its own review, never a re-pin"
+    );
+
+    for ((state, top), witness) in &witnesses {
+        for byte in 0..=u8::MAX {
+            let mut probe = witness.clone();
+            probe.push(byte);
+            let fixed_verdict = replay(&probe, &fixed);
+            let spec_verdict = replay(&probe, &spec);
+            assert_eq!(
+                fixed_verdict,
+                spec_verdict,
+                "fixed and spec-compiled grammars diverge at ({state}, stack-top {top}) \
+                 on byte {byte:#04x} ({:?}): fixed={fixed_verdict:?} spec={spec_verdict:?}\n  \
+                 witness: {:?}",
+                byte as char,
+                String::from_utf8_lossy(witness)
+            );
+        }
     }
 }
