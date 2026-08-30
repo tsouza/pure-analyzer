@@ -618,11 +618,13 @@ const CRITERION_BASELINE: Baseline = Baseline {
 /// 35/57 — a maintainer-authorized lowering, not a ratchet.** Say it plainly:
 /// 35 is eight below the 43 Phase 8 recorded, and the floor it sets (32) is
 /// eight below the floor it replaces (40). The constitution (§3, §7) reserves
-/// that move to a human, and this one was taken by the maintainer on issue #55
-/// after the evidence below was put to them as "Decision 1"; it is not a value
-/// the agent may re-derive or repeat on its own.
+/// that move to a human: it is issue #55's "Decision 1", raised by Phase 8,
+/// posed to the maintainer in the 2026-08-30 decision memo, and it merges only
+/// on the maintainer's recorded sign-off on #55 or on PR #153 — never on the
+/// agent's own reading of the evidence, and never as a precedent it may apply
+/// again.
 ///
-/// The evidence the ruling rests on, all of it re-derived live on this branch:
+/// The evidence put to that decision, all of it re-derived live on this branch:
 ///
 /// 1. **The rule is sound.** All 5,034 gold queries, both seed corpora, the
 ///    differential replay and `spec_equivalence` are green, so it rejects
