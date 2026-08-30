@@ -297,6 +297,22 @@ mod tests {
         assert!(milestoning_diagnostics("model::Person.all()->filter(x| $x.name(1))", Some(&graph()))
             .is_empty());
         assert!(milestoning_diagnostics(source, None).is_empty());
+
+        let business_model = milestoning_graph("businesstemporal");
+        assert_eq!(
+            milestoning_diagnostics(source, Some(&business_model))
+                .into_iter()
+                .map(|diagnostic| diagnostic.code)
+                .collect::<Vec<_>>(),
+            vec![DiagCode::WrongMilestoningArity]
+        );
+        assert!(
+            milestoning_diagnostics(
+                "model::Source.all()->filter(x| $x.point(%latest))",
+                Some(&business_model),
+            )
+            .is_empty()
+        );
     }
 
     #[test]
