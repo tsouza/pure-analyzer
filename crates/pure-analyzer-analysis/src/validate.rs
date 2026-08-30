@@ -251,6 +251,7 @@ mod tests {
             "$x.prop($date)",
             "$rows['name'][0]",
             "f(a, b)",
+            "f((a, b))",
             "$x.prop(%latest, %latest)",
             "#>{db::testDB.left}#->join(#>{db::testDB.right}#, JoinKind.LEFT, {x,y| $x == $y})",
         ] {
