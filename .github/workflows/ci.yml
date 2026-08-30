@@ -12,7 +12,10 @@ on:
   merge_group:
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  # A merge-group validation can use the PR merge ref on this repository. Keep
+  # it distinct from the pull-request run: otherwise enabling auto-merge
+  # cancels the in-flight mutation matrix that the PR's own gate requires.
+  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
