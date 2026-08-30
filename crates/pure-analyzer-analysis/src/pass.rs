@@ -297,6 +297,37 @@ mod tests {
     }
 
     #[test]
+    fn input_exposes_the_exact_source_and_supplied_model() {
+        let parse = parse_query("Person.all()", FileId::new(4)).expect("parse fixture");
+        let model = ModelGraph::default();
+        let input = AnalysisInput::new(
+            FileId::new(4),
+            "Person.all()",
+            &parse.green,
+            &parse.diagnostics,
+            Some(&model),
+        );
+
+        assert_eq!(input.source(), "Person.all()");
+        assert!(std::ptr::eq(input.model().expect("supplied model"), &model));
+        assert_eq!(input.model_availability(), ModelAvailability::Available);
+    }
+
+    #[test]
+    fn result_consumes_the_engine_findings() {
+        let finding = diagnostic(DiagCode::UnknownProperty, Severity::Warning, "unknown");
+        let engine = AnalysisEngine::new(
+            vec![Box::new(StaticPass {
+                name: "only",
+                diagnostics: vec![finding.clone()],
+            })],
+            FindingPolicy::new(),
+        );
+
+        assert_eq!(engine.analyze(input()).into_diagnostics(), vec![finding]);
+    }
+
+    #[test]
     fn engine_sorts_passes_findings_and_deduplicates_equal_findings() {
         let duplicate = diagnostic(DiagCode::UnknownProperty, Severity::Error, "unknown");
         let engine = AnalysisEngine::new(
