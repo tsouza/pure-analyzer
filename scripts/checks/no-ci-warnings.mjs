@@ -43,6 +43,17 @@ const WARNING = /\bwarning(\[[^\]]*\])?:|##\[warning\]|::warning/i;
 // growing list is a smell.
 export const ALLOWLIST = [
   {
+    // `pure-analyzer-analysis`'s `Severity` enum (crates/pure-analyzer-analysis/
+    // src/pass.rs) has a `Warning` variant; a match arm on it (`Severity::Warning
+    // => 1,`) satisfies WARNING's `::warning` branch case-insensitively, even
+    // though it is a Rust path separator plus an identifier, not a GitHub
+    // Actions raw workflow-command annotation. Matched narrowly on the exact
+    // enum path so a real `::warning` annotation (lowercase, GitHub's own
+    // syntax) still fails the sweep.
+    re: /\bSeverity::Warning\b/,
+    why: "pure-analyzer-analysis Severity::Warning enum variant, not a ::warning annotation",
+  },
+  {
     // `@actions/cache`/`@actions/toolkit` emit this annotation from their HTTP
     // retry logic when the cache backend returns 429 while several jobs race to
     // reserve the *same* shared cache key (Swatinem/rust-cache's by-design shared
