@@ -171,11 +171,6 @@ impl<'source> LayoutFormatter<'source> {
                 self.indent();
                 self.output.push_str(text);
             }
-            kind if is_binary_operator(kind) => {
-                self.space_if_needed();
-                self.output.push_str(text);
-                self.output.push(' ');
-            }
             SyntaxKind::DOT | SyntaxKind::PATH_SEPARATOR | SyntaxKind::COLON => {
                 self.trim_space();
                 self.output.push_str(text);
@@ -256,22 +251,6 @@ impl<'source> LayoutFormatter<'source> {
     }
 }
 
-const fn is_binary_operator(kind: SyntaxKind) -> bool {
-    matches!(
-        kind,
-        SyntaxKind::EQ
-            | SyntaxKind::NEQ
-            | SyntaxKind::PLUS
-            | SyntaxKind::MINUS
-            | SyntaxKind::STAR
-            | SyntaxKind::SLASH
-            | SyntaxKind::LE
-            | SyntaxKind::LT
-            | SyntaxKind::GE
-            | SyntaxKind::GT
-            | SyntaxKind::PIPE
-    )
-}
 fn needs_space(previous: Option<SyntaxKind>, current: SyntaxKind) -> bool {
     let Some(previous) = previous else {
         return false;
@@ -394,5 +373,16 @@ mod tests {
     #[test]
     fn formatter_keeps_empty_input_empty() {
         assert_eq!(LayoutFormatter::new("", Vec::new()).finish(), "");
+    }
+
+    #[test]
+    fn consuming_format_result_retains_text_and_recovery_diagnostics() {
+        let source = "$rows->filter(x|$x.name == 'Ada'";
+        let result = format(source);
+        let expected_text = result.text().to_owned();
+        let expected_diagnostics = result.diagnostics().to_vec();
+
+        assert!(!expected_diagnostics.is_empty());
+        assert_eq!(result.into_parts(), (expected_text, expected_diagnostics));
     }
 }
