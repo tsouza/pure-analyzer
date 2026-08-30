@@ -366,4 +366,9 @@ mod tests {
     fn navigation_lint_pass_name_is_stable() {
         assert_eq!(NavigationLintPass.name(), "navigation-lints");
     }
+
+    #[test]
+    fn milestoning_arity_lint_pass_name_is_stable() {
+        assert_eq!(MilestoningArityLintPass.name(), "milestoning-arity-lints");
+    }
 }
