@@ -268,6 +268,12 @@ pub enum State {
     /// alternative at input '…::'". The typed-binder arms stay, because arm-R's
     /// second column colon legitimately follows a completed navigation
     /// (`~'Agg': x|$x.v : y|$y->sum()`).
+    ///
+    /// Those binder arms are all this state has left, so it is only *entered*
+    /// where one of them can fire — where [`holds_a_lambda_slot`] holds. With no
+    /// binder slot open the colon has no reading at all and dies on the colon
+    /// itself, back in [`step_after_value`], rather than reaching a
+    /// configuration from which every byte is dead.
     AfterValueColon,
     /// Just consumed the second `:` of a `::` classpath separator; a classpath
     /// identifier must follow. A third `:` is a dead state — `:::` is never valid.

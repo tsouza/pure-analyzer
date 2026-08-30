@@ -278,8 +278,7 @@ pinned engine on the branch and each with its rejecting byte pinned in
   has none and the byte machine cannot see the `~`.
 
 **Tightened in issue #55 Phase 9 (also removed from the over-approximation
-list).** The rule Phase 8 worked out, attested and escalated rather than merged;
-the maintainer ruled on it and it now ships:
+list).** The rule Phase 8 worked out, attested and escalated rather than merged:
 
 - **A `::` binds to a term-start name or a string literal.** A `::` names a
   package path, and a package path is spelled from a bare word or a quoted one.
@@ -295,13 +294,14 @@ the maintainer ruled on it and it now ships:
   slot is open at all the colon has no reading left and dies on the colon itself,
   which is also where the engine points ("Unexpected token ':'").
 
-  Shipping it needed a maintainer call, and got one: it moves the criterion arm
-  **+5** and the generalization guard **−8**, breaching the guard's floor. The
-  −8 was proven to be a reshuffle of the walk sample rather than a precision
-  loss — a second implementation accepting the *byte-identical* language swung
-  the same arm by −2 — and the guard's baseline was lowered by the maintainer
-  under constitution §3/§7, recorded as such in
-  `tests/live_legend_schema_walk_compile.rs`.
+  Shipping it needs a maintainer call, and that call is issue #55's "Decision
+  1": it moves the criterion arm **+5** and the generalization guard **−8**,
+  breaching the guard's floor. The −8 was proven to be a reshuffle of the walk
+  sample rather than a precision loss — a second implementation accepting the
+  *byte-identical* language swung the same arm by −2 — but lowering the guard's
+  baseline is a §3/§7 move reserved to a human, and
+  `tests/live_legend_schema_walk_compile.rs` records it as such rather than as a
+  ratchet.
 
 **One tightening Phase 8 worked out and deliberately did not ship**, recorded
 here so a later phase does not re-derive it:
