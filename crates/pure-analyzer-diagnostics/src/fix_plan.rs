@@ -246,28 +246,11 @@ impl FixPlan {
         &self,
         sources: &BTreeMap<FileId, String>,
     ) -> Result<BTreeMap<FileId, String>, FixPlanError> {
-        if let Some(file) = sources.keys().find(|file| !self.files.contains_key(file)) {
-            return Err(FixPlanError::UnexpectedSource { file: *file });
-        }
-        for (file, snapshot) in &self.files {
-            if sources.get(file) != Some(&snapshot.source) {
-                return Err(FixPlanError::StaleSource { file: *file });
-            }
-        }
-
-        let mut output = sources.clone();
-        for (file, edits) in &self.edits {
-            let Some(source) = output.get_mut(file) else {
-                return Err(FixPlanError::StaleSource { file: *file });
-            };
-            for edit in edits.iter().rev() {
-                source.replace_range(
-                    to_usize(edit.span.start())..to_usize(edit.span.end()),
-                    &edit.new_text,
-                );
-            }
-        }
-        Ok(output)
+        Ok(self
+            .transformed_changes(sources)?
+            .into_iter()
+            .map(|change| (change.file, change.after))
+            .collect())
     }
 
     /// Produce changed buffers without persisting them.
@@ -284,21 +267,50 @@ impl FixPlan {
         &self,
         sources: &BTreeMap<FileId, String>,
     ) -> Result<Vec<PlannedChange>, FixPlanError> {
-        let output = self.apply(sources)?;
-        let mut changes = Vec::new();
-        for (file, snapshot) in &self.files {
-            let Some(after) = output.get(file) else {
-                return Err(FixPlanError::StaleSource { file: *file });
-            };
-            if after != &snapshot.source {
-                changes.push(PlannedChange {
+        Ok(self
+            .transformed_changes(sources)?
+            .into_iter()
+            .filter(|change| change.before != change.after)
+            .collect())
+    }
+
+    fn transformed_changes(
+        &self,
+        sources: &BTreeMap<FileId, String>,
+    ) -> Result<Vec<PlannedChange>, FixPlanError> {
+        self.validate_sources(sources)?;
+        Ok(self
+            .files
+            .iter()
+            .map(|(file, snapshot)| {
+                let mut after = snapshot.source.clone();
+                if let Some(edits) = self.edits.get(file) {
+                    for edit in edits.iter().rev() {
+                        after.replace_range(
+                            to_usize(edit.span.start())..to_usize(edit.span.end()),
+                            &edit.new_text,
+                        );
+                    }
+                }
+                PlannedChange {
                     file: *file,
                     before: snapshot.source.clone(),
-                    after: after.clone(),
-                });
+                    after,
+                }
+            })
+            .collect())
+    }
+
+    fn validate_sources(&self, sources: &BTreeMap<FileId, String>) -> Result<(), FixPlanError> {
+        if let Some(file) = sources.keys().find(|file| !self.files.contains_key(file)) {
+            return Err(FixPlanError::UnexpectedSource { file: *file });
+        }
+        for (file, snapshot) in &self.files {
+            if sources.get(file) != Some(&snapshot.source) {
+                return Err(FixPlanError::StaleSource { file: *file });
             }
         }
-        Ok(changes)
+        Ok(())
     }
 
     /// Return whether this plan would alter any exact supplied source.
