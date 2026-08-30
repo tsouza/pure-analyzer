@@ -386,6 +386,50 @@ Class model::Holder
 }
 
 #[test]
+fn non_temporal_generated_navigation_has_pmcd_pure_zero_date_parity() {
+    let (pmcd, pure) = paired_graphs(
+        vec![
+            pmcd_class("PlainTarget", &[], None, Vec::new(), Vec::new()),
+            pmcd_class(
+                "Holder",
+                &[],
+                None,
+                Vec::new(),
+                vec![pmcd_qualified_property(
+                    "point",
+                    "model::PlainTarget",
+                    0,
+                    Some(1),
+                    true,
+                    &[],
+                )],
+            ),
+        ],
+        r#"
+Class model::PlainTarget
+{
+}
+
+Class model::Holder
+{
+  <<milestoning.generatedmilestoningproperty>>
+  point(): model::PlainTarget[0..1] {};
+}
+"#,
+    );
+
+    let pmcd_member = found_navigation_member(&pmcd, "Holder", "point", 0);
+    let pure_member = found_navigation_member(&pure, "Holder", "point", 0);
+
+    assert_fact_parity(&pmcd_member, &pure_member);
+    assert_eq!(
+        pmcd_member.kind(),
+        &ResolvedMemberKind::Qualified(QpKind::MilestonedPoint)
+    );
+    assert_eq!(pmcd_member.target_temporal_arity(), Some(0));
+}
+
+#[test]
 fn non_generated_all_versions_forms_are_user_qualified_in_pmcd_and_pure() {
     let (pmcd, pure) = paired_graphs(
         vec![
