@@ -151,6 +151,45 @@ fn modern_dialect_seed_corpus_is_equivalent_across_both_engines() {
     );
 }
 
+/// The value-position `::` strings issue #55 Phase 9 pinned, in their own
+/// function for the same reason as [`phase_7_literal_and_binder_corpus`].
+///
+/// This family exists because the shape it covers found a real hole in *this*
+/// suite: with `pda.rs` tightened and `emitted_subset.json` left untouched, the
+/// two engines disagreed outright on `|Country.all()->filter(c|$c.name!=f()::a)`
+/// (fixed `Dead(38)`, spec `Complete`) while every corpus above stayed green —
+/// no gold, seed or precision string puts a `::` on a term that is not a name,
+/// so nothing here could see the divergence. The rule that closes the class is
+/// the same one constitution §5 asks for: the transcription's *new* production
+/// gets its own strings in this corpus, both sides of the boundary.
+fn phase_9_value_position_classpath_corpus() -> Vec<String> {
+    vec![
+        // a `::` binds to a term-start name or a string literal
+        "|X.all()->filter(c|$c.n!=mpg::getInteger)".to_owned(),
+        "|X.all()->filter(c|$c.n!=meta::pure::tds::TDSRow)".to_owned(),
+        "|X.all()->filter(c|$c.n!='europe'::makeId)".to_owned(),
+        "|X.all()->filter(c|$c.n!='a b'::c)".to_owned(),
+        "|X.all()->filter(c|$c.n!=mpg ::getInteger)".to_owned(),
+        // and to nothing else — the exact shape that exposed the gap first
+        "|X.all()->filter(c|$c.n!=f()::a)".to_owned(),
+        "|X.all()->filter(c|$c.n!=[1]::a)".to_owned(),
+        "|X.all()->filter(c|$c.n!=1::a)".to_owned(),
+        "|X.all()->filter(c|$c.n!=%2018-03-17::a)".to_owned(),
+        "|X.all()->filter(c|$c.n!=$x::a)".to_owned(),
+        "|X.all()->filter(c|$c.n!=$x.foo::a)".to_owned(),
+        "|X.all()->filter(c|$c.n!=x->getInteger()::a)".to_owned(),
+        "|X.all()->filter(c|$c.n!=x->getInteger::a)".to_owned(),
+        // the same colon with no binder slot open, where the refusal moves onto
+        // the first `:` instead of the second
+        "{|X.all():language*meta::pure::tds::TDSRow}".to_owned(),
+        "|X.all():a".to_owned(),
+        // the typed-binder arms the rule leaves in place
+        "|X.all()->groupBy(~[K], ~'Agg': x|$x.v : y|$y->sum())".to_owned(),
+        "|X.all()->project(~[N: x|$x.a])->extend(over(~N), ~[agg:{p,w,r|$r.v}:y|$y->sum()])"
+            .to_owned(),
+    ]
+}
+
 /// The `%`-literal and typed-binder strings issue #55 Phase 7 pinned, kept in
 /// their own function so [`precision_corpus`] stays inside the workspace's
 /// function-length lint rather than growing without bound as phases land.
@@ -332,6 +371,7 @@ fn precision_corpus() -> Vec<String> {
     cases.sort();
     cases.dedup();
     cases.extend(phase_7_literal_and_binder_corpus());
+    cases.extend(phase_9_value_position_classpath_corpus());
     cases
 }
 
