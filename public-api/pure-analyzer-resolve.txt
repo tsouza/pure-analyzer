@@ -522,6 +522,7 @@ pub const fn pure_analyzer_resolve::NavigationArityMismatch::actual(&self) -> us
 pub const fn pure_analyzer_resolve::NavigationArityMismatch::definition(&self) -> core::option::Option<pure_analyzer_resolve::DefinitionAnchor>
 pub const fn pure_analyzer_resolve::NavigationArityMismatch::expected(&self) -> usize
 pub const fn pure_analyzer_resolve::NavigationArityMismatch::failure(&self) -> &pure_analyzer_resolve::NavigationFailure
+pub const fn pure_analyzer_resolve::NavigationArityMismatch::is_generated_milestoned(&self) -> bool
 impl core::clone::Clone for pure_analyzer_resolve::NavigationArityMismatch
 pub fn pure_analyzer_resolve::NavigationArityMismatch::clone(&self) -> pure_analyzer_resolve::NavigationArityMismatch
 impl core::cmp::Eq for pure_analyzer_resolve::NavigationArityMismatch
