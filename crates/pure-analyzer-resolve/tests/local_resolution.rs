@@ -28,6 +28,30 @@ fn graph(elements: Vec<Value>) -> ModelGraph {
         .expect("fixture must load")
 }
 
+#[test]
+fn arity_mismatch_retains_the_resolved_generated_member() {
+    let graph = graph(vec![
+        temporal_class("TemporalTarget"),
+        class(
+            "Source",
+            &[],
+            Vec::new(),
+            vec![generated_property("point", "model::TemporalTarget")],
+        ),
+    ]);
+    let resolver = NavigationResolver::new(&graph);
+    let source = class_value(&resolver, "Source");
+    let mismatch = resolver.resolve(&source, &[NavigationStep::property(name("point"))]);
+
+    let NavigationResolution::WrongArity(mismatch) = mismatch else {
+        panic!("a generated point property without its date must be wrong arity");
+    };
+    assert!(matches!(
+        mismatch.member().map(|member| member.kind()),
+        Some(ResolvedMemberKind::Qualified(QpKind::MilestonedPoint))
+    ));
+}
+
 fn exact_span(source: &str, declaration: &str) -> TextRange {
     let start = source.find(declaration).expect("declaration occurs once");
     let end = start + declaration.len();

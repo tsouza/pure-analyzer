@@ -428,6 +428,7 @@ pub struct NavigationArityMismatch {
     failure: NavigationFailure,
     expected: usize,
     actual: usize,
+    member: Option<ResolvedMember>,
     definition: Option<DefinitionAnchor>,
 }
 
@@ -448,6 +449,12 @@ impl NavigationArityMismatch {
     #[must_use]
     pub const fn actual(&self) -> usize {
         self.actual
+    }
+
+    /// Return the resolved model member when this mismatch is model-backed.
+    #[must_use]
+    pub const fn member(&self) -> Option<&ResolvedMember> {
+        self.member.as_ref()
     }
 
     /// Return the contributing model definition anchor when there is one.
@@ -610,12 +617,14 @@ impl<'model> NavigationResolver<'model> {
                 }
                 StepResolution::WrongArity {
                     expected,
+                    member,
                     definition,
                 } => {
                     return NavigationResolution::WrongArity(NavigationArityMismatch {
                         failure: NavigationFailure::new(chain, step.clone()),
                         expected,
                         actual: step.argument_count(),
+                        member,
                         definition,
                     });
                 }
@@ -657,6 +666,7 @@ impl<'model> NavigationResolver<'model> {
         if step.argument_count() != expected {
             return StepResolution::WrongArity {
                 expected,
+                member: Some(member.clone()),
                 definition: Some(member.definition()),
             };
         }
@@ -671,6 +681,7 @@ impl<'model> NavigationResolver<'model> {
         if step.argument_count() != NO_ARGUMENTS {
             return StepResolution::WrongArity {
                 expected: NO_ARGUMENTS,
+                member: None,
                 definition: None,
             };
         }
@@ -714,6 +725,7 @@ enum StepResolution {
     Cycle(Vec<QName>),
     WrongArity {
         expected: usize,
+        member: Option<ResolvedMember>,
         definition: Option<DefinitionAnchor>,
     },
 }
