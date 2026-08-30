@@ -20,3 +20,5 @@ pure-analyzer-parser.workspace = true
 pure-analyzer-model.workspace = true
 pure-analyzer-resolve.workspace = true
 pure-analyzer-analysis.workspace = true
+rayon.workspace = true
+thiserror.workspace = true
