@@ -111,7 +111,7 @@ fn format_files(files: &[String], check: bool, stdout: bool, diff: bool) -> anyh
         } else {
             std::fs::read_to_string(path)?
         };
-        let formatted = pure_analyzer_analysis::format_query(
+        let formatted = libpure::format_query(
             &source,
             pure_analyzer_diagnostics::FileId::new(index as u32),
         )?;
