@@ -177,4 +177,9 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn navigation_lint_pass_name_is_stable() {
+        assert_eq!(NavigationLintPass.name(), "navigation-lints");
+    }
 }
