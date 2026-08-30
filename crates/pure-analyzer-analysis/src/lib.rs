@@ -5,11 +5,13 @@
 
 mod local;
 mod pass;
+mod validate;
 
 pub use local::{LocalNavigationAnalysis, LocalResolution, LocalResolutionSite, analyze_m3_locals};
 pub use pass::{
     AnalysisEngine, AnalysisInput, AnalysisPass, AnalysisResult, FindingPolicy, ModelAvailability,
 };
+pub use validate::ValidatePass;
 
 /// The crate's semantic version, as declared in `Cargo.toml`.
 #[must_use]
