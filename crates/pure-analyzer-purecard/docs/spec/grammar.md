@@ -225,7 +225,8 @@ its rejecting byte pinned in `tests/precision_reject.rs`:
   `%latestdate` — which the seed corpus used to assert L1 accepts — is on the
   rejected side; see §5.8.
 - **A date literal opens on a digit.** `-`/`T`/`:` are date *interior* bytes; a
-  literal that starts on one (`%->…`, `%T`, `%:`) is dead.
+  literal that starts on one (`%->…`, `%T`, `%:`) is dead. Issue #55 Phase 8
+  finished the shape at the other end — see below.
 - **A typed binder's right-hand side is a classpath, then its multiplicity, then
   exactly one pipe.** Only `::` (contiguous), `[`, and `|` may follow the type
   name; the multiplicity bracket holds a `mult` and nothing else (`row['europe']`
@@ -233,6 +234,69 @@ its rejecting byte pinned in `tests/precision_reject.rs`:
   lambda's binder list, the `,` that opens the next binder — may follow. A
   second `|` is dead in the body a binder colon opens: the binder is not an
   operand, so that `||` is never a boolean one.
+
+**Tightened in issue #55 Phase 8 (also removed from the over-approximation
+list).** Four more shapes are now dead states, each live-attested against the
+pinned engine on the branch and each with its rejecting byte pinned in
+`tests/precision_reject.rs`:
+
+- **A date literal also *ends* on a digit, and its `.` is fractional seconds.**
+  Every `-`/`T`/`:` owes a following digit, so a literal can neither end nor
+  branch on a separator; the `.` opens the fraction and is legal only in the time
+  half, past at least one `:`. The two halves also differ in *which* separators
+  they take: a `T` hands over from the date half to the time half and so may open
+  a field only in the first, while a `-` opens a date field in one and a timezone
+  offset in the other. Live: `%2018-`, `%2018-03-17T`, `%2018-03-17T07:`,
+  `%1974.`, `%1974.5`, `%0.0`, `%2018-03-17.000`,
+  `%2018-03-17T07:13:53.000.111`, `%2018-03-17T07:13:53T1` and `%20:18T3` are
+  each "no viable alternative at input", while `%1`, `%1974`, `%1974-1-1`,
+  `%2018-03-17T07:13:53.000`, `%2018-03-17T07:13:53-0500` and `%20:18-3` all
+  parse.
+- **A `(` at a value position is a parenthesised *group*, not an argument list.**
+  A group holds one expression, so it has no `,` to separate: `->limit((1,2))`,
+  `->limit(('a','b'))`, `->limit(1+(2,3))` and `->extend(('MPG_T2',extend))` are
+  each "no viable alternative at input", while `->limit((1))` and `->limit([1,2])`
+  parse. It carries its own stack frame, distinct from the call `(` that binds to
+  a name. A group still opens a **lambda** and a **typed-binder** slot
+  (`->limit((x|1))` and `->limit((a:b[1]|1))` both parse), so only the comma
+  moved.
+- **A lambda binder pipe binds to a name or a string literal.** A binder is named
+  by an identifier, so a pipe off any other completed term is only ever the second
+  byte of a boolean `||`: `->filter(f()|1)`, `->filter(1|1)`, `->filter($x.a|1)`,
+  `->filter(x.y|1)`, `->filter([1]|1)` and `->filter(%2018-01-01|1)` are each "no
+  viable alternative at input '…|'", while `->filter(x|1)`, `->filter('a'|1)` and
+  `->filter(a&&b|1)` parse — the last because `b` is itself a bare name in operand
+  position.
+- **A binder type that has taken a `::` owes its multiplicity.** The `::` settles
+  the one ambiguity a bare binder type carries: it names a package path, never
+  arm-R's bare column-binding variable, so the multiplicity Legend requires of a
+  typed lambda parameter is no longer optional and the pipe may not follow the
+  type directly (`->filter(row: meta::pure::tds::TDSRow|1)` and
+  `->extend(a:b::c|1)` both die; the same walks with `[1]` in front of the pipe
+  parse). The residual over-approximation — a *bare* binder type's multiplicity
+  is still optional — stays, because arm-R's `~'Total': y|$y->sum()` legitimately
+  has none and the byte machine cannot see the `~`.
+
+**Two tightenings Phase 8 worked out and deliberately did not ship.** Both are
+recorded here so a later phase does not re-derive them:
+
+- **A `::` binds to a term-start name or a string literal.** Live-attested:
+  `…!=mpg::getInteger`, `…!=meta::pure::tds::TDSRow`, `…!='europe'::makeId` and
+  `…!=mpg ::getInteger` parse, while the same `::` off a call's `)`, a `]`, a
+  number, a date literal, a `$`-variable, a `.property` or a `->`-called name is
+  each "no viable alternative at input '…::'". Written and green offline, it moves
+  the criterion arm +5 and the generalization guard **−8** — a reshuffle of the
+  walk sample, not a precision loss, but it breaches the guard's floor, so it is a
+  re-scope for the maintainer rather than a merge (constitution §3, §7).
+- **A `;`-continued block query owes its final `;`.** `{|A;B}` and `{|A;B;C}` are
+  "Unexpected token", while `{|A;B;}`, `{|A;}` and `{|A}` parse. Enforcing the
+  engine's actual rule — a `}` may close bare only if no `;` preceded it — needs
+  *mutable per-frame* state, which neither `Step` nor the declarative spec's
+  `Action` (ADR-0010, schema V1) can express. The reachable approximation,
+  requiring the `;` of every block query, would make L1 deliberately stricter than
+  the engine on a structural production for the first time; that belongs in
+  `differential_l1.rs`'s `KNOWN_DIVERGENCES` with its own decision, not folded into
+  a precision phase.
 
 ### 5.7 Observed construct inventory (the empirical spec)
 

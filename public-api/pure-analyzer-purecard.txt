@@ -261,6 +261,7 @@ pub enum purecard::grammar::pda::Frame
 pub purecard::grammar::pda::Frame::Brace
 pub purecard::grammar::pda::Frame::BraceLambda
 pub purecard::grammar::pda::Frame::Bracket
+pub purecard::grammar::pda::Frame::Group
 pub purecard::grammar::pda::Frame::Paren
 impl purecard::grammar::pda::Frame
 pub const fn purecard::grammar::pda::Frame::name(self) -> &'static str
@@ -309,18 +310,24 @@ pub purecard::grammar::pda::State::AfterBinder
 pub purecard::grammar::pda::State::AfterBinderMult
 pub purecard::grammar::pda::State::AfterBinderMultToken
 pub purecard::grammar::pda::State::AfterBinderType
+pub purecard::grammar::pda::State::AfterBinderTypePath
 pub purecard::grammar::pda::State::AfterBraceOpen
 pub purecard::grammar::pda::State::AfterColon
 pub purecard::grammar::pda::State::AfterColon2
 pub purecard::grammar::pda::State::AfterColonWs
 pub purecard::grammar::pda::State::AfterDollar
 pub purecard::grammar::pda::State::AfterDot
+pub purecard::grammar::pda::State::AfterMemberName
 pub purecard::grammar::pda::State::AfterName
+pub purecard::grammar::pda::State::AfterStrLit
 pub purecard::grammar::pda::State::AfterValue
 pub purecard::grammar::pda::State::BinderTypeColon
 pub purecard::grammar::pda::State::BinderTypeColon2
 pub purecard::grammar::pda::State::BlockStmt
 pub purecard::grammar::pda::State::BlockStmtClose
+pub purecard::grammar::pda::State::DateFrac
+pub purecard::grammar::pda::State::DateSep
+pub purecard::grammar::pda::State::DateTimeSep
 pub purecard::grammar::pda::State::ExpectBinder
 pub purecard::grammar::pda::State::ExpectBinderMult
 pub purecard::grammar::pda::State::ExpectBraceBinder
@@ -331,9 +338,13 @@ pub purecard::grammar::pda::State::ExpectValueReq
 pub purecard::grammar::pda::State::InBinder
 pub purecard::grammar::pda::State::InBinderMult
 pub purecard::grammar::pda::State::InBinderType
+pub purecard::grammar::pda::State::InBinderTypePath
+pub purecard::grammar::pda::State::InDateFrac
 pub purecard::grammar::pda::State::InDateLit
+pub purecard::grammar::pda::State::InDateTime
 pub purecard::grammar::pda::State::InExp
 pub purecard::grammar::pda::State::InIdent
+pub purecard::grammar::pda::State::InMemberIdent
 pub purecard::grammar::pda::State::InMilestoneLit
 pub purecard::grammar::pda::State::InMultiplicity
 pub purecard::grammar::pda::State::InNumberFrac
@@ -362,6 +373,7 @@ pub purecard::grammar::pda::State::SawNumSign
 pub purecard::grammar::pda::State::SawPercent
 pub purecard::grammar::pda::State::SawPipe
 pub purecard::grammar::pda::State::SawTilde
+pub purecard::grammar::pda::State::SawValuePipe
 pub purecard::grammar::pda::State::SourceColon
 pub purecard::grammar::pda::State::SourceColon2
 pub purecard::grammar::pda::State::SourceDash

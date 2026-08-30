@@ -2,6 +2,7 @@
   "boundary_byte": 32,
   "frames": [
     "Paren",
+    "Group",
     "Bracket",
     "Brace",
     "BraceLambda"
@@ -23,7 +24,7 @@
         {
           "action": {
             "kind": "next",
-            "state": "InIdent"
+            "state": "InMemberIdent"
           },
           "match": {
             "kind": "ident_start"
@@ -166,6 +167,41 @@
         }
       ]
     },
+    "AfterBinderTypePath": {
+      "accepting": false,
+      "rules": [
+        {
+          "action": {
+            "kind": "next",
+            "state": "AfterBinderTypePath"
+          },
+          "match": {
+            "kind": "whitespace"
+          }
+        },
+        {
+          "action": {
+            "kind": "next",
+            "state": "BinderTypeColon"
+          },
+          "match": {
+            "kind": "exact",
+            "byte": 58
+          }
+        },
+        {
+          "action": {
+            "kind": "push",
+            "frame": "Bracket",
+            "state": "ExpectBinderMult"
+          },
+          "match": {
+            "kind": "exact",
+            "byte": 91
+          }
+        }
+      ]
+    },
     "AfterBraceOpen": {
       "accepting": false,
       "rules": [
@@ -300,7 +336,7 @@
         {
           "action": {
             "kind": "next",
-            "state": "InIdent"
+            "state": "InMemberIdent"
           },
           "match": {
             "kind": "ident_start"
@@ -323,7 +359,7 @@
         {
           "action": {
             "kind": "next",
-            "state": "InIdent"
+            "state": "InMemberIdent"
           },
           "match": {
             "kind": "ident_start"
@@ -337,6 +373,40 @@
           "match": {
             "byte": 39,
             "kind": "exact"
+          }
+        }
+      ]
+    },
+    "AfterMemberName": {
+      "accepting": true,
+      "rules": [
+        {
+          "action": {
+            "kind": "next",
+            "state": "AfterMemberName"
+          },
+          "match": {
+            "kind": "whitespace"
+          }
+        },
+        {
+          "action": {
+            "kind": "push",
+            "frame": "Paren",
+            "state": "ExpectValue"
+          },
+          "match": {
+            "kind": "exact",
+            "byte": 40
+          }
+        },
+        {
+          "action": {
+            "kind": "goto",
+            "state": "AfterValue"
+          },
+          "match": {
+            "kind": "any"
           }
         }
       ]
@@ -362,6 +432,49 @@
           "match": {
             "byte": 40,
             "kind": "exact"
+          }
+        },
+        {
+          "action": {
+            "kind": "next",
+            "state": "SawPipe"
+          },
+          "match": {
+            "kind": "exact",
+            "byte": 124
+          }
+        },
+        {
+          "action": {
+            "kind": "goto",
+            "state": "AfterValue"
+          },
+          "match": {
+            "kind": "any"
+          }
+        }
+      ]
+    },
+    "AfterStrLit": {
+      "accepting": true,
+      "rules": [
+        {
+          "action": {
+            "kind": "next",
+            "state": "AfterStrLit"
+          },
+          "match": {
+            "kind": "whitespace"
+          }
+        },
+        {
+          "action": {
+            "kind": "next",
+            "state": "SawPipe"
+          },
+          "match": {
+            "kind": "exact",
+            "byte": 124
           }
         },
         {
@@ -450,7 +563,7 @@
         {
           "action": {
             "kind": "next",
-            "state": "SawPipe"
+            "state": "SawValuePipe"
           },
           "match": {
             "byte": 124,
@@ -493,6 +606,19 @@
         },
         {
           "action": {
+            "kind": "dead"
+          },
+          "match": {
+            "kind": "exact",
+            "byte": 44
+          },
+          "guard": {
+            "kind": "stack_top_is",
+            "frame": "Group"
+          }
+        },
+        {
+          "action": {
             "kind": "next",
             "state": "ExpectValueReq"
           },
@@ -531,6 +657,20 @@
           "match": {
             "byte": 41,
             "kind": "exact"
+          }
+        },
+        {
+          "action": {
+            "kind": "pop",
+            "state": "AfterValue"
+          },
+          "match": {
+            "kind": "exact",
+            "byte": 41
+          },
+          "guard": {
+            "kind": "stack_top_is",
+            "frame": "Group"
           }
         },
         {
@@ -598,7 +738,7 @@
         {
           "action": {
             "kind": "next",
-            "state": "InBinderType"
+            "state": "InBinderTypePath"
           },
           "match": {
             "kind": "ident_start"
@@ -716,6 +856,48 @@
           "match": {
             "byte": 125,
             "kind": "exact"
+          }
+        }
+      ]
+    },
+    "DateFrac": {
+      "accepting": false,
+      "rules": [
+        {
+          "action": {
+            "kind": "next",
+            "state": "InDateFrac"
+          },
+          "match": {
+            "kind": "digit"
+          }
+        }
+      ]
+    },
+    "DateSep": {
+      "accepting": false,
+      "rules": [
+        {
+          "action": {
+            "kind": "next",
+            "state": "InDateLit"
+          },
+          "match": {
+            "kind": "digit"
+          }
+        }
+      ]
+    },
+    "DateTimeSep": {
+      "accepting": false,
+      "rules": [
+        {
+          "action": {
+            "kind": "next",
+            "state": "InDateTime"
+          },
+          "match": {
+            "kind": "digit"
           }
         }
       ]
@@ -937,7 +1119,7 @@
         },
         {
           "action": {
-            "frame": "Paren",
+            "frame": "Group",
             "kind": "push",
             "state": "ExpectValue"
           },
@@ -1014,6 +1196,20 @@
           "match": {
             "byte": 41,
             "kind": "exact"
+          }
+        },
+        {
+          "action": {
+            "kind": "pop",
+            "state": "AfterValue"
+          },
+          "match": {
+            "kind": "exact",
+            "byte": 41
+          },
+          "guard": {
+            "kind": "stack_top_is",
+            "frame": "Group"
           }
         },
         {
@@ -1152,7 +1348,7 @@
         },
         {
           "action": {
-            "frame": "Paren",
+            "frame": "Group",
             "kind": "push",
             "state": "ExpectValue"
           },
@@ -1329,6 +1525,73 @@
         }
       ]
     },
+    "InBinderTypePath": {
+      "accepting": false,
+      "rules": [
+        {
+          "action": {
+            "kind": "next",
+            "state": "InBinderTypePath"
+          },
+          "match": {
+            "kind": "ident_tail"
+          }
+        },
+        {
+          "action": {
+            "kind": "next",
+            "state": "BinderTypeColon"
+          },
+          "match": {
+            "kind": "exact",
+            "byte": 58
+          }
+        },
+        {
+          "action": {
+            "kind": "next",
+            "state": "AfterBinderTypePath"
+          },
+          "match": {
+            "kind": "whitespace"
+          }
+        },
+        {
+          "action": {
+            "kind": "push",
+            "frame": "Bracket",
+            "state": "ExpectBinderMult"
+          },
+          "match": {
+            "kind": "exact",
+            "byte": 91
+          }
+        }
+      ]
+    },
+    "InDateFrac": {
+      "accepting": false,
+      "rules": [
+        {
+          "action": {
+            "kind": "next",
+            "state": "InDateFrac"
+          },
+          "match": {
+            "kind": "digit"
+          }
+        },
+        {
+          "action": {
+            "kind": "goto",
+            "state": "AfterValue"
+          },
+          "match": {
+            "kind": "any"
+          }
+        }
+      ]
+    },
     "InDateLit": {
       "accepting": false,
       "rules": [
@@ -1344,16 +1607,70 @@
         {
           "action": {
             "kind": "next",
-            "state": "InDateLit"
+            "state": "DateSep"
           },
           "match": {
+            "kind": "one_of",
             "bytes": [
               45,
-              84,
-              58,
-              46
-            ],
-            "kind": "one_of"
+              84
+            ]
+          }
+        },
+        {
+          "action": {
+            "kind": "next",
+            "state": "DateTimeSep"
+          },
+          "match": {
+            "kind": "exact",
+            "byte": 58
+          }
+        },
+        {
+          "action": {
+            "kind": "goto",
+            "state": "AfterValue"
+          },
+          "match": {
+            "kind": "any"
+          }
+        }
+      ]
+    },
+    "InDateTime": {
+      "accepting": false,
+      "rules": [
+        {
+          "action": {
+            "kind": "next",
+            "state": "InDateTime"
+          },
+          "match": {
+            "kind": "digit"
+          }
+        },
+        {
+          "action": {
+            "kind": "next",
+            "state": "DateTimeSep"
+          },
+          "match": {
+            "kind": "one_of",
+            "bytes": [
+              45,
+              58
+            ]
+          }
+        },
+        {
+          "action": {
+            "kind": "next",
+            "state": "DateFrac"
+          },
+          "match": {
+            "kind": "exact",
+            "byte": 46
           }
         },
         {
@@ -1406,6 +1723,29 @@
           "action": {
             "kind": "goto",
             "state": "AfterName"
+          },
+          "match": {
+            "kind": "any"
+          }
+        }
+      ]
+    },
+    "InMemberIdent": {
+      "accepting": false,
+      "rules": [
+        {
+          "action": {
+            "kind": "next",
+            "state": "InMemberIdent"
+          },
+          "match": {
+            "kind": "ident_tail"
+          }
+        },
+        {
+          "action": {
+            "kind": "goto",
+            "state": "AfterMemberName"
           },
           "match": {
             "kind": "any"
@@ -1599,7 +1939,7 @@
         {
           "action": {
             "kind": "goto",
-            "state": "AfterValue"
+            "state": "AfterStrLit"
           },
           "match": {
             "kind": "any"
@@ -2032,6 +2372,21 @@
           },
           "match": {
             "kind": "ident_start"
+          }
+        }
+      ]
+    },
+    "SawValuePipe": {
+      "accepting": false,
+      "rules": [
+        {
+          "action": {
+            "kind": "next",
+            "state": "ExpectValueReq"
+          },
+          "match": {
+            "kind": "exact",
+            "byte": 124
           }
         }
       ]
