@@ -84,6 +84,55 @@ mod tests {
             .expect("fixture model must load")
     }
 
+    fn member_aware_graph() -> ModelGraph {
+        let property = |name, target| {
+            json!({
+                "name": name,
+                "genericType": {"rawType": target, "typeArguments": []},
+                "multiplicity": {"lowerBound": 0, "upperBound": 1}
+            })
+        };
+        let class = |name, supertypes, properties, qualified_properties| {
+            json!({
+                "_type": "class",
+                "package": "model",
+                "name": name,
+                "stereotypes": [],
+                "superTypes": supertypes,
+                "properties": properties,
+                "qualifiedProperties": qualified_properties,
+            })
+        };
+        let source = json!({
+            "_type": "data",
+            "elements": [
+                class("Base", Vec::<&str>::new(), vec![property("inherited", "String")], Vec::new()),
+                class("Child", vec!["model::Base"], Vec::new(), Vec::new()),
+                class("Person", Vec::<&str>::new(), Vec::new(), vec![json!({
+                    "name": "byKey",
+                    "returnGenericType": {"rawType": "String", "typeArguments": []},
+                    "returnMultiplicity": {"lowerBound": 0, "upperBound": 1},
+                    "stereotypes": [],
+                    "parameters": [{"genericType": {"rawType": "Integer", "typeArguments": []}}],
+                })]),
+                class("Manager", Vec::<&str>::new(), vec![property("name", "String")], Vec::new()),
+                json!({
+                    "_type": "association",
+                    "package": "model",
+                    "name": "Person_Manager",
+                    "stereotypes": [],
+                    "properties": [
+                        property("manager", "model::Manager"),
+                        property("reports", "model::Person"),
+                    ],
+                }),
+            ],
+        })
+        .to_string();
+        load_pmcd_documents(&[PmcdDocument::new("member-aware", &source)])
+            .expect("fixture model must load")
+    }
+
     fn diagnostics(source: &str, model: Option<&ModelGraph>) -> Vec<Diagnostic> {
         let parsed = parse_query(source, FileId::new(8)).expect("fixture must parse");
         AnalysisEngine::new(vec![Box::new(NavigationLintPass)], FindingPolicy::new())
@@ -112,5 +161,20 @@ mod tests {
         );
         assert!(diagnostics("model::Person.all()->filter(x| $x.name)", Some(&model)).is_empty());
         assert!(diagnostics(source, None).is_empty());
+    }
+
+    #[test]
+    fn respects_inherited_association_and_qualified_members() {
+        let model = member_aware_graph();
+        for source in [
+            "model::Child.all()->filter(x| $x.inherited)",
+            "model::Person.all()->filter(x| $x.manager.name)",
+            "model::Person.all()->filter(x| $x.byKey(25))",
+        ] {
+            assert!(
+                diagnostics(source, Some(&model)).is_empty(),
+                "known member must not be linted: {source}"
+            );
+        }
     }
 }
