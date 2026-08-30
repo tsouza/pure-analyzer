@@ -13,11 +13,13 @@ mod code;
 mod diagnostic;
 mod file;
 mod fix;
+mod fix_plan;
 mod verdict;
 
 pub use code::{ALL_DIAG_CODES, DiagCode, DiagFamily, UnknownDiagCode};
 pub use diagnostic::{Diagnostic, DiagnosticBuilder, Label, Severity};
 pub use file::FileId;
-pub use fix::{Applicability, Fix, TextEdit};
+pub use fix::{Applicability, Fix, FixProvenance, TextEdit};
+pub use fix_plan::{FixPlan, FixPlanError, PlannedChange, PlannedFile};
 pub use text_size::{TextRange, TextSize};
 pub use verdict::{ALL_REASON_CODES, ReasonBucket, ReasonCode, UnknownReasonCode, Verdict};
