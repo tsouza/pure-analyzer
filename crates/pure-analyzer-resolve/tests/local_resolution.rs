@@ -383,6 +383,42 @@ fn association_navigation_tracks_the_opposite_end() {
 }
 
 #[test]
+fn generated_milestoning_arity_is_fresh_after_an_association_hop() {
+    let graph = graph(vec![
+        class("Source", &[], Vec::new(), Vec::new()),
+        class(
+            "Target",
+            &[],
+            Vec::new(),
+            vec![generated_property("point", "model::TemporalTarget")],
+        ),
+        temporal_class("TemporalTarget"),
+        association(
+            "Link",
+            property("toSource", "model::Source"),
+            property("toTarget", "model::Target"),
+        ),
+    ]);
+    let resolver = NavigationResolver::new(&graph);
+    let source = class_value(&resolver, "Source");
+
+    let outcome = resolver.resolve(
+        &source,
+        &[
+            NavigationStep::property(name("toTarget")),
+            NavigationStep::property(name("point")),
+        ],
+    );
+    let NavigationResolution::WrongArity(mismatch) = outcome else {
+        panic!("generated point navigation must be checked after an association hop");
+    };
+    assert!(mismatch.is_generated_milestoned());
+    assert_eq!(mismatch.expected(), ONE_ARGUMENT);
+    assert_eq!(mismatch.actual(), NO_ARGUMENTS);
+    assert_eq!(mismatch.failure().completed().hops().len(), 1);
+}
+
+#[test]
 fn relation_rows_bind_columns_and_require_zero_context_arguments() {
     let graph = graph(Vec::new());
     let resolver = NavigationResolver::new(&graph);
