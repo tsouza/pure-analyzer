@@ -1123,6 +1123,7 @@ name = "pure-analyzer-analysis"
 version = "0.1.0"
 dependencies = [
  "pure-analyzer-diagnostics",
+ "pure-analyzer-lexer",
  "pure-analyzer-model",
  "pure-analyzer-parser",
  "pure-analyzer-resolve",

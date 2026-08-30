@@ -22,3 +22,6 @@ serde_json.workspace = true
 
 [dev-dependencies]
 pure-analyzer-diagnostics.workspace = true
+pure-analyzer-lexer.workspace = true
+pure-analyzer-parser.workspace = true
+serde_json.workspace = true
