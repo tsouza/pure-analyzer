@@ -369,4 +369,25 @@ mod tests {
             non_whitespace_tokens(&formatted)
         );
     }
+    #[test]
+    fn formatter_control_tokens_preserve_delimiters_whitespace_and_final_newline() {
+        let range = pure_analyzer_syntax::TextRange::new(0.into(), 1.into());
+        let mut formatter = LayoutFormatter::new("", Vec::new());
+        formatter.token(SyntaxKind::BRACE_OPEN, "{", range);
+        formatter.token(SyntaxKind::IDENT, "x", range);
+        formatter.token(SyntaxKind::SEMICOLON, ";", range);
+
+        assert_eq!(formatter.output, "{x;\n");
+        formatter.output.push(' ');
+        formatter.trim_space();
+        assert_eq!(formatter.finish(), "{x;\n");
+    }
+    #[test]
+    fn formatter_indentation_uses_all_nesting_levels() {
+        let mut formatter = LayoutFormatter::new("", Vec::new());
+        formatter.parens = 1;
+        formatter.braces = 2;
+        formatter.indent();
+        assert_eq!(formatter.output, "                ");
+    }
 }
