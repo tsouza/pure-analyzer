@@ -553,6 +553,7 @@ fn navigation_failures_retain_ambiguity_cycle_and_member_arity_metadata() {
     };
     assert_eq!(arity.expected(), ONE_ARGUMENT);
     assert_eq!(arity.actual(), NO_ARGUMENTS);
+    assert!(!arity.is_generated_milestoned());
     assert!(arity.definition().is_some());
     assert!(arity.failure().completed().hops().is_empty());
     assert_eq!(arity.failure().step().name(), &name("byKey"));
