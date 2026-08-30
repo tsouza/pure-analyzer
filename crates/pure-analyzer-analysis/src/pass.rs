@@ -386,4 +386,22 @@ mod tests {
         assert_eq!(result.diagnostics()[0].code, DiagCode::CardinalityMisuse);
         assert_eq!(result.diagnostics()[0].severity, Severity::Warning);
     }
+
+    #[test]
+    fn policy_filters_below_the_minimum_without_filtering_errors() {
+        let engine = AnalysisEngine::new(
+            vec![Box::new(StaticPass {
+                name: "only",
+                diagnostics: vec![
+                    diagnostic(DiagCode::UnknownProperty, Severity::Hint, "quiet"),
+                    diagnostic(DiagCode::CardinalityMisuse, Severity::Error, "loud"),
+                ],
+            })],
+            FindingPolicy::new().with_minimum_severity(Severity::Warning),
+        );
+
+        let result = engine.analyze(input());
+        assert_eq!(result.diagnostics().len(), 1);
+        assert_eq!(result.diagnostics()[0].code, DiagCode::CardinalityMisuse);
+    }
 }
