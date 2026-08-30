@@ -187,6 +187,11 @@ mod tests {
     }
 
     #[test]
+    fn pass_name_is_stable() {
+        assert_eq!(ValidatePass.name(), "validate");
+    }
+
+    #[test]
     fn preserves_parser_recovery_findings() {
         assert!(codes("#>{db::Table").contains(&DiagCode::UnterminatedIsland));
         assert!(codes("\0").contains(&DiagCode::BadToken));
