@@ -174,19 +174,21 @@ mod tests {
             .expect("fixture model must load")
     }
 
-    fn pure_processing_milestoning_graph() -> ModelGraph {
-        let source = r#"
-Class <<temporal.processingtemporal>> model::TemporalTarget
-{
-}
+    fn pure_milestoning_graph(temporal: &str) -> ModelGraph {
+        let source = format!(
+            r#"
+Class <<temporal.{temporal}>> model::TemporalTarget
+{{
+}}
 
 Class model::Source
-{
+{{
   <<milestoning.generatedmilestoningproperty>>
-  point(): model::TemporalTarget[0..1] {};
-}
-"#;
-        load_pure_documents(&[PureDocument::new("milestoning.pure", source)])
+  point(): model::TemporalTarget[0..1] {{}};
+}}
+"#
+        );
+        load_pure_documents(&[PureDocument::new("milestoning.pure", &source)])
             .expect("fixture model must load")
     }
 
@@ -296,6 +298,63 @@ Class model::Source
         })
         .to_string();
         load_pmcd_documents(&[PmcdDocument::new("inherited-association", &source)])
+            .expect("fixture model must load")
+    }
+
+    fn chained_milestoning_graph() -> ModelGraph {
+        let generated = |name| {
+            json!({
+                "name": name,
+                "returnGenericType": {"rawType": "model::Temporal", "typeArguments": []},
+                "returnMultiplicity": {"lowerBound": 0, "upperBound": 1},
+                "stereotypes": [{
+                    "profile": "meta::pure::profiles::milestoning",
+                    "value": "generatedmilestoningproperty",
+                }],
+                "parameters": [],
+            })
+        };
+        let source = json!({
+            "_type": "data",
+            "elements": [
+                {
+                    "_type": "class",
+                    "package": "model",
+                    "name": "Temporal",
+                    "stereotypes": [{
+                        "profile": "meta::pure::profiles::temporal",
+                        "value": "processingtemporal",
+                    }],
+                    "superTypes": [],
+                    "properties": [{
+                        "name": "plain",
+                        "genericType": {"rawType": "model::Temporal", "typeArguments": []},
+                        "multiplicity": {"lowerBound": 0, "upperBound": 1},
+                    }],
+                    "qualifiedProperties": [
+                        generated("next"),
+                        {
+                            "name": "zero",
+                            "returnGenericType": {"rawType": "model::Temporal", "typeArguments": []},
+                            "returnMultiplicity": {"lowerBound": 0, "upperBound": 1},
+                            "stereotypes": [],
+                            "parameters": [],
+                        },
+                    ],
+                },
+                {
+                    "_type": "class",
+                    "package": "model",
+                    "name": "Source",
+                    "stereotypes": [],
+                    "superTypes": [],
+                    "properties": [],
+                    "qualifiedProperties": [generated("first")],
+                },
+            ],
+        })
+        .to_string();
+        load_pmcd_documents(&[PmcdDocument::new("chained-milestoning", &source)])
             .expect("fixture model must load")
     }
 
@@ -490,24 +549,39 @@ Class model::Source
     }
 
     #[test]
-    fn generated_milestoning_lint_has_pmcd_pure_parity() {
-        let pmcd = milestoning_graph(Some("processingtemporal"));
-        let pure = pure_processing_milestoning_graph();
-        for source in [
+    fn generated_milestoning_lint_has_complete_pmcd_pure_truth_table_parity() {
+        let cases = [
+            (None, [false, true, true, true]),
+            (Some("businesstemporal"), [true, false, false, true]),
+            (Some("processingtemporal"), [true, false, false, true]),
+            (Some("bitemporal"), [true, true, true, false]),
+        ];
+        let sources = [
             "model::Source.all()->filter(x| $x.point())",
             "model::Source.all()->filter(x| $x.point(%latest))",
-        ] {
-            assert_eq!(
-                milestoning_diagnostics(source, Some(&pmcd))
+            "model::Source.all()->filter(x| $x.point(%2020-01-01))",
+            "model::Source.all()->filter(x| $x.point(%latest, %2020-01-01))",
+        ];
+
+        for (temporal, expected_findings) in cases {
+            let pmcd = milestoning_graph(temporal);
+            let pure = pure_milestoning_graph(temporal.unwrap_or(""));
+            for (source, expected_finding) in sources.iter().zip(expected_findings) {
+                let pmcd_findings = milestoning_diagnostics(source, Some(&pmcd))
                     .into_iter()
                     .map(|diagnostic| diagnostic.code)
-                    .collect::<Vec<_>>(),
-                milestoning_diagnostics(source, Some(&pure))
+                    .collect::<Vec<_>>();
+                let pure_findings = milestoning_diagnostics(source, Some(&pure))
                     .into_iter()
                     .map(|diagnostic| diagnostic.code)
-                    .collect::<Vec<_>>(),
-                "model loaders must produce the same generated-milestoning lint: {source}"
-            );
+                    .collect::<Vec<_>>();
+                assert_eq!(pmcd_findings, pure_findings, "loader parity: {source}");
+                assert_eq!(
+                    !pmcd_findings.is_empty(),
+                    expected_finding,
+                    "temporal={temporal:?}: {source}"
+                );
+            }
         }
     }
 
@@ -566,6 +640,35 @@ Class model::Source
             )
             .is_empty()
         );
+    }
+
+    #[test]
+    fn requires_a_fresh_date_at_each_generated_hop_after_resets() {
+        let model = chained_milestoning_graph();
+        for source in [
+            "model::Source.all()->filter(x| $x.first(%latest).next())",
+            "model::Source.all()->filter(x| $x.first(%2020-01-01).plain.next())",
+            "model::Source.all()->filter(x| $x.first(%latest).zero().next())",
+        ] {
+            assert_eq!(
+                milestoning_diagnostics(source, Some(&model))
+                    .into_iter()
+                    .map(|diagnostic| diagnostic.code)
+                    .collect::<Vec<_>>(),
+                vec![DiagCode::WrongMilestoningArity],
+                "each generated hop needs a fresh date after reset: {source}"
+            );
+        }
+        for source in [
+            "model::Source.all()->filter(x| $x.first(%latest).next(%latest))",
+            "model::Source.all()->filter(x| $x.first(%2020-01-01).plain.next(%latest))",
+            "model::Source.all()->filter(x| $x.first(%latest).zero().next(%2020-01-01))",
+        ] {
+            assert!(
+                milestoning_diagnostics(source, Some(&model)).is_empty(),
+                "fresh date is accepted at every generated hop: {source}"
+            );
+        }
     }
 
     #[test]
