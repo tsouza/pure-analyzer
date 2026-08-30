@@ -366,6 +366,46 @@ impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::LocalResolutionSi
 pub unsafe fn pure_analyzer_analysis::LocalResolutionSite::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for pure_analyzer_analysis::LocalResolutionSite
 pub fn pure_analyzer_analysis::LocalResolutionSite::from(T) -> T
+pub struct pure_analyzer_analysis::NavigationLintPass
+impl core::clone::Clone for pure_analyzer_analysis::NavigationLintPass
+pub fn pure_analyzer_analysis::NavigationLintPass::clone(&self) -> pure_analyzer_analysis::NavigationLintPass
+impl core::default::Default for pure_analyzer_analysis::NavigationLintPass
+pub fn pure_analyzer_analysis::NavigationLintPass::default() -> pure_analyzer_analysis::NavigationLintPass
+impl core::fmt::Debug for pure_analyzer_analysis::NavigationLintPass
+pub fn pure_analyzer_analysis::NavigationLintPass::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for pure_analyzer_analysis::NavigationLintPass
+impl pure_analyzer_analysis::AnalysisPass for pure_analyzer_analysis::NavigationLintPass
+pub fn pure_analyzer_analysis::NavigationLintPass::analyze(&self, pure_analyzer_analysis::AnalysisInput<'_, '_>) -> alloc::vec::Vec<pure_analyzer_diagnostics::diagnostic::Diagnostic>
+pub fn pure_analyzer_analysis::NavigationLintPass::name(&self) -> &'static str
+impl core::marker::Freeze for pure_analyzer_analysis::NavigationLintPass
+impl core::marker::Send for pure_analyzer_analysis::NavigationLintPass
+impl core::marker::Sync for pure_analyzer_analysis::NavigationLintPass
+impl core::marker::Unpin for pure_analyzer_analysis::NavigationLintPass
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::NavigationLintPass
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::NavigationLintPass
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::NavigationLintPass
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::NavigationLintPass where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::NavigationLintPass::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::NavigationLintPass where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::NavigationLintPass::Error = never
+pub fn pure_analyzer_analysis::NavigationLintPass::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::NavigationLintPass where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::NavigationLintPass::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::NavigationLintPass::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::NavigationLintPass where T: core::clone::Clone
+pub type pure_analyzer_analysis::NavigationLintPass::Owned = T
+pub fn pure_analyzer_analysis::NavigationLintPass::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::NavigationLintPass::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::NavigationLintPass where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::NavigationLintPass::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::NavigationLintPass where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::NavigationLintPass::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::NavigationLintPass where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::NavigationLintPass::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::NavigationLintPass where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::NavigationLintPass::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::NavigationLintPass
+pub fn pure_analyzer_analysis::NavigationLintPass::from(T) -> T
 pub struct pure_analyzer_analysis::ValidatePass
 impl core::clone::Clone for pure_analyzer_analysis::ValidatePass
 pub fn pure_analyzer_analysis::ValidatePass::clone(&self) -> pure_analyzer_analysis::ValidatePass
@@ -409,6 +449,9 @@ pub fn pure_analyzer_analysis::ValidatePass::from(T) -> T
 pub trait pure_analyzer_analysis::AnalysisPass: core::fmt::Debug + core::marker::Send + core::marker::Sync
 pub fn pure_analyzer_analysis::AnalysisPass::analyze(&self, pure_analyzer_analysis::AnalysisInput<'_, '_>) -> alloc::vec::Vec<pure_analyzer_diagnostics::diagnostic::Diagnostic>
 pub fn pure_analyzer_analysis::AnalysisPass::name(&self) -> &'static str
+impl pure_analyzer_analysis::AnalysisPass for pure_analyzer_analysis::NavigationLintPass
+pub fn pure_analyzer_analysis::NavigationLintPass::analyze(&self, pure_analyzer_analysis::AnalysisInput<'_, '_>) -> alloc::vec::Vec<pure_analyzer_diagnostics::diagnostic::Diagnostic>
+pub fn pure_analyzer_analysis::NavigationLintPass::name(&self) -> &'static str
 impl pure_analyzer_analysis::AnalysisPass for pure_analyzer_analysis::ValidatePass
 pub fn pure_analyzer_analysis::ValidatePass::analyze(&self, pure_analyzer_analysis::AnalysisInput<'_, '_>) -> alloc::vec::Vec<pure_analyzer_diagnostics::diagnostic::Diagnostic>
 pub fn pure_analyzer_analysis::ValidatePass::name(&self) -> &'static str
