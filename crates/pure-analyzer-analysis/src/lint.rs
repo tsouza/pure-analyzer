@@ -125,7 +125,7 @@ mod tests {
             .expect("fixture model must load")
     }
 
-    fn milestoning_graph() -> ModelGraph {
+    fn milestoning_graph(temporal: &str) -> ModelGraph {
         let source = json!({
             "_type": "data",
             "elements": [
@@ -135,7 +135,7 @@ mod tests {
                     "name": "TemporalTarget",
                     "stereotypes": [{
                         "profile": "meta::pure::profiles::temporal",
-                        "value": "processingtemporal",
+                        "value": temporal,
                     }],
                     "superTypes": [],
                     "properties": [],
@@ -278,7 +278,7 @@ mod tests {
 
     #[test]
     fn reports_only_confirmed_generated_milestoning_arity_mismatches() {
-        let model = milestoning_graph();
+        let model = milestoning_graph("processingtemporal");
         let source = "model::Source.all()->filter(x| $x.point())";
         let findings = milestoning_diagnostics(source, Some(&model));
 
@@ -297,6 +297,23 @@ mod tests {
         assert!(milestoning_diagnostics("model::Person.all()->filter(x| $x.name(1))", Some(&graph()))
             .is_empty());
         assert!(milestoning_diagnostics(source, None).is_empty());
+    }
+
+    #[test]
+    fn applies_the_bitemporal_two_date_arity() {
+        let model = milestoning_graph("bitemporal");
+        let one_date = "model::Source.all()->filter(x| $x.point(%latest))";
+        let findings = milestoning_diagnostics(one_date, Some(&model));
+
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].code, DiagCode::WrongMilestoningArity);
+        assert!(
+            milestoning_diagnostics(
+                "model::Source.all()->filter(x| $x.point(%latest, %latest))",
+                Some(&model),
+            )
+            .is_empty()
+        );
     }
 
     #[test]
