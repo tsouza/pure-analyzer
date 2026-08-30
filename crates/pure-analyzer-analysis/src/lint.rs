@@ -96,7 +96,9 @@ impl AnalysisPass for MilestoningArityLintPass {
 #[allow(clippy::disallowed_methods)]
 mod tests {
     use pure_analyzer_diagnostics::FileId;
-    use pure_analyzer_model::{ModelGraph, PmcdDocument, load_pmcd_documents};
+    use pure_analyzer_model::{
+        ModelGraph, PmcdDocument, PureDocument, load_pmcd_documents, load_pure_documents,
+    };
     use pure_analyzer_parser::parse_query;
     use serde_json::json;
 
@@ -169,6 +171,131 @@ mod tests {
         })
         .to_string();
         load_pmcd_documents(&[PmcdDocument::new("milestoning", &source)])
+            .expect("fixture model must load")
+    }
+
+    fn pure_processing_milestoning_graph() -> ModelGraph {
+        let source = r#"
+Class <<temporal.processingtemporal>> model::TemporalTarget
+{
+}
+
+Class model::Source
+{
+  <<milestoning.generatedmilestoningproperty>>
+  point(): model::TemporalTarget[0..1] {};
+}
+"#;
+        load_pure_documents(&[PureDocument::new("milestoning.pure", source)])
+            .expect("fixture model must load")
+    }
+
+    fn inherited_association_milestoning_graph(temporal: &str) -> ModelGraph {
+        let property = |name, target| {
+            json!({
+                "name": name,
+                "genericType": {"rawType": target, "typeArguments": []},
+                "multiplicity": {"lowerBound": 0, "upperBound": 1},
+            })
+        };
+        let generated_point = || {
+            json!({
+                "name": "point",
+                "returnGenericType": {"rawType": "model::TemporalTarget", "typeArguments": []},
+                "returnMultiplicity": {"lowerBound": 0, "upperBound": 1},
+                "stereotypes": [{
+                    "profile": "meta::pure::profiles::milestoning",
+                    "value": "generatedmilestoningproperty",
+                }],
+                "parameters": [],
+            })
+        };
+        let user_point = || {
+            json!({
+                "name": "point",
+                "returnGenericType": {"rawType": "String", "typeArguments": []},
+                "returnMultiplicity": {"lowerBound": 0, "upperBound": 1},
+                "stereotypes": [],
+                "parameters": [{
+                    "genericType": {"rawType": "Integer", "typeArguments": []},
+                }],
+            })
+        };
+        let source = json!({
+            "_type": "data",
+            "elements": [
+                {
+                    "_type": "class",
+                    "package": "model",
+                    "name": "TemporalTarget",
+                    "stereotypes": [{
+                        "profile": "meta::pure::profiles::temporal",
+                        "value": temporal,
+                    }],
+                    "superTypes": [],
+                    "properties": [],
+                    "qualifiedProperties": [],
+                },
+                {
+                    "_type": "class",
+                    "package": "model",
+                    "name": "GeneratedParent",
+                    "stereotypes": [],
+                    "superTypes": [],
+                    "properties": [],
+                    "qualifiedProperties": [generated_point()],
+                },
+                {
+                    "_type": "class",
+                    "package": "model",
+                    "name": "InheritedChild",
+                    "stereotypes": [],
+                    "superTypes": ["model::GeneratedParent"],
+                    "properties": [],
+                    "qualifiedProperties": [],
+                },
+                {
+                    "_type": "class",
+                    "package": "model",
+                    "name": "OverrideChild",
+                    "stereotypes": [],
+                    "superTypes": ["model::GeneratedParent"],
+                    "properties": [],
+                    "qualifiedProperties": [user_point()],
+                },
+                {
+                    "_type": "class",
+                    "package": "model",
+                    "name": "Source",
+                    "stereotypes": [],
+                    "superTypes": [],
+                    "properties": [],
+                    "qualifiedProperties": [],
+                },
+                {
+                    "_type": "association",
+                    "package": "model",
+                    "name": "Source_Child",
+                    "stereotypes": [],
+                    "properties": [
+                        property("inheritedChild", "model::InheritedChild"),
+                        property("source", "model::Source"),
+                    ],
+                },
+                {
+                    "_type": "association",
+                    "package": "model",
+                    "name": "Source_Override",
+                    "stereotypes": [],
+                    "properties": [
+                        property("overrideChild", "model::OverrideChild"),
+                        property("overrideSource", "model::Source"),
+                    ],
+                },
+            ],
+        })
+        .to_string();
+        load_pmcd_documents(&[PmcdDocument::new("inherited-association", &source)])
             .expect("fixture model must load")
     }
 
@@ -357,6 +484,85 @@ mod tests {
             milestoning_diagnostics(
                 "model::Source.all()->filter(x| $x.point(%latest, %latest))",
                 Some(&model),
+            )
+            .is_empty()
+        );
+    }
+
+    #[test]
+    fn generated_milestoning_lint_has_pmcd_pure_parity() {
+        let pmcd = milestoning_graph(Some("processingtemporal"));
+        let pure = pure_processing_milestoning_graph();
+        for source in [
+            "model::Source.all()->filter(x| $x.point())",
+            "model::Source.all()->filter(x| $x.point(%latest))",
+        ] {
+            assert_eq!(
+                milestoning_diagnostics(source, Some(&pmcd))
+                    .into_iter()
+                    .map(|diagnostic| diagnostic.code)
+                    .collect::<Vec<_>>(),
+                milestoning_diagnostics(source, Some(&pure))
+                    .into_iter()
+                    .map(|diagnostic| diagnostic.code)
+                    .collect::<Vec<_>>(),
+                "model loaders must produce the same generated-milestoning lint: {source}"
+            );
+        }
+    }
+
+    #[test]
+    fn applies_only_confirmed_generated_arity_after_association_and_inheritance() {
+        let model = inherited_association_milestoning_graph("processingtemporal");
+        let missing_date = "model::Source.all()->filter(x| $x.inheritedChild.point())";
+
+        assert_eq!(
+            milestoning_diagnostics(missing_date, Some(&model))
+                .into_iter()
+                .map(|diagnostic| diagnostic.code)
+                .collect::<Vec<_>>(),
+            vec![DiagCode::WrongMilestoningArity]
+        );
+        assert!(
+            milestoning_diagnostics(
+                "model::Source.all()->filter(x| $x.inheritedChild.point(%latest))",
+                Some(&model),
+            )
+            .is_empty()
+        );
+        assert!(
+            milestoning_diagnostics(
+                "model::Source.all()->filter(x| $x.overrideChild.point())",
+                Some(&model),
+            )
+            .is_empty()
+        );
+        assert_eq!(
+            milestoning_diagnostics(
+                "model::InheritedChild.all()->filter(x| $x.source.inheritedChild.point())",
+                Some(&model),
+            )
+            .into_iter()
+            .map(|diagnostic| diagnostic.code)
+            .collect::<Vec<_>>(),
+            vec![DiagCode::WrongMilestoningArity]
+        );
+
+        let bitemporal = inherited_association_milestoning_graph("bitemporal");
+        assert_eq!(
+            milestoning_diagnostics(
+                "model::Source.all()->filter(x| $x.inheritedChild.point(%latest))",
+                Some(&bitemporal),
+            )
+            .into_iter()
+            .map(|diagnostic| diagnostic.code)
+            .collect::<Vec<_>>(),
+            vec![DiagCode::WrongMilestoningArity]
+        );
+        assert!(
+            milestoning_diagnostics(
+                "model::Source.all()->filter(x| $x.inheritedChild.point(%latest, %latest))",
+                Some(&bitemporal),
             )
             .is_empty()
         );
