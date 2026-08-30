@@ -859,9 +859,13 @@ fn the_shapes_the_name_and_frame_rules_sit_next_to_still_stream() {
 /// an argument or element slot to bind in. A block query's statement level has
 /// neither, so the binder arms die there while `::` keeps streaming.
 ///
-/// The anchor names the byte *after* the colon: the automaton consumes a `:` into
-/// its lookahead state (a second `:` is still legal there), so the refusal lands
-/// on the byte that would have opened the binder.
+/// Off a **name or a string literal** the anchor names the byte *after* the
+/// colon: a `::` may still follow there, so the automaton consumes the `:` into
+/// its lookahead state and the refusal lands on the byte that would have opened
+/// the binder. Off any **other** completed term a `::` cannot follow at all
+/// (issue #55 Phase 9), so with no binder slot open the colon has no reading
+/// left and the refusal lands on the colon itself — which is where the engine
+/// points too ("Unexpected token ':'"). Only walk 1 is of the latter kind.
 ///
 /// All four walks came verbatim out of the live lane (issue #55 Phase 4) with the
 /// engine's "Unexpected token ':'".
@@ -871,7 +875,7 @@ fn a_typed_binder_colon_at_a_block_statement_level_dies() {
         // world_1
         (
             "  \n  \n    {\n\n\n  \n    \n    \n    \n    \n     \n\n    \n  \n      \n        \n        \n            \n\n        \n        \n      |spider::world_1::model::default::Countrylanguage.    \n        \n    \n         \n    all():language*meta::relational::metamodel::join::JoinType}",
-            "language*meta::",
+            ":language*meta::",
         ),
         // car_1
         (
@@ -901,5 +905,80 @@ fn a_value_position_classpath_at_a_block_statement_level_still_streams() {
     assert!(!dies(
         "{|X.all()->filter(x|$x.t == meta::relational::metamodel::join::JoinType.INNER)\
          ->take(1);}"
+    ));
+}
+
+/// A `::` names a **package path**, and a package path is spelled from a bare
+/// word or a quoted one. Off any other completed term — a call's `)`, a `]`, a
+/// number, a date literal, a `$`-variable, a navigated `.property` or a
+/// `->`-called name — the engine has no reading for it (issue #55 Phase 9).
+///
+/// Where the walk still has a binder slot open the `:` is consumed as a possible
+/// typed-binder colon and the refusal lands on the second `:`; where it has none
+/// the colon has no reading at all and the refusal lands on the first. Both
+/// refusal points are frozen below.
+///
+/// All four walks came verbatim out of the live lane on this branch, each with
+/// the pinned engine's own rejection: walk 1 "no viable alternative at input
+/// '…->extend('Code_T1'&&code&&'Republic')::'", walks 2-4 "Unexpected token
+/// '::'".
+#[test]
+fn a_classpath_separator_off_a_non_name_dies() {
+    for (walk, at) in [
+        // world_1 (live walk 18) — `::` off a call's `)`, no binder slot open
+        (
+            "  \n  \n      \n    \n  {|spider::world_1::Db->tableReference('HeadOfState_T1_3'    \n    \n    ,'english'\n        )!='CountryCode_T1_1'\n        ==String|||c+'Population_T1_1'\n        ->extend('Code_T1'&&code&&'Republic'\n  )::filter\n      \n  \n        *asc('HeadOfState_T3_1'  )<'CountryCode_T1_1'|||_<c::min}",
+            "::filter",
+        ),
+        // car_1 (live walk 13) — the same shape, in a walk whose *legal* `::`es
+        // off a bare name and off a string literal both stream past first
+        (
+            "  {\n      \n        \n      \n    \n      |spider::car_1::Db->tableReference('MPG_T2'\n\n        \n         \n      \n      \n    ,'null'\n    )!=mpg::getInteger\n  &&'europe'::makeId\n  (extend|  'cars_data'\n        )\n        ::extend||_}",
+            "::extend||_}",
+        ),
+        // car_1 (live walk 55) — `::` off a navigated `.property`, inside a call
+        // argument, so the refusal lands on the second colon
+        (
+            "      \n      {|\n        spider::car_1::Db->tableReference('Continent_t1'\n  \n    \n\n        \n      \n            \n        \n        \n  \n \n        \n             \n        \n      \n    \n       \n  ,'Accelerate_T3')->join('ContId_T1'&&'MPG_T1_1'.meta::pure::tds::TDSRow)}",
+            ":pure::tds",
+        ),
+        // car_1 (live walk 41) — the same `)`-then-`::`, in a walk whose four
+        // *binder-type* `::`es (`getFloat:row ::weight ::project …`) all stream
+        // past first: that path is a separate, still-open over-approximation and
+        // this rule does not touch it
+        (
+            "    \n      {\n  \n    \n    \n         |        spider::car_1::model::default::CarMakers.\n    \n    all(\n      )\n        ->extend(getFloat:row \n      ::weight\n      \n        \n\n\n          \n      ::project ::fk4DefaultCarsData\n          \n\n        \n  \n      \n        ::parseFloat[\n      1974]\n          \n\n\n\n  \n    \n         \n        \n\n\n    \n \n            \n        \n  \n      \n        |'Year_T3')    ::meta::relational::metamodel::join::JoinType\n        |||y}",
+            "::meta::relational",
+        ),
+    ] {
+        assert_dies_at(walk, at);
+    }
+}
+
+/// The soundness counterfactual for the rule above: every `::` the engine *does*
+/// accept off a completed term still streams. Each shape here was probed through
+/// the pinned engine on this branch and parses; the classpath separator binds to
+/// a term-start name or a string literal, across whitespace as well.
+#[test]
+fn a_classpath_separator_off_a_name_or_a_string_literal_still_streams() {
+    assert!(!dies("|X.all()->filter(c|$c.name != mpg::getInteger)"));
+    assert!(!dies(
+        "|X.all()->filter(c|$c.name != meta::pure::tds::TDSRow)"
+    ));
+    assert!(!dies("|X.all()->filter(c|$c.name != 'europe'::makeId)"));
+    assert!(!dies("|X.all()->filter(c|$c.name != 'a b'::c)"));
+    assert!(!dies("|X.all()->filter(c|$c.name != mpg ::getInteger)"));
+    // The typed binder's own type classpath, whose `:` also opens off a name.
+    assert!(!dies(
+        "|X.all()->filter(row: meta::pure::tds::TDSRow[1]|$row.getInteger('c') == 1)"
+    ));
+    // arm-R's second column colon legitimately follows a *completed* term — a
+    // navigation in the first walk, a brace lambda's `}` in the second — so the
+    // binder arms this rule leaves in place are load-bearing.
+    assert!(!dies(
+        "|X.all()->groupBy(~[K], ~'Agg': x|$x.v : y|$y->sum())"
+    ));
+    assert!(!dies(
+        "|X.all()->project(~[N: x|$x.a])->extend(over(~N), ~[agg:{p,w,r|$r.v}:y|$y->sum()])"
     ));
 }

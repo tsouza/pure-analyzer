@@ -446,6 +446,16 @@
         },
         {
           "action": {
+            "kind": "next",
+            "state": "AfterColon"
+          },
+          "match": {
+            "kind": "exact",
+            "byte": 58
+          }
+        },
+        {
+          "action": {
             "kind": "goto",
             "state": "AfterValue"
           },
@@ -475,6 +485,16 @@
           "match": {
             "kind": "exact",
             "byte": 124
+          }
+        },
+        {
+          "action": {
+            "kind": "next",
+            "state": "AfterColon"
+          },
+          "match": {
+            "kind": "exact",
+            "byte": 58
           }
         },
         {
@@ -597,7 +617,11 @@
         {
           "action": {
             "kind": "next",
-            "state": "AfterColon"
+            "state": "AfterValueColon"
+          },
+          "guard": {
+            "frame": "Brace",
+            "kind": "stack_top_is_not"
           },
           "match": {
             "byte": 58,
@@ -713,6 +737,29 @@
           "match": {
             "byte": 125,
             "kind": "exact"
+          }
+        }
+      ]
+    },
+    "AfterValueColon": {
+      "accepting": false,
+      "rules": [
+        {
+          "action": {
+            "kind": "dead"
+          },
+          "match": {
+            "byte": 58,
+            "kind": "exact"
+          }
+        },
+        {
+          "action": {
+            "kind": "goto",
+            "state": "AfterColon"
+          },
+          "match": {
+            "kind": "any"
           }
         }
       ]

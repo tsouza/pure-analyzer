@@ -321,6 +321,7 @@ pub purecard::grammar::pda::State::AfterMemberName
 pub purecard::grammar::pda::State::AfterName
 pub purecard::grammar::pda::State::AfterStrLit
 pub purecard::grammar::pda::State::AfterValue
+pub purecard::grammar::pda::State::AfterValueColon
 pub purecard::grammar::pda::State::BinderTypeColon
 pub purecard::grammar::pda::State::BinderTypeColon2
 pub purecard::grammar::pda::State::BlockStmt
