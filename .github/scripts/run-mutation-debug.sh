@@ -8,6 +8,8 @@ readonly MEMORY_MAX_BYTES=6442450944
 readonly PIDS_MAX=2048
 readonly INNER_WALL_LIMIT=25m
 readonly INNER_KILL_GRACE=30s
+readonly OUTER_WALL_LIMIT_SECONDS=$((26 * 60))
+readonly OUTER_KILL_GRACE_SECONDS=90
 
 usage() {
   printf 'usage: %s shard <index> <total>\n' "$0" >&2
@@ -72,7 +74,9 @@ mkdir -p "$DIAGNOSTICS_DIR"
 
 mutation_cgroup_dir=""
 telemetry_pid=""
+watchdog_pid=""
 termination_signal=""
+readonly PARENT_PID=$$
 
 find_self_cgroup_dir() {
   local relative
@@ -283,6 +287,35 @@ stop_telemetry() {
   fi
 }
 
+# The inner timeout begins only after cgroup and sccache setup. Keep a
+# separate parent watchdog so a setup hang cannot bypass the CI wall bound.
+# It also kills the cgroup itself before the final parent kill, preventing
+# orphaned cargo-mutants descendants from keeping a hosted runner occupied.
+# shellcheck disable=SC2329
+stop_watchdog() {
+  if [[ -n "$watchdog_pid" ]]; then
+    kill "$watchdog_pid" 2>/dev/null || true
+    wait "$watchdog_pid" 2>/dev/null || true
+    watchdog_pid=""
+  fi
+}
+
+# shellcheck disable=SC2329
+kill_mutation_cgroup() {
+  [[ -n "$mutation_cgroup_dir" && -e "${mutation_cgroup_dir}/cgroup.kill" ]] || return 0
+  printf '1\n' | sudo -n tee "${mutation_cgroup_dir}/cgroup.kill" >/dev/null || true
+}
+
+# shellcheck disable=SC2329
+watchdog() {
+  sleep "$OUTER_WALL_LIMIT_SECONDS"
+  printf '%s\n' "mutation watchdog reached ${OUTER_WALL_LIMIT_SECONDS}s; terminating wrapper" >&2
+  kill -TERM "$PARENT_PID" 2>/dev/null || true
+  sleep "$OUTER_KILL_GRACE_SECONDS"
+  kill_mutation_cgroup
+  kill -KILL "$PARENT_PID" 2>/dev/null || true
+}
+
 # Reached through the EXIT trap cleanup path.
 # shellcheck disable=SC2329
 cgroup_has_processes() {
@@ -399,6 +432,7 @@ on_signal() {
 on_exit() {
   local status=$?
   trap - EXIT TERM INT HUP
+  stop_watchdog
   stop_telemetry
   snapshot "exit status ${status}" || true
   classify_result "$status"
@@ -414,6 +448,9 @@ trap 'on_signal TERM 143' TERM
 trap 'on_signal INT 130' INT
 trap 'on_signal HUP 129' HUP
 trap on_exit EXIT
+
+watchdog &
+watchdog_pid=$!
 
 setup_cgroup
 prepare_sccache
