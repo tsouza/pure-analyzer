@@ -1137,6 +1137,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "pure-analyzer-analysis",
+ "pure-analyzer-diagnostics",
  "tracing",
  "tracing-subscriber",
 ]
