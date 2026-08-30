@@ -391,4 +391,8 @@ mod tests {
         formatter.indent();
         assert_eq!(formatter.output, "                ");
     }
+    #[test]
+    fn formatter_keeps_empty_input_empty() {
+        assert_eq!(LayoutFormatter::new("", Vec::new()).finish(), "");
+    }
 }
