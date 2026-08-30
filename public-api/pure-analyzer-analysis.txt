@@ -39,6 +39,208 @@ impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::LocalResolution w
 pub unsafe fn pure_analyzer_analysis::LocalResolution::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for pure_analyzer_analysis::LocalResolution
 pub fn pure_analyzer_analysis::LocalResolution::from(T) -> T
+pub enum pure_analyzer_analysis::ModelAvailability
+pub pure_analyzer_analysis::ModelAvailability::Available
+pub pure_analyzer_analysis::ModelAvailability::Unavailable
+impl core::clone::Clone for pure_analyzer_analysis::ModelAvailability
+pub fn pure_analyzer_analysis::ModelAvailability::clone(&self) -> pure_analyzer_analysis::ModelAvailability
+impl core::cmp::Eq for pure_analyzer_analysis::ModelAvailability
+impl core::cmp::PartialEq for pure_analyzer_analysis::ModelAvailability
+pub fn pure_analyzer_analysis::ModelAvailability::eq(&self, &pure_analyzer_analysis::ModelAvailability) -> bool
+impl core::fmt::Debug for pure_analyzer_analysis::ModelAvailability
+pub fn pure_analyzer_analysis::ModelAvailability::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for pure_analyzer_analysis::ModelAvailability
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::ModelAvailability
+impl core::marker::Freeze for pure_analyzer_analysis::ModelAvailability
+impl core::marker::Send for pure_analyzer_analysis::ModelAvailability
+impl core::marker::Sync for pure_analyzer_analysis::ModelAvailability
+impl core::marker::Unpin for pure_analyzer_analysis::ModelAvailability
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::ModelAvailability
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::ModelAvailability
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::ModelAvailability
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::ModelAvailability where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::ModelAvailability::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::ModelAvailability where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::ModelAvailability::Error = never
+pub fn pure_analyzer_analysis::ModelAvailability::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::ModelAvailability where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::ModelAvailability::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::ModelAvailability::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::ModelAvailability where T: core::clone::Clone
+pub type pure_analyzer_analysis::ModelAvailability::Owned = T
+pub fn pure_analyzer_analysis::ModelAvailability::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::ModelAvailability::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::ModelAvailability where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::ModelAvailability::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::ModelAvailability where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::ModelAvailability::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::ModelAvailability where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::ModelAvailability::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::ModelAvailability where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::ModelAvailability::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::ModelAvailability
+pub fn pure_analyzer_analysis::ModelAvailability::from(T) -> T
+pub struct pure_analyzer_analysis::AnalysisEngine
+impl pure_analyzer_analysis::AnalysisEngine
+pub fn pure_analyzer_analysis::AnalysisEngine::analyze(&self, pure_analyzer_analysis::AnalysisInput<'_, '_>) -> pure_analyzer_analysis::AnalysisResult
+pub fn pure_analyzer_analysis::AnalysisEngine::new(alloc::vec::Vec<alloc::boxed::Box<dyn pure_analyzer_analysis::AnalysisPass>>, pure_analyzer_analysis::FindingPolicy) -> Self
+pub fn pure_analyzer_analysis::AnalysisEngine::pass_names(&self) -> impl core::iter::traits::iterator::Iterator<Item = &'static str> + '_
+impl core::fmt::Debug for pure_analyzer_analysis::AnalysisEngine
+pub fn pure_analyzer_analysis::AnalysisEngine::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for pure_analyzer_analysis::AnalysisEngine
+impl core::marker::Send for pure_analyzer_analysis::AnalysisEngine
+impl core::marker::Sync for pure_analyzer_analysis::AnalysisEngine
+impl core::marker::Unpin for pure_analyzer_analysis::AnalysisEngine
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::AnalysisEngine
+impl !core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::AnalysisEngine
+impl !core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::AnalysisEngine
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::AnalysisEngine where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::AnalysisEngine::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::AnalysisEngine where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::AnalysisEngine::Error = never
+pub fn pure_analyzer_analysis::AnalysisEngine::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::AnalysisEngine where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::AnalysisEngine::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::AnalysisEngine::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> core::any::Any for pure_analyzer_analysis::AnalysisEngine where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::AnalysisEngine::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::AnalysisEngine where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::AnalysisEngine::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::AnalysisEngine where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::AnalysisEngine::borrow_mut(&mut self) -> &mut T
+impl<T> core::convert::From<T> for pure_analyzer_analysis::AnalysisEngine
+pub fn pure_analyzer_analysis::AnalysisEngine::from(T) -> T
+pub struct pure_analyzer_analysis::AnalysisInput<'source, 'model>
+impl<'source, 'model> pure_analyzer_analysis::AnalysisInput<'source, 'model>
+pub const fn pure_analyzer_analysis::AnalysisInput<'source, 'model>::file(self) -> pure_analyzer_diagnostics::file::FileId
+pub const fn pure_analyzer_analysis::AnalysisInput<'source, 'model>::model(self) -> core::option::Option<&'model pure_analyzer_model::types::ModelGraph>
+pub const fn pure_analyzer_analysis::AnalysisInput<'source, 'model>::model_availability(self) -> pure_analyzer_analysis::ModelAvailability
+pub const fn pure_analyzer_analysis::AnalysisInput<'source, 'model>::new(pure_analyzer_diagnostics::file::FileId, &'source str, &'source pure_analyzer_syntax::green::GreenNode, &'source [pure_analyzer_diagnostics::diagnostic::Diagnostic], core::option::Option<&'model pure_analyzer_model::types::ModelGraph>) -> Self
+pub const fn pure_analyzer_analysis::AnalysisInput<'source, 'model>::parse_diagnostics(self) -> &'source [pure_analyzer_diagnostics::diagnostic::Diagnostic]
+pub const fn pure_analyzer_analysis::AnalysisInput<'source, 'model>::source(self) -> &'source str
+pub const fn pure_analyzer_analysis::AnalysisInput<'source, 'model>::tree(self) -> &'source pure_analyzer_syntax::green::GreenNode
+impl<'source, 'model> core::clone::Clone for pure_analyzer_analysis::AnalysisInput<'source, 'model>
+pub fn pure_analyzer_analysis::AnalysisInput<'source, 'model>::clone(&self) -> pure_analyzer_analysis::AnalysisInput<'source, 'model>
+impl<'source, 'model> core::fmt::Debug for pure_analyzer_analysis::AnalysisInput<'source, 'model>
+pub fn pure_analyzer_analysis::AnalysisInput<'source, 'model>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl<'source, 'model> core::marker::Copy for pure_analyzer_analysis::AnalysisInput<'source, 'model>
+impl<'source, 'model> core::marker::Freeze for pure_analyzer_analysis::AnalysisInput<'source, 'model>
+impl<'source, 'model> core::marker::Send for pure_analyzer_analysis::AnalysisInput<'source, 'model>
+impl<'source, 'model> core::marker::Sync for pure_analyzer_analysis::AnalysisInput<'source, 'model>
+impl<'source, 'model> core::marker::Unpin for pure_analyzer_analysis::AnalysisInput<'source, 'model>
+impl<'source, 'model> core::marker::UnsafeUnpin for pure_analyzer_analysis::AnalysisInput<'source, 'model>
+impl<'source, 'model> core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::AnalysisInput<'source, 'model>
+impl<'source, 'model> core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::AnalysisInput<'source, 'model>
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::AnalysisInput<'source, 'model> where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::AnalysisInput<'source, 'model>::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::AnalysisInput<'source, 'model> where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::AnalysisInput<'source, 'model>::Error = never
+pub fn pure_analyzer_analysis::AnalysisInput<'source, 'model>::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::AnalysisInput<'source, 'model> where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::AnalysisInput<'source, 'model>::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::AnalysisInput<'source, 'model>::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::AnalysisInput<'source, 'model> where T: core::clone::Clone
+pub type pure_analyzer_analysis::AnalysisInput<'source, 'model>::Owned = T
+pub fn pure_analyzer_analysis::AnalysisInput<'source, 'model>::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::AnalysisInput<'source, 'model>::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::AnalysisInput<'source, 'model> where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::AnalysisInput<'source, 'model>::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::AnalysisInput<'source, 'model> where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::AnalysisInput<'source, 'model>::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::AnalysisInput<'source, 'model> where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::AnalysisInput<'source, 'model>::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::AnalysisInput<'source, 'model> where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::AnalysisInput<'source, 'model>::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::AnalysisInput<'source, 'model>
+pub fn pure_analyzer_analysis::AnalysisInput<'source, 'model>::from(T) -> T
+pub struct pure_analyzer_analysis::AnalysisResult
+impl pure_analyzer_analysis::AnalysisResult
+pub fn pure_analyzer_analysis::AnalysisResult::diagnostics(&self) -> &[pure_analyzer_diagnostics::diagnostic::Diagnostic]
+pub fn pure_analyzer_analysis::AnalysisResult::into_diagnostics(self) -> alloc::vec::Vec<pure_analyzer_diagnostics::diagnostic::Diagnostic>
+impl core::clone::Clone for pure_analyzer_analysis::AnalysisResult
+pub fn pure_analyzer_analysis::AnalysisResult::clone(&self) -> pure_analyzer_analysis::AnalysisResult
+impl core::cmp::Eq for pure_analyzer_analysis::AnalysisResult
+impl core::cmp::PartialEq for pure_analyzer_analysis::AnalysisResult
+pub fn pure_analyzer_analysis::AnalysisResult::eq(&self, &pure_analyzer_analysis::AnalysisResult) -> bool
+impl core::default::Default for pure_analyzer_analysis::AnalysisResult
+pub fn pure_analyzer_analysis::AnalysisResult::default() -> pure_analyzer_analysis::AnalysisResult
+impl core::fmt::Debug for pure_analyzer_analysis::AnalysisResult
+pub fn pure_analyzer_analysis::AnalysisResult::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::AnalysisResult
+impl core::marker::Freeze for pure_analyzer_analysis::AnalysisResult
+impl core::marker::Send for pure_analyzer_analysis::AnalysisResult
+impl core::marker::Sync for pure_analyzer_analysis::AnalysisResult
+impl core::marker::Unpin for pure_analyzer_analysis::AnalysisResult
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::AnalysisResult
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::AnalysisResult
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::AnalysisResult
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::AnalysisResult where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::AnalysisResult::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::AnalysisResult where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::AnalysisResult::Error = never
+pub fn pure_analyzer_analysis::AnalysisResult::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::AnalysisResult where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::AnalysisResult::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::AnalysisResult::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::AnalysisResult where T: core::clone::Clone
+pub type pure_analyzer_analysis::AnalysisResult::Owned = T
+pub fn pure_analyzer_analysis::AnalysisResult::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::AnalysisResult::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::AnalysisResult where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::AnalysisResult::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::AnalysisResult where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::AnalysisResult::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::AnalysisResult where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::AnalysisResult::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::AnalysisResult where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::AnalysisResult::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::AnalysisResult
+pub fn pure_analyzer_analysis::AnalysisResult::from(T) -> T
+pub struct pure_analyzer_analysis::FindingPolicy
+impl pure_analyzer_analysis::FindingPolicy
+pub fn pure_analyzer_analysis::FindingPolicy::new() -> Self
+pub fn pure_analyzer_analysis::FindingPolicy::suppress(self, pure_analyzer_diagnostics::code::DiagCode) -> Self
+pub const fn pure_analyzer_analysis::FindingPolicy::with_minimum_severity(self, pure_analyzer_diagnostics::diagnostic::Severity) -> Self
+pub fn pure_analyzer_analysis::FindingPolicy::with_severity(self, pure_analyzer_diagnostics::code::DiagCode, pure_analyzer_diagnostics::diagnostic::Severity) -> Self
+impl core::clone::Clone for pure_analyzer_analysis::FindingPolicy
+pub fn pure_analyzer_analysis::FindingPolicy::clone(&self) -> pure_analyzer_analysis::FindingPolicy
+impl core::cmp::Eq for pure_analyzer_analysis::FindingPolicy
+impl core::cmp::PartialEq for pure_analyzer_analysis::FindingPolicy
+pub fn pure_analyzer_analysis::FindingPolicy::eq(&self, &pure_analyzer_analysis::FindingPolicy) -> bool
+impl core::default::Default for pure_analyzer_analysis::FindingPolicy
+pub fn pure_analyzer_analysis::FindingPolicy::default() -> Self
+impl core::fmt::Debug for pure_analyzer_analysis::FindingPolicy
+pub fn pure_analyzer_analysis::FindingPolicy::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::FindingPolicy
+impl core::marker::Freeze for pure_analyzer_analysis::FindingPolicy
+impl core::marker::Send for pure_analyzer_analysis::FindingPolicy
+impl core::marker::Sync for pure_analyzer_analysis::FindingPolicy
+impl core::marker::Unpin for pure_analyzer_analysis::FindingPolicy
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::FindingPolicy
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::FindingPolicy
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::FindingPolicy
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::FindingPolicy where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::FindingPolicy::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::FindingPolicy where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::FindingPolicy::Error = never
+pub fn pure_analyzer_analysis::FindingPolicy::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::FindingPolicy where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::FindingPolicy::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::FindingPolicy::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::FindingPolicy where T: core::clone::Clone
+pub type pure_analyzer_analysis::FindingPolicy::Owned = T
+pub fn pure_analyzer_analysis::FindingPolicy::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::FindingPolicy::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::FindingPolicy where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::FindingPolicy::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::FindingPolicy where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::FindingPolicy::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::FindingPolicy where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::FindingPolicy::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::FindingPolicy where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::FindingPolicy::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::FindingPolicy
+pub fn pure_analyzer_analysis::FindingPolicy::from(T) -> T
 pub struct pure_analyzer_analysis::LocalNavigationAnalysis
 impl pure_analyzer_analysis::LocalNavigationAnalysis
 pub fn pure_analyzer_analysis::LocalNavigationAnalysis::sites(&self) -> &[pure_analyzer_analysis::LocalResolutionSite]
@@ -122,5 +324,8 @@ impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::LocalResolutionSi
 pub unsafe fn pure_analyzer_analysis::LocalResolutionSite::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for pure_analyzer_analysis::LocalResolutionSite
 pub fn pure_analyzer_analysis::LocalResolutionSite::from(T) -> T
+pub trait pure_analyzer_analysis::AnalysisPass: core::fmt::Debug + core::marker::Send + core::marker::Sync
+pub fn pure_analyzer_analysis::AnalysisPass::analyze(&self, pure_analyzer_analysis::AnalysisInput<'_, '_>) -> alloc::vec::Vec<pure_analyzer_diagnostics::diagnostic::Diagnostic>
+pub fn pure_analyzer_analysis::AnalysisPass::name(&self) -> &'static str
 pub fn pure_analyzer_analysis::analyze_m3_locals(&pure_analyzer_syntax::green::GreenNode, &pure_analyzer_model::types::ModelGraph) -> pure_analyzer_analysis::LocalNavigationAnalysis
 pub fn pure_analyzer_analysis::version() -> &'static str
