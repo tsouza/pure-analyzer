@@ -4,8 +4,12 @@
 //! Conservative analysis passes over Pure syntax and model facts.
 
 mod local;
+mod pass;
 
 pub use local::{LocalNavigationAnalysis, LocalResolution, LocalResolutionSite, analyze_m3_locals};
+pub use pass::{
+    AnalysisEngine, AnalysisInput, AnalysisPass, AnalysisResult, FindingPolicy, ModelAvailability,
+};
 
 /// The crate's semantic version, as declared in `Cargo.toml`.
 #[must_use]
