@@ -10,7 +10,7 @@ mod pass;
 mod validate;
 
 pub use format::{FormatResult, format_query};
-pub use lint::NavigationLintPass;
+pub use lint::{MilestoningArityLintPass, NavigationLintPass};
 pub use local::{LocalNavigationAnalysis, LocalResolution, LocalResolutionSite, analyze_m3_locals};
 pub use pass::{
     AnalysisEngine, AnalysisInput, AnalysisPass, AnalysisResult, FindingPolicy, ModelAvailability,

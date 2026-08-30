@@ -12,6 +12,11 @@ use crate::{AnalysisInput, AnalysisPass, LocalResolution, analyze_m3_locals};
 #[derive(Debug, Default, Clone, Copy)]
 pub struct NavigationLintPass;
 
+/// Emits findings for generated milestoning navigations whose supplied date
+/// arguments have a conclusively wrong arity.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct MilestoningArityLintPass;
+
 impl AnalysisPass for NavigationLintPass {
     fn name(&self) -> &'static str {
         "navigation-lints"
@@ -51,6 +56,42 @@ impl AnalysisPass for NavigationLintPass {
     }
 }
 
+impl AnalysisPass for MilestoningArityLintPass {
+    fn name(&self) -> &'static str {
+        "milestoning-arity-lints"
+    }
+
+    fn analyze(&self, input: AnalysisInput<'_, '_>) -> Vec<Diagnostic> {
+        let Some(model) = input.model() else {
+            return Vec::new();
+        };
+
+        analyze_m3_locals(input.tree(), model)
+            .sites()
+            .iter()
+            .filter_map(|site| {
+                let LocalResolution::Navigation(NavigationResolution::WrongArity(mismatch)) =
+                    site.outcome()
+                else {
+                    return None;
+                };
+                if !mismatch.is_generated_milestoned() {
+                    return None;
+                }
+                Some(
+                    Diagnostic::builder(
+                        DiagCode::WrongMilestoningArity,
+                        Severity::Error,
+                        "generated milestoned navigation has the wrong number of dates",
+                        Label::new(input.file(), site.span()),
+                    )
+                    .build(),
+                )
+            })
+            .collect()
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::disallowed_methods)]
 mod tests {
@@ -81,6 +122,47 @@ mod tests {
         })
         .to_string();
         load_pmcd_documents(&[PmcdDocument::new("closed-world", &source)])
+            .expect("fixture model must load")
+    }
+
+    fn milestoning_graph() -> ModelGraph {
+        let source = json!({
+            "_type": "data",
+            "elements": [
+                {
+                    "_type": "class",
+                    "package": "model",
+                    "name": "TemporalTarget",
+                    "stereotypes": [{
+                        "profile": "meta::pure::profiles::temporal",
+                        "value": "processingtemporal",
+                    }],
+                    "superTypes": [],
+                    "properties": [],
+                    "qualifiedProperties": [],
+                },
+                {
+                    "_type": "class",
+                    "package": "model",
+                    "name": "Source",
+                    "stereotypes": [],
+                    "superTypes": [],
+                    "properties": [],
+                    "qualifiedProperties": [{
+                        "name": "point",
+                        "returnGenericType": {"rawType": "model::TemporalTarget", "typeArguments": []},
+                        "returnMultiplicity": {"lowerBound": 0, "upperBound": 1},
+                        "stereotypes": [{
+                            "profile": "meta::pure::profiles::milestoning",
+                            "value": "generatedmilestoningproperty",
+                        }],
+                        "parameters": [],
+                    }],
+                },
+            ],
+        })
+        .to_string();
+        load_pmcd_documents(&[PmcdDocument::new("milestoning", &source)])
             .expect("fixture model must load")
     }
 
@@ -146,6 +228,22 @@ mod tests {
             .into_diagnostics()
     }
 
+    fn milestoning_diagnostics(source: &str, model: Option<&ModelGraph>) -> Vec<Diagnostic> {
+        let parsed = parse_query(source, FileId::new(8)).expect("fixture must parse");
+        AnalysisEngine::new(
+            vec![Box::new(MilestoningArityLintPass)],
+            FindingPolicy::new(),
+        )
+        .analyze(AnalysisInput::new(
+            FileId::new(8),
+            source,
+            &parsed.green,
+            &parsed.diagnostics,
+            model,
+        ))
+        .into_diagnostics()
+    }
+
     #[test]
     fn reports_only_closed_world_missing_class_properties_at_the_navigation_span() {
         let model = graph();
@@ -176,6 +274,29 @@ mod tests {
                 "known member must not be linted: {source}"
             );
         }
+    }
+
+    #[test]
+    fn reports_only_confirmed_generated_milestoning_arity_mismatches() {
+        let model = milestoning_graph();
+        let source = "model::Source.all()->filter(x| $x.point())";
+        let findings = milestoning_diagnostics(source, Some(&model));
+
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].code, DiagCode::WrongMilestoningArity);
+        let span = findings[0].primary.span;
+        assert_eq!(
+            &source[usize::from(span.start())..usize::from(span.end())],
+            ".point()"
+        );
+        assert!(milestoning_diagnostics(
+            "model::Source.all()->filter(x| $x.point(%latest))",
+            Some(&model),
+        )
+        .is_empty());
+        assert!(milestoning_diagnostics("model::Person.all()->filter(x| $x.name(1))", Some(&graph()))
+            .is_empty());
+        assert!(milestoning_diagnostics(source, None).is_empty());
     }
 
     #[test]
