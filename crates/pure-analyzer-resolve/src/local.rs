@@ -428,6 +428,7 @@ pub struct NavigationArityMismatch {
     failure: NavigationFailure,
     expected: usize,
     actual: usize,
+    generated_milestoned: bool,
     definition: Option<DefinitionAnchor>,
 }
 
@@ -448,6 +449,12 @@ impl NavigationArityMismatch {
     #[must_use]
     pub const fn actual(&self) -> usize {
         self.actual
+    }
+
+    /// Return whether the resolved member is generated milestoned navigation.
+    #[must_use]
+    pub const fn is_generated_milestoned(&self) -> bool {
+        self.generated_milestoned
     }
 
     /// Return the contributing model definition anchor when there is one.
@@ -610,12 +617,14 @@ impl<'model> NavigationResolver<'model> {
                 }
                 StepResolution::WrongArity {
                     expected,
+                    generated_milestoned,
                     definition,
                 } => {
                     return NavigationResolution::WrongArity(NavigationArityMismatch {
                         failure: NavigationFailure::new(chain, step.clone()),
                         expected,
                         actual: step.argument_count(),
+                        generated_milestoned,
                         definition,
                     });
                 }
@@ -657,6 +666,10 @@ impl<'model> NavigationResolver<'model> {
         if step.argument_count() != expected {
             return StepResolution::WrongArity {
                 expected,
+                generated_milestoned: matches!(
+                    member.kind(),
+                    ResolvedMemberKind::Qualified(QpKind::MilestonedPoint | QpKind::EdgePoint)
+                ),
                 definition: Some(member.definition()),
             };
         }
@@ -671,6 +684,7 @@ impl<'model> NavigationResolver<'model> {
         if step.argument_count() != NO_ARGUMENTS {
             return StepResolution::WrongArity {
                 expected: NO_ARGUMENTS,
+                generated_milestoned: false,
                 definition: None,
             };
         }
@@ -714,6 +728,7 @@ enum StepResolution {
     Cycle(Vec<QName>),
     WrongArity {
         expected: usize,
+        generated_milestoned: bool,
         definition: Option<DefinitionAnchor>,
     },
 }

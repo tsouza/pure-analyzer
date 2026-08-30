@@ -28,6 +28,55 @@ fn graph(elements: Vec<Value>) -> ModelGraph {
         .expect("fixture must load")
 }
 
+#[test]
+fn arity_mismatch_retains_the_resolved_generated_member() {
+    let graph = graph(vec![
+        temporal_class("TemporalTarget"),
+        class(
+            "Source",
+            &[],
+            Vec::new(),
+            vec![generated_property("point", "model::TemporalTarget")],
+        ),
+    ]);
+    let resolver = NavigationResolver::new(&graph);
+    let source = class_value(&resolver, "Source");
+    let mismatch = resolver.resolve(&source, &[NavigationStep::property(name("point"))]);
+
+    let NavigationResolution::WrongArity(mismatch) = mismatch else {
+        panic!("a generated point property without its date must be wrong arity");
+    };
+    assert!(mismatch.is_generated_milestoned());
+}
+
+#[test]
+fn generated_milestoning_navigation_to_non_temporal_target_requires_no_dates() {
+    let graph = graph(vec![
+        class("PlainTarget", &[], Vec::new(), Vec::new()),
+        class(
+            "Source",
+            &[],
+            Vec::new(),
+            vec![generated_property("point", "model::PlainTarget")],
+        ),
+    ]);
+    let resolver = NavigationResolver::new(&graph);
+    let source = class_value(&resolver, "Source");
+
+    found(resolver.resolve(&source, &[NavigationStep::property(name("point"))]));
+
+    let outcome = resolver.resolve(
+        &source,
+        &[NavigationStep::call(name("point"), ONE_ARGUMENT)],
+    );
+    let NavigationResolution::WrongArity(mismatch) = outcome else {
+        panic!("a non-temporal generated point property must reject explicit dates");
+    };
+    assert!(mismatch.is_generated_milestoned());
+    assert_eq!(mismatch.expected(), NO_ARGUMENTS);
+    assert_eq!(mismatch.actual(), ONE_ARGUMENT);
+}
+
 fn exact_span(source: &str, declaration: &str) -> TextRange {
     let start = source.find(declaration).expect("declaration occurs once");
     let end = start + declaration.len();
@@ -334,6 +383,83 @@ fn association_navigation_tracks_the_opposite_end() {
 }
 
 #[test]
+fn generated_milestoning_arity_is_fresh_after_an_association_hop() {
+    let graph = graph(vec![
+        class("Source", &[], Vec::new(), Vec::new()),
+        class(
+            "Target",
+            &[],
+            Vec::new(),
+            vec![generated_property("point", "model::TemporalTarget")],
+        ),
+        temporal_class("TemporalTarget"),
+        association(
+            "Link",
+            property("toSource", "model::Source"),
+            property("toTarget", "model::Target"),
+        ),
+    ]);
+    let resolver = NavigationResolver::new(&graph);
+    let source = class_value(&resolver, "Source");
+
+    let outcome = resolver.resolve(
+        &source,
+        &[
+            NavigationStep::property(name("toTarget")),
+            NavigationStep::property(name("point")),
+        ],
+    );
+    let NavigationResolution::WrongArity(mismatch) = outcome else {
+        panic!("generated point navigation must be checked after an association hop");
+    };
+    assert!(mismatch.is_generated_milestoned());
+    assert_eq!(mismatch.expected(), ONE_ARGUMENT);
+    assert_eq!(mismatch.actual(), NO_ARGUMENTS);
+    assert_eq!(mismatch.failure().completed().hops().len(), 1);
+}
+
+#[test]
+fn generated_milestoning_arity_is_fresh_for_each_navigation_hop() {
+    let mut middle = class(
+        "Middle",
+        &[],
+        Vec::new(),
+        vec![generated_property("second", "model::Target")],
+    );
+    middle["stereotypes"] = json!([{
+        "profile": "meta::pure::profiles::temporal",
+        "value": "processingtemporal",
+    }]);
+    let graph = graph(vec![
+        middle,
+        temporal_class("Target"),
+        class(
+            "Source",
+            &[],
+            Vec::new(),
+            vec![generated_property("first", "model::Middle")],
+        ),
+    ]);
+    let resolver = NavigationResolver::new(&graph);
+    let source = class_value(&resolver, "Source");
+
+    let outcome = resolver.resolve(
+        &source,
+        &[
+            NavigationStep::call(name("first"), ONE_ARGUMENT),
+            NavigationStep::property(name("second")),
+        ],
+    );
+    let NavigationResolution::WrongArity(mismatch) = outcome else {
+        panic!("each generated hop must require its own explicit date");
+    };
+    assert!(mismatch.is_generated_milestoned());
+    assert_eq!(mismatch.expected(), ONE_ARGUMENT);
+    assert_eq!(mismatch.actual(), NO_ARGUMENTS);
+    assert_eq!(mismatch.failure().completed().hops().len(), 1);
+}
+
+#[test]
 fn relation_rows_bind_columns_and_require_zero_context_arguments() {
     let graph = graph(Vec::new());
     let resolver = NavigationResolver::new(&graph);
@@ -427,6 +553,7 @@ fn navigation_failures_retain_ambiguity_cycle_and_member_arity_metadata() {
     };
     assert_eq!(arity.expected(), ONE_ARGUMENT);
     assert_eq!(arity.actual(), NO_ARGUMENTS);
+    assert!(!arity.is_generated_milestoned());
     assert!(arity.definition().is_some());
     assert!(arity.failure().completed().hops().is_empty());
     assert_eq!(arity.failure().step().name(), &name("byKey"));
