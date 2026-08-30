@@ -334,11 +334,14 @@ mod tests {
     fn formats_pipeline_columns_comments_and_islands_without_reordering_tokens() {
         let source = "#>{db::testDB.personTable}# ->join(#>{db::testDB.groupTable}#,JoinKind.INNER,{x,y|$x.ID==$y.PERSONID})->extend(~[id:Integer[1], name : String[1]]) // keep\n";
         let formatted = format(source).text().to_owned();
-        assert!(formatted.contains("\n    ->join("));
-        assert!(formatted.contains("\n    ->extend("));
-        assert!(formatted.contains("JoinKind.INNER, {x, y | $x.ID == $y.PERSONID}"));
-        assert!(formatted.contains("~[id: Integer[1],\n"));
-        assert!(formatted.ends_with("// keep\n"));
+        let expected = concat!(
+            "#>{db::testDB.personTable}#\n",
+            "    ->join(#>{db::testDB.groupTable}#, JoinKind.INNER, {x, y | $x.ID == $y.PERSONID})\n",
+            "    ->extend(~[id: Integer[1],\n",
+            "        name: String[1]\n",
+            "]) // keep\n",
+        );
+        assert_eq!(formatted, expected);
         assert_eq!(
             non_whitespace_tokens(source),
             non_whitespace_tokens(&formatted)
