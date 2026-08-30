@@ -419,6 +419,47 @@ fn generated_milestoning_arity_is_fresh_after_an_association_hop() {
 }
 
 #[test]
+fn generated_milestoning_arity_is_fresh_for_each_navigation_hop() {
+    let mut middle = class(
+        "Middle",
+        &[],
+        Vec::new(),
+        vec![generated_property("second", "model::Target")],
+    );
+    middle["stereotypes"] = json!([{
+        "profile": "meta::pure::profiles::temporal",
+        "value": "processingtemporal",
+    }]);
+    let graph = graph(vec![
+        middle,
+        temporal_class("Target"),
+        class(
+            "Source",
+            &[],
+            Vec::new(),
+            vec![generated_property("first", "model::Middle")],
+        ),
+    ]);
+    let resolver = NavigationResolver::new(&graph);
+    let source = class_value(&resolver, "Source");
+
+    let outcome = resolver.resolve(
+        &source,
+        &[
+            NavigationStep::call(name("first"), ONE_ARGUMENT),
+            NavigationStep::property(name("second")),
+        ],
+    );
+    let NavigationResolution::WrongArity(mismatch) = outcome else {
+        panic!("each generated hop must require its own explicit date");
+    };
+    assert!(mismatch.is_generated_milestoned());
+    assert_eq!(mismatch.expected(), ONE_ARGUMENT);
+    assert_eq!(mismatch.actual(), NO_ARGUMENTS);
+    assert_eq!(mismatch.failure().completed().hops().len(), 1);
+}
+
+#[test]
 fn relation_rows_bind_columns_and_require_zero_context_arguments() {
     let graph = graph(Vec::new());
     let resolver = NavigationResolver::new(&graph);

@@ -295,13 +295,17 @@ mod tests {
             &source[usize::from(span.start())..usize::from(span.end())],
             ".point()"
         );
-        assert!(milestoning_diagnostics(
-            "model::Source.all()->filter(x| $x.point(%latest))",
-            Some(&model),
-        )
-        .is_empty());
-        assert!(milestoning_diagnostics("model::Person.all()->filter(x| $x.name(1))", Some(&graph()))
-            .is_empty());
+        assert!(
+            milestoning_diagnostics(
+                "model::Source.all()->filter(x| $x.point(%latest))",
+                Some(&model),
+            )
+            .is_empty()
+        );
+        assert!(
+            milestoning_diagnostics("model::Person.all()->filter(x| $x.name(1))", Some(&graph()))
+                .is_empty()
+        );
         assert!(milestoning_diagnostics(source, None).is_empty());
 
         let business_model = milestoning_graph(Some("businesstemporal"));
