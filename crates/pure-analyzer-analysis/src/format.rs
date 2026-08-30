@@ -374,6 +374,7 @@ mod tests {
         let range = pure_analyzer_syntax::TextRange::new(0.into(), 1.into());
         let mut formatter = LayoutFormatter::new("", Vec::new());
         formatter.token(SyntaxKind::BRACE_OPEN, "{", range);
+        assert_eq!(formatter.braces, 1);
         formatter.token(SyntaxKind::IDENT, "x", range);
         formatter.token(SyntaxKind::SEMICOLON, ";", range);
 
