@@ -3,10 +3,12 @@
 
 //! Conservative analysis passes over Pure syntax and model facts.
 
+mod format;
 mod local;
 mod pass;
 mod validate;
 
+pub use format::{FormatResult, format_query};
 pub use local::{LocalNavigationAnalysis, LocalResolution, LocalResolutionSite, analyze_m3_locals};
 pub use pass::{
     AnalysisEngine, AnalysisInput, AnalysisPass, AnalysisResult, FindingPolicy, ModelAvailability,

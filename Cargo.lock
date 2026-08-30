@@ -1123,6 +1123,7 @@ name = "pure-analyzer-analysis"
 version = "0.1.0"
 dependencies = [
  "pure-analyzer-diagnostics",
+ "pure-analyzer-lexer",
  "pure-analyzer-model",
  "pure-analyzer-parser",
  "pure-analyzer-resolve",
@@ -1136,6 +1137,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "libpure",
+ "pure-analyzer-diagnostics",
  "tracing",
  "tracing-subscriber",
 ]

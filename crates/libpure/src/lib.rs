@@ -3,6 +3,8 @@
 
 //! Facade exposing shared diagnostics and analyzer-crate versions.
 
+/// Formatter API exposed to front ends through the workspace facade.
+pub use pure_analyzer_analysis::{FormatResult, format_query};
 pub use pure_analyzer_diagnostics::{Diagnostic, Severity};
 
 /// One entry of [`engine_crate_versions`]: a crate name paired with its

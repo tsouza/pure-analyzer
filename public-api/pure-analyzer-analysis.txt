@@ -241,6 +241,48 @@ impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::FindingPolicy whe
 pub unsafe fn pure_analyzer_analysis::FindingPolicy::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for pure_analyzer_analysis::FindingPolicy
 pub fn pure_analyzer_analysis::FindingPolicy::from(T) -> T
+pub struct pure_analyzer_analysis::FormatResult
+impl pure_analyzer_analysis::FormatResult
+pub fn pure_analyzer_analysis::FormatResult::diagnostics(&self) -> &[pure_analyzer_diagnostics::diagnostic::Diagnostic]
+pub fn pure_analyzer_analysis::FormatResult::into_parts(self) -> (alloc::string::String, alloc::vec::Vec<pure_analyzer_diagnostics::diagnostic::Diagnostic>)
+pub fn pure_analyzer_analysis::FormatResult::text(&self) -> &str
+impl core::clone::Clone for pure_analyzer_analysis::FormatResult
+pub fn pure_analyzer_analysis::FormatResult::clone(&self) -> pure_analyzer_analysis::FormatResult
+impl core::cmp::Eq for pure_analyzer_analysis::FormatResult
+impl core::cmp::PartialEq for pure_analyzer_analysis::FormatResult
+pub fn pure_analyzer_analysis::FormatResult::eq(&self, &pure_analyzer_analysis::FormatResult) -> bool
+impl core::fmt::Debug for pure_analyzer_analysis::FormatResult
+pub fn pure_analyzer_analysis::FormatResult::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::FormatResult
+impl core::marker::Freeze for pure_analyzer_analysis::FormatResult
+impl core::marker::Send for pure_analyzer_analysis::FormatResult
+impl core::marker::Sync for pure_analyzer_analysis::FormatResult
+impl core::marker::Unpin for pure_analyzer_analysis::FormatResult
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::FormatResult
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::FormatResult
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::FormatResult
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::FormatResult where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::FormatResult::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::FormatResult where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::FormatResult::Error = never
+pub fn pure_analyzer_analysis::FormatResult::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::FormatResult where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::FormatResult::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::FormatResult::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::FormatResult where T: core::clone::Clone
+pub type pure_analyzer_analysis::FormatResult::Owned = T
+pub fn pure_analyzer_analysis::FormatResult::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::FormatResult::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::FormatResult where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::FormatResult::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::FormatResult where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::FormatResult::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::FormatResult where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::FormatResult::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::FormatResult where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::FormatResult::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::FormatResult
+pub fn pure_analyzer_analysis::FormatResult::from(T) -> T
 pub struct pure_analyzer_analysis::LocalNavigationAnalysis
 impl pure_analyzer_analysis::LocalNavigationAnalysis
 pub fn pure_analyzer_analysis::LocalNavigationAnalysis::sites(&self) -> &[pure_analyzer_analysis::LocalResolutionSite]
@@ -371,4 +413,5 @@ impl pure_analyzer_analysis::AnalysisPass for pure_analyzer_analysis::ValidatePa
 pub fn pure_analyzer_analysis::ValidatePass::analyze(&self, pure_analyzer_analysis::AnalysisInput<'_, '_>) -> alloc::vec::Vec<pure_analyzer_diagnostics::diagnostic::Diagnostic>
 pub fn pure_analyzer_analysis::ValidatePass::name(&self) -> &'static str
 pub fn pure_analyzer_analysis::analyze_m3_locals(&pure_analyzer_syntax::green::GreenNode, &pure_analyzer_model::types::ModelGraph) -> pure_analyzer_analysis::LocalNavigationAnalysis
+pub fn pure_analyzer_analysis::format_query(&str, pure_analyzer_diagnostics::file::FileId) -> core::result::Result<pure_analyzer_analysis::FormatResult, pure_analyzer_syntax::builder::BuildError>
 pub fn pure_analyzer_analysis::version() -> &'static str

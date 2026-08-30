@@ -64,8 +64,14 @@ enum Command {
         files: Vec<String>,
         /// Check formatting without writing; exit non-zero if any file would
         /// change.
-        #[arg(long)]
+        #[arg(long, conflicts_with_all = ["stdout", "diff"])]
         check: bool,
+        /// Print formatted content to standard output instead of writing files.
+        #[arg(long, conflicts_with_all = ["check", "diff"])]
+        stdout: bool,
+        /// Print a compact before/after diff instead of writing files.
+        #[arg(long, conflicts_with_all = ["check", "stdout"])]
+        diff: bool,
     },
     /// Print the `docs/reason-codes/<code>.md` page for a `PUR<nnnn>` code.
     Explain {
@@ -84,8 +90,55 @@ fn main() -> anyhow::Result<()> {
         Command::Lint { .. } => not_yet_implemented("lint"),
         Command::Eq { .. } => not_yet_implemented("eq"),
         Command::Diff { .. } => not_yet_implemented("diff"),
-        Command::Fmt { .. } => not_yet_implemented("fmt"),
+        Command::Fmt {
+            files,
+            check,
+            stdout,
+            diff,
+        } => format_files(&files, check, stdout, diff),
         Command::Explain { code } => not_yet_implemented(&format!("explain {code}")),
+    }
+}
+
+fn format_files(files: &[String], check: bool, stdout: bool, diff: bool) -> anyhow::Result<()> {
+    if files.is_empty() {
+        anyhow::bail!("fmt requires at least one file or - for standard input");
+    }
+    let mut changed = false;
+    for (index, path) in files.iter().enumerate() {
+        let source = if path == "-" {
+            std::io::read_to_string(std::io::stdin())?
+        } else {
+            std::fs::read_to_string(path)?
+        };
+        let formatted = libpure::format_query(
+            &source,
+            pure_analyzer_diagnostics::FileId::new(index as u32),
+        )?;
+        let text = formatted.text();
+        changed |= text != source;
+        if stdout || path == "-" {
+            print!("{text}");
+        } else if diff && text != source {
+            print_diff(path, &source, text);
+        } else if !check && text != source {
+            std::fs::write(path, text)?;
+        }
+    }
+    if check && changed {
+        anyhow::bail!("formatting changes required");
+    }
+    Ok(())
+}
+
+fn print_diff(path: &str, before: &str, after: &str) {
+    println!("--- {path}");
+    println!("+++ {path} (formatted)");
+    for line in before.lines() {
+        println!("-{line}");
+    }
+    for line in after.lines() {
+        println!("+{line}");
     }
 }
 
