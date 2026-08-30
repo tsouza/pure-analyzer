@@ -125,7 +125,16 @@ mod tests {
             .expect("fixture model must load")
     }
 
-    fn milestoning_graph(temporal: &str) -> ModelGraph {
+    fn milestoning_graph(temporal: Option<&str>) -> ModelGraph {
+        let target_stereotypes = temporal
+            .map(|value| {
+                json!({
+                    "profile": "meta::pure::profiles::temporal",
+                    "value": value,
+                })
+            })
+            .into_iter()
+            .collect::<Vec<_>>();
         let source = json!({
             "_type": "data",
             "elements": [
@@ -133,10 +142,7 @@ mod tests {
                     "_type": "class",
                     "package": "model",
                     "name": "TemporalTarget",
-                    "stereotypes": [{
-                        "profile": "meta::pure::profiles::temporal",
-                        "value": temporal,
-                    }],
+                    "stereotypes": target_stereotypes,
                     "superTypes": [],
                     "properties": [],
                     "qualifiedProperties": [],
@@ -278,7 +284,7 @@ mod tests {
 
     #[test]
     fn reports_only_confirmed_generated_milestoning_arity_mismatches() {
-        let model = milestoning_graph("processingtemporal");
+        let model = milestoning_graph(Some("processingtemporal"));
         let source = "model::Source.all()->filter(x| $x.point())";
         let findings = milestoning_diagnostics(source, Some(&model));
 
@@ -298,7 +304,7 @@ mod tests {
             .is_empty());
         assert!(milestoning_diagnostics(source, None).is_empty());
 
-        let business_model = milestoning_graph("businesstemporal");
+        let business_model = milestoning_graph(Some("businesstemporal"));
         assert_eq!(
             milestoning_diagnostics(source, Some(&business_model))
                 .into_iter()
@@ -316,8 +322,28 @@ mod tests {
     }
 
     #[test]
+    fn applies_the_non_temporal_zero_date_arity() {
+        let model = milestoning_graph(None);
+
+        assert!(
+            milestoning_diagnostics("model::Source.all()->filter(x| $x.point())", Some(&model),)
+                .is_empty()
+        );
+        assert_eq!(
+            milestoning_diagnostics(
+                "model::Source.all()->filter(x| $x.point(%latest))",
+                Some(&model),
+            )
+            .into_iter()
+            .map(|diagnostic| diagnostic.code)
+            .collect::<Vec<_>>(),
+            vec![DiagCode::WrongMilestoningArity]
+        );
+    }
+
+    #[test]
     fn applies_the_bitemporal_two_date_arity() {
-        let model = milestoning_graph("bitemporal");
+        let model = milestoning_graph(Some("bitemporal"));
         let one_date = "model::Source.all()->filter(x| $x.point(%latest))";
         let findings = milestoning_diagnostics(one_date, Some(&model));
 

@@ -620,7 +620,11 @@ impl<'model> Resolver<'model> {
                 _ => return Ok(None),
             }
         }
-        Ok(None)
+        // The entire reachable hierarchy is present and carries no temporal
+        // stereotype. That is a conclusive zero-date answer, not an absence
+        // of facts: generated point navigation to this target accepts no
+        // explicit temporal arguments.
+        Ok(Some(0))
     }
 }
 

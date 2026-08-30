@@ -49,6 +49,34 @@ fn arity_mismatch_retains_the_resolved_generated_member() {
     assert!(mismatch.is_generated_milestoned());
 }
 
+#[test]
+fn generated_milestoning_navigation_to_non_temporal_target_requires_no_dates() {
+    let graph = graph(vec![
+        class("PlainTarget", &[], Vec::new(), Vec::new()),
+        class(
+            "Source",
+            &[],
+            Vec::new(),
+            vec![generated_property("point", "model::PlainTarget")],
+        ),
+    ]);
+    let resolver = NavigationResolver::new(&graph);
+    let source = class_value(&resolver, "Source");
+
+    found(resolver.resolve(&source, &[NavigationStep::property(name("point"))]));
+
+    let outcome = resolver.resolve(
+        &source,
+        &[NavigationStep::call(name("point"), ONE_ARGUMENT)],
+    );
+    let NavigationResolution::WrongArity(mismatch) = outcome else {
+        panic!("a non-temporal generated point property must reject explicit dates");
+    };
+    assert!(mismatch.is_generated_milestoned());
+    assert_eq!(mismatch.expected(), NO_ARGUMENTS);
+    assert_eq!(mismatch.actual(), ONE_ARGUMENT);
+}
+
 fn exact_span(source: &str, declaration: &str) -> TextRange {
     let start = source.find(declaration).expect("declaration occurs once");
     let end = start + declaration.len();
