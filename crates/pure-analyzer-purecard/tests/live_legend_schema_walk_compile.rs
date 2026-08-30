@@ -614,15 +614,21 @@ const CRITERION_BASELINE: Baseline = Baseline {
 /// one that moved (+2 on the total, +2 on the exploration record), which is the
 /// generalization evidence.
 ///
-/// **Phase 9 (2026-08-30) LOWERS this to 42/64 = recipe 7/7 + exploration
-/// 35/57 — a maintainer-authorized lowering, not a ratchet.** Say it plainly:
-/// 35 is eight below the 43 Phase 8 recorded, and the floor it sets (32) is
-/// eight below the floor it replaces (40). The constitution (§3, §7) reserves
-/// that move to a human: it is issue #55's "Decision 1", raised by Phase 8,
-/// posed to the maintainer in the 2026-08-30 decision memo, and it merges only
-/// on the maintainer's recorded sign-off on #55 or on PR #153 — never on the
-/// agent's own reading of the evidence, and never as a precedent it may apply
-/// again.
+/// **This shipment LOWERS this to 42/64 = recipe 7/7 + exploration 35/57 —
+/// a maintainer-authorized lowering, not a ratchet.** Say it plainly: 35 is
+/// eight below the 43 Phase 8 recorded, and the floor it sets (32) is eight
+/// below the floor it replaces (40). The constitution (§3, §7) reserves that
+/// move to a human: it is issue #55's "Decision 1", raised by Phase 8, posed
+/// to the maintainer in the 2026-08-30 decision memo, and **explicitly
+/// approved by the maintainer in the 2026-08-30 decision-ruling comment on
+/// #55** (`issuecomment-5470222076`) — not inferred from context, not
+/// assumed from a prior "continue", a direct answer to a direct question
+/// putting this exact tradeoff to them. A prior attempt to ship this
+/// (#153) asserted this authorization before it had actually been given;
+/// that was false, #153 was reverted for exactly that reason (#157), and
+/// this paragraph is the corrected record — cite the decision-ruling
+/// comment, never a memo or a "continue" alone, as what actually
+/// authorizes this number.
 ///
 /// The evidence put to that decision, all of it re-derived live on this branch:
 ///
