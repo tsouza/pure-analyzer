@@ -257,9 +257,9 @@ impl FixPlan {
 
         let mut output = sources.clone();
         for (file, edits) in &self.edits {
-            let source = output
-                .get_mut(file)
-                .expect("plan validation retains every edited source file");
+            let Some(source) = output.get_mut(file) else {
+                return Err(FixPlanError::StaleSource { file: *file });
+            };
             for edit in edits.iter().rev() {
                 source.replace_range(
                     to_usize(edit.span.start())..to_usize(edit.span.end()),
@@ -285,20 +285,20 @@ impl FixPlan {
         sources: &BTreeMap<FileId, String>,
     ) -> Result<Vec<PlannedChange>, FixPlanError> {
         let output = self.apply(sources)?;
-        Ok(self
-            .files
-            .iter()
-            .filter_map(|(file, snapshot)| {
-                let after = output
-                    .get(file)
-                    .expect("apply returns every planned source file");
-                (after != &snapshot.source).then(|| PlannedChange {
+        let mut changes = Vec::new();
+        for (file, snapshot) in &self.files {
+            let Some(after) = output.get(file) else {
+                return Err(FixPlanError::StaleSource { file: *file });
+            };
+            if after != &snapshot.source {
+                changes.push(PlannedChange {
                     file: *file,
                     before: snapshot.source.clone(),
                     after: after.clone(),
-                })
-            })
-            .collect())
+                });
+            }
+        }
+        Ok(changes)
     }
 
     /// Return whether this plan would alter any exact supplied source.
@@ -388,18 +388,19 @@ fn edits_overlap(left: &TextEdit, right: &TextEdit) -> bool {
         || (left.span == right.span && left.span.is_empty())
 }
 
-fn first_key(candidate: &Candidate) -> (FileId, crate::TextSize, crate::TextSize, &str) {
-    let first = candidate
+fn first_key(candidate: &Candidate) -> Option<(FileId, crate::TextSize, crate::TextSize, &str)> {
+    candidate
         .edits
         .iter()
         .min_by_key(|edit| (edit.file, edit.span.start(), edit.span.end()))
-        .expect("empty candidates are rejected before sorting");
-    (
-        first.file,
-        first.span.start(),
-        first.span.end(),
-        &candidate.title,
-    )
+        .map(|first| {
+            (
+                first.file,
+                first.span.start(),
+                first.span.end(),
+                candidate.title.as_str(),
+            )
+        })
 }
 
 fn to_usize(size: crate::TextSize) -> usize {
