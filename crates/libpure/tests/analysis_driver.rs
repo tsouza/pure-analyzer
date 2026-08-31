@@ -1,5 +1,6 @@
 //! End-to-end facade tests for the libpure analysis driver.
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -40,6 +41,50 @@ Class model::Person
   name: String[0..1];
 }
 "#;
+const MILESTONING_QUERY: &str = "model::Source.all()->filter(x| $x.point(/* keep é */))";
+const FIXED_MILESTONING_QUERY: &str =
+    "model::Source.all()->filter(x| $x.point(/* keep é */%latest))";
+const MILESTONING_MODEL: &str = r#"{
+    "_type": "data",
+    "elements": [
+        {
+            "_type": "class",
+            "package": "model",
+            "name": "TemporalTarget",
+            "stereotypes": [{
+                "profile": "meta::pure::profiles::temporal",
+                "value": "processingtemporal"
+            }],
+            "superTypes": [],
+            "properties": [],
+            "qualifiedProperties": []
+        },
+        {
+            "_type": "class",
+            "package": "model",
+            "name": "Source",
+            "stereotypes": [],
+            "superTypes": [],
+            "properties": [],
+            "qualifiedProperties": [{
+                "name": "point",
+                "returnGenericType": {
+                    "rawType": "model::TemporalTarget",
+                    "typeArguments": []
+                },
+                "returnMultiplicity": {
+                    "lowerBound": 0,
+                    "upperBound": 1
+                },
+                "stereotypes": [{
+                    "profile": "meta::pure::profiles::milestoning",
+                    "value": "generatedmilestoningproperty"
+                }],
+                "parameters": []
+            }]
+        }
+    ]
+}"#;
 
 static TEMP_FILE_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
@@ -188,6 +233,16 @@ fn lint_request(jobs: usize) -> LintRequest {
         [ModelInput::pmcd(SourceInput::in_memory(
             "model.json",
             MODEL,
+        ))],
+    )
+}
+
+fn milestoning_lint_request(query: &str) -> LintRequest {
+    LintRequest::new(
+        SourceRequest::new([SourceInput::in_memory("query.pure", query)]),
+        [ModelInput::pmcd(SourceInput::in_memory(
+            "model.json",
+            MILESTONING_MODEL,
         ))],
     )
 }
@@ -502,5 +557,51 @@ fn lint_matches_equivalent_file_and_memory_snapshots() {
             .expect("query file retained")
             .text(),
         query
+    );
+}
+
+#[test]
+fn lint_plan_previews_proven_milestoning_fix_and_reanalysis_is_a_no_op() {
+    let driver = AnalysisDriver;
+    let output = driver
+        .lint(&milestoning_lint_request(MILESTONING_QUERY))
+        .expect("lint missing generated date");
+    let query = output
+        .sources()
+        .files()
+        .find(|source| source.name() == "query.pure")
+        .expect("query snapshot retained");
+    let source_map = output
+        .sources()
+        .files()
+        .map(|source| (source.id(), source.text().to_owned()))
+        .collect::<BTreeMap<_, _>>();
+
+    let plan = output.plan_fixes().expect("proven fix plan");
+    assert!(plan.check(&source_map).expect("check planned source"));
+    assert_eq!(
+        plan.preview(&source_map).expect("preview planned source"),
+        vec![libpure::PlannedChange {
+            file: query.id(),
+            before: MILESTONING_QUERY.to_owned(),
+            after: FIXED_MILESTONING_QUERY.to_owned(),
+        }]
+    );
+    assert_eq!(query.text(), MILESTONING_QUERY);
+
+    let reanalyzed = driver
+        .lint(&milestoning_lint_request(FIXED_MILESTONING_QUERY))
+        .expect("lint fixed generated date");
+    assert!(
+        reanalyzed
+            .diagnostics()
+            .iter()
+            .all(|diagnostic| diagnostic.code != DiagCode::WrongMilestoningArity)
+    );
+    assert!(
+        reanalyzed
+            .plan_fixes()
+            .expect("no-op plan after reanalysis")
+            .is_empty()
     );
 }

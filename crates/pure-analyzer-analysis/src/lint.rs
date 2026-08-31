@@ -1,9 +1,13 @@
 //! Model-aware, conservative navigation lints.
 
-use pure_analyzer_diagnostics::{DiagCode, Diagnostic, Label, Severity};
+use pure_analyzer_diagnostics::{DiagCode, Diagnostic, Fix, Label, Severity, TextEdit};
 use pure_analyzer_resolve::{LocalValueKind, NavigationResolution};
+use pure_analyzer_syntax::{GreenElement, GreenNode, SyntaxKind, TextRange};
 
 use crate::{AnalysisInput, AnalysisPass, LocalResolution, analyze_m3_locals};
+
+const INSERT_LATEST_ARGUMENT_TITLE: &str = "insert `%latest` argument";
+const LATEST_ARGUMENT: &str = "%latest";
 
 /// Emits findings that are provable from locally resolved closed-world model facts.
 ///
@@ -78,24 +82,74 @@ impl AnalysisPass for MilestoningArityLintPass {
                 if !mismatch.is_generated_milestoned() {
                     return None;
                 }
-                Some(
-                    Diagnostic::builder(
-                        DiagCode::WrongMilestoningArity,
-                        Severity::Error,
-                        "generated milestoned navigation has the wrong number of dates",
-                        Label::new(input.file(), site.span()),
-                    )
-                    .build(),
-                )
+                let diagnostic = Diagnostic::builder(
+                    DiagCode::WrongMilestoningArity,
+                    Severity::Error,
+                    "generated milestoned navigation has the wrong number of dates",
+                    Label::new(input.file(), site.span()),
+                );
+                let diagnostic = match latest_argument_fix(input, site.span(), mismatch) {
+                    Some(fix) => diagnostic.fix(fix),
+                    None => diagnostic,
+                };
+                Some(diagnostic.build())
             })
             .collect()
     }
 }
 
+fn latest_argument_fix(
+    input: AnalysisInput<'_, '_>,
+    navigation_span: TextRange,
+    mismatch: &pure_analyzer_resolve::NavigationArityMismatch,
+) -> Option<Fix> {
+    if mismatch.expected() != 1 || mismatch.actual() != 0 || !input.parse_diagnostics().is_empty() {
+        return None;
+    }
+
+    let insertion = latest_argument_insertion_span(input.tree(), navigation_span)?;
+    Some(Fix::single_arity_proven(
+        INSERT_LATEST_ARGUMENT_TITLE,
+        vec![TextEdit {
+            file: input.file(),
+            span: insertion,
+            new_text: LATEST_ARGUMENT.to_owned(),
+        }],
+    ))
+}
+
+fn latest_argument_insertion_span(
+    tree: &GreenNode,
+    navigation_span: TextRange,
+) -> Option<TextRange> {
+    let navigation = property_navigation(tree, navigation_span)?;
+    let arguments = navigation
+        .children()
+        .iter()
+        .filter_map(GreenElement::as_node)
+        .find(|node| node.kind() == SyntaxKind::CALL_ARGS)?;
+    let closing_parenthesis = arguments
+        .children()
+        .iter()
+        .filter_map(GreenElement::as_token)
+        .find(|token| token.kind() == SyntaxKind::PAREN_CLOSE)?;
+    Some(TextRange::empty(closing_parenthesis.text_range().start()))
+}
+
+fn property_navigation(tree: &GreenNode, span: TextRange) -> Option<&GreenNode> {
+    if tree.kind() == SyntaxKind::PROPERTY_NAV && tree.text_range() == span {
+        return Some(tree);
+    }
+    tree.children()
+        .iter()
+        .filter_map(GreenElement::as_node)
+        .find_map(|child| property_navigation(child, span))
+}
+
 #[cfg(test)]
 #[allow(clippy::disallowed_methods)]
 mod tests {
-    use pure_analyzer_diagnostics::FileId;
+    use pure_analyzer_diagnostics::{Applicability, FileId, FixProvenance};
     use pure_analyzer_model::{
         ModelGraph, PmcdDocument, PureDocument, load_pmcd_documents, load_pure_documents,
     };
@@ -509,6 +563,100 @@ Class model::Source
             )
             .is_empty()
         );
+    }
+
+    #[test]
+    fn emits_an_exact_machine_applicable_latest_fix_for_one_missing_date() {
+        let model = milestoning_graph(Some("processingtemporal"));
+        let source = "model::Source.all()->filter(x| $x.point(/* keep é */))";
+        let findings = milestoning_diagnostics(source, Some(&model));
+
+        assert_eq!(findings.len(), 1);
+        let fix = findings[0]
+            .fix
+            .as_ref()
+            .expect("one missing generated date has a fix");
+        assert_eq!(fix.title, INSERT_LATEST_ARGUMENT_TITLE);
+        assert_eq!(fix.applicability, Applicability::MachineApplicable);
+        assert_eq!(fix.provenance, FixProvenance::SingleArityProven);
+        assert_eq!(fix.edits.len(), 1);
+
+        let edit = &fix.edits[0];
+        let insertion = source
+            .rfind("))")
+            .expect("generated call closes before the filter call");
+        assert_eq!(edit.file, FileId::new(8));
+        assert_eq!(usize::from(edit.span.start()), insertion);
+        assert_eq!(edit.span.start(), edit.span.end());
+        assert_eq!(edit.new_text, LATEST_ARGUMENT);
+
+        let mut fixed = source.to_owned();
+        fixed.insert_str(insertion, &edit.new_text);
+        assert_eq!(
+            fixed,
+            "model::Source.all()->filter(x| $x.point(/* keep é */%latest))"
+        );
+        assert_eq!(&source[..insertion], &fixed[..insertion]);
+        assert_eq!(
+            &source[insertion..],
+            &fixed[insertion + edit.new_text.len()..]
+        );
+        assert!(milestoning_diagnostics(&fixed, Some(&model)).is_empty());
+    }
+
+    #[test]
+    fn limits_latest_fixes_to_proven_empty_generated_calls() {
+        let one_date_model = milestoning_graph(Some("processingtemporal"));
+        let bare_navigation = milestoning_diagnostics(
+            "model::Source.all()->filter(x| $x.point)",
+            Some(&one_date_model),
+        );
+        assert_eq!(bare_navigation.len(), 1);
+        assert!(bare_navigation[0].fix.is_none());
+
+        let malformed = milestoning_diagnostics(
+            "[model::Source.all()->filter(x| $x.point()),]",
+            Some(&one_date_model),
+        );
+        assert_eq!(malformed.len(), 1);
+        assert!(malformed[0].fix.is_none());
+
+        let bitemporal = milestoning_graph(Some("bitemporal"));
+        let no_dates = milestoning_diagnostics(
+            "model::Source.all()->filter(x| $x.point())",
+            Some(&bitemporal),
+        );
+        assert_eq!(no_dates.len(), 1);
+        assert!(no_dates[0].fix.is_none());
+
+        let one_of_two_dates = milestoning_diagnostics(
+            "model::Source.all()->filter(x| $x.point(%latest))",
+            Some(&bitemporal),
+        );
+        assert_eq!(one_of_two_dates.len(), 1);
+        assert!(one_of_two_dates[0].fix.is_none());
+
+        let non_temporal = milestoning_graph(None);
+        let unexpected_date = milestoning_diagnostics(
+            "model::Source.all()->filter(x| $x.point(%latest))",
+            Some(&non_temporal),
+        );
+        assert_eq!(unexpected_date.len(), 1);
+        assert!(unexpected_date[0].fix.is_none());
+    }
+
+    #[test]
+    fn proven_latest_fix_has_pmcd_pure_model_parity() {
+        let source = "model::Source.all()->filter(x| $x.point())";
+
+        for temporal in ["businesstemporal", "processingtemporal"] {
+            let pmcd = milestoning_diagnostics(source, Some(&milestoning_graph(Some(temporal))));
+            let pure = milestoning_diagnostics(source, Some(&pure_milestoning_graph(temporal)));
+
+            assert_eq!(pmcd, pure, "loader parity for {temporal}");
+            assert_eq!(pmcd.len(), 1);
+            assert!(pmcd[0].fix.is_some());
+        }
     }
 
     #[test]
