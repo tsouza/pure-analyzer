@@ -17,6 +17,9 @@ use serde_json::Value;
 use libpure::{SourceInput, SourceStore};
 
 const TEMP_FILE_PREFIX: &str = "pure-analyzer-render-test";
+const TERMINAL_CONTROLS: &str = "\x1b]8;;https://example.invalid\x07\r\u{009b}β";
+const ESCAPED_TERMINAL_CONTROLS: &str = r"\u{1b}]8;;https://example.invalid\u{7}\r\u{9b}β";
+const TERMINAL_CONTROL_TARGET: &str = "target";
 
 static TEMP_FILE_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
@@ -745,6 +748,111 @@ fn color_policy_respects_tty_and_controls_ansi_sequences() {
             assert!(output.contains("\x1b[0m"));
         }
     }
+}
+
+#[test]
+fn human_renderer_escapes_untrusted_terminal_controls() {
+    let (sources, diagnostics) = terminal_control_fixture();
+    let input = RenderInput::new(&sources, &diagnostics);
+
+    let plain = render_human(input, ColorPolicy::Never.resolve(true)).expect("human renders");
+    assert_plain_human_output_escapes_terminal_controls(&plain);
+
+    let colored = render_human(input, ColorPolicy::Always.resolve(false)).expect("human renders");
+    assert_colored_human_output_has_only_renderer_ansi(&colored);
+}
+
+fn terminal_control_fixture() -> (SourceStore, Vec<Diagnostic>) {
+    let source_text = format!("prefix{TERMINAL_CONTROLS} {TERMINAL_CONTROL_TARGET}\n");
+    let target_start = u32::try_from(
+        source_text
+            .find(TERMINAL_CONTROL_TARGET)
+            .expect("fixture contains the highlighted target"),
+    )
+    .expect("fixture offset fits a diagnostic span");
+    let target_end = target_start
+        .checked_add(
+            u32::try_from(TERMINAL_CONTROL_TARGET.len())
+                .expect("target length fits a diagnostic span"),
+        )
+        .expect("fixture span fits in u32");
+    let sources = SourceStore::load([SourceInput::in_memory(
+        format!("input{TERMINAL_CONTROLS}.pure"),
+        source_text,
+    )])
+    .expect("source loads");
+    let diagnostics = vec![
+        Diagnostic::builder(
+            DiagCode::BadToken,
+            Severity::Error,
+            format!("message{TERMINAL_CONTROLS}"),
+            Label::with_note(
+                FileId::new(0),
+                range(target_start, target_end),
+                format!("note{TERMINAL_CONTROLS}"),
+            ),
+        )
+        .fix(Fix::model_dependent(
+            format!("fix{TERMINAL_CONTROLS}"),
+            vec![TextEdit {
+                file: FileId::new(0),
+                span: range(target_start, target_end),
+                new_text: format!("replacement{TERMINAL_CONTROLS}"),
+            }],
+        ))
+        .verdict(Verdict::NotEquivalent {
+            witness: format!("witness{TERMINAL_CONTROLS}"),
+        })
+        .url(format!("https://example.invalid/{TERMINAL_CONTROLS}"))
+        .build(),
+    ];
+
+    (sources, diagnostics)
+}
+
+fn assert_plain_human_output_escapes_terminal_controls(plain: &str) {
+    assert!(plain.contains(&format!("input{ESCAPED_TERMINAL_CONTROLS}.pure:")));
+    assert!(plain.contains(&format!(
+        "error[PUR0102]: message{ESCAPED_TERMINAL_CONTROLS}"
+    )));
+    assert!(plain.contains(&format!(
+        "prefix{ESCAPED_TERMINAL_CONTROLS} {TERMINAL_CONTROL_TARGET}"
+    )));
+    assert!(plain.contains(&format!("primary: note{ESCAPED_TERMINAL_CONTROLS}")));
+    assert!(plain.contains(&format!("= fix: fix{ESCAPED_TERMINAL_CONTROLS}")));
+    assert!(plain.contains(&format!("with \"replacement{ESCAPED_TERMINAL_CONTROLS}\"")));
+    assert!(plain.contains(&format!(
+        "not_equivalent; witness: witness{ESCAPED_TERMINAL_CONTROLS}"
+    )));
+    assert!(plain.contains(&format!(
+        "docs: https://example.invalid/{ESCAPED_TERMINAL_CONTROLS}"
+    )));
+    let escaped_prefix = format!("prefix{ESCAPED_TERMINAL_CONTROLS} ");
+    assert!(plain.contains(&format!(
+        "      | {}{} primary: note{ESCAPED_TERMINAL_CONTROLS}",
+        " ".repeat(escaped_prefix.chars().count()),
+        "^".repeat(TERMINAL_CONTROL_TARGET.len())
+    )));
+    assert!(!plain.contains('\x1b'));
+    assert!(!plain.contains('\x07'));
+    assert!(!plain.contains('\r'));
+    assert!(
+        plain
+            .chars()
+            .all(|character| character == '\n' || !character.is_control()),
+        "plain output must contain only renderer-owned line breaks: {plain:?}"
+    );
+}
+
+fn assert_colored_human_output_has_only_renderer_ansi(colored: &str) {
+    assert_eq!(colored.matches('\x1b').count(), 2);
+    assert!(colored.contains("\x1b[1;31m"));
+    assert!(colored.contains("\x1b[0m"));
+    assert!(
+        colored.chars().all(|character| {
+            character == '\n' || character == '\x1b' || !character.is_control()
+        })
+    );
 }
 
 #[test]

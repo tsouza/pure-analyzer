@@ -18,7 +18,7 @@ pub(crate) fn render(input: RenderInput<'_>, options: HumanOptions) -> Result<St
             if previous_file.is_some() {
                 output.push('\n');
             }
-            output.push_str(diagnostic.primary.source.name());
+            append_terminal_text(&mut output, diagnostic.primary.source.name());
             output.push_str(":\n");
             previous_file = Some(file);
         }
@@ -34,22 +34,21 @@ pub(crate) fn render(input: RenderInput<'_>, options: HumanOptions) -> Result<St
 
 fn append_diagnostic(output: &mut String, diagnostic: &PreparedDiagnostic<'_>, color: bool) {
     let severity = diagnostic.diagnostic.severity;
-    let header = format!(
-        "  {}[{}]: {}",
-        severity_name(severity),
-        diagnostic.diagnostic.code.as_str(),
-        diagnostic.diagnostic.message
-    );
     if color {
         output.push_str("\x1b[1;");
         output.push_str(severity_color(severity));
         output.push('m');
-        output.push_str(&header);
-        output.push_str("\x1b[0m\n");
-    } else {
-        output.push_str(&header);
-        output.push('\n');
     }
+    output.push_str("  ");
+    output.push_str(severity_name(severity));
+    output.push('[');
+    output.push_str(diagnostic.diagnostic.code.as_str());
+    output.push_str("]: ");
+    append_terminal_text(output, &diagnostic.diagnostic.message);
+    if color {
+        output.push_str("\x1b[0m");
+    }
+    output.push('\n');
 
     append_label(output, "primary", &diagnostic.primary);
     for label in &diagnostic.secondary {
@@ -57,7 +56,7 @@ fn append_diagnostic(output: &mut String, diagnostic: &PreparedDiagnostic<'_>, c
     }
     if let Some(fix) = &diagnostic.fix {
         output.push_str("    = fix: ");
-        output.push_str(&fix.fix.title);
+        append_terminal_text(output, &fix.fix.title);
         output.push_str(" [");
         output.push_str(applicability_name(fix.fix.applicability));
         output.push_str(", ");
@@ -69,7 +68,7 @@ fn append_diagnostic(output: &mut String, diagnostic: &PreparedDiagnostic<'_>, c
     }
     if let Some(verdict) = &diagnostic.diagnostic.verdict {
         output.push_str("    = verdict: ");
-        output.push_str(&verdict_name(verdict));
+        append_verdict_name(output, verdict);
         output.push('\n');
     }
     if let Some(reason) = diagnostic.diagnostic.reason {
@@ -81,14 +80,14 @@ fn append_diagnostic(output: &mut String, diagnostic: &PreparedDiagnostic<'_>, c
     }
     if let Some(url) = &diagnostic.diagnostic.url {
         output.push_str("    = docs: ");
-        output.push_str(url);
+        append_terminal_text(output, url);
         output.push('\n');
     }
 }
 
 fn append_label(output: &mut String, role: &str, label: &PreparedLabel<'_>) {
     output.push_str("    --> ");
-    output.push_str(label.source.name());
+    append_terminal_text(output, label.source.name());
     output.push(':');
     output.push_str(&label.start.line.to_string());
     output.push(':');
@@ -105,7 +104,7 @@ fn append_label(output: &mut String, role: &str, label: &PreparedLabel<'_>) {
     output.push_str("      |");
     output.push('\n');
     output.push_str(&format!("{:>5} | ", label.start.line));
-    output.push_str(line);
+    append_terminal_text(output, line);
     output.push('\n');
     output.push_str("      | ");
     output.push_str(&" ".repeat(padding));
@@ -114,7 +113,7 @@ fn append_label(output: &mut String, role: &str, label: &PreparedLabel<'_>) {
     output.push_str(role);
     if !label.note.is_empty() {
         output.push_str(": ");
-        output.push_str(label.note);
+        append_terminal_text(output, label.note);
     }
     output.push('\n');
 }
@@ -128,14 +127,14 @@ fn annotated_line<'a>(label: &PreparedLabel<'a>) -> (&'a str, usize, usize) {
         .find('\n')
         .map_or(text.len(), |index| start + index);
     let highlighted_end = end.min(line_end);
-    let padding = text[line_start..start].chars().count();
-    let width = text[start..highlighted_end].chars().count().max(1);
+    let padding = terminal_text_width(&text[line_start..start]);
+    let width = terminal_text_width(&text[start..highlighted_end]).max(1);
     (&text[line_start..line_end], padding, width)
 }
 
 fn append_edit(output: &mut String, edit: &PreparedEdit<'_>) {
     output.push_str("      replace ");
-    output.push_str(edit.source.name());
+    append_terminal_text(output, edit.source.name());
     output.push(':');
     output.push_str(&edit.start.line.to_string());
     output.push(':');
@@ -145,7 +144,7 @@ fn append_edit(output: &mut String, edit: &PreparedEdit<'_>) {
     output.push(':');
     output.push_str(&edit.end.column.to_string());
     output.push_str(" with ");
-    output.push_str(&format!("{:?}", edit.edit.new_text));
+    append_quoted_terminal_text(output, &edit.edit.new_text);
     output.push('\n');
 }
 
@@ -197,10 +196,54 @@ const fn provenance_name(provenance: FixProvenance) -> &'static str {
     }
 }
 
-fn verdict_name(verdict: &Verdict) -> String {
+fn append_verdict_name(output: &mut String, verdict: &Verdict) {
     match verdict {
-        Verdict::Equivalent => "equivalent".to_owned(),
-        Verdict::NotEquivalent { witness } => format!("not_equivalent; witness: {witness}"),
-        Verdict::Indecisive => "indecisive".to_owned(),
+        Verdict::Equivalent => output.push_str("equivalent"),
+        Verdict::NotEquivalent { witness } => {
+            output.push_str("not_equivalent; witness: ");
+            append_terminal_text(output, witness);
+        }
+        Verdict::Indecisive => output.push_str("indecisive"),
+    }
+}
+
+fn append_quoted_terminal_text(output: &mut String, text: &str) {
+    output.push('"');
+    for character in text.chars() {
+        match character {
+            '"' => output.push_str("\\\""),
+            '\\' => output.push_str("\\\\"),
+            _ => append_terminal_character(output, character),
+        }
+    }
+    output.push('"');
+}
+
+fn append_terminal_text(output: &mut String, text: &str) {
+    for character in text.chars() {
+        append_terminal_character(output, character);
+    }
+}
+
+fn append_terminal_character(output: &mut String, character: char) {
+    match character {
+        '\0' => output.push_str("\\0"),
+        '\t' => output.push_str("\\t"),
+        '\n' => output.push_str("\\n"),
+        '\r' => output.push_str("\\r"),
+        character if character.is_control() => output.extend(character.escape_unicode()),
+        _ => output.push(character),
+    }
+}
+
+fn terminal_text_width(text: &str) -> usize {
+    text.chars().map(terminal_character_width).sum()
+}
+
+fn terminal_character_width(character: char) -> usize {
+    match character {
+        '\0' | '\t' | '\n' | '\r' => 2,
+        character if character.is_control() => character.escape_unicode().count(),
+        _ => 1,
     }
 }
