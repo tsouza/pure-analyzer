@@ -502,4 +502,5 @@ pub fn pure_analyzer_analysis::ValidatePass::analyze(&self, pure_analyzer_analys
 pub fn pure_analyzer_analysis::ValidatePass::name(&self) -> &'static str
 pub fn pure_analyzer_analysis::analyze_m3_locals(&pure_analyzer_syntax::green::GreenNode, &pure_analyzer_model::types::ModelGraph) -> pure_analyzer_analysis::LocalNavigationAnalysis
 pub fn pure_analyzer_analysis::format_query(&str, pure_analyzer_diagnostics::file::FileId) -> core::result::Result<pure_analyzer_analysis::FormatResult, pure_analyzer_syntax::builder::BuildError>
+pub fn pure_analyzer_analysis::format_query_with_width(&str, pure_analyzer_diagnostics::file::FileId, usize) -> core::result::Result<pure_analyzer_analysis::FormatResult, pure_analyzer_syntax::builder::BuildError>
 pub fn pure_analyzer_analysis::version() -> &'static str

@@ -4,8 +4,9 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use libpure::{
-    AnalysisDriver, DiagCode, Diagnostic, FileId, LineColumn, LintRequest, ModelInput, SourceFile,
-    SourceInput, SourceOrigin, SourceRequest, SourceStore, TextSize,
+    AnalysisDriver, DiagCode, Diagnostic, DiagnosticPolicy, FileId, LineColumn, LintRequest,
+    ModelInput, Severity, SourceFile, SourceInput, SourceOrigin, SourceRequest, SourceStore,
+    TextSize,
 };
 
 const SEQUENTIAL_JOBS: usize = 1;
@@ -328,6 +329,32 @@ fn formatting_recovery_retains_meaningful_parser_diagnostics() {
         ]
     );
     assert_eq!(diagnostics, expected_diagnostics);
+}
+
+#[test]
+fn formatting_policy_filters_recovery_diagnostics() {
+    let driver = AnalysisDriver;
+    let source = SourceInput::in_memory("broken.pure", "\0");
+    let warned = driver
+        .format(
+            &SourceRequest::new([source.clone()]).with_diagnostic_policy(
+                DiagnosticPolicy::new().with_severity(DiagCode::BadToken, Severity::Warning),
+            ),
+        )
+        .expect("format recovery source with warning policy");
+
+    assert_eq!(warned.diagnostics().len(), 1);
+    assert_eq!(warned.diagnostics()[0].code, DiagCode::BadToken);
+    assert_eq!(warned.diagnostics()[0].severity, Severity::Warning);
+
+    let ignored = driver
+        .format(
+            &SourceRequest::new([source])
+                .with_diagnostic_policy(DiagnosticPolicy::new().ignore(DiagCode::BadToken)),
+        )
+        .expect("format recovery source with ignore policy");
+
+    assert!(ignored.diagnostics().is_empty());
 }
 
 #[test]

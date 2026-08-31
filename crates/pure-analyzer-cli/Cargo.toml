@@ -23,9 +23,8 @@ path = "src/main.rs"
 # `anyhow` at the boundary (libraries use `thiserror`).
 [dependencies]
 clap.workspace = true
-anyhow.workspace = true
-pure-analyzer-diagnostics.workspace = true
 libpure.workspace = true
+pure-analyzer-render.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 serde.workspace = true

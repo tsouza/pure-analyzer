@@ -11,7 +11,7 @@ pub use driver::{
     LintRequest, ModelInput, ParseOutput, ParsedSource, RequestError, SourceRequest,
 };
 /// Formatter API exposed to front ends through the workspace facade.
-pub use pure_analyzer_analysis::{FormatResult, format_query};
+pub use pure_analyzer_analysis::{FormatResult, format_query, format_query_with_width};
 pub use pure_analyzer_diagnostics::{
     ALL_DIAG_CODES, DiagCode, Diagnostic, FileId, FixPlan, FixPlanError, PlannedChange,
     PlannedFile, Severity, TextRange, TextSize,
