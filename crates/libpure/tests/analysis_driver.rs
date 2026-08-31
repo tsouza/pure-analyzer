@@ -148,6 +148,27 @@ fn parse_validate_and_format_match_file_and_memory_snapshots() {
 }
 
 #[test]
+fn formatting_recovery_retains_meaningful_parser_diagnostics() {
+    let driver = AnalysisDriver;
+    let output = driver
+        .format(&SourceRequest::new([SourceInput::in_memory(
+            "malformed.pure",
+            "[a,]",
+        )]))
+        .expect("format recovery-tolerant source");
+
+    assert_eq!(output.formatted()[0].text(), "[a,]\n");
+    assert_eq!(output.diagnostics().len(), 1);
+
+    let diagnostic = &output.diagnostics()[0];
+    assert_eq!(diagnostic.code, DiagCode::MalformedSyntax);
+    assert_eq!(diagnostic.message, "expected an expression after `,`");
+    assert_eq!(diagnostic.primary.file, FileId::new(0));
+    assert_eq!(usize::from(diagnostic.primary.span.start()), 3);
+    assert_eq!(usize::from(diagnostic.primary.span.end()), 4);
+}
+
+#[test]
 fn parse_validate_and_format_are_deterministic_across_execution_modes() {
     let driver = AnalysisDriver;
     let sequential_request = source_request(SEQUENTIAL_JOBS);
