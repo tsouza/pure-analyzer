@@ -435,10 +435,11 @@ pub enum DriverError {
         source: BuildError,
     },
     /// A requested parallel worker pool could not be constructed.
-    #[error("internal worker-pool failure: {message}")]
+    #[error("internal worker-pool failure: {source}")]
     WorkerPool {
         /// The worker-pool construction failure reported by Rayon.
-        message: String,
+        #[source]
+        source: rayon::ThreadPoolBuildError,
     },
     /// An internal source-store invariant was not preserved.
     #[error("internal source-store invariant lost file {file}")]
@@ -633,9 +634,7 @@ impl DriverError {
     }
 
     fn worker_pool(source: rayon::ThreadPoolBuildError) -> Self {
-        Self::WorkerPool {
-            message: source.to_string(),
-        }
+        Self::WorkerPool { source }
     }
 }
 
@@ -881,5 +880,21 @@ Class model::Person
             driver.lint(&malformed_model),
             Err(DriverError::ModelLoad { .. })
         ));
+    }
+
+    #[test]
+    fn worker_pool_failures_preserve_the_rayon_error_source() {
+        let source = rayon::ThreadPoolBuilder::new()
+            .spawn_handler(|_| Err(std::io::Error::other("fixture worker failure")))
+            .build()
+            .expect_err("fixture spawn handler must reject worker creation");
+        let error = DriverError::worker_pool(source);
+
+        assert!(
+            std::error::Error::source(&error)
+                .and_then(|source| source.downcast_ref::<rayon::ThreadPoolBuildError>())
+                .is_some(),
+            "the public driver error must retain Rayon's typed construction failure"
+        );
     }
 }

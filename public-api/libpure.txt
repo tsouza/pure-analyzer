@@ -29,7 +29,7 @@ pub libpure::DriverError::SourceLoad::source: libpure::SourceStoreError
 pub libpure::DriverError::Usage
 pub libpure::DriverError::Usage::source: libpure::RequestError
 pub libpure::DriverError::WorkerPool
-pub libpure::DriverError::WorkerPool::message: alloc::string::String
+pub libpure::DriverError::WorkerPool::source: rayon_core::ThreadPoolBuildError
 impl core::error::Error for libpure::DriverError
 pub fn libpure::DriverError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
 impl core::fmt::Debug for libpure::DriverError
