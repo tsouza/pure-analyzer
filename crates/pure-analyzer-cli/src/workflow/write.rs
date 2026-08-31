@@ -12,7 +12,6 @@ use super::Failure;
 const MAX_UNIQUE_NAME_ATTEMPTS: usize = 128;
 const WRITER_MARKER: &str = "pure-analyzer";
 const STAGING_ROLE: &str = "stage";
-const BACKUP_ROLE: &str = "backup";
 
 static NEXT_TEMPORARY: AtomicU64 = AtomicU64::new(0);
 
@@ -168,11 +167,12 @@ fn rollback_one<O: FileOperations>(
 ) -> Result<(), Failure> {
     operations.before_rollback(replacement.index, &replacement.path)?;
     if let Err(error) = verify_installed_snapshot(&replacement.path, &replacement.after) {
-        return Err(clean_link_after_failure(error, &replacement.backup));
+        return Err(clean_backup_after_failure(error, &replacement.backup));
     }
+    operations.before_rollback_exchange(replacement.index, &replacement.path)?;
     operations
-        .replace(
-            ReplaceOperation::RestoreRolledBack,
+        .exchange(
+            ExchangeOperation::RestoreRolledBack,
             replacement.index,
             &replacement.backup,
             &replacement.path,
@@ -182,7 +182,38 @@ fn rollback_one<O: FileOperations>(
                 "could not atomically restore original output {} while rolling back: {error}",
                 replacement.path.display()
             ))
-        })
+        })?;
+    let displaced = verify_rollback_displaced_snapshot(
+        &replacement.backup,
+        &replacement.after,
+        &replacement.path,
+    );
+    let restored = verify_rolled_back_snapshot(&replacement.path, &replacement.before);
+    match (displaced, restored) {
+        (Ok(()), Ok(())) => {}
+        (Ok(()), Err(error)) => {
+            return Err(restore_rollback_after_mismatch(
+                error,
+                replacement,
+                operations,
+                Some(replacement.after.clone()),
+            ));
+        }
+        (Err(error), _) => {
+            return Err(restore_rollback_after_mismatch(
+                error,
+                replacement,
+                operations,
+                None,
+            ));
+        }
+    }
+    remove_owned_file(&replacement.backup).map_err(|error| {
+        Failure::internal(format!(
+            "could not remove transactional backup {} after rolling back: {error}",
+            replacement.backup.display()
+        ))
+    })
 }
 
 #[derive(Debug)]
@@ -214,53 +245,106 @@ impl StagedReplacement {
     ) -> Result<CommittedReplacement, Failure> {
         operations.before_late_validation(index, &self.replacement.path)?;
         verify_snapshot(&self.replacement.path, &self.replacement.before)?;
-        let backup = self.link_original_to_backup(index, operations)?;
-        if let Err(error) = verify_snapshot(&self.replacement.path, &self.replacement.before) {
-            return Err(clean_link_after_failure(error, &backup));
-        }
         let temporary = self.temporary_path()?.to_owned();
+        operations.before_install(index, &self.replacement.path, &temporary)?;
 
-        match operations.replace(
-            ReplaceOperation::InstallStaged,
-            index,
-            &temporary,
-            &self.replacement.path,
-        ) {
-            Ok(()) => {
-                self.temporary = None;
-                Ok(CommittedReplacement {
-                    index,
-                    path: self.replacement.path.clone(),
-                    backup,
-                    after: self.replacement.after.clone(),
-                })
-            }
-            Err(error) => Err(clean_link_after_failure(
+        operations
+            .exchange(
+                ExchangeOperation::InstallStaged,
+                index,
+                &temporary,
+                &self.replacement.path,
+            )
+            .map_err(|error| {
                 Failure::internal(format!(
                     "could not atomically install staged output {}: {error}",
                     self.replacement.path.display()
-                )),
-                &backup,
-            )),
+                ))
+            })?;
+        let displaced =
+            verify_displaced_snapshot(&temporary, &self.replacement.before, &self.replacement.path);
+        let installed = verify_installed_snapshot(&self.replacement.path, &self.replacement.after);
+        match (displaced, installed) {
+            (Ok(()), Ok(())) => {}
+            (Ok(()), Err(error)) => {
+                return Err(self.restore_invalid_install(
+                    error,
+                    index,
+                    operations,
+                    &temporary,
+                    Some(self.replacement.before.clone()),
+                ));
+            }
+            (Err(error), _) => {
+                return Err(
+                    self.restore_invalid_install(error, index, operations, &temporary, None)
+                );
+            }
         }
+
+        self.temporary = None;
+        Ok(CommittedReplacement {
+            index,
+            path: self.replacement.path.clone(),
+            backup: temporary,
+            before: self.replacement.before.clone(),
+            after: self.replacement.after.clone(),
+        })
     }
 
-    fn link_original_to_backup<O: FileOperations>(
-        &self,
+    /// Return an invalid-install error only after atomically putting the
+    /// displaced entry back at its original path.
+    ///
+    /// The exchange leaves the staged path holding exactly the entry that was
+    /// at the destination at the commit point. Either the displaced snapshot
+    /// or the installed output can fail verification: the latter also catches
+    /// tampering with the closed staging pathname before the exchange.
+    fn restore_invalid_install<O: FileOperations>(
+        &mut self,
+        failure: Failure,
         index: usize,
         operations: &mut O,
-    ) -> Result<PathBuf, Failure> {
-        let backup = link_to_unique_sibling(
-            operations,
-            LinkOperation::PreserveOriginal,
+        temporary: &Path,
+        expected_destination: Option<String>,
+    ) -> Failure {
+        if let Err(error) = operations.exchange(
+            ExchangeOperation::RestoreStale,
             index,
+            temporary,
             &self.replacement.path,
-            BACKUP_ROLE,
-        )?;
-        match verify_snapshot(&backup, &self.replacement.before) {
-            Ok(_) => Ok(backup),
-            Err(error) => Err(clean_link_after_failure(error, &backup)),
+        ) {
+            // The temporary path now contains the external edit. It is the
+            // only recoverable copy, so deliberately relinquish cleanup.
+            self.temporary = None;
+            return Failure::internal(format!(
+                "{failure}; additionally, could not restore the external edit to {}: {error}; recovery content remains at {}",
+                self.replacement.path.display(),
+                temporary.display()
+            ));
         }
+
+        if let Err(error) = verify_snapshot(temporary, &self.replacement.after) {
+            // A second writer raced the recovery exchange. Its content may
+            // now be reachable only through the staging path, so retain it.
+            self.temporary = None;
+            return Failure::internal(format!(
+                "{failure}; additionally, recovery of {} raced another edit: {error}; recovery content remains at {}",
+                self.replacement.path.display(),
+                temporary.display()
+            ));
+        }
+        if let Some(expected) = expected_destination
+            && let Err(error) = verify_snapshot(&self.replacement.path, &expected)
+        {
+            self.temporary = None;
+            return Failure::internal(format!(
+                "{failure}; additionally, recovery of {} raced another edit: {error}; recovery content remains at {}",
+                self.replacement.path.display(),
+                temporary.display()
+            ));
+        }
+
+        failure
     }
 
     fn temporary_path(&self) -> Result<&Path, Failure> {
@@ -299,6 +383,7 @@ struct CommittedReplacement {
     index: usize,
     path: PathBuf,
     backup: PathBuf,
+    before: String,
     after: String,
 }
 
@@ -307,21 +392,26 @@ trait FileOperations {
         Ok(())
     }
 
+    fn before_install(
+        &mut self,
+        _index: usize,
+        _path: &Path,
+        _temporary: &Path,
+    ) -> Result<(), Failure> {
+        Ok(())
+    }
+
     fn before_rollback(&mut self, _index: usize, _path: &Path) -> Result<(), Failure> {
         Ok(())
     }
 
-    fn hard_link(
-        &mut self,
-        _operation: LinkOperation,
-        _index: usize,
-        source: &Path,
-        destination: &Path,
-    ) -> io::Result<()>;
+    fn before_rollback_exchange(&mut self, _index: usize, _path: &Path) -> Result<(), Failure> {
+        Ok(())
+    }
 
-    fn replace(
+    fn exchange(
         &mut self,
-        _operation: ReplaceOperation,
+        _operation: ExchangeOperation,
         _index: usize,
         source: &Path,
         destination: &Path,
@@ -331,36 +421,43 @@ trait FileOperations {
 struct NativeFileOperations;
 
 impl FileOperations for NativeFileOperations {
-    fn hard_link(
+    fn exchange(
         &mut self,
-        _operation: LinkOperation,
+        _operation: ExchangeOperation,
         _index: usize,
         source: &Path,
         destination: &Path,
     ) -> io::Result<()> {
-        fs::hard_link(source, destination)
-    }
-
-    fn replace(
-        &mut self,
-        _operation: ReplaceOperation,
-        _index: usize,
-        source: &Path,
-        destination: &Path,
-    ) -> io::Result<()> {
-        fs::rename(source, destination)
+        atomic_exchange(source, destination)
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum LinkOperation {
-    PreserveOriginal,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ReplaceOperation {
+enum ExchangeOperation {
     InstallStaged,
+    RestoreStale,
     RestoreRolledBack,
+}
+
+/// Atomically swap two existing sibling paths, preserving the displaced entry
+/// for stale-snapshot verification and rollback.
+#[cfg(any(target_os = "linux", target_vendor = "apple"))]
+fn atomic_exchange(source: &Path, destination: &Path) -> io::Result<()> {
+    use rustix::fs::{CWD, RenameFlags, renameat_with};
+
+    renameat_with(CWD, source, CWD, destination, RenameFlags::EXCHANGE)
+        .map_err(|error| io::Error::from_raw_os_error(error.raw_os_error()))
+}
+
+/// A plain rename cannot preserve a non-cooperating writer that races the
+/// final validation, so unsupported platforms fail closed instead of silently
+/// weakening the transactional-write contract.
+#[cfg(not(any(target_os = "linux", target_vendor = "apple")))]
+fn atomic_exchange(_source: &Path, _destination: &Path) -> io::Result<()> {
+    Err(io::Error::new(
+        io::ErrorKind::Unsupported,
+        "atomic file exchange is unavailable on this platform",
+    ))
 }
 
 fn ensure_regular_file(path: &Path) -> Result<(), Failure> {
@@ -449,6 +546,98 @@ fn verify_installed_snapshot(path: &Path, expected: &str) -> Result<(), Failure>
     Ok(())
 }
 
+/// Verify the entry displaced by an installation exchange. A mismatch is a
+/// stale destination, not a corrupt staging file: the caller will swap the
+/// displaced external edit back into place before returning this error.
+fn verify_displaced_snapshot(
+    displaced: &Path,
+    expected: &str,
+    destination: &Path,
+) -> Result<(), Failure> {
+    match verify_snapshot(displaced, expected) {
+        Ok(_) => Ok(()),
+        Err(error) if error.exit_code() == super::EXIT_USAGE => Err(Failure::usage(format!(
+            "{} changed after it was analyzed; no replacement was installed",
+            destination.display()
+        ))),
+        Err(error) => Err(error),
+    }
+}
+
+/// Verify the entry displaced while undoing a prior installation. A mismatch
+/// means another writer won before the rollback exchange, so its edit must be
+/// restored rather than overwritten by the rollback.
+fn verify_rollback_displaced_snapshot(
+    displaced: &Path,
+    expected: &str,
+    destination: &Path,
+) -> Result<(), Failure> {
+    match verify_snapshot(displaced, expected) {
+        Ok(_) => Ok(()),
+        Err(error) if error.exit_code() == super::EXIT_USAGE => Err(Failure::usage(format!(
+            "{} changed after automatic replacement; preserving external edit",
+            destination.display()
+        ))),
+        Err(error) => Err(error),
+    }
+}
+
+/// Verify that the rollback exchange restored the analyzed input at its
+/// destination. This catches a tampered backup path before it is allowed to
+/// replace the formatter output.
+fn verify_rolled_back_snapshot(path: &Path, expected: &str) -> Result<(), Failure> {
+    match verify_snapshot(path, expected) {
+        Ok(_) => Ok(()),
+        Err(error) if error.exit_code() == super::EXIT_USAGE => Err(Failure::usage(format!(
+            "{} changed while rolling back; preserving external edit",
+            path.display()
+        ))),
+        Err(error) => Err(error),
+    }
+}
+
+/// Undo a rollback exchange that displaced an external edit. If the second
+/// exchange races too, retain the staging path so no external content is
+/// discarded while reporting a recoverable artifact location.
+fn restore_rollback_after_mismatch<O: FileOperations>(
+    failure: Failure,
+    replacement: &CommittedReplacement,
+    operations: &mut O,
+    expected_destination: Option<String>,
+) -> Failure {
+    if let Err(error) = operations.exchange(
+        ExchangeOperation::RestoreStale,
+        replacement.index,
+        &replacement.backup,
+        &replacement.path,
+    ) {
+        return Failure::internal(format!(
+            "{failure}; additionally, could not restore the external edit to {}: {error}; recovery content remains at {}",
+            replacement.path.display(),
+            replacement.backup.display()
+        ));
+    }
+
+    if let Err(error) = verify_snapshot(&replacement.backup, &replacement.before) {
+        return Failure::internal(format!(
+            "{failure}; additionally, recovery of {} raced another edit: {error}; recovery content remains at {}",
+            replacement.path.display(),
+            replacement.backup.display()
+        ));
+    }
+    if let Some(expected) = expected_destination
+        && let Err(error) = verify_installed_snapshot(&replacement.path, &expected)
+    {
+        return Failure::internal(format!(
+            "{failure}; additionally, recovery of {} raced another edit: {error}; recovery content remains at {}",
+            replacement.path.display(),
+            replacement.backup.display()
+        ));
+    }
+
+    clean_backup_after_failure(failure, &replacement.backup)
+}
+
 fn create_staging_file(path: &Path) -> Result<(PathBuf, File), Failure> {
     for _ in 0..MAX_UNIQUE_NAME_ATTEMPTS {
         let temporary = unique_sibling(path, STAGING_ROLE)?;
@@ -470,32 +659,6 @@ fn create_staging_file(path: &Path) -> Result<(PathBuf, File), Failure> {
     Err(Failure::internal(format!(
         "could not reserve a staged output path beside {}",
         path.display()
-    )))
-}
-
-fn link_to_unique_sibling<O: FileOperations>(
-    operations: &mut O,
-    operation: LinkOperation,
-    index: usize,
-    source: &Path,
-    role: &str,
-) -> Result<PathBuf, Failure> {
-    for _ in 0..MAX_UNIQUE_NAME_ATTEMPTS {
-        let candidate = unique_sibling(source, role)?;
-        match operations.hard_link(operation, index, source, &candidate) {
-            Ok(()) => return Ok(candidate),
-            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
-            Err(error) => {
-                return Err(Failure::internal(format!(
-                    "could not create transactional link {}: {error}",
-                    candidate.display()
-                )));
-            }
-        }
-    }
-    Err(Failure::internal(format!(
-        "could not reserve a transactional link beside {}",
-        source.display()
     )))
 }
 
@@ -557,12 +720,12 @@ fn clean_staged_after_failure(error: Failure, temporary: &Path) -> Failure {
     }
 }
 
-fn clean_link_after_failure(error: Failure, link: &Path) -> Failure {
-    match remove_owned_file(link) {
+fn clean_backup_after_failure(error: Failure, backup: &Path) -> Failure {
+    match remove_owned_file(backup) {
         Ok(()) => error,
         Err(cleanup_error) => Failure::internal(format!(
-            "{error}; additionally, could not remove transactional link {}: {cleanup_error}",
-            link.display()
+            "{error}; additionally, could not remove transactional backup {}: {cleanup_error}",
+            backup.display()
         )),
     }
 }
@@ -586,6 +749,7 @@ mod tests {
     const TEST_DIRECTORY_ATTEMPTS: usize = 128;
     static NEXT_TEST_DIRECTORY: AtomicU64 = AtomicU64::new(0);
 
+    #[cfg(any(target_os = "linux", target_vendor = "apple"))]
     #[test]
     fn replaces_every_file_after_staging() {
         let fixture = Fixture::new("success");
@@ -600,6 +764,20 @@ mod tests {
 
         assert_eq!(fixture.read(&first), "after one");
         assert_eq!(fixture.read(&second), "after two");
+        fixture.assert_no_writer_artifacts();
+    }
+
+    #[cfg(not(any(target_os = "linux", target_vendor = "apple")))]
+    #[test]
+    fn native_writes_fail_closed_without_atomic_exchange() {
+        let fixture = Fixture::new("unsupported-exchange");
+        let source = fixture.write("source.pure", "before");
+
+        let error = replace_all(vec![replacement(&source, "before", "after")])
+            .expect_err("unsupported platforms must not fall back to plain rename");
+
+        assert_eq!(error.exit_code(), super::super::EXIT_INTERNAL);
+        assert_eq!(fixture.read(&source), "before");
         fixture.assert_no_writer_artifacts();
     }
 
@@ -624,6 +802,53 @@ mod tests {
         assert_eq!(fixture.read(&first), "before one");
         assert_eq!(fixture.read(&second), changed_elsewhere);
         fixture.assert_no_writer_artifacts();
+    }
+
+    #[test]
+    fn exchange_restores_an_edit_that_races_the_final_validation() {
+        let fixture = Fixture::new("install-race");
+        let source = fixture.write("source.pure", "before");
+        let external_change = "external edit";
+        let mut operations = TestOperations::install_change(0, source.clone(), external_change);
+
+        let error = replace_all_with_operations(
+            vec![replacement(&source, "before", "after")],
+            &mut operations,
+        )
+        .expect_err("an edit immediately before the exchange must remain stale");
+
+        assert_eq!(error.exit_code(), super::super::EXIT_USAGE);
+        assert_eq!(fixture.read(&source), external_change);
+        fixture.assert_no_writer_artifacts();
+    }
+
+    #[test]
+    fn exchange_rejects_tampered_staged_content() {
+        let fixture = Fixture::new("staging-tamper");
+        let source = fixture.write("source.pure", "before");
+        let tampered = "tampered staged content";
+        let mut operations = TestOperations::tamper_staging(0, tampered);
+
+        replace_all_with_operations(
+            vec![replacement(&source, "before", "after")],
+            &mut operations,
+        )
+        .expect_err("a staged file changed before exchange must be rejected");
+
+        assert_eq!(fixture.read(&source), "before");
+        let artifacts: Vec<_> = fs::read_dir(&fixture.root)
+            .expect("list fixture entries")
+            .map(|entry| entry.expect("read fixture entry").path())
+            .filter(|path| {
+                path.file_name()
+                    .is_some_and(|name| name.to_string_lossy().contains(WRITER_MARKER))
+            })
+            .collect();
+        assert_eq!(artifacts.len(), 1, "retain the unknown staged artifact");
+        assert_eq!(
+            fs::read(&artifacts[0]).expect("read staged artifact"),
+            tampered.as_bytes()
+        );
     }
 
     #[test]
@@ -677,6 +902,34 @@ mod tests {
     }
 
     #[test]
+    fn rollback_restores_an_edit_that_races_its_final_validation() {
+        let fixture = Fixture::new("rollback-exchange-race");
+        let first = fixture.write("first.pure", "before one");
+        let second = fixture.write("second.pure", "before two");
+        let external_change = "external change";
+        let mut operations = TestOperations::failing_install_with_rollback_exchange_change(
+            1,
+            0,
+            first.clone(),
+            external_change,
+        );
+
+        let error = replace_all_with_operations(
+            vec![
+                replacement(&first, "before one", "after one"),
+                replacement(&second, "before two", "after two"),
+            ],
+            &mut operations,
+        )
+        .expect_err("the second installation must force a rollback");
+
+        assert_eq!(error.exit_code(), super::super::EXIT_INTERNAL);
+        assert_eq!(fixture.read(&first), external_change);
+        assert_eq!(fixture.read(&second), "before two");
+        fixture.assert_no_writer_artifacts();
+    }
+
+    #[test]
     fn refuses_non_regular_destinations_before_staging_any_output() {
         let fixture = Fixture::new("non-regular");
         let file = fixture.write("file.pure", "before file");
@@ -712,7 +965,7 @@ mod tests {
         fixture.assert_no_writer_artifacts();
     }
 
-    #[cfg(unix)]
+    #[cfg(any(target_os = "linux", target_vendor = "apple"))]
     #[test]
     fn preserves_destination_permissions() {
         use std::os::unix::fs::PermissionsExt;
@@ -746,7 +999,10 @@ mod tests {
 
     struct TestOperations {
         late_stale: Option<LateStale>,
+        install_change: Option<LateStale>,
+        staging_tamper: Option<StagingTamper>,
         rollback_change: Option<LateStale>,
+        rollback_exchange_change: Option<LateStale>,
         failing_install: Option<usize>,
         install_failure_injected: bool,
     }
@@ -759,7 +1015,26 @@ mod tests {
                     path,
                     text: text.to_owned(),
                 }),
+                install_change: None,
+                staging_tamper: None,
                 rollback_change: None,
+                rollback_exchange_change: None,
+                failing_install: None,
+                install_failure_injected: false,
+            }
+        }
+
+        fn install_change(index: usize, path: PathBuf, text: &str) -> Self {
+            Self {
+                late_stale: None,
+                install_change: Some(LateStale {
+                    index,
+                    path,
+                    text: text.to_owned(),
+                }),
+                staging_tamper: None,
+                rollback_change: None,
+                rollback_exchange_change: None,
                 failing_install: None,
                 install_failure_injected: false,
             }
@@ -768,7 +1043,10 @@ mod tests {
         fn failing_install(index: usize) -> Self {
             Self {
                 late_stale: None,
+                install_change: None,
+                staging_tamper: None,
                 rollback_change: None,
+                rollback_exchange_change: None,
                 failing_install: Some(index),
                 install_failure_injected: false,
             }
@@ -782,12 +1060,51 @@ mod tests {
         ) -> Self {
             Self {
                 late_stale: None,
+                install_change: None,
+                staging_tamper: None,
                 rollback_change: Some(LateStale {
                     index: rollback_index,
                     path,
                     text: text.to_owned(),
                 }),
+                rollback_exchange_change: None,
                 failing_install: Some(failing_index),
+                install_failure_injected: false,
+            }
+        }
+
+        fn failing_install_with_rollback_exchange_change(
+            failing_index: usize,
+            rollback_index: usize,
+            path: PathBuf,
+            text: &str,
+        ) -> Self {
+            Self {
+                late_stale: None,
+                install_change: None,
+                staging_tamper: None,
+                rollback_change: None,
+                rollback_exchange_change: Some(LateStale {
+                    index: rollback_index,
+                    path,
+                    text: text.to_owned(),
+                }),
+                failing_install: Some(failing_index),
+                install_failure_injected: false,
+            }
+        }
+
+        fn tamper_staging(index: usize, text: &str) -> Self {
+            Self {
+                late_stale: None,
+                install_change: None,
+                staging_tamper: Some(StagingTamper {
+                    index,
+                    text: text.to_owned(),
+                }),
+                rollback_change: None,
+                rollback_exchange_change: None,
+                failing_install: None,
                 install_failure_injected: false,
             }
         }
@@ -824,37 +1141,96 @@ mod tests {
             Ok(())
         }
 
-        fn hard_link(
-            &mut self,
-            _operation: LinkOperation,
-            _index: usize,
-            source: &Path,
-            destination: &Path,
-        ) -> io::Result<()> {
-            fs::hard_link(source, destination)
+        fn before_rollback_exchange(&mut self, index: usize, path: &Path) -> Result<(), Failure> {
+            if let Some(change) = &self.rollback_exchange_change
+                && change.index == index
+                && change.path == path
+            {
+                fs::write(path, &change.text).map_err(|error| {
+                    Failure::internal(format!(
+                        "could not update rollback-exchange fixture {}: {error}",
+                        path.display()
+                    ))
+                })?;
+            }
+            Ok(())
         }
 
-        fn replace(
+        fn before_install(
             &mut self,
-            operation: ReplaceOperation,
+            index: usize,
+            path: &Path,
+            temporary: &Path,
+        ) -> Result<(), Failure> {
+            if let Some(change) = &self.install_change
+                && change.index == index
+                && change.path == path
+            {
+                fs::write(path, &change.text).map_err(|error| {
+                    Failure::internal(format!(
+                        "could not update before-install fixture {}: {error}",
+                        path.display()
+                    ))
+                })?;
+            }
+            if let Some(tamper) = &self.staging_tamper
+                && tamper.index == index
+            {
+                fs::write(temporary, &tamper.text).map_err(|error| {
+                    Failure::internal(format!(
+                        "could not tamper staged fixture {}: {error}",
+                        temporary.display()
+                    ))
+                })?;
+            }
+            Ok(())
+        }
+
+        fn exchange(
+            &mut self,
+            operation: ExchangeOperation,
             index: usize,
             source: &Path,
             destination: &Path,
         ) -> io::Result<()> {
             if !self.install_failure_injected
                 && self.failing_install == Some(index)
-                && operation == ReplaceOperation::InstallStaged
+                && operation == ExchangeOperation::InstallStaged
             {
                 self.install_failure_injected = true;
                 return Err(io::Error::other("injected staged-install failure"));
             }
-            fs::rename(source, destination)
+            exchange_for_test(source, destination)
         }
+    }
+
+    /// A deterministic stand-in for the platform exchange primitive. No test
+    /// introduces a concurrent mutation within this three-rename sequence; the
+    /// `before_install` seam controls the exact race boundary under test.
+    fn exchange_for_test(source: &Path, destination: &Path) -> io::Result<()> {
+        let intermediate = unique_sibling(source, "test-exchange")
+            .map_err(|error| io::Error::other(error.to_string()))?;
+        fs::rename(source, &intermediate)?;
+        if let Err(error) = fs::rename(destination, source) {
+            let _ = fs::rename(&intermediate, source);
+            return Err(error);
+        }
+        if let Err(error) = fs::rename(&intermediate, destination) {
+            let _ = fs::rename(source, destination);
+            let _ = fs::rename(&intermediate, source);
+            return Err(error);
+        }
+        Ok(())
     }
 
     struct LateStale {
         index: usize,
         path: PathBuf,
+        text: String,
+    }
+
+    struct StagingTamper {
+        index: usize,
         text: String,
     }
 

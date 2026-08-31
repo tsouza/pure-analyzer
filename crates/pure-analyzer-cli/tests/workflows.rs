@@ -12,6 +12,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use serde_json::Value;
 
 const EXIT_ACTIONABLE: i32 = 1;
+#[cfg(not(any(target_os = "linux", target_vendor = "apple")))]
+const EXIT_INTERNAL: i32 = 4;
 const EXIT_USAGE: i32 = 3;
 const FORMATTER_VALID_SOURCE: &str = "model::Person . all ( )";
 const FORMATTER_BROKEN_SOURCE: &str = "\0";
@@ -347,6 +349,7 @@ fn lint_model_merge_warning_can_be_denied_without_changing_its_code() {
     assert_eq!(document["summary"]["total"], 1);
 }
 
+#[cfg(any(target_os = "linux", target_vendor = "apple"))]
 #[test]
 fn lint_fix_applies_a_real_single_file_change() {
     let (fixture, _, fixed) = lint_fix_fixture("lint-fix-single");
@@ -370,6 +373,7 @@ fn lint_fix_applies_a_real_single_file_change() {
     assert_eq!(fixture.read("query.pure"), fixed);
 }
 
+#[cfg(any(target_os = "linux", target_vendor = "apple"))]
 #[test]
 fn lint_fix_applies_real_multi_file_changes_and_is_idempotent() {
     let fixture = Fixture::new("lint-fix-write");
@@ -420,6 +424,31 @@ fn lint_fix_applies_real_multi_file_changes_and_is_idempotent() {
     assert!(repeated.status.success());
     assert!(repeated.stdout.is_empty());
     assert!(repeated.stderr.is_empty());
+}
+
+#[cfg(not(any(target_os = "linux", target_vendor = "apple")))]
+#[test]
+fn lint_fix_fails_closed_without_changing_source() {
+    let (fixture, query, _) = lint_fix_fixture("lint-fix-unsupported-exchange");
+
+    let applied = run(
+        &fixture.root,
+        &[
+            "lint",
+            "query.pure",
+            "--model",
+            "model.json",
+            "--fix",
+            "--quiet",
+            "--no-config",
+        ],
+    );
+
+    assert_eq!(applied.status.code(), Some(EXIT_INTERNAL));
+    assert!(applied.stdout.is_empty());
+    assert!(utf8(&applied.stderr).contains("atomic file exchange is unavailable on this platform"));
+    assert_eq!(fixture.read("query.pure"), query);
+    fixture.assert_no_writer_artifacts();
 }
 
 #[test]
@@ -596,14 +625,30 @@ fn formatter_read_only_modes_and_transactional_write_have_distinct_behavior() {
     assert_ne!(formatted, original);
     assert_eq!(fixture.read("query.pure"), original);
 
-    let write = run(&fixture.root, &["fmt", "query.pure", "--no-config"]);
-    assert!(write.status.success());
-    assert!(write.stdout.is_empty());
-    assert!(write.stderr.is_empty());
-    assert_eq!(fixture.read("query.pure"), formatted);
-    fixture.assert_no_writer_artifacts();
+    #[cfg(any(target_os = "linux", target_vendor = "apple"))]
+    {
+        let write = run(&fixture.root, &["fmt", "query.pure", "--no-config"]);
+        assert!(write.status.success());
+        assert!(write.stdout.is_empty());
+        assert!(write.stderr.is_empty());
+        assert_eq!(fixture.read("query.pure"), formatted);
+        fixture.assert_no_writer_artifacts();
+    }
+
+    #[cfg(not(any(target_os = "linux", target_vendor = "apple")))]
+    {
+        let write = run(&fixture.root, &["fmt", "query.pure", "--no-config"]);
+        assert_eq!(write.status.code(), Some(EXIT_INTERNAL));
+        assert!(write.stdout.is_empty());
+        assert!(
+            utf8(&write.stderr).contains("atomic file exchange is unavailable on this platform")
+        );
+        assert_eq!(fixture.read("query.pure"), original);
+        fixture.assert_no_writer_artifacts();
+    }
 }
 
+#[cfg(any(target_os = "linux", target_vendor = "apple"))]
 #[test]
 fn formatter_default_write_updates_multiple_files_and_is_idempotent() {
     let fixture = Fixture::new("format-write-multiple");
