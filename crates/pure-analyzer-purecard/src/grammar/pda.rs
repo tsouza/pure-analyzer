@@ -253,10 +253,28 @@ pub enum State {
     AfterDot,
     /// Just consumed `->`; a step / method / reducer identifier must follow.
     AfterArrow,
-    /// Just consumed a single `:` (a typed-binder colon `row: …[1]`) or the first
-    /// `:` of a `::` classpath separator; a classpath identifier or a second `:`
-    /// must follow.
+    /// Just consumed a single `:` off a **name or a string literal** — either a
+    /// typed-binder colon (`row: …[1]`) or the first `:` of a `::` classpath
+    /// separator; a classpath identifier or a second `:` must follow.
     AfterColon,
+    /// Just consumed a single `:` off **any other completed term**. Identical to
+    /// [`AfterColon`](State::AfterColon) except that the `::` classpath separator
+    /// is not among its continuations: a package path is spelled from a bare word
+    /// or a quoted one, never off a call's `)`, a `]`, a number, a date, a
+    /// `$`-variable or a navigated member. Live-attested both ways —
+    /// `…!=mpg::getInteger`, `…!=meta::pure::tds::TDSRow` and
+    /// `…!='europe'::makeId` parse, while `…!=f()::a`, `…!=[1]::a`, `…!=1::a`,
+    /// `…!=$x::a`, `…!=$x.foo::a` and `…!=x->getInteger()::a` are each "no viable
+    /// alternative at input '…::'". The typed-binder arms stay, because arm-R's
+    /// second column colon legitimately follows a completed navigation
+    /// (`~'Agg': x|$x.v : y|$y->sum()`).
+    ///
+    /// Those binder arms are all this state has left, so it is only *entered*
+    /// where one of them can fire — where a call/collection/group/brace-lambda
+    /// frame is open. With no binder slot the colon has no reading at all and
+    /// dies on the colon itself, at the completed-term hub, rather than reaching
+    /// a configuration from which every byte is dead.
+    AfterValueColon,
     /// Just consumed the second `:` of a `::` classpath separator; a classpath
     /// identifier must follow. A third `:` is a dead state — `:::` is never valid.
     AfterColon2,
@@ -407,6 +425,7 @@ impl State {
             State::AfterDot => "AfterDot",
             State::AfterArrow => "AfterArrow",
             State::AfterColon => "AfterColon",
+            State::AfterValueColon => "AfterValueColon",
             State::AfterColon2 => "AfterColon2",
             State::InBinderType => "InBinderType",
             State::AfterBinderType => "AfterBinderType",
@@ -516,13 +535,14 @@ impl State {
             State::SawValuePipe => 70,
             State::InBinderTypePath => 71,
             State::AfterBinderTypePath => 72,
+            State::AfterValueColon => 73,
         }
     }
 
     /// The number of distinct automaton states — the length a per-state cache
     /// (`Vec<_>` keyed by [`index`](State::index)) must have. One more than the
     /// largest [`index`](State::index).
-    pub const COUNT: usize = 73;
+    pub const COUNT: usize = 74;
 
     /// Whether this state is a **completed-term hub** — an inter-lexeme position
     /// the automaton reaches by finishing a term, whichever kind of term it was.
@@ -931,7 +951,14 @@ fn step_after_value(stack_top: Option<Frame>, byte: u8) -> Step {
         // Binary arithmetic: an operand is required, so a closer cannot follow.
         b'+' | b'*' | b'/' => Step::Next(State::ExpectValueReq),
         b'.' => Step::Next(State::AfterDot),
-        b':' => Step::Next(State::AfterColon),
+        // A `::` classpath separator binds to a name or a string literal, both of
+        // which route their own `:` to [`State::AfterColon`]. Off every other
+        // completed term the typed-binder colon is the only reading left, and it
+        // needs a slot to bind in — so with no lambda slot open the colon has no
+        // reading at all and dies on the colon itself, exactly where the engine
+        // says it does (live: `|X.all():language*meta::pure::tds::TDSRow` →
+        // "Unexpected token ':'").
+        b':' if holds_a_lambda_slot(stack_top) => Step::Next(State::AfterValueColon),
         // A call's `(` and a multiplicity's `[` belong to a *name*, so they live
         // in [`State::AfterName`], not here.
         // A `,` separates list/argument elements: the next element is required
@@ -983,9 +1010,11 @@ fn step_after_name(stack_top: Option<Frame>, byte: u8) -> Step {
     match byte {
         b if is_ws(b) => Step::Next(State::AfterName),
         b'(' => Step::Push(Frame::Paren, State::ExpectValue),
-        // The one continuation a *term-start* name has and a completed value does
-        // not: the lambda binder pipe that makes it a parameter.
+        // The two continuations a *term-start* name has and a completed value does
+        // not: the lambda binder pipe that makes it a parameter, and the `::` that
+        // continues a package path.
         b'|' => Step::Next(State::SawPipe),
+        b':' => Step::Next(State::AfterColon),
         _ => step_after_value(stack_top, byte),
     }
 }
@@ -1010,6 +1039,7 @@ fn step_after_str_lit(stack_top: Option<Frame>, byte: u8) -> Step {
     match byte {
         b if is_ws(b) => Step::Next(State::AfterStrLit),
         b'|' => Step::Next(State::SawPipe),
+        b':' => Step::Next(State::AfterColon),
         _ => step_after_value(stack_top, byte),
     }
 }
@@ -1375,6 +1405,20 @@ fn step_after_colon(stack_top: Option<Frame>, byte: u8) -> Step {
     }
 }
 
+// The same `:` off any *other* completed term — a call's `)`, a `]`, a number, a
+// date, a `$`-variable or a navigated member. A `::` names a package path, and a
+// package path is spelled from a bare word or a quoted one, so that one arm is
+// withdrawn and everything else [`step_after_colon`] admits stays: arm-R's second
+// column colon legitimately follows a completed navigation
+// (`~'Agg': x|$x.v : y|$y->sum()`).
+fn step_after_value_colon(stack_top: Option<Frame>, byte: u8) -> Step {
+    if byte == b':' {
+        Step::Dead
+    } else {
+        step_after_colon(stack_top, byte)
+    }
+}
+
 fn step_after_colon_ws(byte: u8) -> Step {
     match byte {
         b if is_ws(b) => Step::Next(State::AfterColonWs),
@@ -1674,6 +1718,7 @@ pub fn step(state: State, stack_top: Option<Frame>, byte: u8) -> Step {
         State::AfterDot => step_after_dot(byte),
         State::AfterArrow => step_after_arrow(byte),
         State::AfterColon => step_after_colon(stack_top, byte),
+        State::AfterValueColon => step_after_value_colon(stack_top, byte),
         State::AfterColon2 => step_after_colon2(byte),
         State::InBinderType => step_in_binder_type(byte),
         State::AfterBinderType => step_after_binder_type(byte),
@@ -1990,6 +2035,7 @@ pub const ALL_STATES: [State; State::COUNT] = [
     State::AfterDot,
     State::AfterArrow,
     State::AfterColon,
+    State::AfterValueColon,
     State::AfterColon2,
     State::InBinderType,
     State::AfterBinderType,

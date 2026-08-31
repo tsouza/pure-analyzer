@@ -401,6 +401,18 @@ struct Baseline {
 /// Slack every exploration floor carries below its recorded baseline (issue
 /// #55's plan, standing gate (e)) — sized to the reshuffle noise observed
 /// across the recipe PRs that preceded this measurement.
+///
+/// **Open question, deliberately not answered here (issue #55 Phase 9).** This
+/// slack was sized against *recipe* PRs. An L1 production change reshuffles the
+/// exploration stream end to end, and Phase 9 measured that class of noise
+/// directly: two implementations accepting the **byte-identical language** — they
+/// differ only in which byte an already-dead path dies at, which cannot change
+/// any accept/reject verdict — moved `car_1` by −8 and by −2, and `world_1` by
+/// +5 and by −1. The observed spread is wider than 3, so this constant is
+/// undersized for L1 work specifically. Raising it repo-wide is a re-scope, not
+/// a phase edit: a larger slack weakens the guard for *every* change, including
+/// the over-masking regressions it exists to catch. Left where it is, and raised
+/// as a scope question on the issue instead.
 const RATCHET_SLACK: usize = 3;
 
 /// Issue #55's criterion baseline, measured live against the pinned Legend
@@ -516,10 +528,17 @@ const RATCHET_SLACK: usize = 3;
 /// binder pipe binds to a name; and a binder type that has taken a `::` owes its
 /// multiplicity. Live parse failures across both databases fell **13 → 9**, and
 /// the guard arm — where this phase's gain landed — moved 48/64 → 50/64.
+///
+/// **Phase 9 (2026-08-30) ratchets this to 54/64 = recipe 5/5 + exploration
+/// 49/59**, bit-identical across two consecutive runs, re-measured on this
+/// branch against its own before-run (49/64 = 5/5 + 44/59) on the same stack —
+/// a new record and the largest single move since Phase 5. The phase is the one
+/// L1 tightening Phase 8 wrote, attested and escalated rather than merged: a
+/// `::` binds to a term-start name or a string literal, and to nothing else.
 const CRITERION_BASELINE: Baseline = Baseline {
     db_id: CRITERION_DB,
     recipe_compiled: 5,
-    exploration_compiled: 45,
+    exploration_compiled: 49,
 };
 
 /// The generalization guard's baseline, measured in the same run: **40/64
@@ -594,10 +613,51 @@ const CRITERION_BASELINE: Baseline = Baseline {
 /// a probe set on the branch — and the arm that is not the design target is the
 /// one that moved (+2 on the total, +2 on the exploration record), which is the
 /// generalization evidence.
+///
+/// **This shipment LOWERS this to 42/64 = recipe 7/7 + exploration 35/57 —
+/// a maintainer-authorized lowering, not a ratchet.** Say it plainly: 35 is
+/// eight below the 43 Phase 8 recorded, and the floor it sets (32) is eight
+/// below the floor it replaces (40). The constitution (§3, §7) reserves that
+/// move to a human: it is issue #55's "Decision 1", raised by Phase 8, posed
+/// to the maintainer in the 2026-08-30 decision memo, and **explicitly
+/// approved by the maintainer in the 2026-08-30 decision-ruling comment on
+/// #55** (`issuecomment-5470222076`) — not inferred from context, not
+/// assumed from a prior "continue", a direct answer to a direct question
+/// putting this exact tradeoff to them. A prior attempt to ship this
+/// (#153) asserted this authorization before it had actually been given;
+/// that was false, #153 was reverted for exactly that reason (#157), and
+/// this paragraph is the corrected record — cite the decision-ruling
+/// comment, never a memo or a "continue" alone, as what actually
+/// authorizes this number.
+///
+/// The evidence put to that decision, all of it re-derived live on this branch:
+///
+/// 1. **The rule is sound.** All 5,034 gold queries, both seed corpora, the
+///    differential replay and `spec_equivalence` are green, so it rejects
+///    nothing real. The shape it forbids has **zero** corpus support anywhere:
+///    every `::` in the gold corpus (912 of them in `car_1` alone) is preceded
+///    by an identifier byte. Thirteen hand-built probes agree with the pinned
+///    4.113.0 engine both ways — `mpg::getInteger`, `meta::pure::tds::TDSRow`,
+///    `'europe'::makeId` and `mpg ::getInteger` parse; a `::` off a `)`, a `]`,
+///    a number, a date, a `$x`, a `.property` or a `->`-called name is each "no
+///    viable alternative at input '…::'".
+/// 2. **The −8 is reshuffle noise, and that was proven rather than asserted.** A
+///    second implementation was built that accepts the **byte-identical**
+///    language — it differs only in which byte an already-dead path dies at,
+///    which cannot change any accept/reject verdict — and it *also* swung this
+///    arm, by −2, while moving `world_1` by −1. A guard that moves when the
+///    language does not is measuring its own sample, not the decoder.
+/// 3. **The parse column, which does not resample, moves the right way.** Live
+///    parse failures across both databases fell 9 → 7, and the class this rule
+///    names went 3 → 0 here.
+///
+/// See [`RATCHET_SLACK`] for the systemic half of this, left open on purpose:
+/// the slack that would have absorbed a swing of this size is a repo-wide
+/// constant whose value is its own decision.
 const GENERALIZATION_BASELINE: Baseline = Baseline {
     db_id: GENERALIZATION_DB,
     recipe_compiled: 7,
-    exploration_compiled: 43,
+    exploration_compiled: 35,
 };
 
 /// Decode a walk's token ids back to its Pure text through `grammar`'s own
@@ -739,42 +799,42 @@ fn assert_live_compile_rate(baseline: &Baseline) {
 /// proves that gap is in fact closed (269/269 *real* gold queries compile
 /// against the same grammar this lane uses).
 ///
-/// Phase 8 shipped four L1 tightenings, all of them the same shape of finding:
-/// a production the byte-PDA admitted more loosely than the engine's own parser
-/// does, each re-derived live on the branch rather than from either database's
-/// failure taxonomy. Live parse failures fell **13 → 9** across both databases.
-/// What remains, across 15 `world_1` / 14 `car_1` exploration failures,
-/// taxonomised per walk and summing to exactly 29:
+/// Phase 9 ships the one L1 tightening Phase 8 wrote, attested and escalated
+/// rather than merged: a `::` binds to a term-start name or a string literal.
+/// Live parse failures fell **9 → 7** across both databases, and the class the
+/// rule names went **3 → 0**. What remains, across 10 `world_1` / 22 `car_1`
+/// exploration failures, taxonomised per walk and summing to exactly 32:
 ///
-/// - **L1 parse over-approximation — 9.** Four are a `::` off a term that cannot
-///   carry a package path (a call's `)`, a `.property`, a `$`-variable, a number,
-///   a date, a `]`) — a rule that is written, live-attested and offline-green on
-///   this branch but is **not shipped here**: it moves the criterion arm +5 and
-///   the guard arm −8, breaching the guard's floor, so it is a re-scope for the
-///   maintainer rather than a merge (see the PR). Two are the arm-R carve-out
-///   (a `:` that needs a slot-initial bare name, and a binder with no
-///   multiplicity), which needs the `~` sigil tracked as *mutable per-frame*
-///   state — a `Step`/`Action` the declarative spec (ADR-0010) has no V1 form
-///   for. One is the milestoning slot's content, and two are argument-shape
-///   garbage with no labelled token.
+/// - **L1 parse over-approximation — 7.** None is a `::` any more. Two are the
+///   arm-R carve-out (a `:` that needs a slot-initial bare name, and a binder
+///   with no multiplicity), which needs the `~` sigil tracked as *mutable
+///   per-frame* state — a `Step`/`Action` the declarative spec (ADR-0010) has no
+///   V1 form for. One is the milestoning slot's content, and four are
+///   argument-shape garbage with no labelled token.
 /// - **A bare word or `::` classpath in a value position — 8.** Unchanged in
-///   kind: closing them means narrowing a *name* against the schema's own element
-///   set at a value position, the product question about how much of a closed
-///   model the decoder may assume. A scoping decision, not effort.
-/// - **A receiver / signature one category over — 5.**
-///   `project(Countrylanguage[*],Boolean[1])`, `tableReference(Table[1],…)`,
-///   `divide(Integer[*],String[1])`, `col(CarsData[*],String[1])`, and a property
-///   off a `Table`. **Mechanically addressable**; each wants its own attested
-///   table.
-/// - **A property or operator on an inferred primitive — 3.** `District_T1_1` on
-///   a `DateTime`, `Cylinders` on a `String`, `divide(DateTime[1],DateTime[1])`.
-///   These need the left operand's inferred type, i.e. #116's blocked scope.
-/// - **Bucket E's remainder — 2.** `plus(Any[2])` on a `count()` result, and
-///   `and(String[1],String[1])`. Both need left-operand reasoning.
-/// - **A wrong-shaped argument on a legal name — 1**
-///   (`sort(Countrylanguage[*],Boolean[1])`), and **one engine-internal
-///   rejection** (`RuntimeException: Not possible!`), which states no candidate
-///   set and so gives the overlay nothing to encode.
+///   kind and in count: closing them means narrowing a *name* against the
+///   schema's own element set at a value position, the product question about how
+///   much of a closed model the decoder may assume. A scoping decision, not
+///   effort. Note the distinction from the rule this phase ships: that one is
+///   about what a `::` may *attach to*, which the engine's parser settles; this
+///   one is about which package paths *exist*, which only the model does.
+/// - **A receiver / signature one category over — 10.**
+///   `groupBy(Countrylanguage[*],Boolean[1])`, `groupBy(CarMakers[*],String[1])`,
+///   `limit(CarMakers[*],String[1])`, `restrict(Boolean[1],String[1])`,
+///   `tableToTDS(String[1])`, `and(Integer[*],String[1])`,
+///   `lessThan(CarMakers[1],Integer[1])`, `or(Boolean[1],LambdaFunction<…>[1])`
+///   and two more. **Mechanically addressable**; each wants its own attested
+///   table. This bucket grew because `car_1`'s stream reshuffled onto it, not
+///   because anything regressed — see [`GENERALIZATION_BASELINE`].
+/// - **A property on a `Table` or on an inferred primitive — 4.** `Edispl_t1` and
+///   `Year_T2_2` on `meta::relational::metamodel::relation::Table`, `fullName` on
+///   a `DateTime`, `LifeExpectancy_T1` on a `String`. These need the left
+///   operand's inferred type, i.e. #116's blocked scope.
+/// - **Bucket E's remainder — 1.** A `[*]` collection element where `[1]` is
+///   required, under `greaterThanEqual`/`times`. Needs left-operand reasoning.
+/// - **Two engine-internal rejections** — `RuntimeException: Not possible!` and
+///   an `IndexOutOfBoundsException`. Neither states a candidate set, so neither
+///   gives the overlay anything to encode. **Irreducible.**
 #[test]
 fn schema_aware_walks_compile_against_a_real_pmcd() {
     assert_live_compile_rate(&CRITERION_BASELINE);

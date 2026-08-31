@@ -277,17 +277,35 @@ pinned engine on the branch and each with its rejecting byte pinned in
   is still optional — stays, because arm-R's `~'Total': y|$y->sum()` legitimately
   has none and the byte machine cannot see the `~`.
 
-**Two tightenings Phase 8 worked out and deliberately did not ship.** Both are
-recorded here so a later phase does not re-derive them:
+**Tightened in issue #55 Phase 9 (also removed from the over-approximation
+list).** The rule Phase 8 worked out, attested and escalated rather than merged:
 
-- **A `::` binds to a term-start name or a string literal.** Live-attested:
-  `…!=mpg::getInteger`, `…!=meta::pure::tds::TDSRow`, `…!='europe'::makeId` and
-  `…!=mpg ::getInteger` parse, while the same `::` off a call's `)`, a `]`, a
-  number, a date literal, a `$`-variable, a `.property` or a `->`-called name is
-  each "no viable alternative at input '…::'". Written and green offline, it moves
-  the criterion arm +5 and the generalization guard **−8** — a reshuffle of the
-  walk sample, not a precision loss, but it breaches the guard's floor, so it is a
-  re-scope for the maintainer rather than a merge (constitution §3, §7).
+- **A `::` binds to a term-start name or a string literal.** A `::` names a
+  package path, and a package path is spelled from a bare word or a quoted one.
+  Live-attested both ways: `…!=mpg::getInteger`, `…!=meta::pure::tds::TDSRow`,
+  `…!='europe'::makeId` and `…!=mpg ::getInteger` parse, while the same `::` off
+  a call's `)`, a `]`, a number, a date literal, a `$`-variable, a `.property` or
+  a `->`-called name is each "no viable alternative at input '…::'". A name and a
+  string literal route their own `:` to the existing `AfterColon`, which keeps
+  the separator; every other completed term routes to the new `AfterValueColon`,
+  which does not. The typed-binder arms are unchanged in both, because arm-R's
+  second column colon legitimately follows a *completed* term
+  (`~'Agg': x|$x.v : y|$y->sum()`, `~[agg:{p,w,r|$r.v}:y|…]`). Where no binder
+  slot is open at all the colon has no reading left and dies on the colon itself,
+  which is also where the engine points ("Unexpected token ':'").
+
+  Shipping it needs a maintainer call, and that call is issue #55's "Decision
+  1": it moves the criterion arm **+5** and the generalization guard **−8**,
+  breaching the guard's floor. The −8 was proven to be a reshuffle of the walk
+  sample rather than a precision loss — a second implementation accepting the
+  *byte-identical* language swung the same arm by −2 — but lowering the guard's
+  baseline is a §3/§7 move reserved to a human, and
+  `tests/live_legend_schema_walk_compile.rs` records it as such rather than as a
+  ratchet.
+
+**One tightening Phase 8 worked out and deliberately did not ship**, recorded
+here so a later phase does not re-derive it:
+
 - **A `;`-continued block query owes its final `;`.** `{|A;B}` and `{|A;B;C}` are
   "Unexpected token", while `{|A;B;}`, `{|A;}` and `{|A}` parse. Enforcing the
   engine's actual rule — a `}` may close bare only if no `;` preceded it — needs
