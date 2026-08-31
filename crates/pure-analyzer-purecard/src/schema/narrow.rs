@@ -33,7 +33,8 @@ use crate::grammar::pda::{is_ident_start, is_ident_tail};
 use crate::mask::BitMask;
 use crate::schema::model::{Schema, TypeClass};
 use crate::schema::scope::{
-    EXTENT_INCOMPATIBLE_METHODS, L2Position, Lexeme, SOURCE_METHOD, STORE_METHODS, classify,
+    L2Position, Lexeme, PRIMITIVE_RECEIVER_METHODS, RELATION_RECEIVER_METHODS, SOURCE_METHOD,
+    STORE_METHODS, classify,
 };
 use crate::schema::trie::{NameClose, NameShape, Trie, Walk, walk};
 use crate::vocab::Vocab;
@@ -95,10 +96,10 @@ enum CacheKey {
     /// step arrow — two whole-vocab constants.
     SourceExtent(bool),
     /// N3f's extent-method set at a given cursor in the deny trie. The trie is a
-    /// whole-vocab constant ([`EXTENT_INCOMPATIBLE_METHODS`]), so the cursor node
-    /// is the entire identity of the mask — exactly as a trie rule's per-node memo
-    /// is keyed, but the trie lives in [`EXTENT_DENY`] rather than in a
-    /// `RuleCache`, because this rule *clears* names instead of permitting them.
+    /// whole-vocab constant ([`EXTENT_DENY`]), so the cursor node is the entire
+    /// identity of the mask — exactly as a trie rule's per-node memo is keyed, but
+    /// the trie lives in a `static` rather than in a `RuleCache`, because this
+    /// rule *clears* names instead of permitting them.
     ExtentMethod(u32),
     /// N3g's receiver-only argument-slot set — a whole-vocab constant, exactly
     /// like [`SourceMethodArg`](CacheKey::SourceMethodArg)'s.
@@ -128,8 +129,11 @@ enum CacheKey {
     OrderedOperand,
     /// T3 reducer class — the aggregation-reducer lever (cursor-independent).
     Reducer(TypeClass),
-    /// T4 receiver class — the string-method lever (cursor-independent).
-    StringMethod(TypeClass),
+    /// The scalar-receiver method set: the receiver's type class (T4's lever) and
+    /// the cursor node N3h's [`SCALAR_DENY`] trie has walked to. Both halves key
+    /// it because the two rules that share the position read different inputs —
+    /// T4 the type, N3h the open name.
+    ScalarMethod(TypeClass, u32),
     /// N6 column set at a given emitted-column count (monotonic within a stream,
     /// so the count pins the set exactly).
     Column(usize),
@@ -232,15 +236,24 @@ pub(crate) fn narrow_into(
                 fill_reducer(dst, vocab, eos_bit, masked_by);
             })
         }
-        L2Position::StringMethod(TypeClass::Str) => {
-            // The receiver a String-only method wants — no constraint to apply.
-            false
-        }
-        L2Position::StringMethod(tc) => {
+        L2Position::ScalarMethod(tc) => {
             let masked_by = *tc;
-            with_cache(dst, cache, CacheKey::StringMethod(masked_by), |dst| {
-                fill_string_method(dst, vocab, eos_bit, masked_by);
-            })
+            // Past the last denied name N3h knows, the position constrains
+            // nothing: T4's own half is a whole-token match, which no non-empty
+            // prefix can reach.
+            let Some(cursor) = deny_cursor(&SCALAR_DENY, prefix) else {
+                return false;
+            };
+            with_cache(
+                dst,
+                cache,
+                CacheKey::ScalarMethod(masked_by, cursor),
+                |dst| {
+                    fill_denied_method(dst, vocab, eos_bit, &SCALAR_DENY, cursor, |bytes| {
+                        denied_string_method(bytes, masked_by)
+                    });
+                },
+            )
         }
         L2Position::SourceMethodArg => with_cache(dst, cache, CacheKey::SourceMethodArg, |dst| {
             fill_source_method_arg(dst, vocab, eos_bit);
@@ -261,11 +274,11 @@ pub(crate) fn narrow_into(
             })
         }
         L2Position::ExtentMethod => {
-            let Some(cursor) = extent_deny_cursor(prefix) else {
+            let Some(cursor) = deny_cursor(&EXTENT_DENY, prefix) else {
                 return false;
             };
             with_cache(dst, cache, CacheKey::ExtentMethod(cursor), |dst| {
-                fill_extent_method(dst, vocab, eos_bit, cursor);
+                fill_denied_method(dst, vocab, eos_bit, &EXTENT_DENY, cursor, |_| false);
             })
         }
         L2Position::ReceiverOnlyArg => with_cache(dst, cache, CacheKey::ReceiverOnlyArg, |dst| {
@@ -408,11 +421,17 @@ pub(crate) fn admits_eos(
     columns: &[Vec<u8>],
     vars: &[String],
 ) -> bool {
-    // N3f forbids ending on a *denied* whole name, and constrains nothing else —
-    // the same verdict `fill_extent_method` writes into the EOS bit, read back
-    // here so `is_complete` cannot disagree with the mask.
-    if matches!(pos, L2Position::ExtentMethod) {
-        return extent_deny_cursor(prefix).is_none_or(|cursor| !EXTENT_DENY.is_terminal(cursor));
+    // The two receiver-category rules forbid ending on a *denied* whole name and
+    // constrain EOS in no other way — the same verdict `fill_denied_method`
+    // writes into the EOS bit, read back here so `is_complete` cannot disagree
+    // with the mask. T4's half of `ScalarMethod` never touches EOS: it denies
+    // vocabulary tokens, and EOS is not one.
+    if let Some(deny) = match pos {
+        L2Position::ExtentMethod => Some(&*EXTENT_DENY),
+        L2Position::ScalarMethod(_) => Some(&*SCALAR_DENY),
+        _ => None,
+    } {
+        return deny_cursor(deny, prefix).is_none_or(|cursor| !deny.is_terminal(cursor));
     }
     let Some(rule) = TrieRule::of(pos, schema, columns, vars) else {
         // N7 is the one non-trie rule that forbids ending here: a bare word left
@@ -546,7 +565,7 @@ impl<'a> TrieRule<'a> {
             | L2Position::Comparator(_)
             | L2Position::OrderedOperand
             | L2Position::Reducer(_)
-            | L2Position::StringMethod(_)
+            | L2Position::ScalarMethod(_)
             | L2Position::ValueIdent => return None,
         };
         Some(Self { key, kind, names })
@@ -736,7 +755,7 @@ pub(crate) fn narrow_fused_into(
         | L2Position::Comparator(_)
         | L2Position::OrderedOperand
         | L2Position::Reducer(_)
-        | L2Position::StringMethod(_)
+        | L2Position::ScalarMethod(_)
         | L2Position::RefVar
         | L2Position::ValueIdent => false,
     }
@@ -1029,24 +1048,18 @@ fn keeps_reducer(bytes: &[u8], tc: TypeClass) -> bool {
 /// narrows.
 const STRING_ONLY_METHODS: &[&[u8]] = &[b"toLower", b"toUpper", b"startsWith", b"endsWith"];
 
-/// Whether a method-name token is kept under a T4 constraint with receiver
-/// class `tc` (§6.6 T4). A [`STRING_ONLY_METHODS`] name is kept only on a
-/// `String` receiver; every other name is unconstrained here, since the rule
-/// knows the receiver's type, not the vocabulary of methods it admits.
-fn keeps_string_method(bytes: &[u8], tc: TypeClass) -> bool {
-    !STRING_ONLY_METHODS.contains(&bytes) || matches!(tc, TypeClass::Str)
-}
-
-/// Refill `dst` with the T4 method set for receiver class `masked_by`, plus EOS.
-fn fill_string_method(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32, masked_by: TypeClass) {
-    dst.clear_all();
-    for id in 0..vocab.len() as u32 {
-        let bytes = vocab.bytes(id).unwrap_or(&[]);
-        if keeps_string_method(bytes, masked_by) {
-            dst.set(id);
-        }
-    }
-    dst.set(eos_bit);
+/// Whether a method-name token is denied by **T4** at a receiver of class `tc`
+/// (§6.6 T4): a [`STRING_ONLY_METHODS`] name is legal only on a `String`
+/// receiver.
+///
+/// A whole-token match rather than a trie walk, unlike N3h's half of
+/// [`L2Position::ScalarMethod`] — deliberately, and the doc on
+/// [`STRING_ONLY_METHODS`] is why: the family a name here prefixes
+/// (`toUpperFirstCharacter`) is String-only too, so denying the token outright
+/// masks the whole family, which a trie's close-on-boundary policy would let
+/// through.
+fn denied_string_method(bytes: &[u8], tc: TypeClass) -> bool {
+    STRING_ONLY_METHODS.contains(&bytes) && !matches!(tc, TypeClass::Str)
 }
 
 /// Refill `dst` with the T3 reducer set for element class `masked_by`, plus EOS.
@@ -1187,64 +1200,85 @@ fn fill_source_extent(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32, after_dash
     dst.set(eos_bit);
 }
 
-/// N3f's deny trie: the method names no class extent can present a receiver for
-/// ([`EXTENT_INCOMPATIBLE_METHODS`]). Built once — the set is a compile-time
-/// constant with no schema, column or vocabulary input, so it needs neither a
-/// per-session cache entry nor a rebuild.
-static EXTENT_DENY: LazyLock<Trie> =
-    LazyLock::new(|| Trie::from_names(EXTENT_INCOMPATIBLE_METHODS.iter().copied()));
+/// N3f's deny trie: the method names no class extent can present a receiver for —
+/// both halves of the receiver-category evidence at once
+/// ([`RELATION_RECEIVER_METHODS`] and [`PRIMITIVE_RECEIVER_METHODS`]). Built
+/// once — the set is a compile-time constant with no schema, column or vocabulary
+/// input, so it needs neither a per-session cache entry nor a rebuild.
+static EXTENT_DENY: LazyLock<Trie> = LazyLock::new(|| {
+    Trie::from_names(
+        RELATION_RECEIVER_METHODS
+            .iter()
+            .chain(PRIMITIVE_RECEIVER_METHODS)
+            .copied(),
+    )
+});
 
-/// The [`EXTENT_DENY`] cursor `prefix` walks to, or `None` once the open method
-/// name has left every denied name — the rule then constrains nothing.
+/// N3h's deny trie: the relation/store-receiver names alone
+/// ([`RELATION_RECEIVER_METHODS`]), which is all a *scalar primitive* receiver
+/// rules out — the primitive half is exactly what such a receiver does admit
+/// (`'car_makers'->substring(0,1)` compiles).
+static SCALAR_DENY: LazyLock<Trie> =
+    LazyLock::new(|| Trie::from_names(RELATION_RECEIVER_METHODS.iter().copied()));
+
+/// The cursor `prefix` walks `deny` to, or `None` once the open method name has
+/// left every denied name — the rule then constrains nothing.
 ///
 /// The dual of [`cursor_of`]: a [`Walk::Diverge`] is the *good* case here (the
 /// name being typed is not one this rule denies), and a [`Walk::Complete`] means
 /// a denied name was already closed, which only happens if the closing token was
-/// admitted — it never is, because [`fill_extent_method`] is what clears it.
-fn extent_deny_cursor(prefix: &[u8]) -> Option<u32> {
+/// admitted — it never is, because [`fill_denied_method`] is what clears it.
+fn deny_cursor(deny: &Trie, prefix: &[u8]) -> Option<u32> {
     if prefix.is_empty() {
-        return Some(EXTENT_DENY.root());
+        return Some(deny.root());
     }
-    match walk(&EXTENT_DENY, EXTENT_DENY.root(), prefix, NameShape::Plain) {
+    match walk(deny, deny.root(), prefix, NameShape::Plain) {
         Walk::Stay(cursor) => Some(cursor),
         Walk::Complete { .. } | Walk::Diverge => None,
     }
 }
 
-/// Refill `dst` with [`L2Position::ExtentMethod`]'s set: every vocabulary token,
-/// less the ones that would **close** the open method name on an entry of
-/// [`EXTENT_INCOMPATIBLE_METHODS`].
+/// Refill `dst` with a receiver-category rule's set: every vocabulary token, less
+/// the ones that would **close** the open method name on an entry of `deny`, and
+/// less the ones `also_denied` rejects outright.
 ///
-/// Subtractive by construction, which is what keeps the rule sound in the
-/// direction that matters. It names no legal set — there is none to name (see
-/// [`L2Position::ExtentMethod`]) — so a builtin the engine does accept on an
-/// extent is never touched, whether or not any corpus has heard of it.
+/// Subtractive by construction, which is what keeps both rules that use it sound
+/// in the direction that matters. Neither names a legal set — there is none to
+/// name (see [`L2Position::ExtentMethod`]) — so a builtin the engine does accept
+/// on the receiver is never touched, whether or not any corpus has heard of it.
 ///
-/// The clear lands on the *closing* token rather than the name's first byte,
+/// The trie clear lands on the *closing* token rather than the name's first byte,
 /// because under byte-level BPE a denied name is routinely a live prefix of a
 /// legal one (`in` ⊂ `indexOf`, `pair` ⊂ `pairwise`): [`walk`] descends an edge
 /// in preference to a terminal, so those keep walking and only a boundary byte —
 /// the call's `(`, whitespace, an operator — completes the denied name and is
 /// cleared. EOS is cleared at a terminal cursor for the same reason: a stream
 /// that ends on `->sum` has closed the name just as surely.
-fn fill_extent_method(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32, cursor: u32) {
+fn fill_denied_method(
+    dst: &mut BitMask,
+    vocab: &Vocab,
+    eos_bit: u32,
+    deny: &Trie,
+    cursor: u32,
+    also_denied: impl Fn(&[u8]) -> bool,
+) {
     dst.clear_all();
     for id in 0..vocab.len() as u32 {
         let bytes = vocab.bytes(id).unwrap_or(&[]);
-        if keeps_extent_method(cursor, bytes) {
+        if keeps_denied_method(deny, cursor, bytes) && !also_denied(bytes) {
             dst.set(id);
         }
     }
-    if !EXTENT_DENY.is_terminal(cursor) {
+    if !deny.is_terminal(cursor) {
         dst.set(eos_bit);
     }
 }
 
-/// Whether `bytes` may continue an extent method name — see
-/// [`fill_extent_method`].
-fn keeps_extent_method(cursor: u32, bytes: &[u8]) -> bool {
+/// Whether `bytes` may continue a method name without closing a `deny` entry —
+/// see [`fill_denied_method`].
+fn keeps_denied_method(deny: &Trie, cursor: u32, bytes: &[u8]) -> bool {
     !matches!(
-        walk(&EXTENT_DENY, cursor, bytes, NameShape::Plain),
+        walk(deny, cursor, bytes, NameShape::Plain),
         Walk::Complete { .. }
     )
 }

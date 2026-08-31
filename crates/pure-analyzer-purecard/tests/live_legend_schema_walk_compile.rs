@@ -535,6 +535,16 @@ const RATCHET_SLACK: usize = 3;
 /// a new record and the largest single move since Phase 5. The phase is the one
 /// L1 tightening Phase 8 wrote, attested and escalated rather than merged: a
 /// `::` binds to a term-start name or a string literal, and to nothing else.
+///
+/// **Phase 10 (2026-08-31) re-measures at 54/64 = recipe 5/5 + exploration
+/// 49/59**, bit-identical across two consecutive runs and level with Phase 9 on
+/// both partitions, so this baseline is *not* raised. The phase ships N3h, whose
+/// two closed classes (`tableToTDS(String[1])` and `restrict(Boolean[1],…)`)
+/// both sat in `car_1`'s residue and neither in this one — this arm's
+/// exploration stream reaches no relation method on a scalar receiver at all.
+/// Reported because the standing regime measures both arms on every rule, not
+/// only the one a rule was designed to move; the failure *set* here is
+/// unchanged in kind, ten failures across the same six categories.
 const CRITERION_BASELINE: Baseline = Baseline {
     db_id: CRITERION_DB,
     recipe_compiled: 5,
@@ -654,10 +664,19 @@ const CRITERION_BASELINE: Baseline = Baseline {
 /// See [`RATCHET_SLACK`] for the systemic half of this, left open on purpose:
 /// the slack that would have absorbed a swing of this size is a repo-wide
 /// constant whose value is its own decision.
+///
+/// **Phase 10 (2026-08-31) ratchets this to 44/64 = recipe 7/7 + exploration
+/// 37/57**, bit-identical across two consecutive runs, measured on this branch
+/// against its own before-run (42/64 = 7/7 + 35/57) on the same stack. The floor
+/// rises 32 → 34. The phase ships N3h, and the +2 is the two failure *classes*
+/// it names leaving the residue outright: `tableToTDS(String[1])` and
+/// `restrict(Boolean[1],String[1])` are both gone, and nothing that was
+/// compiling stopped. `groupBy(String[1],String[1])` deliberately survives — it
+/// is an arity error on a receiver-generic name, which N3h does not claim.
 const GENERALIZATION_BASELINE: Baseline = Baseline {
     db_id: GENERALIZATION_DB,
     recipe_compiled: 7,
-    exploration_compiled: 35,
+    exploration_compiled: 37,
 };
 
 /// Decode a walk's token ids back to its Pure text through `grammar`'s own
@@ -799,37 +818,55 @@ fn assert_live_compile_rate(baseline: &Baseline) {
 /// proves that gap is in fact closed (269/269 *real* gold queries compile
 /// against the same grammar this lane uses).
 ///
-/// Phase 9 ships the one L1 tightening Phase 8 wrote, attested and escalated
-/// rather than merged: a `::` binds to a term-start name or a string literal.
-/// Live parse failures fell **9 → 7** across both databases, and the class the
-/// rule names went **3 → 0**. What remains, across 10 `world_1` / 22 `car_1`
-/// exploration failures, taxonomised per walk and summing to exactly 32:
+/// Phase 10 ships N3h: a relation/store builtin is dead at a `->` whose receiver
+/// the overlay has typed a scalar primitive. What remains, across 10 `world_1` /
+/// 20 `car_1` exploration failures, taxonomised per walk and summing to exactly
+/// 30:
 ///
-/// - **L1 parse over-approximation — 7.** None is a `::` any more. Two are the
-///   arm-R carve-out (a `:` that needs a slot-initial bare name, and a binder
-///   with no multiplicity), which needs the `~` sigil tracked as *mutable
-///   per-frame* state — a `Step`/`Action` the declarative spec (ADR-0010) has no
-///   V1 form for. One is the milestoning slot's content, and four are
-///   argument-shape garbage with no labelled token.
-/// - **A bare word or `::` classpath in a value position — 8.** Unchanged in
-///   kind and in count: closing them means narrowing a *name* against the
+/// - **L1 parse over-approximation — 7.** Two are the arm-R carve-out (a `:`
+///   that needs a slot-initial bare name, and a binder with no multiplicity),
+///   which needs the `~` sigil tracked as *mutable per-frame* state — a
+///   `Step`/`Action` the declarative spec (ADR-0010) has no V1 form for. One is
+///   the milestoning slot's content, and four are argument-shape garbage with no
+///   labelled token.
+/// - **A bare word or `::` classpath in a value position — 7.** Unchanged in
+///   kind (one fewer than Phase 9's 8, on the stream's own reshuffle rather than
+///   on anything this phase did): closing them means narrowing a *name* against the
 ///   schema's own element set at a value position, the product question about how
-///   much of a closed model the decoder may assume. A scoping decision, not
-///   effort. Note the distinction from the rule this phase ships: that one is
-///   about what a `::` may *attach to*, which the engine's parser settles; this
-///   one is about which package paths *exist*, which only the model does.
-/// - **A receiver / signature one category over — 10.**
-///   `groupBy(Countrylanguage[*],Boolean[1])`, `groupBy(CarMakers[*],String[1])`,
-///   `limit(CarMakers[*],String[1])`, `restrict(Boolean[1],String[1])`,
-///   `tableToTDS(String[1])`, `and(Integer[*],String[1])`,
-///   `lessThan(CarMakers[1],Integer[1])`, `or(Boolean[1],LambdaFunction<…>[1])`
-///   and two more. **Mechanically addressable**; each wants its own attested
-///   table. This bucket grew because `car_1`'s stream reshuffled onto it, not
-///   because anything regressed — see [`GENERALIZATION_BASELINE`].
+///   much of a closed model the decoder may assume. **Declined by the maintainer**
+///   in the 2026-08-30 decision-ruling comment on #55 (Decision 3), on the
+///   ground that a real host's novel identifiers must stay legal. Permanent
+///   residue, not a backlog item.
+/// - **A receiver / signature one category over — 8.** N3h took two of the ten
+///   Phase 9 recorded — `tableToTDS(String[1])` and
+///   `restrict(Boolean[1],String[1])`, the whole scalar-receiver class. What is
+///   left splits in two, and the split is what a Phase 11 would work from:
+///   **arity on a receiver-generic name** (`groupBy(Countrylanguage[*],Boolean[1])`,
+///   `groupBy(CarMakers[*],String[1])`, `limit(CarMakers[*],String[1])`,
+///   `limit(ModelList[*],String[1])` — the extent-method argument *shape*, which
+///   N3h explicitly does not claim), and **operator operands**
+///   (`and(Integer[*],String[1])`, `lessThan(CarMakers[1],Integer[1])`,
+///   `or(Boolean[1],LambdaFunction<…>[1])` and one more).
+/// - **A corpus binder name called as a method — 1.** `row1(ModelList[*],
+///   Integer[1])` — `row1` is a lambda binder name the gold corpus's join
+///   lambdas bind 2378 times, not a schema column and not a builtin. Closing it
+///   needs a *permit* set of legal builtin names at the extent-method position,
+///   which §6.5 N3f rules out on its own evidence: eleven collection builtins
+///   compile there and appear in no corpus, so any corpus-derived allow-list
+///   over-masks. Filed with Decision 3's bucket in spirit — it is the same
+///   closed-vocabulary question, at a method name instead of a value.
 /// - **A property on a `Table` or on an inferred primitive — 4.** `Edispl_t1` and
 ///   `Year_T2_2` on `meta::relational::metamodel::relation::Table`, `fullName` on
-///   a `DateTime`, `LifeExpectancy_T1` on a `String`. These need the left
-///   operand's inferred type, i.e. #116's blocked scope.
+///   a `DateTime`, `LifeExpectancy_T1` on a `String`. The `Table` two are **not**
+///   the cheap rule they look like: the receiver type is statically known, but
+///   `Table`'s own property set is rich and overlaps the schema's member
+///   vocabulary — `.name`, `.schema`, `.columns`, `.primaryKey`, `.milestoning`,
+///   `.temporaryTable`, `.setColumns`, `.elementOverride` and
+///   `.classifierGenericType` all compile live, quoted or bare, and `name` is a
+///   member name in five of the eight fixture schemas. Denying the schema's
+///   member vocabulary there would mask a legal navigation; an allow-list would
+///   have to enumerate a metamodel class the engine exposes no listing for.
+///   These stay with #116's blocked type inference.
 /// - **Bucket E's remainder — 1.** A `[*]` collection element where `[1]` is
 ///   required, under `greaterThanEqual`/`times`. Needs left-operand reasoning.
 /// - **Two engine-internal rejections** — `RuntimeException: Not possible!` and
