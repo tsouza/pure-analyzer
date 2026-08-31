@@ -75,9 +75,27 @@ fn print_config_is_machine_clean_deterministic_toml() {
     assert!(first.stderr.is_empty());
     assert_eq!(first.stdout, second.stdout);
     let text = String::from_utf8(first.stdout).expect("UTF-8 config output");
-    let value = text.parse::<toml::Table>().expect("resolved TOML");
-    assert_eq!(value["version"].as_integer(), Some(1));
-    assert_eq!(value["jobs"].as_integer(), Some(1));
+    let expected = concat!(
+        "version = 1\n",
+        "jobs = 1\n\n",
+        "[output]\n",
+        "format = \"human\"\n",
+        "color = \"auto\"\n",
+        "quiet = false\n\n",
+        "[lint]\n",
+        "select = []\n",
+        "ignore = []\n",
+        "deny = []\n",
+        "warn = []\n\n",
+        "[validate]\n",
+        "strict = false\n\n",
+        "[fmt]\n",
+        "line-width = 100\n\n",
+        "[model]\n",
+        "paths = []\n",
+    );
+    assert_eq!(text, expected);
+    text.parse::<toml::Table>().expect("resolved TOML");
 }
 
 #[test]

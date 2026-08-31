@@ -886,6 +886,43 @@ mod tests {
 
     static FIXTURE_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
+    const TWO_FINDING_MODEL: &str = r#"{
+        "_type": "data",
+        "elements": [{
+            "_type": "class",
+            "package": "model",
+            "name": "Person",
+            "stereotypes": [],
+            "superTypes": [],
+            "properties": [{
+                "name": "name",
+                "genericType": {"rawType": "String", "typeArguments": []},
+                "multiplicity": {"lowerBound": 0, "upperBound": 1}
+            }],
+            "qualifiedProperties": []
+        }]
+    }"#;
+
+    fn two_finding_request(policy: libpure::DiagnosticPolicy) -> libpure::LintRequest {
+        libpure::LintRequest::new(
+            libpure::SourceRequest::new([libpure::SourceInput::in_memory(
+                "query.pure",
+                "model::Person.all()->filter(x| $x.missing)",
+            )])
+            .with_diagnostic_policy(policy),
+            [
+                libpure::ModelInput::pmcd(libpure::SourceInput::in_memory(
+                    "first.json",
+                    TWO_FINDING_MODEL,
+                )),
+                libpure::ModelInput::pmcd(libpure::SourceInput::in_memory(
+                    "second.json",
+                    TWO_FINDING_MODEL,
+                )),
+            ],
+        )
+    }
+
     #[derive(Debug, Parser)]
     struct TestCli {
         #[command(flatten)]
@@ -1307,6 +1344,52 @@ mod tests {
     }
 
     #[test]
+    fn selection_and_ignore_filters_apply_to_model_findings() {
+        let fixture = DirectoryFixture::new("selection-and-ignore");
+        let selected_flags = flags(&["test", "--no-config", "--select", "PUR9000"]);
+        let selected = ConfigResolver::new(&fixture.path, None, BTreeMap::new())
+            .resolve(
+                &selected_flags,
+                selected_flags.overrides(None, None, Vec::new()),
+            )
+            .expect("resolve selected policy");
+        let selected_output = libpure::AnalysisDriver
+            .lint(&two_finding_request(
+                selected.lint_policy().expect("compile selected policy"),
+            ))
+            .expect("lint selected model finding");
+        assert_eq!(
+            selected_output
+                .diagnostics()
+                .iter()
+                .map(|diagnostic| diagnostic.code)
+                .collect::<Vec<_>>(),
+            vec![DiagCode::ModelMergeConflict]
+        );
+
+        let ignored_flags = flags(&[
+            "test",
+            "--no-config",
+            "--select",
+            "PUR9000",
+            "--ignore",
+            "PUR9000",
+        ]);
+        let ignored = ConfigResolver::new(&fixture.path, None, BTreeMap::new())
+            .resolve(
+                &ignored_flags,
+                ignored_flags.overrides(None, None, Vec::new()),
+            )
+            .expect("resolve ignored policy");
+        let ignored_output = libpure::AnalysisDriver
+            .lint(&two_finding_request(
+                ignored.lint_policy().expect("compile ignored policy"),
+            ))
+            .expect("lint ignored model finding");
+        assert!(ignored_output.diagnostics().is_empty());
+    }
+
+    #[test]
     fn invalid_empty_unknown_and_no_match_patterns_are_usage_errors() {
         let fixture = DirectoryFixture::new("bad-patterns");
         for pattern in ["", "pur2*", "PUR9999", "PUR8*"] {
@@ -1341,23 +1424,6 @@ mod tests {
 
     #[test]
     fn severity_patterns_reclassify_model_and_source_findings_without_changing_identity() {
-        const MODEL: &str = r#"{
-            "_type": "data",
-            "elements": [{
-                "_type": "class",
-                "package": "model",
-                "name": "Person",
-                "stereotypes": [],
-                "superTypes": [],
-                "properties": [{
-                    "name": "name",
-                    "genericType": {"rawType": "String", "typeArguments": []},
-                    "multiplicity": {"lowerBound": 0, "upperBound": 1}
-                }],
-                "qualifiedProperties": []
-            }]
-        }"#;
-
         let fixture = DirectoryFixture::new("severity-policy");
         let config = fixture.write(
             "policy.toml",
@@ -1372,28 +1438,12 @@ mod tests {
             ConfigOverrides::default(),
         )
         .expect("resolve severity policy");
-        let request = |policy| {
-            libpure::LintRequest::new(
-                libpure::SourceRequest::new([libpure::SourceInput::in_memory(
-                    "query.pure",
-                    "model::Person.all()->filter(x| $x.missing)",
-                )])
-                .with_diagnostic_policy(policy),
-                [
-                    libpure::ModelInput::pmcd(libpure::SourceInput::in_memory("first.json", MODEL)),
-                    libpure::ModelInput::pmcd(libpure::SourceInput::in_memory(
-                        "second.json",
-                        MODEL,
-                    )),
-                ],
-            )
-        };
         let driver = libpure::AnalysisDriver;
         let baseline = driver
-            .lint(&request(libpure::DiagnosticPolicy::new()))
+            .lint(&two_finding_request(libpure::DiagnosticPolicy::new()))
             .expect("lint without severity overrides");
         let transformed = driver
-            .lint(&request(
+            .lint(&two_finding_request(
                 resolved.lint_policy().expect("compile severity policy"),
             ))
             .expect("lint with severity overrides");
@@ -1427,6 +1477,48 @@ mod tests {
             assert_eq!(changed.primary, original.primary);
             assert_eq!(changed.secondary, original.secondary);
         }
+    }
+
+    #[test]
+    fn strict_validation_policy_promotes_model_merge_without_affecting_lint_policy() {
+        let fixture = DirectoryFixture::new("strict-policy");
+        let config = fixture.write("strict.toml", "version = 1\n[validate]\nstrict = true\n");
+        let arguments = ["test", "--config", config.to_str().expect("utf8 fixture")];
+        let resolved = resolve(
+            &fixture.path,
+            None,
+            BTreeMap::new(),
+            &arguments,
+            ConfigOverrides::default(),
+        )
+        .expect("resolve strict validation policy");
+
+        let driver = libpure::AnalysisDriver;
+        let validation_output = driver
+            .lint(&two_finding_request(
+                resolved
+                    .validation_policy()
+                    .expect("compile strict validation policy"),
+            ))
+            .expect("lint with validation policy");
+        let lint_output = driver
+            .lint(&two_finding_request(
+                resolved.lint_policy().expect("compile lint policy"),
+            ))
+            .expect("lint with lint policy");
+
+        let validation_merge = validation_output
+            .diagnostics()
+            .iter()
+            .find(|diagnostic| diagnostic.code == DiagCode::ModelMergeConflict)
+            .expect("validation model merge finding");
+        let lint_merge = lint_output
+            .diagnostics()
+            .iter()
+            .find(|diagnostic| diagnostic.code == DiagCode::ModelMergeConflict)
+            .expect("lint model merge finding");
+        assert_eq!(validation_merge.severity, Severity::Error);
+        assert_eq!(lint_merge.severity, Severity::Warning);
     }
 
     #[test]
