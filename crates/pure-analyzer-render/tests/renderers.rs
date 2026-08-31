@@ -501,6 +501,49 @@ fn human_renderer_marks_zero_width_and_multiline_spans() {
 }
 
 #[test]
+fn eof_labels_render_at_the_start_of_the_final_empty_line_in_every_format() {
+    let source_text = "let query =\n";
+    let eof = u32::try_from(source_text.len()).expect("fixture fits a diagnostic span");
+    let sources =
+        SourceStore::load([SourceInput::in_memory("eof.pure", source_text)]).expect("source loads");
+    let diagnostics = vec![
+        Diagnostic::builder(
+            DiagCode::MalformedSyntax,
+            Severity::Error,
+            "expected expression",
+            Label::with_note(
+                FileId::new(0),
+                range(eof, eof),
+                "expression is required here",
+            ),
+        )
+        .build(),
+    ];
+    let input = RenderInput::new(&sources, &diagnostics);
+
+    let human = render_human(input, HumanOptions::default()).expect("EOF label renders for humans");
+    let json = render_json(input).expect("EOF label renders as JSON");
+    let sarif = render_sarif(input).expect("EOF label renders as SARIF");
+
+    assert!(human.contains("eof.pure:2:1..2:1 (primary)"));
+    assert!(human.contains("^ primary: expression is required here"));
+
+    let document: Value = serde_json::from_str(&json).expect("renderer output is JSON");
+    assert_json_range(
+        &document["diagnostics"][0]["primary"]["range"],
+        (eof, 2, 1),
+        (eof, 2, 1),
+    );
+
+    let log: Value = serde_json::from_str(&sarif).expect("renderer output is SARIF JSON");
+    assert_sarif_region(
+        &log["runs"][0]["results"][0]["locations"][0]["physicalLocation"]["region"],
+        (eof, 2, 1),
+        (eof, 2, 1),
+    );
+}
+
+#[test]
 fn invalid_unicode_boundary_is_an_internal_error_in_every_format() {
     let sources =
         SourceStore::load([SourceInput::in_memory("unicode.pure", "α")]).expect("source loads");
