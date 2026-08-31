@@ -418,6 +418,20 @@ mod tests {
             narrow.text()
         );
     }
+
+    #[test]
+    fn line_width_keeps_an_exact_whitespace_fit_on_the_current_line() {
+        let source = "function(first,second)";
+        let formatted = format_query_with_width(source, FileId::new(3), 22)
+            .expect("fixture must remain representable");
+
+        assert_eq!(formatted.text(), "function(first, second)\n");
+        assert_eq!(
+            non_whitespace_tokens(source),
+            non_whitespace_tokens(formatted.text())
+        );
+    }
+
     #[test]
     fn line_width_keeps_opaque_islands_indivisible() {
         let island = "#{  opaque content that is intentionally wide  }#";
