@@ -296,6 +296,8 @@ fn parse_validate_and_format_match_file_and_memory_snapshots() {
         .expect("format filesystem source");
     assert_eq!(memory_format.formatted(), file_format.formatted());
     assert_eq!(memory_format.diagnostics(), file_format.diagnostics());
+    assert!(!memory_format.has_recovery_diagnostics());
+    assert!(!file_format.has_recovery_diagnostics());
     assert_eq!(memory_format.formatted()[0].text(), FORMATTED_PARITY_QUERY);
     assert_eq!(
         file_format
