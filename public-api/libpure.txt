@@ -497,6 +497,7 @@ pub struct libpure::FormatOutput
 impl libpure::FormatOutput
 pub fn libpure::FormatOutput::diagnostics(&self) -> &[pure_analyzer_diagnostics::diagnostic::Diagnostic]
 pub fn libpure::FormatOutput::formatted(&self) -> &[libpure::FormattedSource]
+pub const fn libpure::FormatOutput::has_recovery_diagnostics(&self) -> bool
 pub fn libpure::FormatOutput::into_parts(self) -> (libpure::SourceStore, alloc::vec::Vec<libpure::FormattedSource>, alloc::vec::Vec<pure_analyzer_diagnostics::diagnostic::Diagnostic>)
 pub const fn libpure::FormatOutput::sources(&self) -> &libpure::SourceStore
 impl core::clone::Clone for libpure::FormatOutput

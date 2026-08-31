@@ -31,8 +31,8 @@ pub(crate) const EXIT_USAGE: u8 = 3;
 /// Analyzer, renderer, or output-commit invariant failure.
 pub(crate) const EXIT_INTERNAL: u8 = 4;
 
-const IN_PLACE_FORMAT_WRITE_UNAVAILABLE: &str =
-    "in-place formatter writes are not available; use --check, --stdout, or --diff";
+const FMT_MIXED_INPUT_WRITE_UNAVAILABLE: &str =
+    "fmt cannot combine standard input with in-place file writes; use --check, --stdout, or --diff";
 const FIX_STDIN_WRITE_UNAVAILABLE: &str =
     "lint --fix cannot update standard input; use --fix --check, --fix --stdout, or --fix --diff";
 
@@ -49,14 +49,6 @@ impl Failure {
     pub(crate) fn usage(error: impl Display) -> Self {
         Self {
             code: EXIT_USAGE,
-            message: error.to_string(),
-        }
-    }
-
-    /// Construct an actionable request that cannot yet be applied.
-    pub(crate) fn actionable(error: impl Display) -> Self {
-        Self {
-            code: EXIT_ACTIONABLE,
             message: error.to_string(),
         }
     }
@@ -194,7 +186,7 @@ pub(crate) fn lint(
     finish_lint_fixes(&driver, &request, &output, mode, config)
 }
 
-/// Execute canonical formatting without modifying filesystem inputs.
+/// Execute canonical formatting, transactionally applying default file inputs.
 pub(crate) fn format(
     files: &[String],
     mode: FormatMode,
@@ -202,11 +194,12 @@ pub(crate) fn format(
 ) -> Result<u8, Failure> {
     let sources = query_sources(files)?;
     if mode.requests_in_place_write()
+        && sources.len() > 1
         && sources
             .iter()
-            .any(|source| matches!(source, SourceInput::File { .. }))
+            .any(|source| matches!(source, SourceInput::Stdin { .. }))
     {
-        return Err(Failure::actionable(IN_PLACE_FORMAT_WRITE_UNAVAILABLE));
+        return Err(Failure::usage(FMT_MIXED_INPUT_WRITE_UNAVAILABLE));
     }
     if mode.stdout && sources.len() != 1 {
         return Err(Failure::usage(
@@ -227,8 +220,11 @@ pub(crate) fn format(
             Destination::Stderr,
         )?;
     }
-    let changed = finish_format(&output, mode)?;
-    if has_errors || (changed && mode.previews_changes()) {
+    let formatted = finish_format(&output, mode, !output.has_recovery_diagnostics())?;
+    if has_errors
+        || (formatted.changed && mode.previews_changes())
+        || formatted.blocked_in_place_change
+    {
         Ok(EXIT_ACTIONABLE)
     } else {
         Ok(EXIT_SUCCESS)
@@ -566,21 +562,31 @@ fn fix_preview_exit(output: &AnalysisOutput, mode: FixMode, changed: bool) -> u8
     }
 }
 
-fn finish_format(output: &FormatOutput, mode: FormatMode) -> Result<bool, Failure> {
-    let mut changed = false;
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct FinishedFormat {
+    changed: bool,
+    blocked_in_place_change: bool,
+}
+
+fn finish_format(
+    output: &FormatOutput,
+    mode: FormatMode,
+    writes_are_safe: bool,
+) -> Result<FinishedFormat, Failure> {
+    let mut finished = FinishedFormat::default();
+    let mut replacements = Vec::new();
     let mut rendered = String::new();
     for formatted in output.formatted() {
         let source = output.sources().get(formatted.file()).ok_or_else(|| {
             Failure::internal(format!("formatter lost source file {}", formatted.file()))
         })?;
-        let stdin = matches!(source.origin(), SourceOrigin::Stdin);
         if source.text() == formatted.text() {
-            if mode.stdout || (stdin && !mode.check && !mode.diff) {
+            if mode.stdout || is_implicit_stdin_stdout(source, mode) {
                 rendered.push_str(formatted.text());
             }
             continue;
         }
-        changed = true;
+        finished.changed = true;
         if mode.diff {
             append_diff(
                 &mut rendered,
@@ -588,14 +594,35 @@ fn finish_format(output: &FormatOutput, mode: FormatMode) -> Result<bool, Failur
                 source.text(),
                 formatted.text(),
             );
-        } else if mode.stdout || (stdin && !mode.check) {
+        } else if mode.stdout || is_implicit_stdin_stdout(source, mode) {
             rendered.push_str(formatted.text());
+        } else if mode.requests_in_place_write() && writes_are_safe {
+            let SourceOrigin::File { path } = source.origin() else {
+                return Err(Failure::internal(format!(
+                    "formatter cannot persist non-file source {}",
+                    source.name()
+                )));
+            };
+            replacements.push(Replacement {
+                path: path.clone(),
+                before: source.text().to_owned(),
+                after: formatted.text().to_owned(),
+            });
+        } else if mode.requests_in_place_write() {
+            finished.blocked_in_place_change = true;
         }
     }
     if !rendered.is_empty() {
         write_stdout(&rendered)?;
     }
-    Ok(changed)
+    if !replacements.is_empty() {
+        replace_all(replacements)?;
+    }
+    Ok(finished)
+}
+
+fn is_implicit_stdin_stdout(source: &SourceFile, mode: FormatMode) -> bool {
+    matches!(source.origin(), SourceOrigin::Stdin) && mode.requests_in_place_write()
 }
 
 fn append_diff(output: &mut String, path: &str, before: &str, after: &str) {

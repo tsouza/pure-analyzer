@@ -365,6 +365,7 @@ pub struct FormatOutput {
     sources: SourceStore,
     formatted: Vec<FormattedSource>,
     diagnostics: Vec<Diagnostic>,
+    has_recovery_diagnostics: bool,
 }
 
 impl FormatOutput {
@@ -384,6 +385,16 @@ impl FormatOutput {
     #[must_use]
     pub fn diagnostics(&self) -> &[Diagnostic] {
         &self.diagnostics
+    }
+
+    /// Return whether parsing required recovery before diagnostic-policy filtering.
+    ///
+    /// Front ends must retain this safety signal when deciding whether formatted
+    /// buffers may replace source files: a presentation policy can hide or
+    /// downgrade a diagnostic, but it cannot make recovery output safe to write.
+    #[must_use]
+    pub const fn has_recovery_diagnostics(&self) -> bool {
+        self.has_recovery_diagnostics
     }
 
     /// Consume this output into original sources, formatted buffers, and findings.
@@ -493,6 +504,7 @@ impl AnalysisDriver {
         let results = run_sources(&sources, &files, request.jobs(), |source| {
             format_source(source, request.line_width())
         })?;
+        let has_recovery_diagnostics = results.iter().any(|result| !result.diagnostics.is_empty());
         let finding_policy = request.diagnostic_policy().finding_policy();
         let diagnostics = results
             .iter()
@@ -504,6 +516,7 @@ impl AnalysisDriver {
             sources,
             formatted,
             diagnostics,
+            has_recovery_diagnostics,
         })
     }
 }

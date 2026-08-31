@@ -387,7 +387,7 @@ fn formatting_recovery_retains_meaningful_parser_diagnostics() {
 }
 
 #[test]
-fn formatting_policy_filters_recovery_diagnostics() {
+fn formatting_policy_does_not_clear_the_raw_recovery_write_guard() {
     let driver = AnalysisDriver;
     let source = SourceInput::in_memory("broken.pure", "\0");
     let warned = driver
@@ -398,6 +398,7 @@ fn formatting_policy_filters_recovery_diagnostics() {
         )
         .expect("format recovery source with warning policy");
 
+    assert!(warned.has_recovery_diagnostics());
     assert_eq!(warned.diagnostics().len(), 1);
     assert_eq!(warned.diagnostics()[0].code, DiagCode::BadToken);
     assert_eq!(warned.diagnostics()[0].severity, Severity::Warning);
@@ -409,6 +410,7 @@ fn formatting_policy_filters_recovery_diagnostics() {
         )
         .expect("format recovery source with ignore policy");
 
+    assert!(ignored.has_recovery_diagnostics());
     assert!(ignored.diagnostics().is_empty());
 }
 

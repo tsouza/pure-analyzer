@@ -67,7 +67,7 @@ enum Command {
         #[arg(long, requires = "fix", conflicts_with_all = ["check", "stdout"])]
         diff: bool,
     },
-    /// Canonical formatting through read-only modes.
+    /// Canonical formatting with transactional in-place file updates.
     Fmt {
         /// Input files/globs; `-` reads one source from stdin.
         files: Vec<String>,
