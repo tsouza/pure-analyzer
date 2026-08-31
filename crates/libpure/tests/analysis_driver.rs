@@ -4,8 +4,8 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use libpure::{
-    AnalysisDriver, DiagCode, FileId, LintRequest, ModelInput, SourceFile, SourceInput,
-    SourceRequest,
+    AnalysisDriver, DiagCode, Diagnostic, FileId, LineColumn, LintRequest, ModelInput, SourceFile,
+    SourceInput, SourceOrigin, SourceRequest, SourceStore, TextSize,
 };
 
 const SEQUENTIAL_JOBS: usize = 1;
@@ -14,6 +14,9 @@ const PARITY_QUERY: &str = "(first, second)";
 const INDEX_QUERY: &str = "$rows[$index]";
 const FORMATTED_PARITY_QUERY: &str = "(first, second)\n";
 const FORMATTED_INDEX_QUERY: &str = "$rows[$index]\n";
+const RECOVERY_QUERY: &str = "[a,]";
+const FORMATTED_RECOVERY_QUERY: &str = "[a,]\n";
+const RECOVERY_DIAGNOSTIC_MESSAGE: &str = "expected an expression after `,`";
 const MODEL: &str = r#"{
     "_type": "data",
     "elements": [{
@@ -30,6 +33,12 @@ const MODEL: &str = r#"{
         "qualifiedProperties": []
     }]
 }"#;
+const PURE_MODEL: &str = r#"
+Class model::Person
+{
+  name: String[0..1];
+}
+"#;
 
 static TEMP_FILE_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
@@ -55,6 +64,14 @@ impl Drop for FileFixture {
     }
 }
 
+fn assert_recovery_diagnostic(diagnostic: &Diagnostic, file: FileId) {
+    assert_eq!(diagnostic.code, DiagCode::MalformedSyntax);
+    assert_eq!(diagnostic.message, RECOVERY_DIAGNOSTIC_MESSAGE);
+    assert_eq!(diagnostic.primary.file, file);
+    assert_eq!(usize::from(diagnostic.primary.span.start()), 3);
+    assert_eq!(usize::from(diagnostic.primary.span.end()), 4);
+}
+
 fn source_request(jobs: usize) -> SourceRequest {
     SourceRequest::new([
         SourceInput::in_memory("tuple.pure", PARITY_QUERY),
@@ -72,6 +89,92 @@ fn source_request_exposes_complete_input_sequence_in_request_order() {
     let request = SourceRequest::new(inputs.clone());
 
     assert_eq!(request.sources(), inputs.as_slice());
+}
+
+#[test]
+fn source_request_exposes_configured_nonzero_jobs() {
+    let default_request = SourceRequest::new([SourceInput::stdin("query()")]);
+    let request = source_request(PARALLEL_JOBS);
+
+    assert_eq!(default_request.jobs(), SEQUENTIAL_JOBS);
+    assert_eq!(request.jobs(), PARALLEL_JOBS);
+}
+
+#[test]
+fn lint_request_exposes_sources_and_models_in_supplied_order() {
+    let sources =
+        SourceRequest::new([SourceInput::stdin("model::Person.all()")]).with_jobs(PARALLEL_JOBS);
+    let models = vec![
+        ModelInput::pmcd(SourceInput::in_memory("model.json", MODEL)),
+        ModelInput::pure(SourceInput::in_memory("model.pure", PURE_MODEL)),
+    ];
+    let request = LintRequest::new(sources.clone(), models.clone());
+
+    assert_eq!(request.sources(), &sources);
+    assert_eq!(request.models(), models.as_slice());
+}
+
+#[test]
+fn source_store_reports_empty_and_nonempty_counts() {
+    let empty = SourceStore::load([]).expect("load empty source store");
+    let nonempty =
+        SourceStore::load([SourceInput::stdin("query()")]).expect("load nonempty source store");
+
+    assert!(empty.is_empty());
+    assert_eq!(empty.len(), 0);
+    assert!(!nonempty.is_empty());
+    assert_eq!(nonempty.len(), 1);
+}
+
+#[test]
+fn source_store_preserves_metadata_in_request_order() {
+    let file_fixture = FileFixture::new("file.pure", "file()");
+    let store = SourceStore::load([
+        SourceInput::file(&file_fixture.path),
+        SourceInput::in_memory("unicode.pure", "aé\nβ"),
+        SourceInput::stdin("stdin()"),
+    ])
+    .expect("load retained source snapshots");
+
+    let files = store.files().collect::<Vec<_>>();
+    assert_eq!(files.len(), 3);
+    assert_eq!(files[0].id(), FileId::new(0));
+    assert_eq!(files[0].text(), "file()");
+    assert!(matches!(
+        files[0].origin(),
+        SourceOrigin::File { path } if path == &file_fixture.path
+    ));
+    assert_eq!(files[1].id(), FileId::new(1));
+    assert_eq!(files[1].name(), "unicode.pure");
+    assert_eq!(files[1].origin(), &SourceOrigin::InMemory);
+    assert_eq!(files[2].id(), FileId::new(2));
+    assert_eq!(files[2].name(), "<stdin>");
+    assert_eq!(files[2].origin(), &SourceOrigin::Stdin);
+    assert!(store.get(FileId::new(3)).is_none());
+}
+
+#[test]
+fn source_file_line_column_accepts_eof_and_rejects_beyond() {
+    let unicode_source = "aé\nβ";
+    let store = SourceStore::load([SourceInput::in_memory("unicode.pure", unicode_source)])
+        .expect("load unicode source snapshot");
+    let eof = u32::try_from(unicode_source.len()).expect("fixture fits TextSize");
+    let source = store.get(FileId::new(0)).expect("unicode source retained");
+    assert_eq!(
+        source.line_column(TextSize::new(3)),
+        Some(LineColumn { line: 1, column: 4 })
+    );
+    assert_eq!(
+        source.line_column(TextSize::new(4)),
+        Some(LineColumn { line: 2, column: 1 })
+    );
+    assert_eq!(source.line_column(TextSize::new(2)), None);
+    assert_eq!(
+        source.line_column(TextSize::new(eof)),
+        Some(LineColumn { line: 2, column: 3 })
+    );
+    assert_eq!(source.line_column(TextSize::new(eof + 1)), None);
+    assert!(store.get(FileId::new(3)).is_none());
 }
 
 fn lint_request(jobs: usize) -> LintRequest {
@@ -148,24 +251,110 @@ fn parse_validate_and_format_match_file_and_memory_snapshots() {
 }
 
 #[test]
+fn parse_output_into_parts_retains_recovery_sources_and_diagnostics() {
+    let driver = AnalysisDriver;
+    let output = driver
+        .parse(&SourceRequest::new([
+            SourceInput::in_memory("valid.pure", PARITY_QUERY),
+            SourceInput::in_memory("malformed.pure", RECOVERY_QUERY),
+        ]))
+        .expect("parse recovery-tolerant sources");
+    let expected_diagnostics = output.diagnostics().to_vec();
+
+    assert_eq!(expected_diagnostics.len(), 1);
+    assert_recovery_diagnostic(&expected_diagnostics[0], FileId::new(1));
+
+    let (sources, parsed) = output.into_parts();
+    assert_eq!(
+        sources.get(FileId::new(0)).map(SourceFile::text),
+        Some(PARITY_QUERY)
+    );
+    assert_eq!(
+        sources.get(FileId::new(1)).map(SourceFile::text),
+        Some(RECOVERY_QUERY)
+    );
+    assert_eq!(parsed.len(), 2);
+    assert_eq!(parsed[0].file(), FileId::new(0));
+    assert_eq!(parsed[0].syntax().text(), PARITY_QUERY);
+    assert!(parsed[0].diagnostics().is_empty());
+    assert_eq!(parsed[1].file(), FileId::new(1));
+    assert_eq!(parsed[1].syntax().text(), RECOVERY_QUERY);
+    assert_eq!(parsed[1].diagnostics(), expected_diagnostics.as_slice());
+}
+
+#[test]
 fn formatting_recovery_retains_meaningful_parser_diagnostics() {
     let driver = AnalysisDriver;
     let output = driver
-        .format(&SourceRequest::new([SourceInput::in_memory(
-            "malformed.pure",
-            "[a,]",
+        .format(&SourceRequest::new([
+            SourceInput::in_memory("valid.pure", PARITY_QUERY),
+            SourceInput::in_memory("malformed.pure", RECOVERY_QUERY),
+        ]))
+        .expect("format recovery-tolerant sources");
+    let expected_diagnostics = output.diagnostics().to_vec();
+
+    assert_eq!(
+        output
+            .formatted()
+            .iter()
+            .map(|source| (source.file(), source.text()))
+            .collect::<Vec<_>>(),
+        vec![
+            (FileId::new(0), FORMATTED_PARITY_QUERY),
+            (FileId::new(1), FORMATTED_RECOVERY_QUERY),
+        ]
+    );
+    assert_eq!(expected_diagnostics.len(), 1);
+
+    assert_recovery_diagnostic(&expected_diagnostics[0], FileId::new(1));
+
+    let (sources, formatted, diagnostics) = output.into_parts();
+    assert_eq!(
+        sources.get(FileId::new(0)).map(SourceFile::text),
+        Some(PARITY_QUERY)
+    );
+    assert_eq!(
+        sources.get(FileId::new(1)).map(SourceFile::text),
+        Some(RECOVERY_QUERY)
+    );
+    assert_eq!(
+        formatted
+            .iter()
+            .map(|source| (source.file(), source.text()))
+            .collect::<Vec<_>>(),
+        vec![
+            (FileId::new(0), FORMATTED_PARITY_QUERY),
+            (FileId::new(1), FORMATTED_RECOVERY_QUERY),
+        ]
+    );
+    assert_eq!(diagnostics, expected_diagnostics);
+}
+
+#[test]
+fn analysis_output_into_parts_retains_sources_and_diagnostics() {
+    let driver = AnalysisDriver;
+    let output = driver
+        .validate(&SourceRequest::new([SourceInput::in_memory(
+            "tuple.pure",
+            PARITY_QUERY,
         )]))
-        .expect("format recovery-tolerant source");
+        .expect("validate source");
+    let expected_diagnostics = output.diagnostics().to_vec();
 
-    assert_eq!(output.formatted()[0].text(), "[a,]\n");
-    assert_eq!(output.diagnostics().len(), 1);
+    assert_eq!(
+        expected_diagnostics
+            .iter()
+            .map(|diagnostic| diagnostic.code)
+            .collect::<Vec<_>>(),
+        vec![DiagCode::ParenthesizedTuple]
+    );
 
-    let diagnostic = &output.diagnostics()[0];
-    assert_eq!(diagnostic.code, DiagCode::MalformedSyntax);
-    assert_eq!(diagnostic.message, "expected an expression after `,`");
-    assert_eq!(diagnostic.primary.file, FileId::new(0));
-    assert_eq!(usize::from(diagnostic.primary.span.start()), 3);
-    assert_eq!(usize::from(diagnostic.primary.span.end()), 4);
+    let (sources, diagnostics) = output.into_parts();
+    assert_eq!(
+        sources.get(FileId::new(0)).map(SourceFile::text),
+        Some(PARITY_QUERY)
+    );
+    assert_eq!(diagnostics, expected_diagnostics);
 }
 
 #[test]
