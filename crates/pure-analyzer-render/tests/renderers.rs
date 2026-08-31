@@ -150,7 +150,7 @@ fn fix_edits_diagnostic(reverse_edits: bool) -> Diagnostic {
     .build()
 }
 
-fn provenance_order_diagnostic(provenance: FixProvenance) -> Diagnostic {
+fn ordered_fix_diagnostic(applicability: Applicability, provenance: FixProvenance) -> Diagnostic {
     Diagnostic::builder(
         DiagCode::UnknownProperty,
         Severity::Error,
@@ -159,7 +159,7 @@ fn provenance_order_diagnostic(provenance: FixProvenance) -> Diagnostic {
     )
     .fix(Fix {
         title: "replace the query symbol".to_owned(),
-        applicability: Applicability::Suggested,
+        applicability,
         provenance,
         edits: vec![TextEdit {
             file: FileId::new(0),
@@ -658,9 +658,9 @@ fn fix_edits_use_canonical_order_in_every_format() {
 fn diagnostic_order_uses_fix_provenance_after_title_and_applicability() {
     let sources = fixture_sources();
     let diagnostics = vec![
-        provenance_order_diagnostic(FixProvenance::SingleArityProven),
-        provenance_order_diagnostic(FixProvenance::ModelDependent),
-        provenance_order_diagnostic(FixProvenance::SyntaxOnly),
+        ordered_fix_diagnostic(Applicability::Suggested, FixProvenance::SingleArityProven),
+        ordered_fix_diagnostic(Applicability::Suggested, FixProvenance::ModelDependent),
+        ordered_fix_diagnostic(Applicability::Suggested, FixProvenance::SyntaxOnly),
     ];
 
     let json = render_json(RenderInput::new(&sources, &diagnostics)).expect("JSON renders");
@@ -680,6 +680,31 @@ fn diagnostic_order_uses_fix_provenance_after_title_and_applicability() {
         provenances,
         ["syntax_only", "model_dependent", "single_arity_proven"]
     );
+}
+
+#[test]
+fn diagnostic_order_uses_fix_applicability_after_title() {
+    let sources = fixture_sources();
+    let diagnostics = vec![
+        ordered_fix_diagnostic(Applicability::Unsafe, FixProvenance::SyntaxOnly),
+        ordered_fix_diagnostic(Applicability::Suggested, FixProvenance::SyntaxOnly),
+        ordered_fix_diagnostic(Applicability::MachineApplicable, FixProvenance::SyntaxOnly),
+    ];
+
+    let json = render_json(RenderInput::new(&sources, &diagnostics)).expect("JSON renders");
+    let document: Value = serde_json::from_str(&json).expect("renderer output is JSON");
+    let applicability = document["diagnostics"]
+        .as_array()
+        .expect("diagnostics array")
+        .iter()
+        .map(|diagnostic| {
+            diagnostic["fix"]["applicability"]
+                .as_str()
+                .expect("fix applicability")
+        })
+        .collect::<Vec<_>>();
+
+    assert_eq!(applicability, ["machine_applicable", "suggested", "unsafe"]);
 }
 
 #[test]
