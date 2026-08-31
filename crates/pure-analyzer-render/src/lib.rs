@@ -41,11 +41,40 @@ impl<'a> RenderInput<'a> {
     }
 }
 
+/// Terminal color policy resolved by a front end before human rendering.
+///
+/// The front end supplies whether its chosen output stream is a terminal, so
+/// the renderer remains deterministic and never inspects process-global I/O.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ColorPolicy {
+    /// Emit color only when the selected output stream is a terminal.
+    #[default]
+    Auto,
+    /// Always emit ANSI color sequences.
+    Always,
+    /// Never emit ANSI color sequences.
+    Never,
+}
+
+impl ColorPolicy {
+    /// Resolve this policy using the front end's terminal detection result.
+    #[must_use]
+    pub const fn resolve(self, is_terminal: bool) -> HumanOptions {
+        HumanOptions {
+            color: match self {
+                Self::Auto => is_terminal,
+                Self::Always => true,
+                Self::Never => false,
+            },
+        }
+    }
+}
+
 /// Options that affect only the terminal-oriented human renderer.
 ///
-/// `color` is already resolved by the caller. Front ends own choices such as
-/// `auto`, `always`, and `never` plus TTY detection; this crate merely emits
-/// ANSI color sequences when requested.
+/// Construct this with [`ColorPolicy::resolve`] when a front end supports
+/// `auto`, `always`, and `never` color choices. This crate emits ANSI color
+/// sequences only when `color` is true.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct HumanOptions {
     /// Whether rendered human output includes ANSI color sequences.

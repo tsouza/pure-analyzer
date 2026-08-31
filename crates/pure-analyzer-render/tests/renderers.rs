@@ -4,7 +4,8 @@ use pure_analyzer_diagnostics::{
     DiagCode, Diagnostic, FileId, Fix, Label, ReasonCode, Severity, TextEdit, TextRange, Verdict,
 };
 use pure_analyzer_render::{
-    HumanOptions, RenderError, RenderInput, SpanKind, render_human, render_json, render_sarif,
+    ColorPolicy, HumanOptions, RenderError, RenderInput, SpanKind, render_human, render_json,
+    render_sarif,
 };
 use serde_json::Value;
 
@@ -62,6 +63,58 @@ fn later_diagnostic() -> Diagnostic {
     .build()
 }
 
+fn nested_labels_diagnostic(
+    reverse_labels: bool,
+    first_note: &str,
+    second_note: &str,
+) -> Diagnostic {
+    let mut secondary = vec![
+        Label::with_note(FileId::new(0), range(0, 3), first_note),
+        Label::with_note(FileId::new(1), range(6, 8), second_note),
+    ];
+    if reverse_labels {
+        secondary.reverse();
+    }
+
+    let mut builder = Diagnostic::builder(
+        DiagCode::UnknownProperty,
+        Severity::Error,
+        "same primary finding",
+        Label::new(FileId::new(0), range(4, 6)),
+    );
+    for label in secondary {
+        builder = builder.secondary(label);
+    }
+    builder.build()
+}
+
+fn fix_edits_diagnostic(reverse_edits: bool) -> Diagnostic {
+    let mut edits = vec![
+        TextEdit {
+            file: FileId::new(1),
+            span: range(0, 5),
+            new_text: "Model".to_owned(),
+        },
+        TextEdit {
+            file: FileId::new(0),
+            span: range(0, 3),
+            new_text: "query".to_owned(),
+        },
+    ];
+    if reverse_edits {
+        edits.reverse();
+    }
+
+    Diagnostic::builder(
+        DiagCode::UnknownProperty,
+        Severity::Error,
+        "ordered edits",
+        Label::new(FileId::new(0), range(4, 6)),
+    )
+    .fix(Fix::model_dependent("replace both", edits))
+    .build()
+}
+
 #[test]
 fn rich_fixture_cross_format_contract() {
     let sources = fixture_sources();
@@ -82,10 +135,17 @@ fn rich_fixture_cross_format_contract() {
 }
 
 fn assert_human_contract(human: &str) {
+    assert!(human.contains("error[PUR2002]: unknown \"α\" \\ path"));
+    assert!(human.contains("queries/α.pure:1:5..1:7 (primary)"));
+    assert!(human.contains("models/β.pure:1:7..1:9 (secondary)"));
     assert!(human.contains("primary: query symbol"));
     assert!(human.contains("secondary: declared here"));
     assert!(human.contains("replace the query symbol"));
+    assert!(human.contains(r#"with "γ\n""#));
+    assert!(human.contains("not_equivalent; witness: #>{db::T}#"));
+    assert!(human.contains("IND_OPAQUE_PREDICATE"));
     assert!(human.contains("docs: https://example.invalid/PUR2002?x=1&y=2"));
+    assert!(human.contains("summary: 1 errors, 0 warnings, 0 info, 0 hints (1 total)"));
 }
 
 fn assert_json_contract(json: &str) {
@@ -93,23 +153,36 @@ fn assert_json_contract(json: &str) {
     assert_eq!(document["version"], "1.0");
     assert_eq!(document["files"][0]["name"], "queries/α.pure");
     assert_eq!(document["files"][0]["origin"], "memory");
-    assert_eq!(
-        document["diagnostics"][0]["primary"]["range"]["start"]["byte"],
-        4
-    );
-    assert_eq!(
-        document["diagnostics"][0]["primary"]["range"]["start"]["line"],
-        1
-    );
-    assert_eq!(
-        document["diagnostics"][0]["primary"]["range"]["start"]["column"],
-        5
-    );
-    assert_eq!(
-        document["diagnostics"][0]["fix"]["edits"][0]["replacement"],
-        "γ\n"
-    );
+    let diagnostic = &document["diagnostics"][0];
+    assert_json_finding(diagnostic);
+    assert_json_fix_and_metadata(diagnostic);
     assert_eq!(document["summary"]["errors"], 1);
+}
+
+fn assert_json_finding(diagnostic: &Value) {
+    assert_eq!(diagnostic["code"], "PUR2002");
+    assert_eq!(diagnostic["severity"], "error");
+    assert_eq!(diagnostic["message"], "unknown \"α\" \\ path");
+    assert_json_range(&diagnostic["primary"]["range"], (4, 1, 5), (6, 1, 7));
+    assert_eq!(diagnostic["primary"]["note"], "query symbol");
+    assert_json_range(&diagnostic["secondary"][0]["range"], (6, 1, 7), (8, 1, 9));
+    assert_eq!(diagnostic["secondary"][0]["note"], "declared here");
+}
+
+fn assert_json_fix_and_metadata(diagnostic: &Value) {
+    assert_eq!(diagnostic["fix"]["title"], "replace the query symbol");
+    assert_eq!(diagnostic["fix"]["applicability"], "machine_applicable");
+    assert_eq!(diagnostic["fix"]["provenance"], "single_arity_proven");
+    assert_json_range(
+        &diagnostic["fix"]["edits"][0]["range"],
+        (4, 1, 5),
+        (6, 1, 7),
+    );
+    assert_eq!(diagnostic["fix"]["edits"][0]["replacement"], "γ\n");
+    assert_eq!(diagnostic["verdict"]["verdict"], "not_equivalent");
+    assert_eq!(diagnostic["verdict"]["witness"], "#>{db::T}#");
+    assert_eq!(diagnostic["reason"]["id"], "IND_OPAQUE_PREDICATE");
+    assert_eq!(diagnostic["url"], "https://example.invalid/PUR2002?x=1&y=2");
 }
 
 fn assert_sarif_contract(sarif: &str) {
@@ -119,21 +192,91 @@ fn assert_sarif_contract(sarif: &str) {
         "https://json.schemastore.org/sarif-2.1.0.json"
     );
     assert_eq!(log["version"], "2.1.0");
+    assert_sarif_rule(&log["runs"][0]["tool"]["driver"]["rules"][0]);
+    assert_sarif_result(&log["runs"][0]["results"][0]);
+}
+
+fn assert_sarif_rule(rule: &Value) {
+    assert_eq!(rule["id"], "PUR2002");
+    assert_eq!(rule["shortDescription"]["text"], "unknown property");
     assert_eq!(
-        log["runs"][0]["tool"]["driver"]["rules"][0]["id"],
-        "PUR2002"
+        rule["helpUri"],
+        "https://github.com/tsouza/pure-analyzer/tree/main/docs"
+    );
+    assert_eq!(rule["defaultConfiguration"]["level"], "error");
+}
+
+fn assert_sarif_result(result: &Value) {
+    assert_eq!(result["ruleId"], "PUR2002");
+    assert_eq!(result["level"], "error");
+    assert_eq!(result["message"]["text"], "unknown \"α\" \\ path");
+    assert_sarif_locations(result);
+    assert_sarif_fix_and_metadata(result);
+}
+
+fn assert_sarif_locations(result: &Value) {
+    assert_sarif_region(
+        &result["locations"][0]["physicalLocation"]["region"],
+        (4, 1, 5),
+        (6, 1, 7),
+    );
+    assert_eq!(result["locations"][0]["message"]["text"], "query symbol");
+    assert_eq!(result["relatedLocations"][0]["id"], 1);
+    assert_sarif_region(
+        &result["relatedLocations"][0]["physicalLocation"]["region"],
+        (6, 1, 7),
+        (8, 1, 9),
     );
     assert_eq!(
-        log["runs"][0]["tool"]["driver"]["rules"][0]["shortDescription"]["text"],
-        "unknown property"
+        result["relatedLocations"][0]["message"]["text"],
+        "declared here"
     );
-    assert_eq!(log["runs"][0]["results"][0]["level"], "error");
-    assert_eq!(log["runs"][0]["results"][0]["relatedLocations"][0]["id"], 1);
+}
+
+fn assert_sarif_fix_and_metadata(result: &Value) {
+    assert_sarif_region(
+        &result["fixes"][0]["artifactChanges"][0]["replacements"][0]["deletedRegion"],
+        (4, 1, 5),
+        (6, 1, 7),
+    );
     assert_eq!(
-        log["runs"][0]["results"][0]["fixes"][0]["artifactChanges"][0]["replacements"][0]["insertedContent"]
-            ["text"],
+        result["fixes"][0]["artifactChanges"][0]["replacements"][0]["insertedContent"]["text"],
         "γ\n"
     );
+    assert_eq!(
+        result["fixes"][0]["properties"]["applicability"],
+        "machine_applicable"
+    );
+    assert_eq!(
+        result["fixes"][0]["properties"]["provenance"],
+        "single_arity_proven"
+    );
+    assert_eq!(result["properties"]["verdict"]["verdict"], "not_equivalent");
+    assert_eq!(result["properties"]["reason"]["id"], "IND_OPAQUE_PREDICATE");
+    assert_eq!(
+        result["properties"]["documentationUrl"],
+        "https://example.invalid/PUR2002?x=1&y=2"
+    );
+}
+
+fn assert_json_range(range: &Value, start: (u32, u64, u64), end: (u32, u64, u64)) {
+    assert_json_position(&range["start"], start);
+    assert_json_position(&range["end"], end);
+}
+
+fn assert_json_position(position: &Value, expected: (u32, u64, u64)) {
+    assert_eq!(position["byte"], expected.0);
+    assert_eq!(position["line"], expected.1);
+    assert_eq!(position["column"], expected.2);
+}
+
+fn assert_sarif_region(region: &Value, start: (u32, u64, u64), end: (u32, u64, u64)) {
+    assert_eq!(region["byteOffset"], start.0);
+    assert_eq!(region["byteLength"], end.0 - start.0);
+    assert_eq!(region["startLine"], start.1);
+    assert_eq!(region["startColumn"], start.2);
+    assert_eq!(region["endLine"], end.1);
+    assert_eq!(region["endColumn"], end.2);
 }
 
 #[test]
@@ -170,17 +313,159 @@ fn renderer_order_is_independent_of_input_order() {
 }
 
 #[test]
-fn resolved_color_choice_controls_ansi_sequences() {
+fn diagnostic_order_uses_canonical_nested_labels() {
+    let sources = fixture_sources();
+    let diagnostics = vec![
+        nested_labels_diagnostic(false, "z-first", "a-second"),
+        nested_labels_diagnostic(false, "a-first", "z-second"),
+    ];
+    let reversed_labels = vec![
+        nested_labels_diagnostic(true, "z-first", "a-second"),
+        nested_labels_diagnostic(true, "a-first", "z-second"),
+    ];
+    let input = RenderInput::new(&sources, &diagnostics);
+    let reversed_input = RenderInput::new(&sources, &reversed_labels);
+
+    let human = render_human(input, HumanOptions::default()).expect("human renders");
+    let json = render_json(input).expect("json renders");
+    let sarif = render_sarif(input).expect("sarif renders");
+    assert_eq!(
+        human,
+        render_human(reversed_input, HumanOptions::default()).expect("reversed human renders")
+    );
+    assert_eq!(
+        json,
+        render_json(reversed_input).expect("reversed JSON renders")
+    );
+    assert_eq!(
+        sarif,
+        render_sarif(reversed_input).expect("reversed SARIF renders")
+    );
+
+    assert!(
+        human.find("secondary: a-first").expect("a-first label")
+            < human.find("secondary: z-first").expect("z-first label")
+    );
+    let document: Value = serde_json::from_str(&json).expect("renderer output is JSON");
+    assert_eq!(
+        document["diagnostics"][0]["secondary"][0]["note"],
+        "a-first"
+    );
+    assert_eq!(
+        document["diagnostics"][1]["secondary"][0]["note"],
+        "z-first"
+    );
+}
+
+#[test]
+fn fix_edits_use_canonical_order_in_every_format() {
+    let sources = fixture_sources();
+    let diagnostics = vec![fix_edits_diagnostic(false)];
+    let reversed_edits = vec![fix_edits_diagnostic(true)];
+    let input = RenderInput::new(&sources, &diagnostics);
+    let reversed_input = RenderInput::new(&sources, &reversed_edits);
+
+    let human = render_human(input, HumanOptions::default()).expect("human renders");
+    let json = render_json(input).expect("json renders");
+    let sarif = render_sarif(input).expect("sarif renders");
+    assert_eq!(
+        human,
+        render_human(reversed_input, HumanOptions::default()).expect("reversed human renders")
+    );
+    assert_eq!(
+        json,
+        render_json(reversed_input).expect("reversed JSON renders")
+    );
+    assert_eq!(
+        sarif,
+        render_sarif(reversed_input).expect("reversed SARIF renders")
+    );
+
+    assert!(
+        human
+            .find("replace queries/α.pure:1:1")
+            .expect("query edit")
+            < human.find("replace models/β.pure:1:1").expect("model edit")
+    );
+    let document: Value = serde_json::from_str(&json).expect("renderer output is JSON");
+    assert_eq!(document["diagnostics"][0]["fix"]["edits"][0]["file"], 0);
+    assert_eq!(document["diagnostics"][0]["fix"]["edits"][1]["file"], 1);
+    let log: Value = serde_json::from_str(&sarif).expect("renderer output is SARIF JSON");
+    assert_eq!(
+        log["runs"][0]["results"][0]["fixes"][0]["artifactChanges"][0]["artifactLocation"]["uri"],
+        "queries/α.pure"
+    );
+    assert_eq!(
+        log["runs"][0]["results"][0]["fixes"][0]["artifactChanges"][1]["artifactLocation"]["uri"],
+        "models/β.pure"
+    );
+}
+
+#[test]
+fn empty_label_notes_remain_empty_in_every_format() {
+    let sources = fixture_sources();
+    let diagnostics = vec![
+        Diagnostic::builder(
+            DiagCode::BadToken,
+            Severity::Error,
+            "empty notes",
+            Label::new(FileId::new(0), range(0, 3)),
+        )
+        .secondary(Label::new(FileId::new(1), range(0, 5)))
+        .build(),
+    ];
+    let input = RenderInput::new(&sources, &diagnostics);
+
+    let human = render_human(input, HumanOptions::default()).expect("human renders");
+    let json = render_json(input).expect("json renders");
+    let sarif = render_sarif(input).expect("sarif renders");
+
+    assert!(!human.contains("secondary location"));
+    let document: Value = serde_json::from_str(&json).expect("renderer output is JSON");
+    assert_eq!(document["diagnostics"][0]["primary"]["note"], "");
+    assert_eq!(document["diagnostics"][0]["secondary"][0]["note"], "");
+    let log: Value = serde_json::from_str(&sarif).expect("renderer output is SARIF JSON");
+    assert!(
+        log["runs"][0]["results"][0]["locations"][0]
+            .get("message")
+            .is_none()
+    );
+    assert!(
+        log["runs"][0]["results"][0]["relatedLocations"][0]
+            .get("message")
+            .is_none()
+    );
+}
+
+#[test]
+fn color_policy_respects_tty_and_controls_ansi_sequences() {
     let sources = fixture_sources();
     let diagnostics = vec![rich_diagnostic()];
     let input = RenderInput::new(&sources, &diagnostics);
 
-    let plain = render_human(input, HumanOptions { color: false }).expect("plain renders");
-    let colored = render_human(input, HumanOptions { color: true }).expect("colored renders");
-    assert!(!plain.contains("\x1b["));
-    assert!(colored.contains("\x1b[1;31m"));
-    assert!(colored.contains("error[PUR2002]"));
-    assert!(colored.contains("\x1b[0m"));
+    for (policy, is_terminal, has_color) in [
+        (ColorPolicy::Auto, false, false),
+        (ColorPolicy::Auto, true, true),
+        (ColorPolicy::Always, false, true),
+        (ColorPolicy::Never, true, false),
+    ] {
+        let options = policy.resolve(is_terminal);
+        assert_eq!(options.color, has_color);
+        let output = render_human(input, options).expect("human renders");
+        assert_eq!(
+            output,
+            if has_color {
+                include_str!("golden/rich.color.human")
+            } else {
+                include_str!("golden/rich.human")
+            }
+        );
+        if has_color {
+            assert!(output.contains("\x1b[1;31m"));
+            assert!(output.contains("error[PUR2002]"));
+            assert!(output.contains("\x1b[0m"));
+        }
+    }
 }
 
 #[test]
@@ -237,6 +522,20 @@ fn invalid_unicode_boundary_is_an_internal_error_in_every_format() {
     ] {
         assert!(matches!(result, Err(RenderError::InvalidSpan { .. })));
     }
+}
+
+#[test]
+fn stale_primary_spans_are_internal_errors_in_every_format() {
+    let sources = SourceStore::load([SourceInput::in_memory("stale-primary.pure", "ok")])
+        .expect("source loads");
+    let stale = Diagnostic::builder(
+        DiagCode::BadToken,
+        Severity::Error,
+        "stale primary",
+        Label::new(FileId::new(0), range(3, 3)),
+    )
+    .build();
+    assert_invalid_span_kind(&sources, vec![stale], SpanKind::Primary);
 }
 
 #[test]

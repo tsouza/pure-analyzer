@@ -107,7 +107,7 @@ fn prepare_diagnostic<'a>(
         SpanKind::Primary,
         &diagnostic.primary,
     )?;
-    let secondary = diagnostic
+    let mut secondary = diagnostic
         .secondary
         .iter()
         .enumerate()
@@ -115,6 +115,7 @@ fn prepare_diagnostic<'a>(
             prepare_label(sources, diagnostic_index, SpanKind::Secondary(index), label)
         })
         .collect::<Result<Vec<_>, _>>()?;
+    secondary.sort_by(compare_prepared_label);
     let fix = diagnostic
         .fix
         .as_ref()
@@ -151,12 +152,13 @@ fn prepare_fix<'a>(
     diagnostic_index: usize,
     fix: &'a Fix,
 ) -> Result<PreparedFix<'a>, RenderError> {
-    let edits = fix
+    let mut edits = fix
         .edits
         .iter()
         .enumerate()
         .map(|(index, edit)| prepare_edit(sources, diagnostic_index, index, edit))
         .collect::<Result<Vec<_>, _>>()?;
+    edits.sort_by(compare_prepared_edit);
     Ok(PreparedFix { fix, edits })
 }
 
@@ -211,34 +213,36 @@ fn validate_span(
 }
 
 fn compare_diagnostics(left: &PreparedDiagnostic<'_>, right: &PreparedDiagnostic<'_>) -> Ordering {
-    compare_diagnostic(left.diagnostic, right.diagnostic)
+    compare_prepared_label(&left.primary, &right.primary)
+        .then_with(|| left.diagnostic.code.cmp(&right.diagnostic.code))
+        .then_with(|| left.diagnostic.severity.cmp(&right.diagnostic.severity))
+        .then_with(|| left.diagnostic.message.cmp(&right.diagnostic.message))
+        .then_with(|| compare_prepared_labels(&left.secondary, &right.secondary))
+        .then_with(|| compare_prepared_fixes(left.fix.as_ref(), right.fix.as_ref()))
+        .then_with(|| {
+            compare_verdicts(
+                left.diagnostic.verdict.as_ref(),
+                right.diagnostic.verdict.as_ref(),
+            )
+        })
+        .then_with(|| left.diagnostic.reason.cmp(&right.diagnostic.reason))
+        .then_with(|| left.diagnostic.url.cmp(&right.diagnostic.url))
 }
 
-fn compare_diagnostic(left: &Diagnostic, right: &Diagnostic) -> Ordering {
-    compare_label(&left.primary, &right.primary)
-        .then_with(|| left.code.cmp(&right.code))
-        .then_with(|| left.severity.cmp(&right.severity))
-        .then_with(|| left.message.cmp(&right.message))
-        .then_with(|| compare_labels(&left.secondary, &right.secondary))
-        .then_with(|| compare_fixes(left.fix.as_ref(), right.fix.as_ref()))
-        .then_with(|| compare_verdicts(left.verdict.as_ref(), right.verdict.as_ref()))
-        .then_with(|| left.reason.cmp(&right.reason))
-        .then_with(|| left.url.cmp(&right.url))
-}
-
-fn compare_labels(left: &[Label], right: &[Label]) -> Ordering {
+fn compare_prepared_labels(left: &[PreparedLabel<'_>], right: &[PreparedLabel<'_>]) -> Ordering {
     left.iter()
         .zip(right)
-        .map(|(left, right)| compare_label(left, right))
+        .map(|(left, right)| compare_prepared_label(left, right))
         .find(|order| *order != Ordering::Equal)
         .unwrap_or_else(|| left.len().cmp(&right.len()))
 }
 
-fn compare_label(left: &Label, right: &Label) -> Ordering {
-    left.file
-        .cmp(&right.file)
+fn compare_prepared_label(left: &PreparedLabel<'_>, right: &PreparedLabel<'_>) -> Ordering {
+    left.source
+        .id()
+        .cmp(&right.source.id())
         .then_with(|| compare_ranges(left.span, right.span))
-        .then_with(|| left.note.cmp(&right.note))
+        .then_with(|| left.note.cmp(right.note))
 }
 
 fn compare_ranges(left: TextRange, right: TextRange) -> Ordering {
@@ -247,19 +251,26 @@ fn compare_ranges(left: TextRange, right: TextRange) -> Ordering {
         .then_with(|| left.end().cmp(&right.end()))
 }
 
-fn compare_fixes(left: Option<&Fix>, right: Option<&Fix>) -> Ordering {
+fn compare_prepared_fixes(
+    left: Option<&PreparedFix<'_>>,
+    right: Option<&PreparedFix<'_>>,
+) -> Ordering {
     match (left, right) {
         (None, None) => Ordering::Equal,
         (None, Some(_)) => Ordering::Less,
         (Some(_), None) => Ordering::Greater,
         (Some(left), Some(right)) => left
+            .fix
             .title
-            .cmp(&right.title)
+            .cmp(&right.fix.title)
             .then_with(|| {
-                applicability_rank(left.applicability).cmp(&applicability_rank(right.applicability))
+                applicability_rank(left.fix.applicability)
+                    .cmp(&applicability_rank(right.fix.applicability))
             })
-            .then_with(|| provenance_rank(left.provenance).cmp(&provenance_rank(right.provenance)))
-            .then_with(|| compare_edits(&left.edits, &right.edits)),
+            .then_with(|| {
+                provenance_rank(left.fix.provenance).cmp(&provenance_rank(right.fix.provenance))
+            })
+            .then_with(|| compare_prepared_edits(&left.edits, &right.edits)),
     }
 }
 
@@ -279,17 +290,20 @@ const fn provenance_rank(provenance: FixProvenance) -> u8 {
     }
 }
 
-fn compare_edits(left: &[TextEdit], right: &[TextEdit]) -> Ordering {
+fn compare_prepared_edits(left: &[PreparedEdit<'_>], right: &[PreparedEdit<'_>]) -> Ordering {
     left.iter()
         .zip(right)
-        .map(|(left, right)| {
-            left.file
-                .cmp(&right.file)
-                .then_with(|| compare_ranges(left.span, right.span))
-                .then_with(|| left.new_text.cmp(&right.new_text))
-        })
+        .map(|(left, right)| compare_prepared_edit(left, right))
         .find(|order| *order != Ordering::Equal)
         .unwrap_or_else(|| left.len().cmp(&right.len()))
+}
+
+fn compare_prepared_edit(left: &PreparedEdit<'_>, right: &PreparedEdit<'_>) -> Ordering {
+    left.source
+        .id()
+        .cmp(&right.source.id())
+        .then_with(|| compare_ranges(left.edit.span, right.edit.span))
+        .then_with(|| left.edit.new_text.cmp(&right.edit.new_text))
 }
 
 fn compare_verdicts(left: Option<&Verdict>, right: Option<&Verdict>) -> Ordering {

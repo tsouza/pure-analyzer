@@ -1,4 +1,58 @@
 pub mod pure_analyzer_render
+pub enum pure_analyzer_render::ColorPolicy
+pub pure_analyzer_render::ColorPolicy::Always
+pub pure_analyzer_render::ColorPolicy::Auto
+pub pure_analyzer_render::ColorPolicy::Never
+impl pure_analyzer_render::ColorPolicy
+pub const fn pure_analyzer_render::ColorPolicy::resolve(self, bool) -> pure_analyzer_render::HumanOptions
+impl core::clone::Clone for pure_analyzer_render::ColorPolicy
+pub fn pure_analyzer_render::ColorPolicy::clone(&self) -> pure_analyzer_render::ColorPolicy
+impl core::cmp::Eq for pure_analyzer_render::ColorPolicy
+impl core::cmp::PartialEq for pure_analyzer_render::ColorPolicy
+pub fn pure_analyzer_render::ColorPolicy::eq(&self, &pure_analyzer_render::ColorPolicy) -> bool
+impl core::default::Default for pure_analyzer_render::ColorPolicy
+pub fn pure_analyzer_render::ColorPolicy::default() -> pure_analyzer_render::ColorPolicy
+impl core::fmt::Debug for pure_analyzer_render::ColorPolicy
+pub fn pure_analyzer_render::ColorPolicy::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for pure_analyzer_render::ColorPolicy
+impl core::marker::StructuralPartialEq for pure_analyzer_render::ColorPolicy
+impl core::marker::Freeze for pure_analyzer_render::ColorPolicy
+impl core::marker::Send for pure_analyzer_render::ColorPolicy
+impl core::marker::Sync for pure_analyzer_render::ColorPolicy
+impl core::marker::Unpin for pure_analyzer_render::ColorPolicy
+impl core::marker::UnsafeUnpin for pure_analyzer_render::ColorPolicy
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_render::ColorPolicy
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_render::ColorPolicy
+impl<T, U> core::convert::Into<U> for pure_analyzer_render::ColorPolicy where U: core::convert::From<T>
+pub fn pure_analyzer_render::ColorPolicy::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_render::ColorPolicy where U: core::convert::Into<T>
+pub type pure_analyzer_render::ColorPolicy::Error = never
+pub fn pure_analyzer_render::ColorPolicy::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_render::ColorPolicy where U: core::convert::TryFrom<T>
+pub type pure_analyzer_render::ColorPolicy::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_render::ColorPolicy::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_render::ColorPolicy where T: core::clone::Clone
+pub type pure_analyzer_render::ColorPolicy::Owned = T
+pub fn pure_analyzer_render::ColorPolicy::clone_into(&self, &mut T)
+pub fn pure_analyzer_render::ColorPolicy::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_render::ColorPolicy where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_render::ColorPolicy::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_render::ColorPolicy where T: ?core::marker::Sized
+pub fn pure_analyzer_render::ColorPolicy::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_render::ColorPolicy where T: ?core::marker::Sized
+pub fn pure_analyzer_render::ColorPolicy::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_render::ColorPolicy where T: core::clone::Clone
+pub unsafe fn pure_analyzer_render::ColorPolicy::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_render::ColorPolicy
+pub fn pure_analyzer_render::ColorPolicy::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for pure_analyzer_render::ColorPolicy
+pub type pure_analyzer_render::ColorPolicy::Init = T
+pub const pure_analyzer_render::ColorPolicy::ALIGN: usize
+pub unsafe fn pure_analyzer_render::ColorPolicy::deref<'a>(usize) -> &'a T
+pub unsafe fn pure_analyzer_render::ColorPolicy::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn pure_analyzer_render::ColorPolicy::drop(usize)
+pub unsafe fn pure_analyzer_render::ColorPolicy::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for pure_analyzer_render::ColorPolicy
 pub enum pure_analyzer_render::RenderError
 pub pure_analyzer_render::RenderError::InvalidSpan
 pub pure_analyzer_render::RenderError::InvalidSpan::diagnostic_index: usize

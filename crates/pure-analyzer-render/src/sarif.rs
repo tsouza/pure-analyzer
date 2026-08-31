@@ -128,7 +128,8 @@ struct SarifLocation<'a> {
 struct SarifRelatedLocation<'a> {
     id: usize,
     physical_location: SarifPhysicalLocation<'a>,
-    message: SarifMessage<'a>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    message: Option<SarifMessage<'a>>,
 }
 
 #[derive(Serialize)]
@@ -283,13 +284,7 @@ fn sarif_related_location<'a>(index: usize, label: &PreparedLabel<'a>) -> SarifR
     SarifRelatedLocation {
         id: index + 1,
         physical_location: physical_location(label.source, label.span, label.start, label.end),
-        message: SarifMessage {
-            text: if label.note.is_empty() {
-                "secondary location"
-            } else {
-                label.note
-            },
-        },
+        message: (!label.note.is_empty()).then_some(SarifMessage { text: label.note }),
     }
 }
 
