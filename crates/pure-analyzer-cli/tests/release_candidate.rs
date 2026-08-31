@@ -14,12 +14,49 @@ const EXIT_ACTIONABLE: i32 = 1;
 #[cfg(not(any(target_os = "linux", target_vendor = "apple")))]
 const EXIT_INTERNAL: i32 = 4;
 const RENDERERS: [&str; 3] = ["human", "json", "sarif"];
+const SEQUENTIAL_JOBS: &str = "1";
+const PARALLEL_JOBS: &str = "4";
 const FORMAT_INPUT: &str = "model::Person . all ( )";
 const FORMATTED_INPUT: &str = "model::Person.all()\n";
+const SECOND_FORMAT_INPUT: &str = "model::Order . all ( )";
+const SECOND_FORMATTED_INPUT: &str = "model::Order.all()\n";
+const FORMAT_DIFF: &str = concat!(
+    "--- query.pure\n",
+    "+++ query.pure (formatted)\n",
+    "-model::Person . all ( )\n",
+    "+model::Person.all()\n",
+    "--- second.pure\n",
+    "+++ second.pure (formatted)\n",
+    "-model::Order . all ( )\n",
+    "+model::Order.all()\n",
+);
 const RECOVERY_INPUT: &str = "[a,]";
-const NAVIGATION_QUERY: &str = "model::Child.all()->filter(child| $child.inherited); model::Person.all()->filter(person| $person.manager.name; $person.missing)";
+const FORMATTED_RECOVERY_INPUT: &str = "[a,]\n";
+const BAD_TOKEN_CODE: &str = "PUR0102";
+const BAD_TOKEN_MESSAGE: &str = "unrecognized token";
+const MALFORMED_SYNTAX_CODE: &str = "PUR1200";
+const RECOVERY_DIAGNOSTIC_MESSAGE: &str = "expected an expression after `,`";
+const MISSING_MEMBER_CODE: &str = "PUR2002";
+const MISSING_MEMBER_MESSAGE: &str = "not declared";
+const FIRST_BROKEN_FILE: &str = "first-broken.pure";
+const SECOND_BROKEN_FILE: &str = "second-broken.pure";
+const INHERITANCE_FILE: &str = "inheritance.pure";
+const ASSOCIATION_FILE: &str = "association.pure";
+const VALIDATE_DIAGNOSTIC_COUNT: usize = 2;
+const NAVIGATION_MISSING_MEMBER_COUNT: usize = 2;
+const FIX_MISSING_MEMBER_COUNT: usize = 1;
+const PMCD_MODEL_SUFFIX: &str = "model.json";
+const PURE_MODEL_SUFFIX: &str = "model.pure";
+const NORMALIZED_MODEL_NAME_FIELD: &str = "\"name\": \"model\"";
+const INHERITANCE_QUERY: &str =
+    "model::Child.all()->filter(child| $child.inherited; $child.missing)";
+const ASSOCIATION_QUERY: &str =
+    "model::Person.all()->filter(person| $person.manager.name; $person.missing)";
 const FIX_QUERY: &str = "model::Source.all()->filter(x| $x.point(); $x.missing)";
 const FIXED_QUERY: &str = "model::Source.all()->filter(x| $x.point(%latest); $x.missing)";
+const SECOND_FIX_QUERY: &str = "model::Source.all()->filter(x| $x.point(/* second */); $x.missing)";
+const SECOND_FIXED_QUERY: &str =
+    "model::Source.all()->filter(x| $x.point(/* second */%latest); $x.missing)";
 
 const PMCD_NAVIGATION_MODEL: &str = r#"{
   "_type": "data",
@@ -166,12 +203,19 @@ Class model::Source
 #[test]
 fn release_candidate_validate_renderers_are_process_deterministic() {
     let fixture = Fixture::new("release-candidate-validate");
-    fixture.write_bytes("broken.pure", b"\0");
+    fixture.write_bytes(FIRST_BROKEN_FILE, b"\0");
+    fixture.write(SECOND_BROKEN_FILE, RECOVERY_INPUT);
 
     for renderer in RENDERERS {
         let output = run_deterministically(
             &fixture.root,
-            &["validate", "broken.pure", "--format", renderer],
+            &[
+                "validate",
+                FIRST_BROKEN_FILE,
+                SECOND_BROKEN_FILE,
+                "--format",
+                renderer,
+            ],
         );
 
         assert_eq!(output.status.code(), Some(EXIT_ACTIONABLE));
@@ -181,13 +225,24 @@ fn release_candidate_validate_renderers_are_process_deterministic() {
             "{renderer} wrote validation diagnostics to stderr"
         );
         assert_renderer_document(renderer, &output.stdout);
+        assert_renderer_finding(renderer, &output.stdout, BAD_TOKEN_CODE, BAD_TOKEN_MESSAGE);
+        assert_renderer_finding(
+            renderer,
+            &output.stdout,
+            MALFORMED_SYNTAX_CODE,
+            RECOVERY_DIAGNOSTIC_MESSAGE,
+        );
+        assert_renderer_diagnostic_count(renderer, &output.stdout, VALIDATE_DIAGNOSTIC_COUNT);
+        assert_renderer_mentions_file(renderer, &output.stdout, FIRST_BROKEN_FILE);
+        assert_renderer_mentions_file(renderer, &output.stdout, SECOND_BROKEN_FILE);
     }
 }
 
 #[test]
 fn release_candidate_lint_matches_pmcd_and_pure_navigation_semantics() {
     let fixture = Fixture::new("release-candidate-lint");
-    fixture.write("query.pure", NAVIGATION_QUERY);
+    fixture.write(INHERITANCE_FILE, INHERITANCE_QUERY);
+    fixture.write(ASSOCIATION_FILE, ASSOCIATION_QUERY);
     fixture.write("model.json", PMCD_NAVIGATION_MODEL);
     fixture.write("model.pure", PURE_NAVIGATION_MODEL);
 
@@ -196,7 +251,8 @@ fn release_candidate_lint_matches_pmcd_and_pure_navigation_semantics() {
             &fixture.root,
             &[
                 "lint",
-                "query.pure",
+                INHERITANCE_FILE,
+                ASSOCIATION_FILE,
                 "--model",
                 "model.json",
                 "--format",
@@ -207,7 +263,8 @@ fn release_candidate_lint_matches_pmcd_and_pure_navigation_semantics() {
             &fixture.root,
             &[
                 "lint",
-                "query.pure",
+                INHERITANCE_FILE,
+                ASSOCIATION_FILE,
                 "--model",
                 "model.pure",
                 "--format",
@@ -222,9 +279,19 @@ fn release_candidate_lint_matches_pmcd_and_pure_navigation_semantics() {
         assert_renderer_document(renderer, &pmcd.stdout);
         assert_renderer_document(renderer, &pure.stdout);
         assert_equivalent_rendering(renderer, &pmcd.stdout, &pure.stdout);
-        if renderer == "json" {
-            assert_single_missing_member(&pmcd.stdout);
-            assert_single_missing_member(&pure.stdout);
+        assert_missing_member_findings_for_renderer(
+            renderer,
+            &pmcd.stdout,
+            NAVIGATION_MISSING_MEMBER_COUNT,
+        );
+        assert_missing_member_findings_for_renderer(
+            renderer,
+            &pure.stdout,
+            NAVIGATION_MISSING_MEMBER_COUNT,
+        );
+        for file in [INHERITANCE_FILE, ASSOCIATION_FILE] {
+            assert_renderer_mentions_file(renderer, &pmcd.stdout, file);
+            assert_renderer_mentions_file(renderer, &pure.stdout, file);
         }
     }
 }
@@ -271,8 +338,16 @@ fn release_candidate_lint_fix_matches_models_and_persists_deterministically() {
         assert_renderer_document(renderer, &pmcd.stderr);
         assert_renderer_document(renderer, &pure.stderr);
         assert_equivalent_rendering(renderer, &pmcd.stderr, &pure.stderr);
-        assert_single_missing_member_for_renderer(renderer, &pmcd.stderr);
-        assert_single_missing_member_for_renderer(renderer, &pure.stderr);
+        assert_missing_member_findings_for_renderer(
+            renderer,
+            &pmcd.stderr,
+            FIX_MISSING_MEMBER_COUNT,
+        );
+        assert_missing_member_findings_for_renderer(
+            renderer,
+            &pure.stderr,
+            FIX_MISSING_MEMBER_COUNT,
+        );
         assert_eq!(previews.read("query.pure"), FIX_QUERY);
     }
 
@@ -288,68 +363,90 @@ fn release_candidate_lint_fix_matches_models_and_persists_deterministically() {
 fn release_candidate_formatter_keeps_write_and_recovery_contracts() {
     let fixture = Fixture::new("release-candidate-format");
     fixture.write("query.pure", FORMAT_INPUT);
+    fixture.write("second.pure", SECOND_FORMAT_INPUT);
+    assert_format_preview_contract(&fixture);
+    assert_format_write_contract();
 
+    for renderer in RENDERERS {
+        assert_format_recovery_contract(renderer);
+    }
+}
+
+fn assert_format_preview_contract(fixture: &Fixture) {
     let stdout = run_deterministically(&fixture.root, &["fmt", "query.pure", "--stdout"]);
     assert!(stdout.status.success());
     assert_eq!(stdout.stdout, FORMATTED_INPUT.as_bytes());
     assert!(stdout.stderr.is_empty());
     assert_eq!(fixture.read("query.pure"), FORMAT_INPUT);
 
-    let diff = run_deterministically(&fixture.root, &["fmt", "query.pure", "--diff"]);
+    let diff = run_deterministically(
+        &fixture.root,
+        &["fmt", "query.pure", "second.pure", "--diff"],
+    );
     assert_eq!(diff.status.code(), Some(EXIT_ACTIONABLE));
-    assert!(String::from_utf8_lossy(&diff.stdout).contains("--- query.pure"));
-    assert!(String::from_utf8_lossy(&diff.stdout).contains("+++ query.pure (formatted)"));
+    assert_eq!(diff.stdout, FORMAT_DIFF.as_bytes());
     assert!(diff.stderr.is_empty());
     assert_eq!(fixture.read("query.pure"), FORMAT_INPUT);
+    assert_eq!(fixture.read("second.pure"), SECOND_FORMAT_INPUT);
+}
 
-    assert_format_write_contract();
+fn assert_format_recovery_contract(renderer: &str) {
+    let recovery = Fixture::new(&format!("release-candidate-format-recovery-{renderer}"));
+    recovery.write("recovery.pure", RECOVERY_INPUT);
+    let output = run_deterministically(
+        &recovery.root,
+        &["fmt", "recovery.pure", "--stdout", "--format", renderer],
+    );
 
-    for renderer in RENDERERS {
-        let recovery = Fixture::new(&format!("release-candidate-format-recovery-{renderer}"));
-        recovery.write("recovery.pure", RECOVERY_INPUT);
-        let output = run_deterministically(
-            &recovery.root,
-            &["fmt", "recovery.pure", "--stdout", "--format", renderer],
-        );
-
-        assert_eq!(output.status.code(), Some(EXIT_ACTIONABLE));
-        assert!(!output.stdout.is_empty());
-        assert_renderer_document(renderer, &output.stderr);
-        assert_eq!(recovery.read("recovery.pure"), RECOVERY_INPUT);
-    }
+    assert_eq!(output.status.code(), Some(EXIT_ACTIONABLE));
+    assert_eq!(output.stdout, FORMATTED_RECOVERY_INPUT.as_bytes());
+    assert_renderer_document(renderer, &output.stderr);
+    assert_renderer_finding(
+        renderer,
+        &output.stderr,
+        MALFORMED_SYNTAX_CODE,
+        RECOVERY_DIAGNOSTIC_MESSAGE,
+    );
+    assert_eq!(recovery.read("recovery.pure"), RECOVERY_INPUT);
 }
 
 fn assert_lint_fix_write_contract(label: &str, model_name: &str, model: &str) {
-    let sequential = Fixture::new(&format!("release-candidate-lint-fix-{label}-sequential"));
-    sequential.write("query.pure", FIX_QUERY);
-    sequential.write(model_name, model);
+    let fixture = Fixture::new(&format!("release-candidate-lint-fix-{label}"));
+    fixture.write("first.pure", FIX_QUERY);
+    fixture.write("second.pure", SECOND_FIX_QUERY);
+    fixture.write(model_name, model);
     let sequential_output = run_with_jobs(
-        &sequential.root,
+        &fixture.root,
         &[
             "lint",
-            "query.pure",
+            "first.pure",
+            "second.pure",
             "--model",
             model_name,
             "--fix",
-            "--quiet",
+            "--format",
+            "json",
         ],
-        "1",
+        SEQUENTIAL_JOBS,
     );
+    let sequential_first = fixture.read("first.pure");
+    let sequential_second = fixture.read("second.pure");
 
-    let parallel = Fixture::new(&format!("release-candidate-lint-fix-{label}-parallel"));
-    parallel.write("query.pure", FIX_QUERY);
-    parallel.write(model_name, model);
+    fixture.write("first.pure", FIX_QUERY);
+    fixture.write("second.pure", SECOND_FIX_QUERY);
     let parallel_output = run_with_jobs(
-        &parallel.root,
+        &fixture.root,
         &[
             "lint",
-            "query.pure",
+            "first.pure",
+            "second.pure",
             "--model",
             model_name,
             "--fix",
-            "--quiet",
+            "--format",
+            "json",
         ],
-        "4",
+        PARALLEL_JOBS,
     );
 
     #[cfg(any(target_os = "linux", target_vendor = "apple"))]
@@ -357,49 +454,64 @@ fn assert_lint_fix_write_contract(label: &str, model_name: &str, model: &str) {
         assert_eq!(sequential_output.status.code(), Some(EXIT_ACTIONABLE));
         assert_same_process_output(&sequential_output, &parallel_output);
         assert!(sequential_output.stdout.is_empty());
-        assert!(sequential_output.stderr.is_empty());
-        assert_eq!(sequential.read("query.pure"), FIXED_QUERY);
-        assert_eq!(parallel.read("query.pure"), FIXED_QUERY);
+        assert_renderer_document("json", &sequential_output.stderr);
+        assert_renderer_code("json", &sequential_output.stderr, MISSING_MEMBER_CODE);
+        assert_eq!(sequential_first, FIXED_QUERY);
+        assert_eq!(sequential_second, SECOND_FIXED_QUERY);
+        assert_eq!(fixture.read("first.pure"), FIXED_QUERY);
+        assert_eq!(fixture.read("second.pure"), SECOND_FIXED_QUERY);
 
         let repeated = run_with_jobs(
-            &sequential.root,
+            &fixture.root,
             &[
                 "lint",
-                "query.pure",
+                "first.pure",
+                "second.pure",
                 "--model",
                 model_name,
                 "--fix",
-                "--quiet",
+                "--format",
+                "json",
             ],
-            "4",
+            PARALLEL_JOBS,
         );
-        assert_eq!(repeated.status.code(), Some(EXIT_ACTIONABLE));
-        assert!(repeated.stdout.is_empty());
-        assert!(repeated.stderr.is_empty());
-        assert_eq!(sequential.read("query.pure"), FIXED_QUERY);
-        sequential.assert_no_writer_artifacts();
-        parallel.assert_no_writer_artifacts();
+        assert_same_process_output(&sequential_output, &repeated);
+        assert_eq!(fixture.read("first.pure"), FIXED_QUERY);
+        assert_eq!(fixture.read("second.pure"), SECOND_FIXED_QUERY);
+        fixture.assert_no_writer_artifacts();
     }
 
     #[cfg(not(any(target_os = "linux", target_vendor = "apple")))]
     {
         assert_eq!(sequential_output.status.code(), Some(EXIT_INTERNAL));
         assert_same_process_output(&sequential_output, &parallel_output);
-        assert_eq!(sequential.read("query.pure"), FIX_QUERY);
-        assert_eq!(parallel.read("query.pure"), FIX_QUERY);
-        sequential.assert_no_writer_artifacts();
-        parallel.assert_no_writer_artifacts();
+        assert_eq!(sequential_first, FIX_QUERY);
+        assert_eq!(sequential_second, SECOND_FIX_QUERY);
+        assert_eq!(fixture.read("first.pure"), FIX_QUERY);
+        assert_eq!(fixture.read("second.pure"), SECOND_FIX_QUERY);
+        fixture.assert_no_writer_artifacts();
     }
 }
 
 fn assert_format_write_contract() {
-    let sequential = Fixture::new("release-candidate-format-write-sequential");
-    sequential.write("query.pure", FORMAT_INPUT);
-    let sequential_output = run_with_jobs(&sequential.root, &["fmt", "query.pure"], "1");
+    let fixture = Fixture::new("release-candidate-format-write");
+    fixture.write("first.pure", FORMAT_INPUT);
+    fixture.write("second.pure", SECOND_FORMAT_INPUT);
+    let sequential_output = run_with_jobs(
+        &fixture.root,
+        &["fmt", "first.pure", "second.pure"],
+        SEQUENTIAL_JOBS,
+    );
+    let sequential_first = fixture.read("first.pure");
+    let sequential_second = fixture.read("second.pure");
 
-    let parallel = Fixture::new("release-candidate-format-write-parallel");
-    parallel.write("query.pure", FORMAT_INPUT);
-    let parallel_output = run_with_jobs(&parallel.root, &["fmt", "query.pure"], "4");
+    fixture.write("first.pure", FORMAT_INPUT);
+    fixture.write("second.pure", SECOND_FORMAT_INPUT);
+    let parallel_output = run_with_jobs(
+        &fixture.root,
+        &["fmt", "first.pure", "second.pure"],
+        PARALLEL_JOBS,
+    );
 
     #[cfg(any(target_os = "linux", target_vendor = "apple"))]
     {
@@ -407,32 +519,40 @@ fn assert_format_write_contract() {
         assert_same_process_output(&sequential_output, &parallel_output);
         assert!(sequential_output.stdout.is_empty());
         assert!(sequential_output.stderr.is_empty());
-        assert_eq!(sequential.read("query.pure"), FORMATTED_INPUT);
-        assert_eq!(parallel.read("query.pure"), FORMATTED_INPUT);
+        assert_eq!(sequential_first, FORMATTED_INPUT);
+        assert_eq!(sequential_second, SECOND_FORMATTED_INPUT);
+        assert_eq!(fixture.read("first.pure"), FORMATTED_INPUT);
+        assert_eq!(fixture.read("second.pure"), SECOND_FORMATTED_INPUT);
 
-        let repeated = run_with_jobs(&sequential.root, &["fmt", "query.pure"], "4");
-        assert!(repeated.status.success());
-        assert!(repeated.stdout.is_empty());
-        assert!(repeated.stderr.is_empty());
-        assert_eq!(sequential.read("query.pure"), FORMATTED_INPUT);
-        sequential.assert_no_writer_artifacts();
-        parallel.assert_no_writer_artifacts();
+        let repeated = run_with_jobs(
+            &fixture.root,
+            &["fmt", "first.pure", "second.pure"],
+            PARALLEL_JOBS,
+        );
+        assert_same_process_output(&sequential_output, &repeated);
+        assert_eq!(fixture.read("first.pure"), FORMATTED_INPUT);
+        assert_eq!(fixture.read("second.pure"), SECOND_FORMATTED_INPUT);
+        fixture.assert_no_writer_artifacts();
     }
 
     #[cfg(not(any(target_os = "linux", target_vendor = "apple")))]
     {
         assert_eq!(sequential_output.status.code(), Some(EXIT_INTERNAL));
         assert_same_process_output(&sequential_output, &parallel_output);
-        assert_eq!(sequential.read("query.pure"), FORMAT_INPUT);
-        assert_eq!(parallel.read("query.pure"), FORMAT_INPUT);
-        sequential.assert_no_writer_artifacts();
-        parallel.assert_no_writer_artifacts();
+        assert_eq!(sequential_first, FORMAT_INPUT);
+        assert_eq!(sequential_second, SECOND_FORMAT_INPUT);
+        assert_eq!(fixture.read("first.pure"), FORMAT_INPUT);
+        assert_eq!(fixture.read("second.pure"), SECOND_FORMAT_INPUT);
+        fixture.assert_no_writer_artifacts();
     }
 }
 
 fn assert_renderer_document(renderer: &str, bytes: &[u8]) {
     match renderer {
-        "human" => assert!(!bytes.is_empty(), "human renderer omitted diagnostics"),
+        "human" => assert!(
+            !utf8(bytes).is_empty(),
+            "human renderer omitted diagnostics"
+        ),
         "json" => {
             let document: Value =
                 serde_json::from_slice(bytes).expect("valid JSON renderer output");
@@ -447,74 +567,183 @@ fn assert_renderer_document(renderer: &str, bytes: &[u8]) {
     }
 }
 
-fn assert_single_missing_member(bytes: &[u8]) {
-    let document: Value = serde_json::from_slice(bytes).expect("valid JSON lint output");
-    let diagnostics = document["diagnostics"]
-        .as_array()
-        .expect("JSON diagnostics array");
-    assert_eq!(
-        diagnostics.len(),
-        1,
-        "model navigation emitted extra findings"
-    );
-    assert_eq!(diagnostics[0]["code"], "PUR2002");
+fn assert_renderer_code(renderer: &str, bytes: &[u8], code: &str) {
+    match renderer {
+        "human" => assert!(utf8(bytes).contains(code), "human output omitted {code}"),
+        "json" => {
+            let document: Value =
+                serde_json::from_slice(bytes).expect("valid JSON renderer output");
+            assert!(
+                json_diagnostics(&document)
+                    .iter()
+                    .any(|diagnostic| diagnostic["code"] == code),
+                "JSON output omitted {code}: {document:#?}"
+            );
+        }
+        "sarif" => {
+            let document: Value =
+                serde_json::from_slice(bytes).expect("valid SARIF renderer output");
+            assert!(
+                sarif_results(&document)
+                    .iter()
+                    .any(|result| result["ruleId"] == code),
+                "SARIF output omitted {code}: {document:#?}"
+            );
+        }
+        _ => panic!("unsupported renderer {renderer}"),
+    }
+}
+
+fn assert_renderer_finding(renderer: &str, bytes: &[u8], code: &str, message: &str) {
+    assert_renderer_code(renderer, bytes, code);
+    match renderer {
+        "human" => assert!(
+            utf8(bytes).contains(message),
+            "human output omitted {message}"
+        ),
+        "json" => {
+            let document: Value =
+                serde_json::from_slice(bytes).expect("valid JSON renderer output");
+            assert!(
+                json_diagnostics(&document).iter().any(|diagnostic| {
+                    diagnostic["code"] == code
+                        && diagnostic["message"]
+                            .as_str()
+                            .is_some_and(|actual| actual.contains(message))
+                }),
+                "JSON output omitted {code}: {document:#?}"
+            );
+        }
+        "sarif" => {
+            let document: Value =
+                serde_json::from_slice(bytes).expect("valid SARIF renderer output");
+            assert!(
+                sarif_results(&document).iter().any(|result| {
+                    result["ruleId"] == code
+                        && result["message"]["text"]
+                            .as_str()
+                            .is_some_and(|actual| actual.contains(message))
+                }),
+                "SARIF output omitted {code}: {document:#?}"
+            );
+        }
+        _ => panic!("unsupported renderer {renderer}"),
+    }
+}
+
+fn assert_renderer_diagnostic_count(renderer: &str, bytes: &[u8], expected: usize) {
+    match renderer {
+        "human" => assert_eq!(utf8(bytes).matches("error[").count(), expected),
+        "json" => {
+            let document: Value =
+                serde_json::from_slice(bytes).expect("valid JSON renderer output");
+            assert_eq!(json_diagnostics(&document).len(), expected);
+        }
+        "sarif" => {
+            let document: Value =
+                serde_json::from_slice(bytes).expect("valid SARIF renderer output");
+            assert_eq!(sarif_results(&document).len(), expected);
+        }
+        _ => panic!("unsupported renderer {renderer}"),
+    }
+}
+
+fn assert_renderer_mentions_file(renderer: &str, bytes: &[u8], file: &str) {
     assert!(
-        diagnostics[0]["message"]
-            .as_str()
-            .is_some_and(|message| message.contains("not declared")),
-        "expected the deliberately missing member: {diagnostics:#?}"
+        utf8(bytes).contains(file),
+        "{renderer} output omitted {file}"
     );
 }
 
-fn assert_single_missing_member_for_renderer(renderer: &str, bytes: &[u8]) {
-    if renderer == "json" {
-        assert_single_missing_member(bytes);
-    } else {
-        assert!(!bytes.is_empty());
+fn assert_missing_member_findings_for_renderer(renderer: &str, bytes: &[u8], expected: usize) {
+    assert_renderer_finding(renderer, bytes, MISSING_MEMBER_CODE, MISSING_MEMBER_MESSAGE);
+    assert_renderer_diagnostic_count(renderer, bytes, expected);
+    match renderer {
+        "human" => assert_eq!(utf8(bytes).matches(MISSING_MEMBER_CODE).count(), expected),
+        "json" => {
+            let document: Value =
+                serde_json::from_slice(bytes).expect("valid JSON renderer output");
+            assert!(json_diagnostics(&document).iter().all(|diagnostic| {
+                diagnostic["code"] == MISSING_MEMBER_CODE
+                    && diagnostic["message"]
+                        .as_str()
+                        .is_some_and(|message| message.contains(MISSING_MEMBER_MESSAGE))
+            }));
+        }
+        "sarif" => {
+            let document: Value =
+                serde_json::from_slice(bytes).expect("valid SARIF renderer output");
+            let results = sarif_results(&document);
+            assert!(results.iter().all(|result| {
+                result["ruleId"] == MISSING_MEMBER_CODE
+                    && result["message"]["text"]
+                        .as_str()
+                        .is_some_and(|message| message.contains(MISSING_MEMBER_MESSAGE))
+            }));
+        }
+        _ => panic!("unsupported renderer {renderer}"),
     }
 }
 
 fn assert_equivalent_rendering(renderer: &str, left: &[u8], right: &[u8]) {
-    if renderer == "human" {
-        assert_eq!(left, right);
-        return;
+    match renderer {
+        "human" | "sarif" => assert_eq!(left, right),
+        "json" => assert_eq!(
+            normalized_json_model_file_name(left, PMCD_MODEL_SUFFIX),
+            normalized_json_model_file_name(right, PURE_MODEL_SUFFIX),
+            "JSON differed beyond the model input name"
+        ),
+        _ => panic!("unsupported renderer {renderer}"),
     }
-
-    let mut left: Value = serde_json::from_slice(left).expect("valid left renderer output");
-    let mut right: Value = serde_json::from_slice(right).expect("valid right renderer output");
-    normalize_model_references(&mut left);
-    normalize_model_references(&mut right);
-    assert_eq!(
-        left, right,
-        "{renderer} differed beyond the model input path"
-    );
 }
 
-fn normalize_model_references(value: &mut Value) {
-    match value {
-        Value::Array(values) => {
-            for value in values {
-                normalize_model_references(value);
-            }
-        }
-        Value::Object(values) => {
-            for value in values.values_mut() {
-                normalize_model_references(value);
-            }
-        }
-        Value::String(text) => {
-            *text = text
-                .replace("model.json", "model")
-                .replace("model.pure", "model");
-        }
-        Value::Null | Value::Bool(_) | Value::Number(_) => {}
-    }
+fn normalized_json_model_file_name(bytes: &[u8], model_suffix: &str) -> String {
+    let text = utf8(bytes);
+    let document: Value = serde_json::from_str(text).expect("valid JSON renderer output");
+    let model_name = document["files"]
+        .as_array()
+        .expect("JSON source files")
+        .iter()
+        .filter_map(|file| file["name"].as_str())
+        .filter(|name| name.ends_with(model_suffix))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        model_name.len(),
+        1,
+        "JSON model manifest must contain one model source"
+    );
+    let model_name = model_name[0];
+    let model_name_field = format!("\"name\": \"{model_name}\"");
+    assert_eq!(
+        text.matches(&model_name_field).count(),
+        1,
+        "JSON model manifest must render its model path once"
+    );
+    text.replacen(&model_name_field, NORMALIZED_MODEL_NAME_FIELD, 1)
+}
+
+fn json_diagnostics(document: &Value) -> &[Value] {
+    document["diagnostics"]
+        .as_array()
+        .expect("JSON diagnostics array")
+}
+
+fn sarif_results(document: &Value) -> &[Value] {
+    document["runs"]
+        .as_array()
+        .and_then(|runs| runs.first())
+        .and_then(|run| run["results"].as_array())
+        .expect("SARIF results array")
+}
+
+fn utf8(bytes: &[u8]) -> &str {
+    std::str::from_utf8(bytes).expect("UTF-8 process output")
 }
 
 fn run_deterministically(root: &Path, arguments: &[&str]) -> Output {
-    let sequential = run_with_jobs(root, arguments, "1");
-    let parallel = run_with_jobs(root, arguments, "4");
-    let repeated = run_with_jobs(root, arguments, "4");
+    let sequential = run_with_jobs(root, arguments, SEQUENTIAL_JOBS);
+    let parallel = run_with_jobs(root, arguments, PARALLEL_JOBS);
+    let repeated = run_with_jobs(root, arguments, PARALLEL_JOBS);
     assert_same_process_output(&sequential, &parallel);
     assert_same_process_output(&parallel, &repeated);
     sequential
