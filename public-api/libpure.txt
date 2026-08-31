@@ -1,4 +1,5 @@
 pub mod libpure
+pub use libpure::ALL_DIAG_CODES
 pub use libpure::BuildError
 pub use libpure::DiagCode
 pub use libpure::Diagnostic
@@ -432,6 +433,60 @@ pub unsafe fn libpure::AnalysisOutput::deref_mut<'a>(usize) -> &'a mut T
 pub unsafe fn libpure::AnalysisOutput::drop(usize)
 pub unsafe fn libpure::AnalysisOutput::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
 impl<T> either::into_either::IntoEither for libpure::AnalysisOutput
+pub struct libpure::DiagnosticPolicy
+impl libpure::DiagnosticPolicy
+pub fn libpure::DiagnosticPolicy::ignore(self, pure_analyzer_diagnostics::code::DiagCode) -> Self
+pub fn libpure::DiagnosticPolicy::new() -> Self
+pub fn libpure::DiagnosticPolicy::select(self, pure_analyzer_diagnostics::code::DiagCode) -> Self
+pub fn libpure::DiagnosticPolicy::with_severity(self, pure_analyzer_diagnostics::code::DiagCode, pure_analyzer_diagnostics::diagnostic::Severity) -> Self
+pub const fn libpure::DiagnosticPolicy::with_warnings_as_errors(self, bool) -> Self
+impl core::clone::Clone for libpure::DiagnosticPolicy
+pub fn libpure::DiagnosticPolicy::clone(&self) -> libpure::DiagnosticPolicy
+impl core::cmp::Eq for libpure::DiagnosticPolicy
+impl core::cmp::PartialEq for libpure::DiagnosticPolicy
+pub fn libpure::DiagnosticPolicy::eq(&self, &libpure::DiagnosticPolicy) -> bool
+impl core::default::Default for libpure::DiagnosticPolicy
+pub fn libpure::DiagnosticPolicy::default() -> libpure::DiagnosticPolicy
+impl core::fmt::Debug for libpure::DiagnosticPolicy
+pub fn libpure::DiagnosticPolicy::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for libpure::DiagnosticPolicy
+impl core::marker::Freeze for libpure::DiagnosticPolicy
+impl core::marker::Send for libpure::DiagnosticPolicy
+impl core::marker::Sync for libpure::DiagnosticPolicy
+impl core::marker::Unpin for libpure::DiagnosticPolicy
+impl core::marker::UnsafeUnpin for libpure::DiagnosticPolicy
+impl core::panic::unwind_safe::RefUnwindSafe for libpure::DiagnosticPolicy
+impl core::panic::unwind_safe::UnwindSafe for libpure::DiagnosticPolicy
+impl<T, U> core::convert::Into<U> for libpure::DiagnosticPolicy where U: core::convert::From<T>
+pub fn libpure::DiagnosticPolicy::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for libpure::DiagnosticPolicy where U: core::convert::Into<T>
+pub type libpure::DiagnosticPolicy::Error = never
+pub fn libpure::DiagnosticPolicy::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for libpure::DiagnosticPolicy where U: core::convert::TryFrom<T>
+pub type libpure::DiagnosticPolicy::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn libpure::DiagnosticPolicy::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for libpure::DiagnosticPolicy where T: core::clone::Clone
+pub type libpure::DiagnosticPolicy::Owned = T
+pub fn libpure::DiagnosticPolicy::clone_into(&self, &mut T)
+pub fn libpure::DiagnosticPolicy::to_owned(&self) -> T
+impl<T> core::any::Any for libpure::DiagnosticPolicy where T: 'static + ?core::marker::Sized
+pub fn libpure::DiagnosticPolicy::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for libpure::DiagnosticPolicy where T: ?core::marker::Sized
+pub fn libpure::DiagnosticPolicy::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for libpure::DiagnosticPolicy where T: ?core::marker::Sized
+pub fn libpure::DiagnosticPolicy::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for libpure::DiagnosticPolicy where T: core::clone::Clone
+pub unsafe fn libpure::DiagnosticPolicy::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for libpure::DiagnosticPolicy
+pub fn libpure::DiagnosticPolicy::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for libpure::DiagnosticPolicy
+pub type libpure::DiagnosticPolicy::Init = T
+pub const libpure::DiagnosticPolicy::ALIGN: usize
+pub unsafe fn libpure::DiagnosticPolicy::deref<'a>(usize) -> &'a T
+pub unsafe fn libpure::DiagnosticPolicy::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn libpure::DiagnosticPolicy::drop(usize)
+pub unsafe fn libpure::DiagnosticPolicy::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for libpure::DiagnosticPolicy
 pub struct libpure::FormatOutput
 impl libpure::FormatOutput
 pub fn libpure::FormatOutput::diagnostics(&self) -> &[pure_analyzer_diagnostics::diagnostic::Diagnostic]
@@ -786,9 +841,11 @@ pub unsafe fn libpure::SourceFile::init(<T as crossbeam_epoch::atomic::Pointable
 impl<T> either::into_either::IntoEither for libpure::SourceFile
 pub struct libpure::SourceRequest
 impl libpure::SourceRequest
+pub const fn libpure::SourceRequest::diagnostic_policy(&self) -> &libpure::DiagnosticPolicy
 pub const fn libpure::SourceRequest::jobs(&self) -> usize
 pub fn libpure::SourceRequest::new(impl core::iter::traits::collect::IntoIterator<Item = libpure::SourceInput>) -> Self
 pub fn libpure::SourceRequest::sources(&self) -> &[libpure::SourceInput]
+pub fn libpure::SourceRequest::with_diagnostic_policy(self, libpure::DiagnosticPolicy) -> Self
 pub const fn libpure::SourceRequest::with_jobs(self, usize) -> Self
 impl core::clone::Clone for libpure::SourceRequest
 pub fn libpure::SourceRequest::clone(&self) -> libpure::SourceRequest

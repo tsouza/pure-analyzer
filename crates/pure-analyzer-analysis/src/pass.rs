@@ -106,6 +106,7 @@ pub struct FindingPolicy {
     suppressed: BTreeSet<DiagCode>,
     severity_overrides: BTreeMap<DiagCode, Severity>,
     minimum_severity: Severity,
+    warnings_as_errors: bool,
 }
 
 impl Default for FindingPolicy {
@@ -114,6 +115,7 @@ impl Default for FindingPolicy {
             suppressed: BTreeSet::new(),
             severity_overrides: BTreeMap::new(),
             minimum_severity: Severity::Warning,
+            warnings_as_errors: false,
         }
     }
 }
@@ -146,9 +148,21 @@ impl FindingPolicy {
         self
     }
 
-    fn apply(&self, mut diagnostic: Diagnostic) -> Option<Diagnostic> {
+    /// Promote default warnings before applying exact-code overrides.
+    #[must_use]
+    pub const fn with_warnings_as_errors(mut self, enabled: bool) -> Self {
+        self.warnings_as_errors = enabled;
+        self
+    }
+
+    /// Apply suppression, strictness, exact overrides, and minimum severity.
+    #[must_use]
+    pub fn apply(&self, mut diagnostic: Diagnostic) -> Option<Diagnostic> {
         if self.suppressed.contains(&diagnostic.code) {
             return None;
+        }
+        if self.warnings_as_errors && diagnostic.severity == Severity::Warning {
+            diagnostic.severity = Severity::Error;
         }
         if let Some(severity) = self.severity_overrides.get(&diagnostic.code) {
             diagnostic.severity = *severity;
@@ -434,5 +448,26 @@ mod tests {
         let result = engine.analyze(input());
         assert_eq!(result.diagnostics().len(), 1);
         assert_eq!(result.diagnostics()[0].code, DiagCode::CardinalityMisuse);
+    }
+
+    #[test]
+    fn exact_overrides_take_precedence_over_warning_promotion() {
+        let engine = AnalysisEngine::new(
+            vec![Box::new(StaticPass {
+                name: "only",
+                diagnostics: vec![
+                    diagnostic(DiagCode::UnknownProperty, Severity::Warning, "promoted"),
+                    diagnostic(DiagCode::CardinalityMisuse, Severity::Info, "unchanged"),
+                ],
+            })],
+            FindingPolicy::new()
+                .with_severity(DiagCode::CardinalityMisuse, Severity::Warning)
+                .with_warnings_as_errors(true),
+        );
+
+        let diagnostics = engine.analyze(input()).into_diagnostics();
+        assert_eq!(diagnostics.len(), 2);
+        assert_eq!(diagnostics[0].severity, Severity::Error);
+        assert_eq!(diagnostics[1].severity, Severity::Warning);
     }
 }

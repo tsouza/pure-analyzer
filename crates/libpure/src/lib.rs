@@ -7,14 +7,14 @@ mod driver;
 mod source;
 
 pub use driver::{
-    AnalysisDriver, AnalysisOutput, DriverError, FormatOutput, FormattedSource, LintRequest,
-    ModelInput, ParseOutput, ParsedSource, RequestError, SourceRequest,
+    AnalysisDriver, AnalysisOutput, DiagnosticPolicy, DriverError, FormatOutput, FormattedSource,
+    LintRequest, ModelInput, ParseOutput, ParsedSource, RequestError, SourceRequest,
 };
 /// Formatter API exposed to front ends through the workspace facade.
 pub use pure_analyzer_analysis::{FormatResult, format_query};
 pub use pure_analyzer_diagnostics::{
-    DiagCode, Diagnostic, FileId, FixPlan, FixPlanError, PlannedChange, PlannedFile, Severity,
-    TextRange, TextSize,
+    ALL_DIAG_CODES, DiagCode, Diagnostic, FileId, FixPlan, FixPlanError, PlannedChange,
+    PlannedFile, Severity, TextRange, TextSize,
 };
 pub use pure_analyzer_model::ModelError;
 pub use pure_analyzer_syntax::{BuildError, GreenNode};
