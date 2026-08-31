@@ -501,7 +501,14 @@ fn n3h_masks_a_relation_method_on_a_scalar_receiver() {
 #[test]
 fn n3h_keeps_a_receiver_generic_method_on_a_scalar_receiver() {
     const EXTENT: &str = "|spider::car_1::model::default::CarMakers.all()";
+    // `agg` first: its arrow form is the exact construct the first revision of
+    // this rule masked, and the gold corpus writes its plain-function twin 2367
+    // times. `no_denied_name_is_one_the_corpus_writes_with_a_scalar_first_argument`
+    // is the gate that closes the class; this pins the instance beside its
+    // siblings, where the rule's own soundness edge is stated.
     for tail in [
+        "->project('COUNT()'->agg(row: meta::pure::tds::TDSRow[1]|$row, \
+         y: meta::pure::tds::TDSRow[*]|$y->count()))",
         "->project('car_makers'->substring(0,1))",
         "->project('car_makers'->parseFloat())",
         "->project('car_makers'->pair('_c1'))",
