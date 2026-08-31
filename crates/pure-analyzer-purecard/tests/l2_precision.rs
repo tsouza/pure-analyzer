@@ -3523,6 +3523,52 @@ fn n3f_forbids_a_stream_ending_on_a_denied_extent_method_name() {
     );
 }
 
+/// N3h's completion half, the twin of
+/// [`n3f_forbids_a_stream_ending_on_a_denied_extent_method_name`] one receiver
+/// category over: a stream may not *end* on a denied whole name at a scalar
+/// receiver either.
+///
+/// The same argument and the same mechanism — EOS is a name's closure by another
+/// route, so `admits_eos` clears it at a `SCALAR_DENY` terminal — and it needs
+/// its own fixture because the two rules read *different* tries: the extent's
+/// carries `sum`, `pair` and `agg`, this one must not, since all three compile on
+/// a scalar receiver.
+///
+/// Only the two **receiver-only-call** routes appear here, and their absence
+/// elsewhere is a fact about the grammar rather than an omission: the other two
+/// receivers a `ScalarMethod` arms on — a string literal and a property
+/// navigation — are reachable only *inside* a call or a lambda, so an
+/// L1-accepting stream that reaches one still owes a `)` and can never end at
+/// this position at all. The two counterfactuals are what make the denial this
+/// rule's doing and not L1's: a strict prefix is an open lexeme, and a name this
+/// rule does not deny keeps whatever completion L1 gives it.
+#[test]
+fn n3h_forbids_a_stream_ending_on_a_denied_scalar_method_name() {
+    const EXTENT: &str = "|spider::car_1::model::default::CarMakers.all()";
+    for receiver in [
+        format!("{EXTENT}->isNotEmpty()"),
+        format!("{EXTENT}->count()"),
+    ] {
+        assert!(
+            walk_may_end("car_1", &format!("{receiver}->res")),
+            "a strict prefix of a denied name is an open lexeme, not a denial"
+        );
+        for denied in ["restrict", "tableToTDS", "renameColumns"] {
+            assert!(
+                !walk_may_end("car_1", &format!("{receiver}->{denied}")),
+                "a stream may not end on the denied name {denied:?} after {receiver}"
+            );
+        }
+        for kept in ["count", "sum", "pair", "agg"] {
+            assert!(
+                walk_may_end("car_1", &format!("{receiver}->{kept}")),
+                "{kept:?} is legal on a scalar receiver and must keep whatever \
+                 completion L1 gives it after {receiver}"
+            );
+        }
+    }
+}
+
 /// N3f under a vocabulary that splits the step connector. Phase 4 found N3c had
 /// never fired in the live lane at all, because classification read a token's own
 /// bytes and a `-`/`>` split meant no token's bytes were ever `->`. N3f arms on
