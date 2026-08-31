@@ -33,8 +33,8 @@ use crate::grammar::pda::{is_ident_start, is_ident_tail};
 use crate::mask::BitMask;
 use crate::schema::model::{Schema, TypeClass};
 use crate::schema::scope::{
-    EXTENT_ONLY_DENIED_METHODS, L2Position, Lexeme, RELATION_RECEIVER_METHODS, SOURCE_METHOD,
-    STORE_METHODS, classify,
+    EXTENT_ONLY_DENIED_METHODS, ExtentArg, L2Position, Lexeme, RELATION_RECEIVER_METHODS,
+    SOURCE_METHOD, STORE_METHODS, classify,
 };
 use crate::schema::trie::{NameClose, NameShape, Trie, Walk, walk};
 use crate::vocab::Vocab;
@@ -101,6 +101,9 @@ enum CacheKey {
     /// the trie lives in a `static` rather than in a `RuleCache`, because this
     /// rule *clears* names instead of permitting them.
     ExtentMethod(u32),
+    /// N3h's extent-method first-argument set, one whole-vocab constant per
+    /// declared argument shape.
+    ExtentMethodArg(ExtentArg),
     /// N3g's receiver-only argument-slot set — a whole-vocab constant, exactly
     /// like [`SourceMethodArg`](CacheKey::SourceMethodArg)'s.
     ReceiverOnlyArg,
@@ -279,6 +282,12 @@ pub(crate) fn narrow_into(
                 fill_denied_method(dst, vocab, eos_bit, &EXTENT_DENY, cursor, None);
             })
         }
+        L2Position::ExtentMethodArg(arg) => {
+            let arg = *arg;
+            with_cache(dst, cache, CacheKey::ExtentMethodArg(arg), |dst| {
+                fill_extent_method_arg(dst, vocab, eos_bit, arg);
+            })
+        }
         L2Position::ReceiverOnlyArg => with_cache(dst, cache, CacheKey::ReceiverOnlyArg, |dst| {
             fill_receiver_only_arg(dst, vocab, eos_bit);
         }),
@@ -307,7 +316,7 @@ pub(crate) fn narrow_into(
             })
         }
         L2Position::LogicalOperand => with_cache(dst, cache, CacheKey::LogicalOperand, |dst| {
-            fill_operand(dst, vocab, eos_bit, TypeClass::Boolean);
+            fill_logical_operand(dst, vocab, eos_bit);
         }),
         L2Position::ValueIdent => with_cache(dst, cache, CacheKey::ValueIdent, |dst| {
             fill_value_ident(dst, vocab);
@@ -555,6 +564,7 @@ impl<'a> TrieRule<'a> {
             | L2Position::StoreMethodArgSep { .. }
             | L2Position::SourceExtent { .. }
             | L2Position::ExtentMethod
+            | L2Position::ExtentMethodArg(_)
             | L2Position::ReceiverOnlyArg
             | L2Position::StoreResult { .. }
             | L2Position::StrOperator { .. }
@@ -744,6 +754,7 @@ pub(crate) fn narrow_fused_into(
         | L2Position::StoreMethodArgSep { .. }
         | L2Position::SourceExtent { .. }
         | L2Position::ExtentMethod
+        | L2Position::ExtentMethodArg(_)
         | L2Position::ReceiverOnlyArg
         | L2Position::StoreResult { .. }
         | L2Position::StrOperator { .. }
@@ -963,6 +974,76 @@ fn fill_operand(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32, masked_by: TypeC
     dst.set(eos_bit);
 }
 
+/// The byte a lambda opens with — the shape N4b clears from a logical
+/// operator's operand slot.
+const LAMBDA_PIPE: u8 = b'|';
+
+/// Refill `dst` with N4b's operand set for a logical operator, plus EOS
+/// ([`L2Position::LogicalOperand`]): the Boolean-operand test [`keeps_operand`]
+/// already applies to a *literal*, and — one category further out — nothing that
+/// opens a **lambda**.
+///
+/// The lambda half is first-byte discriminated, for the reason
+/// [`STORE_RESULT_DENIED_OPENERS`] gives in the other direction: under
+/// byte-level BPE the binder pipe arrives fused to the body it opens
+/// (`|spider::world_1::Db` is one token over the gold vocabulary), and a
+/// whole-token [`classify`] would read that as an identifier and let it through.
+/// The same first-byte test also kills the *named* binder form: `x` is a bare
+/// word this rule keeps, and the `|` that would make it a binder arrives at the
+/// same position with the same stamped rule.
+fn fill_logical_operand(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32) {
+    dst.clear_all();
+    for id in 0..vocab.len() as u32 {
+        let bytes = vocab.bytes(id).unwrap_or(&[]);
+        if keeps_operand(&classify(bytes), TypeClass::Boolean)
+            && !opens_with(bytes, |byte| byte == LAMBDA_PIPE)
+        {
+            dst.set(id);
+        }
+    }
+    dst.set(eos_bit);
+}
+
+/// Whether a token is kept in a class-extent builtin's first argument slot under
+/// the shape its signature declares (§6.5 N3h).
+///
+/// A *literal* the signature cannot accept is cleared; everything else — an
+/// identifier, a `$var`, a lambda, a list, a `~` column set or a nested opener —
+/// is kept, exactly as [`keeps_operand`] keeps everything it cannot adjudicate. A
+/// `String` and a `StrictDate` are refused by both entries; an `Integer` only by
+/// the one whose slot wants a function.
+fn keeps_extent_method_arg(lex: &Lexeme, arg: ExtentArg) -> bool {
+    match lex {
+        Lexeme::Str(_) | Lexeme::Date => false,
+        Lexeme::Number => matches!(arg, ExtentArg::Integer),
+        _ => true,
+    }
+}
+
+/// Refill `dst` with N3h's first-argument set for shape `arg`, plus EOS.
+///
+/// **Shape only — no arity.** Both halves of an arity claim were probed live and
+/// both were deliberately left out. The *upper* bound is not a fact about the
+/// name at all: `->limit(3,4)` and a four-argument `groupBy` are refused, but the
+/// modern-dialect seeds call `.all()->groupBy(~[K], ~'Agg': x|…)` with two
+/// arguments through the Relation API, so a count states something about the
+/// pipeline arm. The *lower* bound is a real fact — `groupBy(CarMakers[*])` and
+/// `limit(CarMakers[*])` are refused, so an opened slot does owe an argument —
+/// but no walk in issue #55's live taxonomy has ever emitted an empty extent
+/// call, and clearing the closer here measurably cost the generalization guard
+/// two compiles for a class with nothing to kill. A mask is bought with an
+/// attested walk, not with a probe; this one is left to the compiler oracle.
+fn fill_extent_method_arg(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32, arg: ExtentArg) {
+    dst.clear_all();
+    for id in 0..vocab.len() as u32 {
+        let bytes = vocab.bytes(id).unwrap_or(&[]);
+        if keeps_extent_method_arg(&classify(bytes), arg) {
+            dst.set(id);
+        }
+    }
+    dst.set(eos_bit);
+}
+
 /// Whether `bytes` is one of the **ordered** comparators. [`classify`] folds
 /// every comparator shape into one [`Lexeme::Cmp`], and ordered-vs-equality is
 /// exactly what T2 and T6 both distinguish, so the set is read off the raw bytes
@@ -983,15 +1064,45 @@ fn keeps_comparator(bytes: &[u8], lhs: TypeClass) -> bool {
     }
 }
 
+/// The operator bytes no non-scalar navExpr can open a term with, beyond the
+/// ordered comparators [`is_ordered_comparator`] already names (§6.6 T6).
+///
+/// A first-byte set rather than a token list, for the reason
+/// [`STORE_RESULT_DENIED_OPENERS`] gives: under byte-level BPE an operator
+/// arrives fused to its right-hand operand (`*'MPG'`, `&&'Model_T1_1'` are each
+/// one token over the gold vocabulary). Each byte here opens an operator family
+/// the engine declares over scalar operands only, refused on every shape this
+/// position covers — live, on a collection, on an extent navigation and on a
+/// class-typed association end alike:
+///
+/// * `&` and `|` only ever begin `&&`/`||` — `and(Integer[*],String[1])`,
+///   `or(ModelList[1..*],Boolean[1])`;
+/// * `*` and `/` begin the two arithmetic operators with no collection reading —
+///   `divide(Integer[*],Integer[1])`, `divide(ModelList[1..*],Integer[1])`, and
+///   `times` answering "Collection element must have a multiplicity [1]".
+///
+/// `+` is deliberately absent — `plus(String[*])` is declared over a collection —
+/// as are `=`/`!`, since `equal` is `Any[*]`-generic and every shape here
+/// compiles with `==` live. So is `-`: this rule has no `after_dash` latch, and
+/// the step arrow off a to-many navExpr is the collapse the spec names
+/// (`$x.rel->exists(…)`), so the byte must keep streaming as the arrow. The
+/// arithmetic minus that survives is left to the compiler oracle rather than
+/// bought with a mask that would take the arrow with it.
+const ORDERED_OPERAND_DENIED_OPENERS: &[u8] = b"&|*/";
+
 /// Refill `dst` with T6's set for a non-scalar navExpr, plus EOS
-/// ([`L2Position::OrderedOperand`]): every token but the ordered comparators,
-/// which the engine declares no overload of for a collection or a class-typed
-/// operand. `== !=` are deliberately kept — Pure's `equal` is `Any[*]`-generic,
-/// and all three of the position's shapes compile with it live.
+/// ([`L2Position::OrderedOperand`]): every token but the ordered comparators and
+/// the [`ORDERED_OPERAND_DENIED_OPENERS`] families, none of which the engine
+/// declares an overload of for a collection or a class-typed operand. `== !=`
+/// are deliberately kept — Pure's `equal` is `Any[*]`-generic, and all four of
+/// the position's shapes compile with it live.
 fn fill_ordered_operand(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32) {
     dst.clear_all();
     for id in 0..vocab.len() as u32 {
-        if !is_ordered_comparator(vocab.bytes(id).unwrap_or(&[])) {
+        let bytes = vocab.bytes(id).unwrap_or(&[]);
+        if !is_ordered_comparator(bytes)
+            && !opens_with(bytes, |byte| ORDERED_OPERAND_DENIED_OPENERS.contains(&byte))
+        {
             dst.set(id);
         }
     }

@@ -317,6 +317,80 @@ fn t6_masks_an_ordered_comparator_on_a_non_scalar_nav_expr() {
     assert_frozen("t6-ordered-operand");
 }
 
+/// Issue #55 Phase 10 widens T6's position from the ordered comparators to every
+/// operator family the engine declares over scalar operands only, and adds the
+/// fourth navExpr shape that reaches it. Live, on the same stack:
+///
+/// ```text
+/// {|…::ModelList.all().maker*'MPG'}          Collection element must have a multiplicity [1]
+/// {|…::CarMakers.all().id&&'Model_T1_1'}     and(Integer[*],String[1])
+/// {|…::CarMakers.all().id/2}                 divide(Integer[*],Integer[1])
+/// {|…->filter(c|$c.fk2DefaultModelList||true)} or(ModelList[1..*],Boolean[1])
+/// {|…::CarMakers.all()->toOne()<4}           lessThan(CarMakers[1],Integer[1])
+/// ```
+///
+/// The last is the fourth shape: a `toOne` off the class extent collapses the
+/// multiplicity and keeps the class, so it reaches the position through a
+/// completed *call* rather than through a member name.
+#[test]
+fn t6_masks_the_logical_and_arithmetic_operators_on_a_non_scalar_nav_expr() {
+    assert_frozen("t6-nonscalar-operator");
+}
+
+/// T6's widened soundness counterfactual: the families it clears are exactly the
+/// scalar-only ones, so everything a non-scalar navExpr really does take stays —
+/// equality (`equal` is `Any[*]`-generic), the step arrow that opens the collapse
+/// the spec names, and `+`, which `plus(String[*])` declares over a collection.
+#[test]
+fn t6_still_admits_every_continuation_a_non_scalar_nav_expr_really_takes() {
+    for query in [
+        "|spider::car_1::model::default::CarMakers.all().id == 1",
+        "|spider::car_1::model::default::CarMakers.all().id->count()",
+        "|spider::car_1::model::default::CarMakers.all()->toOne() == 1",
+        "|spider::car_1::model::default::CarMakers.all()->toOne().id",
+        "|spider::car_1::model::default::CarMakers.all()->toOne()->count()",
+    ] {
+        assert_streams_soundly_under_l2("car_1", query);
+    }
+}
+
+/// Issue #55 Phase 10 — N3h, the argument half of N3f's position. `groupBy` and
+/// `limit` are both legal names on a `T[*]` class extent, so no receiver-category
+/// rule reaches them; each is wrong only in what its first slot is filled with,
+/// and the engine states the shape back in its own rejection:
+///
+/// ```text
+/// {|…::CarMakers.all()->groupBy('Edispl_T4')}          groupBy(CarMakers[*],String[1])
+/// {|…::Countrylanguage.all()->groupBy('Percentage_t2'<'country')}
+///                                                      groupBy(Countrylanguage[*],Boolean[1])
+/// {|…::CarMakers.all()->limit('MPG_T2_2')}             limit(CarMakers[*],String[1])
+/// ```
+///
+/// The rule claims the argument's **shape** and no part of its arity, though both
+/// bounds were probed. See `narrow::fill_extent_method_arg` for why each was left
+/// out.
+#[test]
+fn n3h_masks_a_literal_the_extent_methods_first_argument_cannot_be() {
+    assert_frozen("n3h-extent-method-arg");
+}
+
+/// N3h's soundness counterfactual: the rule clears only the literals the
+/// signature refuses, at the first slot alone. `limit(3)`, the corpus's own
+/// list-headed `.all()->groupBy([…], […], […])` — all 37 of its three-argument
+/// gold occurrences open on a `[` — and the seeds' two-argument arm-R spelling
+/// all stream untouched, and `groupBy`'s later slots, which do take string
+/// literals, are never narrowed.
+#[test]
+fn n3h_still_admits_every_first_argument_the_signature_takes() {
+    for query in [
+        "|spider::car_1::model::default::CarMakers.all()->limit(3)",
+        "|spider::car_1::model::default::CarMakers.all()\
+         ->groupBy([x|$x.id], [], ['id'])",
+    ] {
+        assert_streams_soundly_under_l2("car_1", query);
+    }
+}
+
 /// The tokens that **terminate** a `project`/`groupBy` column/key lambda body
 /// stay admissible on a class-typed and a to-many navExpr — the guard that
 /// keeps §6.6 T7 retired (issue #116).
@@ -778,6 +852,11 @@ const FROZEN_FAMILIES: &[(&str, &str)] = &[
          every overload wants a receiver a `T[*]` class collection cannot be",
     ),
     (
+        "n3h-extent-method-arg",
+        "Phase 10 · bucket D — a literal in the first argument slot of a \
+         class-extent builtin whose own signature fixes that slot's shape",
+    ),
+    (
         "n3i-scalar-receiver-method",
         "Phase 10 · bucket D — a relation/store builtin arrowed off a receiver the \
          overlay has typed a scalar primitive: a string literal, or a \
@@ -797,6 +876,11 @@ const FROZEN_FAMILIES: &[(&str, &str)] = &[
         "n4b-logical-operand",
         "Phase 6 · bucket E — a literal operand of `&&`/`||`, which take Boolean \
          only",
+    ),
+    (
+        "n4b-lambda-operand",
+        "Phase 10 · bucket E — a lambda in the same slot, one category further \
+         out than the literal",
     ),
     (
         "n4c-str-operator",
@@ -882,6 +966,12 @@ const FROZEN_FAMILIES: &[(&str, &str)] = &[
         "t6-ordered-operand",
         "#116 T6 · an ordered comparator on a navExpr that is not a scalar \
          primitive — a collection, an extent navigation, or a class",
+    ),
+    (
+        "t6-nonscalar-operator",
+        "Phase 10 · bucket E — the logical and arithmetic operators on the same \
+         non-scalar navExpr, and the fourth shape that reaches it: a \
+         type-preserving call off the class extent",
     ),
     (
         "t4-string-method",
@@ -1390,6 +1480,60 @@ static FROZEN_KILLS: &[FrozenKill] = &[
         kill: Kill::Walk {
             walk: "{|spider::world_1::model::default::Country.all()->year('a')}",
             closed_by: "(",
+        },
+    },
+    // N3h — the argument half of N3f's position. Both names are legal on a
+    // `T[*]` extent and wrong only in what they are called with, so the
+    // receiver-category rule cannot reach either.
+    FrozenKill {
+        fixture: "n3h-extent-method-arg",
+        db: "car_1",
+        closer: Closer::L2("ExtentMethodArg"),
+        kill: Kill::Walk {
+            walk: "{|spider::car_1::model::default::CarMakers.all()->groupBy('Edispl_T4')}",
+            closed_by: "'Edispl_T4'",
+        },
+    },
+    FrozenKill {
+        fixture: "n3h-extent-method-arg",
+        db: "world_1",
+        closer: Closer::L2("ExtentMethodArg"),
+        kill: Kill::Walk {
+            walk: "{|spider::world_1::model::default::Countrylanguage.all()\
+             ->groupBy('Percentage_t2'<'country')}",
+            closed_by: "'Percentage_t2'",
+        },
+    },
+    FrozenKill {
+        fixture: "n3h-extent-method-arg",
+        db: "car_1",
+        closer: Closer::L2("ExtentMethodArg"),
+        kill: Kill::Walk {
+            walk: "{|spider::car_1::model::default::CarMakers.all()->limit('MPG_T2_2')}",
+            closed_by: "'MPG_T2_2'",
+        },
+    },
+    // The two shapes' whole difference, pinned as a contrast: the `Integer` slot
+    // keeps a numeric literal that the `Function` slot clears, and both keep the
+    // opener a real argument list starts with.
+    FrozenKill {
+        fixture: "n3h-extent-method-arg",
+        db: "car_1",
+        closer: Closer::L2("ExtentMethodArg"),
+        kill: Kill::Probe {
+            prefix: "|spider::car_1::model::default::CarMakers.all()->limit(",
+            real: "3",
+            phantom: "'MPG_T2_2'",
+        },
+    },
+    FrozenKill {
+        fixture: "n3h-extent-method-arg",
+        db: "car_1",
+        closer: Closer::L2("ExtentMethodArg"),
+        kill: Kill::Probe {
+            prefix: "|spider::car_1::model::default::CarMakers.all()->groupBy(",
+            real: "[",
+            phantom: "1",
         },
     },
     FrozenKill {
@@ -2135,6 +2279,68 @@ static FROZEN_KILLS: &[FrozenKill] = &[
             phantom: "<=",
         },
     },
+    // Phase 10 widens the same position from the ordered comparators to every
+    // operator family the engine declares over scalar operands only. The walk is
+    // the live `car_1` failure it closes, whose `>=` sits behind a `*` no earlier
+    // rule reached — and it needs the whitespace the live walk itself has, for
+    // the reason `n4c-str-operator`'s own fourth fixture records: a member name
+    // is dispatched only once a later token closes it, so an operator written
+    // flush against it is decided at the `Member` trie's boundary policy rather
+    // than at this position.
+    FrozenKill {
+        fixture: "t6-nonscalar-operator",
+        db: "car_1",
+        closer: Closer::L2("OrderedOperand"),
+        kill: Kill::Walk {
+            walk: "{|spider::car_1::model::default::ModelList.all().maker *'MPG'}",
+            closed_by: "*",
+        },
+    },
+    FrozenKill {
+        fixture: "t6-nonscalar-operator",
+        db: "car_1",
+        closer: Closer::L2("OrderedOperand"),
+        kill: Kill::Probe {
+            prefix: "|spider::car_1::model::default::CarMakers.all().id ",
+            real: "==",
+            phantom: "&&",
+        },
+    },
+    FrozenKill {
+        fixture: "t6-nonscalar-operator",
+        db: "car_1",
+        closer: Closer::L2("OrderedOperand"),
+        kill: Kill::Probe {
+            prefix: "|spider::car_1::model::default::CarMakers.all().id ",
+            real: "==",
+            phantom: "/",
+        },
+    },
+    FrozenKill {
+        fixture: "t6-nonscalar-operator",
+        db: "world_1",
+        closer: Closer::L2("OrderedOperand"),
+        kill: Kill::Probe {
+            prefix: "|spider::world_1::model::default::Country.all()\
+                     ->filter(c|$c.fk1DefaultCountrylanguage ",
+            real: "->",
+            phantom: "||",
+        },
+    },
+    // The fourth shape, and the only one that reaches this position through a
+    // *call*: `toOne` collapses the extent's multiplicity and hands the class
+    // straight back (`lessThan(CarMakers[1],Integer[1])`), where a member name —
+    // the route the other three take — is long gone by the closing `)`.
+    FrozenKill {
+        fixture: "t6-nonscalar-operator",
+        db: "car_1",
+        closer: Closer::L2("OrderedOperand"),
+        kill: Kill::Probe {
+            prefix: "|spider::car_1::model::default::CarMakers.all()->toOne() ",
+            real: "==",
+            phantom: "<",
+        },
+    },
     FrozenKill {
         fixture: "t3-reducer",
         db: "car_1",
@@ -2403,6 +2609,32 @@ static FROZEN_KILLS: &[FrozenKill] = &[
             walk: "{|spider::car_1::model::default::CarMakers.all()\
              ->filter(x|$x.country=='usa'||1930)}",
             closed_by: "1930",
+        },
+    },
+    // Phase 10 — the same slot, one category further out: a `LambdaFunction` is
+    // no more a `Boolean` than a string literal is. The named-binder form dies on
+    // the very same byte, the bare word before it being an operand this rule
+    // keeps.
+    FrozenKill {
+        fixture: "n4b-lambda-operand",
+        db: "world_1",
+        closer: Closer::L2("LogicalOperand"),
+        kill: Kill::Probe {
+            prefix: "|spider::world_1::model::default::Country.all()\
+                     ->filter(x|$x.name == 'Aruba' && ",
+            real: "true",
+            phantom: "|",
+        },
+    },
+    FrozenKill {
+        fixture: "n4b-lambda-operand",
+        db: "car_1",
+        closer: Closer::L2("LogicalOperand"),
+        kill: Kill::Probe {
+            prefix: "|spider::car_1::model::default::CarMakers.all()\
+                     ->filter(x|$x.country == 'usa' || ",
+            real: "true",
+            phantom: "|",
         },
     },
     FrozenKill {
@@ -3412,6 +3644,25 @@ fn n4a_still_admits_what_a_table_result_really_accepts() {
 #[test]
 fn n4b_masks_a_literal_operand_of_a_logical_operator() {
     assert_frozen("n4b-logical-operand");
+}
+
+/// Issue #55 Phase 10 extends N4b one category out from the literal: a `|` in
+/// the same slot opens a lambda, and a `LambdaFunction` is no more a `Boolean`
+/// than a string is.
+///
+/// ```text
+/// {|…::Db->tableReference('english','GNP_t1')!='Population_T3'|||…::Db}
+///     => or(Boolean[1],LambdaFunction<{->Database[1]}>[1])
+/// {|true&&|true}  => and(Boolean[1],LambdaFunction<{->Boolean[1]}>[1])
+/// {|true&&x|true} => Can't find variable class for variable 'x' in the graph
+/// ```
+///
+/// The named-binder form dies on the very same byte: `x` is a bare word this
+/// rule keeps, and the pipe that would make it a binder arrives at the same
+/// position under the same stamped rule.
+#[test]
+fn n4b_masks_a_lambda_operand_of_a_logical_operator() {
+    assert_frozen("n4b-lambda-operand");
 }
 
 /// N4b's soundness counterfactual: the rule masks *literals* of a mismatched
