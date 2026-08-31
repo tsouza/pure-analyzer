@@ -44,10 +44,19 @@ enum Command {
     TestMutation,
     /// Run one shard of the workspace-wide mutation pass (CI matrix only).
     TestMutationShard {
-        /// Zero-based shard index (matches `strategy.job-index`).
+        /// Zero-based shard index (matches the mutation planner matrix).
         index: u32,
-        /// Total number of shards (matches `strategy.job-total`).
+        /// Total number of shards (matches the mutation planner matrix).
         total: u32,
+    },
+    /// Run one merge-base-diff-scoped workspace mutation shard (CI only).
+    TestMutationDiffShard {
+        /// Zero-based shard index.
+        index: u32,
+        /// Total number of shards.
+        total: u32,
+        /// Unified diff file generated from the verified merge base.
+        diff: String,
     },
     /// Run the feature-gated FFI-boundary mutation pass (fast; never sharded).
     TestMutationFfi,
@@ -99,6 +108,9 @@ fn main() -> Result<()> {
         Command::ParserDifferential { refresh } => tasks::parser_differential(refresh),
         Command::TestMutation => tasks::test_mutation(),
         Command::TestMutationShard { index, total } => tasks::test_mutation_shard(index, total),
+        Command::TestMutationDiffShard { index, total, diff } => {
+            tasks::test_mutation_diff_shard(index, total, &diff)
+        }
         Command::TestMutationFfi => tasks::test_mutation_ffi(),
         Command::TestMutationParser => tasks::test_mutation_parser(),
         Command::Coverage { html } => tasks::coverage(html),

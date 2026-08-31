@@ -414,12 +414,11 @@ pub fn parser_differential(refresh: bool) -> Result<()> {
 ///
 /// Returns an error when the output parent cannot be created or the
 /// cargo-mutants pass fails.
-fn test_mutation_workspace(shard: Option<(u32, u32)>) -> Result<()> {
-    std::fs::create_dir_all(MUTATION_OUTPUT_ROOT)
-        .context("creating mutation report output parent")?;
-    let output = match shard {
-        Some((index, _)) => format!("target/mutants-default-shard-{index}"),
-        None => "target/mutants-default".to_string(),
+fn mutation_workspace_args(shard: Option<(u32, u32)>, diff: Option<&str>) -> Vec<String> {
+    let output = match (shard, diff) {
+        (Some((index, _)), Some(_)) => format!("target/mutants-diff-shard-{index}"),
+        (Some((index, _)), None) => format!("target/mutants-default-shard-{index}"),
+        (None, _) => "target/mutants-default".to_string(),
     };
     let mut args = vec![
         "mutants".to_string(),
@@ -432,6 +431,10 @@ fn test_mutation_workspace(shard: Option<(u32, u32)>) -> Result<()> {
         "--timeout".to_string(),
         MUTATION_COMMAND_TIMEOUT_SECONDS.to_string(),
     ];
+    if let Some(diff) = diff {
+        args.push("--in-diff".to_string());
+        args.push(diff.to_string());
+    }
     if let Some((index, total)) = shard {
         args.push("--shard".to_string());
         args.push(format!("{index}/{total}"));
@@ -449,6 +452,13 @@ fn test_mutation_workspace(shard: Option<(u32, u32)>) -> Result<()> {
         args.push("--sharding".to_string());
         args.push("round-robin".to_string());
     }
+    args
+}
+
+fn test_mutation_workspace(shard: Option<(u32, u32)>, diff: Option<&str>) -> Result<()> {
+    std::fs::create_dir_all(MUTATION_OUTPUT_ROOT)
+        .context("creating mutation report output parent")?;
+    let args = mutation_workspace_args(shard, diff);
     let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
     run("cargo", &arg_refs)
 }
@@ -519,7 +529,7 @@ pub fn test_mutation_parser() -> Result<()> {
 /// Returns an error when the output parent cannot be created or either
 /// cargo-mutants pass fails.
 pub fn test_mutation() -> Result<()> {
-    test_mutation_workspace(None)?;
+    test_mutation_workspace(None, None)?;
     test_mutation_ffi()
 }
 
@@ -532,7 +542,20 @@ pub fn test_mutation() -> Result<()> {
 /// Returns an error when the output parent cannot be created or the
 /// cargo-mutants pass fails.
 pub fn test_mutation_shard(index: u32, total: u32) -> Result<()> {
-    test_mutation_workspace(Some((index, total)))
+    test_mutation_workspace(Some((index, total)), None)
+}
+
+/// Run one workspace mutation shard restricted to a verified merge-base diff.
+///
+/// The CI planner lists the same diff before selecting shards, so the zero-mutant
+/// case must be converted to the full matrix before this command is reached.
+///
+/// # Errors
+///
+/// Returns an error when the output parent cannot be created or cargo-mutants
+/// rejects the diff or mutation pass.
+pub fn test_mutation_diff_shard(index: u32, total: u32, diff: &str) -> Result<()> {
+    test_mutation_workspace(Some((index, total)), Some(diff))
 }
 
 /// Time-box every target in PureCARD's dedicated cargo-fuzz project.
@@ -2396,6 +2419,37 @@ fn workspace_member_manifests() -> Result<Vec<(String, String)>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn diff_mutation_shards_keep_the_default_scope_and_add_the_verified_diff() {
+        let args = mutation_workspace_args(Some((2, 3)), Some("target/mutation-scope.diff"));
+        assert_eq!(
+            args,
+            [
+                "mutants",
+                "--workspace",
+                "--exclude",
+                PURECARD_FFI_SOURCE,
+                "--in-place",
+                "--output",
+                "target/mutants-diff-shard-2",
+                "--timeout",
+                MUTATION_COMMAND_TIMEOUT_SECONDS,
+                "--in-diff",
+                "target/mutation-scope.diff",
+                "--shard",
+                "2/3",
+                "--sharding",
+                "round-robin",
+            ]
+            .map(str::to_string)
+        );
+        assert!(
+            !mutation_workspace_args(Some((0, 1)), None)
+                .iter()
+                .any(|arg| arg == "--in-diff")
+        );
+    }
 
     /// The completeness lane must exclude exactly the binary the real-model
     /// lane scopes itself to, and nothing else. Both sides read the one
