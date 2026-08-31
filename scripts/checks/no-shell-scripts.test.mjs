@@ -50,6 +50,7 @@ test("rejects shell shebangs even without a shell extension", () => {
 
 test("rejects quoted env split-string shell shebangs safely", () => {
   expect(hasShellShebang("#!/usr/bin/env -S 'bash -eu'")).toBeTrue();
+  expect(hasShellShebang("#!/usr/bin/env -Sbash -eu")).toBeTrue();
   expect(
     hasShellShebang("#!/usr/bin/env --split-string='zsh -eu'"),
   ).toBeTrue();

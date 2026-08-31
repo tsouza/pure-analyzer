@@ -76,6 +76,9 @@ function envInterpreter(words) {
     if (word === "-S" || word === "--split-string") {
       return splitStringInterpreter(words[index + 1] ?? "");
     }
+    if (word.startsWith("-S") && word.length > 2) {
+      return splitStringInterpreter(word.slice(2));
+    }
     if (word.startsWith("--split-string=")) {
       return splitStringInterpreter(word.slice("--split-string=".length));
     }
