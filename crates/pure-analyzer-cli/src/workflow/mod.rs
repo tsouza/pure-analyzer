@@ -1,15 +1,13 @@
 //! Process-boundary workflows over libpure and renderer-neutral outputs.
 
 mod input;
-mod write;
 
-use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::io::{IsTerminal, Write};
 
 use libpure::{
-    AnalysisDriver, AnalysisOutput, Diagnostic, DriverError, FormatOutput, LintRequest,
-    PlannedChange, Severity, SourceInput, SourceOrigin, SourceRequest, SourceStore,
+    AnalysisDriver, AnalysisOutput, Diagnostic, DriverError, FormatOutput, LintRequest, Severity,
+    SourceInput, SourceOrigin, SourceRequest, SourceStore,
 };
 use pure_analyzer_render::{ColorPolicy, RenderInput, render_human, render_json, render_sarif};
 use thiserror::Error;
@@ -17,7 +15,6 @@ use thiserror::Error;
 use crate::CompletionShell;
 use crate::config::{ColorChoice, OutputFormat, ResolvedConfig};
 use input::{model_sources, query_sources};
-use write::{Replacement, replace_all};
 
 /// Successful command execution.
 pub(crate) const EXIT_SUCCESS: u8 = 0;
@@ -30,6 +27,9 @@ const _: u8 = EXIT_INDECISIVE;
 pub(crate) const EXIT_USAGE: u8 = 3;
 /// Analyzer, renderer, or output-commit invariant failure.
 pub(crate) const EXIT_INTERNAL: u8 = 4;
+
+const IN_PLACE_FORMAT_WRITE_UNAVAILABLE: &str =
+    "in-place formatter writes are not available; use --check, --stdout, or --diff";
 
 /// A classified CLI boundary failure with a stable process exit code.
 #[derive(Debug, Error)]
@@ -44,6 +44,14 @@ impl Failure {
     pub(crate) fn usage(error: impl Display) -> Self {
         Self {
             code: EXIT_USAGE,
+            message: error.to_string(),
+        }
+    }
+
+    /// Construct an actionable request that cannot yet be applied.
+    pub(crate) fn actionable(error: impl Display) -> Self {
+        Self {
+            code: EXIT_ACTIONABLE,
             message: error.to_string(),
         }
     }
@@ -91,6 +99,10 @@ impl FormatMode {
     const fn previews_changes(self) -> bool {
         self.check || self.diff
     }
+
+    const fn requests_in_place_write(self) -> bool {
+        !self.check && !self.stdout && !self.diff
+    }
 }
 
 /// Execute model-free validation and render the retained analysis snapshot.
@@ -106,8 +118,8 @@ pub(crate) fn validate(files: &[String], config: &ResolvedConfig) -> Result<u8, 
     Ok(diagnostic_exit(output.diagnostics()))
 }
 
-/// Execute model-aware linting, optionally applying and rechecking safe fixes.
-pub(crate) fn lint(files: &[String], fix: bool, config: &ResolvedConfig) -> Result<u8, Failure> {
+/// Execute model-aware linting.
+pub(crate) fn lint(files: &[String], config: &ResolvedConfig) -> Result<u8, Failure> {
     let sources = query_sources(files)?;
     let models = model_sources(config.model_paths())?;
     let request = || -> Result<LintRequest, Failure> {
@@ -120,22 +132,25 @@ pub(crate) fn lint(files: &[String], fix: bool, config: &ResolvedConfig) -> Resu
             models.clone(),
         ))
     };
-    let driver = AnalysisDriver;
-    let mut output = driver.lint(&request()?).map_err(driver_failure)?;
-    if fix && apply_fixes(&output)? {
-        output = driver.lint(&request()?).map_err(driver_failure)?;
-    }
+    let output = AnalysisDriver.lint(&request()?).map_err(driver_failure)?;
     emit_analysis(&output, config)?;
     Ok(diagnostic_exit(output.diagnostics()))
 }
 
-/// Execute canonical formatting in check, stdout, diff, or atomic-write mode.
+/// Execute canonical formatting without modifying filesystem inputs.
 pub(crate) fn format(
     files: &[String],
     mode: FormatMode,
     config: &ResolvedConfig,
 ) -> Result<u8, Failure> {
     let sources = query_sources(files)?;
+    if mode.requests_in_place_write()
+        && sources
+            .iter()
+            .any(|source| matches!(source, SourceInput::File { .. }))
+    {
+        return Err(Failure::actionable(IN_PLACE_FORMAT_WRITE_UNAVAILABLE));
+    }
     if mode.stdout && sources.len() != 1 {
         return Err(Failure::usage(
             "fmt --stdout requires exactly one resolved input",
@@ -155,7 +170,7 @@ pub(crate) fn format(
             Destination::Stderr,
         )?;
     }
-    let changed = finish_format(&output, mode, !output.has_recovery_diagnostics())?;
+    let changed = finish_format(&output, mode)?;
     if has_errors || (changed && mode.previews_changes()) {
         Ok(EXIT_ACTIONABLE)
     } else {
@@ -323,54 +338,8 @@ fn has_actionable_diagnostics(diagnostics: &[Diagnostic]) -> bool {
         .any(|diagnostic| diagnostic.severity == Severity::Error)
 }
 
-fn apply_fixes(output: &AnalysisOutput) -> Result<bool, Failure> {
-    let plan = output.plan_fixes().map_err(Failure::internal)?;
-    if plan.is_empty() {
-        return Ok(false);
-    }
-    let snapshots = output
-        .sources()
-        .files()
-        .map(|source| (source.id(), source.text().to_owned()))
-        .collect::<BTreeMap<_, _>>();
-    let changes = plan.preview(&snapshots).map_err(Failure::internal)?;
-    let replacements = fix_replacements(output.sources(), changes)?;
-    let changed = !replacements.is_empty();
-    replace_all(replacements)?;
-    Ok(changed)
-}
-
-fn fix_replacements(
-    sources: &SourceStore,
-    changes: Vec<PlannedChange>,
-) -> Result<Vec<Replacement>, Failure> {
-    let mut replacements = Vec::with_capacity(changes.len());
-    for change in changes {
-        let source = sources.get(change.file).ok_or_else(|| {
-            Failure::internal(format!("fix plan lost source file {}", change.file))
-        })?;
-        let SourceOrigin::File { path } = source.origin() else {
-            return Err(Failure::usage(format!(
-                "automatic fixes cannot update {} from standard input",
-                source.name()
-            )));
-        };
-        replacements.push(Replacement {
-            path: path.clone(),
-            before: change.before,
-            after: change.after,
-        });
-    }
-    Ok(replacements)
-}
-
-fn finish_format(
-    output: &FormatOutput,
-    mode: FormatMode,
-    permit_writes: bool,
-) -> Result<bool, Failure> {
+fn finish_format(output: &FormatOutput, mode: FormatMode) -> Result<bool, Failure> {
     let mut changed = false;
-    let mut replacements = Vec::new();
     let mut rendered = String::new();
     for formatted in output.formatted() {
         let source = output.sources().get(formatted.file()).ok_or_else(|| {
@@ -393,25 +362,10 @@ fn finish_format(
             );
         } else if mode.stdout || (stdin && !mode.check) {
             rendered.push_str(formatted.text());
-        } else if !mode.check && permit_writes {
-            let SourceOrigin::File { path } = source.origin() else {
-                return Err(Failure::internal(format!(
-                    "formatter cannot persist non-file source {}",
-                    source.name()
-                )));
-            };
-            replacements.push(Replacement {
-                path: path.clone(),
-                before: source.text().to_owned(),
-                after: formatted.text().to_owned(),
-            });
         }
     }
     if !rendered.is_empty() {
         write_stdout(&rendered)?;
-    }
-    if permit_writes {
-        replace_all(replacements)?;
     }
     Ok(changed)
 }
@@ -457,7 +411,6 @@ fn test_nonce() -> u64 {
 #[cfg(test)]
 mod tests {
     use clap::CommandFactory;
-    use libpure::{FileId, SourceInput};
 
     use super::*;
     use crate::Cli;
@@ -472,11 +425,15 @@ mod tests {
     }
 
     #[test]
-    fn format_modes_identify_only_unapplied_previews() {
+    fn format_modes_distinguish_read_only_previews_from_in_place_requests() {
+        assert!(FormatMode::default().requests_in_place_write());
         assert!(!FormatMode::default().previews_changes());
         assert!(FormatMode::new(true, false, false).previews_changes());
         assert!(!FormatMode::new(false, true, false).previews_changes());
         assert!(FormatMode::new(false, false, true).previews_changes());
+        assert!(!FormatMode::new(true, false, false).requests_in_place_write());
+        assert!(!FormatMode::new(false, true, false).requests_in_place_write());
+        assert!(!FormatMode::new(false, false, true).requests_in_place_write());
     }
 
     #[test]
@@ -484,37 +441,6 @@ mod tests {
         assert_eq!(color_policy(ColorChoice::Auto), ColorPolicy::Auto);
         assert_eq!(color_policy(ColorChoice::Always), ColorPolicy::Always);
         assert_eq!(color_policy(ColorChoice::Never), ColorPolicy::Never);
-    }
-
-    #[test]
-    fn query_fix_with_a_model_uses_the_retained_file_origin() {
-        let root = std::env::temp_dir().join(format!(
-            "pure-analyzer-fix-origin-{}-{}",
-            std::process::id(),
-            test_nonce()
-        ));
-        std::fs::create_dir_all(&root).expect("create fixture directory");
-        let model = root.join("model.json");
-        let query = root.join("query.pure");
-        std::fs::write(&model, "{}").expect("write model fixture");
-        std::fs::write(&query, "before").expect("write query fixture");
-        let sources = SourceStore::load([SourceInput::file(&model), SourceInput::file(&query)])
-            .expect("retain model and query sources");
-
-        let replacements = fix_replacements(
-            &sources,
-            vec![PlannedChange {
-                file: FileId::new(1),
-                before: "before".to_owned(),
-                after: "after".to_owned(),
-            }],
-        )
-        .expect("map query fix after a model input");
-
-        assert_eq!(replacements.len(), 1);
-        assert_eq!(replacements[0].path, query);
-        assert_eq!(replacements[0].after, "after");
-        std::fs::remove_dir_all(root).expect("remove fixtures");
     }
 
     #[test]

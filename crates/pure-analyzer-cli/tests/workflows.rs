@@ -339,7 +339,7 @@ fn lint_model_merge_warning_can_be_denied_without_changing_its_code() {
 }
 
 #[test]
-fn lint_fix_with_a_model_is_safe_when_no_applicable_fix_exists() {
+fn lint_fix_is_not_exposed_before_transactional_apply() {
     let fixture = Fixture::new("lint-fix");
     let query = "model::Person.all()->filter(x| $x.missing)";
     fixture.write("query.pure", query);
@@ -357,13 +357,14 @@ fn lint_fix_with_a_model_is_safe_when_no_applicable_fix_exists() {
             "--no-config",
         ],
     );
-    assert_eq!(output.status.code(), Some(EXIT_ACTIONABLE));
+    assert_eq!(output.status.code(), Some(EXIT_USAGE));
     assert!(output.stdout.is_empty());
+    assert!(utf8(&output.stderr).contains("--fix"));
     assert_eq!(fixture.read("query.pure"), query);
 }
 
 #[test]
-fn formatter_check_diff_stdout_and_atomic_write_have_distinct_behavior() {
+fn formatter_read_only_modes_and_unavailable_in_place_write_have_distinct_behavior() {
     let fixture = Fixture::new("format-modes");
     let original = "model::Person . all ( )";
     fixture.write("query.pure", original);
@@ -395,16 +396,13 @@ fn formatter_check_diff_stdout_and_atomic_write_have_distinct_behavior() {
     assert_eq!(fixture.read("query.pure"), original);
 
     let write = run(&fixture.root, &["fmt", "query.pure", "--no-config"]);
-    assert!(write.status.success());
+    assert_eq!(write.status.code(), Some(EXIT_ACTIONABLE));
     assert!(write.stdout.is_empty());
-    assert_eq!(fixture.read("query.pure"), formatted);
-    assert!(
-        fixture
-            .entries()
-            .iter()
-            .all(|name| !name.contains("pure-analyzer-tmp")
-                && !name.contains("pure-analyzer-backup"))
+    assert_eq!(
+        utf8(&write.stderr),
+        "error: in-place formatter writes are not available; use --check, --stdout, or --diff\n"
     );
+    assert_eq!(fixture.read("query.pure"), original);
 }
 
 #[test]
@@ -512,7 +510,7 @@ fn formatter_line_width_environment_applies_with_no_config() {
 }
 
 #[test]
-fn formatter_stdin_is_machine_clean_and_parse_errors_never_write() {
+fn formatter_stdin_is_machine_clean_and_read_only_recovery_preserves_files() {
     let fixture = Fixture::new("format-stdin-error");
     let stdin = run_with_stdin(
         &fixture.root,
@@ -548,7 +546,10 @@ fn formatter_stdin_is_machine_clean_and_parse_errors_never_write() {
 
     fixture.write("broken.pure", "a  +  \0");
     let before = fixture.read("broken.pure");
-    let broken = run(&fixture.root, &["fmt", "broken.pure", "--no-config"]);
+    let broken = run(
+        &fixture.root,
+        &["fmt", "broken.pure", "--check", "--no-config"],
+    );
     assert_eq!(broken.status.code(), Some(EXIT_ACTIONABLE));
     assert!(broken.stdout.is_empty());
     assert!(utf8(&broken.stderr).contains("PUR0102"));
@@ -579,6 +580,7 @@ fn formatter_applies_global_policy_to_recovery_diagnostics_on_stderr() {
         &[
             "fmt",
             "broken.pure",
+            "--stdout",
             "--warn",
             "PUR0102",
             "--format",
@@ -588,7 +590,7 @@ fn formatter_applies_global_policy_to_recovery_diagnostics_on_stderr() {
     );
 
     assert!(output.status.success());
-    assert!(output.stdout.is_empty());
+    assert!(!output.stdout.is_empty());
     let document: Value = serde_json::from_slice(&output.stderr)
         .expect("formatter recovery diagnostics are valid JSON on stderr");
     assert_eq!(document["diagnostics"][0]["code"], "PUR0102");
@@ -599,27 +601,7 @@ fn formatter_applies_global_policy_to_recovery_diagnostics_on_stderr() {
 }
 
 #[test]
-fn formatter_never_partially_writes_when_an_input_has_recovery_diagnostics() {
-    let fixture = Fixture::new("format-atomic-recovery");
-    let valid_before = "model::Person . all ( )";
-    let broken_before = "\0";
-    fixture.write("valid.pure", valid_before);
-    fixture.write("broken.pure", broken_before);
-
-    let output = run(
-        &fixture.root,
-        &["fmt", "valid.pure", "broken.pure", "--no-config"],
-    );
-
-    assert_eq!(output.status.code(), Some(EXIT_ACTIONABLE));
-    assert!(output.stdout.is_empty());
-    assert!(utf8(&output.stderr).contains("PUR0102"));
-    assert_eq!(fixture.read("valid.pure"), valid_before);
-    assert_eq!(fixture.read("broken.pure"), broken_before);
-}
-
-#[test]
-fn formatter_recovery_blocks_every_atomic_write_after_a_policy_downgrade() {
+fn formatter_in_place_write_remains_actionable_after_a_policy_downgrade() {
     let fixture = Fixture::new("format-policy-atomic");
     let valid_before = "model::Person . all ( )";
     let broken_before = "\0";
@@ -638,8 +620,12 @@ fn formatter_recovery_blocks_every_atomic_write_after_a_policy_downgrade() {
         ],
     );
 
-    assert!(output.status.success());
+    assert_eq!(output.status.code(), Some(EXIT_ACTIONABLE));
     assert!(output.stdout.is_empty());
+    assert_eq!(
+        utf8(&output.stderr),
+        "error: in-place formatter writes are not available; use --check, --stdout, or --diff\n"
+    );
     assert_eq!(fixture.read("valid.pure"), valid_before);
     assert_eq!(fixture.read("broken.pure"), broken_before);
 }
@@ -742,19 +728,6 @@ impl Fixture {
 
     fn read(&self, relative: &str) -> String {
         fs::read_to_string(self.root.join(relative)).expect("read fixture")
-    }
-
-    fn entries(&self) -> Vec<String> {
-        fs::read_dir(&self.root)
-            .expect("read fixture directory")
-            .map(|entry| {
-                entry
-                    .expect("read fixture entry")
-                    .file_name()
-                    .to_string_lossy()
-                    .into_owned()
-            })
-            .collect()
     }
 }
 

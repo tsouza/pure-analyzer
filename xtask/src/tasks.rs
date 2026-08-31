@@ -1762,7 +1762,11 @@ const ALLOWED_INTERNAL_DEPS: &[(&str, &[&str])] = &[
     ),
     (
         "pure-analyzer-cli",
-        &["libpure", "pure-analyzer-diagnostics"],
+        &[
+            "libpure",
+            "pure-analyzer-diagnostics",
+            "pure-analyzer-render",
+        ],
     ),
 ];
 
@@ -2986,6 +2990,15 @@ missing_docs = \"warn\"
             layering_violations(&forbidden),
             ["pure-analyzer-model --(normal)--> pure-analyzer-resolve"]
         );
+    }
+
+    #[test]
+    fn cli_may_depend_on_the_renderer_at_the_front_end_boundary() {
+        let packages = [package(
+            "pure-analyzer-cli",
+            &[("pure-analyzer-render", None)],
+        )];
+        assert!(layering_violations(&packages).is_empty());
     }
 
     #[test]

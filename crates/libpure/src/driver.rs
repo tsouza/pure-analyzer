@@ -365,11 +365,10 @@ pub struct FormatOutput {
     sources: SourceStore,
     formatted: Vec<FormattedSource>,
     diagnostics: Vec<Diagnostic>,
-    has_recovery_diagnostics: bool,
 }
 
 impl FormatOutput {
-    /// Return original snapshots retained for diff, check, or atomic writes.
+    /// Return original snapshots retained for diff or check operations.
     #[must_use]
     pub const fn sources(&self) -> &SourceStore {
         &self.sources
@@ -381,21 +380,10 @@ impl FormatOutput {
         &self.formatted
     }
 
-    /// Return policy-filtered parser diagnostics retained while formatting the
-    /// same snapshots.
+    /// Return policy-filtered parser diagnostics retained while formatting the same snapshots.
     #[must_use]
     pub fn diagnostics(&self) -> &[Diagnostic] {
         &self.diagnostics
-    }
-
-    /// Return whether parsing produced recovery diagnostics before policy filtering.
-    ///
-    /// Front ends must preserve this signal when deciding whether formatting
-    /// results may replace source files: a presentation policy can suppress or
-    /// downgrade a diagnostic, but it cannot make recovery output safe to write.
-    #[must_use]
-    pub const fn has_recovery_diagnostics(&self) -> bool {
-        self.has_recovery_diagnostics
     }
 
     /// Consume this output into original sources, formatted buffers, and findings.
@@ -505,7 +493,6 @@ impl AnalysisDriver {
         let results = run_sources(&sources, &files, request.jobs(), |source| {
             format_source(source, request.line_width())
         })?;
-        let has_recovery_diagnostics = results.iter().any(|result| !result.diagnostics.is_empty());
         let finding_policy = request.diagnostic_policy().finding_policy();
         let diagnostics = results
             .iter()
@@ -517,7 +504,6 @@ impl AnalysisDriver {
             sources,
             formatted,
             diagnostics,
-            has_recovery_diagnostics,
         })
     }
 }

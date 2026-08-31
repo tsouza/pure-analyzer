@@ -54,22 +54,19 @@ enum Command {
         /// PMCD JSON and/or Pure-model-file model sources; may repeat.
         #[arg(long)]
         model: Vec<String>,
-        /// Apply `MachineApplicable` fixes in place.
-        #[arg(long)]
-        fix: bool,
     },
-    /// Canonical formatting.
+    /// Canonical formatting through read-only modes.
     Fmt {
         /// Input files/globs; `-` reads one source from stdin.
         files: Vec<String>,
-        /// Check formatting without writing; exit non-zero if any file would
-        /// change.
+        /// Check formatting without modifying files; exit non-zero if any file
+        /// would change.
         #[arg(long, conflicts_with_all = ["stdout", "diff"])]
         check: bool,
-        /// Print formatted content to standard output instead of writing files.
+        /// Print formatted content to standard output.
         #[arg(long, conflicts_with_all = ["check", "diff"])]
         stdout: bool,
-        /// Print a compact before/after diff instead of writing files.
+        /// Print a compact before/after diff.
         #[arg(long, conflicts_with_all = ["check", "stdout"])]
         diff: bool,
         /// Preferred layout line width.
@@ -149,7 +146,7 @@ fn run(cli: Cli) -> Result<u8, Failure> {
 
     match command {
         Command::Validate { files, .. } => workflow::validate(&files, &resolved),
-        Command::Lint { files, fix, .. } => workflow::lint(&files, fix, &resolved),
+        Command::Lint { files, .. } => workflow::lint(&files, &resolved),
         Command::Fmt {
             files,
             check,
