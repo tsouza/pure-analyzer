@@ -6,7 +6,8 @@ use std::{
 };
 
 use pure_analyzer_diagnostics::{
-    DiagCode, Diagnostic, FileId, Fix, Label, ReasonCode, Severity, TextEdit, TextRange, Verdict,
+    Applicability, DiagCode, Diagnostic, FileId, Fix, FixProvenance, Label, ReasonCode, Severity,
+    TextEdit, TextRange, Verdict,
 };
 use pure_analyzer_render::{
     ColorPolicy, HumanOptions, RenderError, RenderInput, SpanKind, render_human, render_json,
@@ -146,6 +147,26 @@ fn fix_edits_diagnostic(reverse_edits: bool) -> Diagnostic {
         Label::new(FileId::new(0), range(4, 6)),
     )
     .fix(Fix::model_dependent("replace both", edits))
+    .build()
+}
+
+fn provenance_order_diagnostic(provenance: FixProvenance) -> Diagnostic {
+    Diagnostic::builder(
+        DiagCode::UnknownProperty,
+        Severity::Error,
+        "same fix metadata except provenance",
+        Label::new(FileId::new(0), range(4, 6)),
+    )
+    .fix(Fix {
+        title: "replace the query symbol".to_owned(),
+        applicability: Applicability::Suggested,
+        provenance,
+        edits: vec![TextEdit {
+            file: FileId::new(0),
+            span: range(4, 6),
+            new_text: "γ".to_owned(),
+        }],
+    })
     .build()
 }
 
@@ -611,6 +632,34 @@ fn fix_edits_use_canonical_order_in_every_format() {
 }
 
 #[test]
+fn diagnostic_order_uses_fix_provenance_after_title_and_applicability() {
+    let sources = fixture_sources();
+    let diagnostics = vec![
+        provenance_order_diagnostic(FixProvenance::SingleArityProven),
+        provenance_order_diagnostic(FixProvenance::ModelDependent),
+        provenance_order_diagnostic(FixProvenance::SyntaxOnly),
+    ];
+
+    let json = render_json(RenderInput::new(&sources, &diagnostics)).expect("JSON renders");
+    let document: Value = serde_json::from_str(&json).expect("renderer output is JSON");
+    let provenances = document["diagnostics"]
+        .as_array()
+        .expect("diagnostics array")
+        .iter()
+        .map(|diagnostic| {
+            diagnostic["fix"]["provenance"]
+                .as_str()
+                .expect("fix provenance")
+        })
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        provenances,
+        ["syntax_only", "model_dependent", "single_arity_proven"]
+    );
+}
+
+#[test]
 fn sarif_declares_unicode_code_point_columns_for_locations_and_fixes() {
     let sources =
         SourceStore::load([SourceInput::in_memory("unicode.pure", "aβγ\n")]).expect("source loads");
@@ -887,6 +936,31 @@ fn human_renderer_marks_zero_width_and_multiline_spans() {
     assert!(output.contains("spans.pure:1:4..1:4 (primary)"));
     assert!(output.contains("^^ primary: crosses lines"));
     assert!(output.contains("^ primary: insertion point"));
+}
+
+#[test]
+fn human_renderer_annotates_non_first_line_from_its_actual_start() {
+    let sources = SourceStore::load([SourceInput::in_memory("lines.pure", "one\ntwo\n")])
+        .expect("source loads");
+    let diagnostics = vec![
+        Diagnostic::builder(
+            DiagCode::BadToken,
+            Severity::Error,
+            "second-line token",
+            Label::with_note(FileId::new(0), range(4, 7), "second line"),
+        )
+        .build(),
+    ];
+
+    let output = render_human(
+        RenderInput::new(&sources, &diagnostics),
+        HumanOptions::default(),
+    )
+    .expect("second-line label renders");
+
+    assert!(output.contains(
+        "    --> lines.pure:2:1..2:4 (primary)\n      |\n    2 | two\n      | ^^^ primary: second line\n"
+    ));
 }
 
 #[test]
