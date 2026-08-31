@@ -1,0 +1,96 @@
+{
+  "version": "1.0",
+  "files": [
+    {
+      "id": 0,
+      "name": "queries/α.pure",
+      "origin": "memory"
+    },
+    {
+      "id": 1,
+      "name": "models/β.pure",
+      "origin": "memory"
+    }
+  ],
+  "diagnostics": [
+    {
+      "code": "PUR2002",
+      "severity": "error",
+      "message": "unknown \"α\" \\ path",
+      "primary": {
+        "file": 0,
+        "range": {
+          "start": {
+            "byte": 4,
+            "line": 1,
+            "column": 5
+          },
+          "end": {
+            "byte": 6,
+            "line": 1,
+            "column": 7
+          }
+        },
+        "note": "query symbol"
+      },
+      "secondary": [
+        {
+          "file": 1,
+          "range": {
+            "start": {
+              "byte": 6,
+              "line": 1,
+              "column": 7
+            },
+            "end": {
+              "byte": 8,
+              "line": 1,
+              "column": 9
+            }
+          },
+          "note": "declared here"
+        }
+      ],
+      "fix": {
+        "title": "replace the query symbol",
+        "applicability": "machine_applicable",
+        "provenance": "single_arity_proven",
+        "edits": [
+          {
+            "file": 0,
+            "range": {
+              "start": {
+                "byte": 4,
+                "line": 1,
+                "column": 5
+              },
+              "end": {
+                "byte": 6,
+                "line": 1,
+                "column": 7
+              }
+            },
+            "replacement": "γ\n"
+          }
+        ]
+      },
+      "verdict": {
+        "verdict": "not_equivalent",
+        "witness": "#>{db::T}#"
+      },
+      "reason": {
+        "id": "IND_OPAQUE_PREDICATE",
+        "bucket": "fundamental",
+        "blurb": "the predicate is outside the sound interpreted whitelist"
+      },
+      "url": "https://example.invalid/PUR2002?x=1&y=2"
+    }
+  ],
+  "summary": {
+    "errors": 1,
+    "warnings": 0,
+    "info": 0,
+    "hints": 0,
+    "total": 1
+  }
+}

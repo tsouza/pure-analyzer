@@ -839,22 +839,42 @@ const RELEASE_PLZ_CONFIG: &str = "release-plz.toml";
 /// branch upstream and git history that a PR's detached-HEAD checkout lacks, so
 /// it fails for reasons unrelated to config. Comparing the config's overrides
 /// against `cargo metadata` is deterministic, needs no network or git state,
-/// and targets precisely the class of bug that broke the trunk.
+/// and catches both stale overrides and analyzer-package omissions before
+/// release automation reaches `main`.
 pub fn release_plz_check() -> Result<()> {
     let src = std::fs::read_to_string(RELEASE_PLZ_CONFIG)
         .with_context(|| format!("reading {RELEASE_PLZ_CONFIG}"))?;
     let overrides = release_plz_override_names(&src);
     let members = workspace_member_names()?;
 
-    let missing = missing_overrides(&overrides, &members);
-    if !missing.is_empty() {
+    validate_release_plz_overrides(&overrides, &members)
+}
+
+/// Check release-plz overrides against the provided workspace member names.
+///
+/// Keeping this validation independent of filesystem and Cargo access makes the
+/// release policy's two failure paths directly testable.
+fn validate_release_plz_overrides(overrides: &[String], members: &[String]) -> Result<()> {
+    let unknown = missing_names(overrides, members);
+    if !unknown.is_empty() {
         anyhow::bail!(
             "{RELEASE_PLZ_CONFIG} has [[package]] overrides not present in the workspace: {}. \
              Remove them or fix the name — an override for a non-member crate reddens every \
              push to main.",
-            missing.join(", ")
+            unknown.join(", ")
         );
     }
+
+    let analyzer_packages = analyzer_release_package_names(members);
+    let unregistered = missing_names(&analyzer_packages, overrides);
+    if !unregistered.is_empty() {
+        anyhow::bail!(
+            "{RELEASE_PLZ_CONFIG} is missing [[package]] overrides for analyzer workspace crates: {}. \
+             Add the package configuration before release automation reaches main.",
+            unregistered.join(", ")
+        );
+    }
+
     Ok(())
 }
 
@@ -909,11 +929,27 @@ fn workspace_member_names() -> Result<Vec<String>> {
         .collect())
 }
 
-/// Override names absent from the workspace-member set.
-fn missing_overrides(overrides: &[String], members: &[String]) -> Vec<String> {
-    overrides
+/// Analyzer-product crates that must have an explicit release-plz override.
+///
+/// Reuse the workspace's product classifier so release configuration follows the
+/// same analyzer/PureCARD boundary as the layering gate.
+fn analyzer_release_package_names(members: &[String]) -> Vec<String> {
+    members
         .iter()
-        .filter(|name| !members.iter().any(|member| member == *name))
+        .filter(|name| workspace_member_class(name) == Some(WorkspaceMemberClass::Analyzer))
+        .cloned()
+        .collect()
+}
+
+/// Required names that are absent from the configured-name set.
+fn missing_names(required: &[String], configured: &[String]) -> Vec<String> {
+    required
+        .iter()
+        .filter(|name| {
+            !configured
+                .iter()
+                .any(|configured_name| configured_name == *name)
+        })
         .cloned()
         .collect()
 }
@@ -1719,6 +1755,10 @@ const ALLOWED_INTERNAL_DEPS: &[(&str, &[&str])] = &[
             "pure-analyzer-analysis",
             "pure-analyzer-diagnostics",
         ],
+    ),
+    (
+        "pure-analyzer-render",
+        &["libpure", "pure-analyzer-diagnostics"],
     ),
     (
         "pure-analyzer-cli",
@@ -2762,17 +2802,39 @@ release = false
     }
 
     #[test]
-    fn missing_overrides_flags_non_members() {
+    fn missing_names_flags_non_members() {
         let overrides = ["domain".to_string(), "lints".to_string()];
         let members = ["domain".to_string(), "xtask".to_string()];
-        assert_eq!(missing_overrides(&overrides, &members), ["lints"]);
+        assert_eq!(missing_names(&overrides, &members), ["lints"]);
     }
 
     #[test]
-    fn missing_overrides_empty_when_all_present() {
+    fn missing_names_empty_when_all_present() {
         let overrides = ["domain".to_string(), "xtask".to_string()];
         let members = ["domain".to_string(), "xtask".to_string()];
-        assert!(missing_overrides(&overrides, &members).is_empty());
+        assert!(missing_names(&overrides, &members).is_empty());
+    }
+
+    #[test]
+    fn release_plz_validation_rejects_missing_analyzer_package_overrides() {
+        let members = [
+            "libpure".to_string(),
+            "pure-analyzer-analysis".to_string(),
+            "pure-analyzer-render".to_string(),
+            PURECARD_PACKAGE.to_string(),
+            "purecard-schema-walker".to_string(),
+            "xtask".to_string(),
+        ];
+        let overrides = ["libpure".to_string(), "pure-analyzer-analysis".to_string()];
+
+        let error = validate_release_plz_overrides(&overrides, &members)
+            .expect_err("a missing analyzer package must fail release validation");
+        assert_eq!(
+            error.to_string(),
+            "release-plz.toml is missing [[package]] overrides for analyzer workspace crates: \
+             pure-analyzer-render. Add the package configuration before release automation reaches \
+             main."
+        );
     }
 
     #[test]

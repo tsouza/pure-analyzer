@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "pure-analyzer",
+          "informationUri": "https://github.com/tsouza/pure-analyzer",
+          "rules": [
+            {
+              "id": "PUR2002",
+              "name": "PUR2002",
+              "shortDescription": {
+                "text": "unknown property"
+              },
+              "helpUri": "https://github.com/tsouza/pure-analyzer/tree/main/docs",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "family": "lint"
+              }
+            }
+          ]
+        }
+      },
+      "columnKind": "unicodeCodePoints",
+      "results": [
+        {
+          "ruleId": "PUR2002",
+          "level": "error",
+          "message": {
+            "text": "unknown \"α\" \\ path"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "queries/%CE%B1.pure"
+                },
+                "region": {
+                  "startLine": 1,
+                  "startColumn": 5,
+                  "endLine": 1,
+                  "endColumn": 6,
+                  "byteOffset": 4,
+                  "byteLength": 2
+                }
+              },
+              "message": {
+                "text": "query symbol"
+              }
+            }
+          ],
+          "relatedLocations": [
+            {
+              "id": 1,
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "models/%CE%B2.pure"
+                },
+                "region": {
+                  "startLine": 1,
+                  "startColumn": 7,
+                  "endLine": 1,
+                  "endColumn": 8,
+                  "byteOffset": 6,
+                  "byteLength": 2
+                }
+              },
+              "message": {
+                "text": "declared here"
+              }
+            }
+          ],
+          "fixes": [
+            {
+              "description": {
+                "text": "replace the query symbol"
+              },
+              "artifactChanges": [
+                {
+                  "artifactLocation": {
+                    "uri": "queries/%CE%B1.pure"
+                  },
+                  "replacements": [
+                    {
+                      "deletedRegion": {
+                        "startLine": 1,
+                        "startColumn": 5,
+                        "endLine": 1,
+                        "endColumn": 6,
+                        "byteOffset": 4,
+                        "byteLength": 2
+                      },
+                      "insertedContent": {
+                        "text": "γ\n"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "properties": {
+                "applicability": "machine_applicable",
+                "provenance": "single_arity_proven"
+              }
+            }
+          ],
+          "properties": {
+            "verdict": {
+              "verdict": "not_equivalent",
+              "witness": "#>{db::T}#"
+            },
+            "reason": {
+              "id": "IND_OPAQUE_PREDICATE",
+              "bucket": "fundamental",
+              "blurb": "the predicate is outside the sound interpreted whitelist"
+            },
+            "documentationUrl": "https://example.invalid/PUR2002?x=1&y=2"
+          }
+        }
+      ],
+      "invocations": [
+        {
+          "executionSuccessful": true
+        }
+      ]
+    }
+  ]
+}

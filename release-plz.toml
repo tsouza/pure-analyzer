@@ -64,6 +64,10 @@ name = "libpure"
 publish = false
 
 [[package]]
+name = "pure-analyzer-render"
+publish = false
+
+[[package]]
 name = "pure-analyzer-cli"
 publish = false
 
