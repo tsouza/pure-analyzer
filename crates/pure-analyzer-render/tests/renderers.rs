@@ -797,7 +797,7 @@ fn terminal_control_fixture() -> (SourceStore, Vec<Diagnostic>) {
             vec![TextEdit {
                 file: FileId::new(0),
                 span: range(target_start, target_end),
-                new_text: format!("replacement{TERMINAL_CONTROLS}"),
+                new_text: format!("replacement\"\\{TERMINAL_CONTROLS}"),
             }],
         ))
         .verdict(Verdict::NotEquivalent {
@@ -820,7 +820,9 @@ fn assert_plain_human_output_escapes_terminal_controls(plain: &str) {
     )));
     assert!(plain.contains(&format!("primary: note{ESCAPED_TERMINAL_CONTROLS}")));
     assert!(plain.contains(&format!("= fix: fix{ESCAPED_TERMINAL_CONTROLS}")));
-    assert!(plain.contains(&format!("with \"replacement{ESCAPED_TERMINAL_CONTROLS}\"")));
+    assert!(plain.contains(&format!(
+        "with \"replacement\\\"\\\\{ESCAPED_TERMINAL_CONTROLS}\""
+    )));
     assert!(plain.contains(&format!(
         "not_equivalent; witness: witness{ESCAPED_TERMINAL_CONTROLS}"
     )));
