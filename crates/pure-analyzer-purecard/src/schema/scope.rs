@@ -391,6 +391,16 @@ pub enum L2Position {
     /// a *comparison*'s operand, where `equal(Any[1],Any[1])` keeps a
     /// type-mismatched literal legal beside a Boolean navExpr. The narrowing is
     /// nonetheless the same predicate, applied at a position where it does hold.
+    ///
+    /// A **lambda** is refused in the same slot, and for the same reason read one
+    /// category further out: a `|` here opens one, and a `LambdaFunction` is no
+    /// more a `Boolean` than a string literal is (live:
+    /// `or(Boolean[1],LambdaFunction<{->Database[1]}>[1])` for the niladic
+    /// `true||…`, and "Can't find variable class for variable 'x'" for the bound
+    /// `true&&x|…`). The bare `|` is the whole of the shape — a named binder's own
+    /// name is a bare word this rule keeps, and dies on the pipe that follows it —
+    /// and no token following a `&&`/`||` opens with one anywhere in the three
+    /// corpora.
     LogicalOperand,
     /// N3f: the method-name identifier right after a class extent's own `->` —
     /// the coarse **receiver-category** position. N3e admits the step arrow off a
@@ -413,6 +423,35 @@ pub enum L2Position {
     /// legal name, exactly as N3c's close policy keeps `Country` walkable inside
     /// `Countrylanguage`.
     ExtentMethod,
+    /// N3h: the **first** argument slot of a class-extent builtin whose own
+    /// signature fixes that argument's shape ([`EXTENT_METHOD_ARGS`]) — the
+    /// argument half of the treatment
+    /// [`ExtentMethod`](L2Position::ExtentMethod) gives the name.
+    ///
+    /// N3f decides which names the extent's arrow may open at all; this decides
+    /// what the ones it admits may be *called with*. The two failures it closes
+    /// are exactly the residue N3f's receiver-category argument cannot reach,
+    /// because both names are perfectly legal on a `T[*]` extent and wrong only
+    /// in their argument list (live, against the pinned engine):
+    /// `groupBy(CarMakers[*],String[1])` and `limit(CarMakers[*],String[1])`.
+    ///
+    /// Deliberately the **first slot only**, and deliberately a *shape* rather
+    /// than an arity. Each entry states one fact the engine states back in its
+    /// own rejection, and nothing beyond it: `limit(T[*],Integer[1])` is the
+    /// whole extent overload, so a string or date literal in that slot can never
+    /// match at any arity (`limit(…,String[1])`, `limit(…,StrictDate[1])`), while
+    /// `limit(3)` compiles; and the extent's `groupBy` takes
+    /// `Function<{K[1]->Any[*]}>[*]` first, so *no* literal can open its argument
+    /// list — live-confirmed at the right arity too (`groupBy('a','b','c')` →
+    /// `groupBy(CarMakers[*],String[1],String[1],String[1])`), while
+    /// `groupBy([x|$x.id],[],['k'])` compiles. The corpus agrees: all 39 gold
+    /// `.all()->groupBy(…)` calls open their argument list on a `[`, and no gold
+    /// query calls `limit` off an extent at all.
+    ///
+    /// No part of the **arity** is claimed, though both bounds were probed live —
+    /// see `narrow::fill_extent_method_arg` for why each was left to the compiler
+    /// oracle, and [`EXTENT_METHOD_ARGS`] for the probes themselves.
+    ExtentMethodArg(ExtentArg),
     /// N1/N2: the identifier after `.` must be a member of `class`.
     Member(String),
     /// T1: the comparison operand's literal type must match `class`.
@@ -420,15 +459,14 @@ pub enum L2Position {
     /// T2: an ordered comparator (`< > <= >=`) is legal only when the completed
     /// navExpr just left of it is numeric or temporal.
     Comparator(TypeClass),
-    /// T6: the same ordered comparators, at the position after a completed
-    /// navExpr that is **not a scalar primitive** at all — the case
+    /// T6: the **scalar-only operator** position after a completed navExpr that
+    /// is **not a scalar primitive** at all — the case
     /// [`Comparator`](L2Position::Comparator) has no type class to key on and so
     /// left wholly unnarrowed.
     ///
-    /// `< > <= >=` dispatch to `lessThan`/`greaterThan`/`lessThanEqual`/
-    /// `greaterThanEqual`, which the engine declares only over scalar primitive
-    /// operands. Three navExpr shapes reach this position, each live-attested
-    /// against the pinned Legend stack (issue #116):
+    /// Four navExpr shapes reach this position, each live-attested against the
+    /// pinned Legend stack (the first three from issue #116, the fourth from
+    /// issue #55 Phase 10):
     ///
     /// - a **collection** — any nav step on the chain whose upper multiplicity
     ///   bound is not exactly one (`$c.fk1DefaultCountrylanguage` →
@@ -440,13 +478,30 @@ pub enum L2Position {
     ///   (`Country.all().gnp` → `lessThan(Float[*],Integer[1])`);
     /// - a **class-typed** navExpr at any multiplicity, a class being no
     ///   ordered operand even when the association end is `[1..1]`
-    ///   (`$c.fk1DefaultCountry` → `lessThan(Country[1],Integer[1])`).
+    ///   (`$c.fk1DefaultCountry` → `lessThan(Country[1],Integer[1])`);
+    /// - a [`TYPE_PRESERVING_METHODS`] call **off the class extent**, which
+    ///   collapses the multiplicity and keeps the class
+    ///   (`CarMakers.all()->toOne()` → `lessThan(CarMakers[1],Integer[1])`).
+    ///   The one shape that arrives through a *call* rather than a member name,
+    ///   and so through
+    ///   [`awaiting_class_call_result`](ScopeTracker::awaiting_class_call_result)
+    ///   rather than through [`last_nav`](ScopeTracker::last_nav).
     ///
-    /// Equality is **not** masked here, in any of the three: Pure's `equal` is
-    /// `Any[*]`-generic, and all three shapes compile with `==` live. Nor is any
-    /// non-comparator continuation — `->` (the collapse the spec names:
+    /// Three operator families are masked, each declared by the engine over
+    /// scalar operands only and each refused on every one of the shapes above:
+    /// the **ordered comparators** `< > <= >=`
+    /// (`lessThan`/`greaterThan`/`lessThanEqual`/`greaterThanEqual`), the
+    /// **logical** operators `&&`/`||` (live: `and(Integer[*],String[1])`,
+    /// `or(ModelList[1..*],Boolean[1])`), and the two **arithmetic** operators
+    /// with no collection reading (live: `divide(Integer[*],Integer[1])`, and
+    /// `times` answering "Collection element must have a multiplicity [1]").
+    ///
+    /// Equality is **not** masked here, in any of the four: Pure's `equal` is
+    /// `Any[*]`-generic, and all four shapes compile with `==` live. Nor is any
+    /// non-operator continuation — `->` (the collapse the spec names:
     /// `->isEmpty()`, `->filter(…)`, `->count()`, `->exists(…)`), a further `.`,
-    /// or the end of the term.
+    /// or the end of the term. `+` is left alone too: `plus(String[*])` is
+    /// declared over a collection.
     OrderedOperand,
     /// T3: `sum`/`average` are legal only when the reduce lambda's declared
     /// element type is numeric; `min`/`max`/`count` are unconstrained (see
@@ -625,6 +680,88 @@ pub(crate) const EXTENT_ONLY_DENIED_METHODS: &[&str] = &[
     "year",
 ];
 
+/// The shape a class-extent builtin's own signature fixes for its **first**
+/// argument — the fact [`EXTENT_METHOD_ARGS`] carries and
+/// [`L2Position::ExtentMethodArg`] narrows on.
+///
+/// Stated as the literal kind the slot admits, because that is the whole of what
+/// the engine adjudicates here: asked for the wrong one it prints the signature
+/// back (`limit(CarMakers[*],String[1])`), and a non-literal operand — a `$var`,
+/// a nested call, a lambda, a list — it accepts or rejects on grounds this
+/// overlay cannot read.
+///
+/// `#[doc(hidden)] pub`, re-exported as `crate::schema::ExtentArg`, for the
+/// reason [`L2Position`] itself is: it is a payload of that test-support enum,
+/// so it has to cross the crate boundary with it.
+#[doc(hidden)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ExtentArg {
+    /// The slot takes a `Function`/lambda, so **no** literal opens it —
+    /// `groupBy(K[*],Function<{K[1]->Any[*]}>[*],…)`.
+    Function,
+    /// The slot takes an `Integer`, so only a numeric literal opens it —
+    /// `limit(T[*],Integer[1])`.
+    Integer,
+}
+
+/// N3h's table: the class-extent builtins whose first argument's shape their own
+/// engine signature fixes ([`L2Position::ExtentMethodArg`]).
+///
+/// The shape travels *with* the name, exactly as [`STORE_METHODS`]'s arity does
+/// and for the same reason: it is a fact about one method's signature, never
+/// about the set, so a third entry cannot be added without stating its own.
+///
+/// Both entries were sent through the running engine before they were written
+/// down, at the wrong shape *and* at the right one:
+///
+/// * `groupBy` — `groupBy(CarMakers[*],String[1])`,
+///   `groupBy(CarMakers[*],Integer[1])`,
+///   `groupBy(CarMakers[*],StrictDate[1])` and
+///   `groupBy(CarMakers[*],String[1],String[1],String[1])` all refused; the
+///   list-headed `->groupBy([x|$x.id],[],['k'])` compiles;
+/// * `limit` — `limit(CarMakers[*],String[1])` and
+///   `limit(CarMakers[*],StrictDate[1])` refused; `->limit(3)` compiles.
+///
+/// No **arity** is carried here, and both bounds were probed before that was
+/// decided: empty (`groupBy(CarMakers[*])`, `limit(CarMakers[*])`) and over-full
+/// (`limit(CarMakers[*],Integer[1],Integer[1])`, a four-argument `groupBy`) are
+/// refused alike. See `narrow::fill_extent_method_arg` for why neither became a
+/// mask.
+///
+/// `pub(crate)` so `narrow.rs` reads the same table.
+pub(crate) const EXTENT_METHOD_ARGS: &[(&str, ExtentArg)] = &[
+    ("groupBy", ExtentArg::Function),
+    ("limit", ExtentArg::Integer),
+];
+
+/// N3g's set: the builtins whose **entire** engine overload set is
+/// receiver-only, so an arrow call of one takes no further argument
+/// ([`L2Position::ReceiverOnlyArg`]).
+///
+/// Read off the engine's own registry, exactly as N3f's deny set is. Asked for
+/// one of these names with an argument, the compiler prints back the complete
+/// candidate list it *could* have matched, and every candidate has arity one —
+/// the receiver:
+///
+/// * `count(Any[*]):Integer[1]`;
+/// * `isEmpty(Any[0..1]):Boolean[1]`, `isEmpty(Any[*]):Boolean[1]`;
+/// * `isNotEmpty(Any[0..1]):Boolean[1]`, `isNotEmpty(Any[*]):Boolean[1]`;
+/// * `size(Relation<T>[1]):Integer[1]`, `size(Any[*]):Integer[1]`;
+/// * `toOne(T[*]):T[1]`.
+///
+/// The receiver parameter is `Any`/`T`, so the arity is a fact about the name
+/// alone and not about what it is arrowed off — live-confirmed on a class
+/// extent, a `TableTDS`, a primitive collection and a `filter` result alike. The
+/// corpus agrees and adds nothing: across the 5034 gold queries these names are
+/// called 3048 times and **never** with an argument.
+///
+/// Names the engine would not adjudicate are left out rather than guessed:
+/// `->distinct('x')` answers `RuntimeException: Not possible!` with no candidate
+/// list, so `distinct` is not here (§4 — invent no constraint the oracle does
+/// not state), and `sort` is excluded outright, taking a comparator argument in
+/// all 1048 of its corpus calls.
+///
+/// `pub(crate)` so `narrow.rs` and the tracker share one list.
 pub(crate) const RECEIVER_ONLY_METHODS: &[&str] =
     &["count", "isEmpty", "isNotEmpty", "size", "toOne"];
 
@@ -645,6 +782,15 @@ fn store_method_arity(name: &str) -> Option<usize> {
         .iter()
         .find(|(method, _)| *method == name)
         .map(|(_, arity)| *arity)
+}
+
+/// `name`'s declared first-argument shape if it is an [`EXTENT_METHOD_ARGS`]
+/// entry.
+fn extent_method_arg(name: &str) -> Option<ExtentArg> {
+    EXTENT_METHOD_ARGS
+        .iter()
+        .find(|(method, _)| *method == name)
+        .map(|(_, arg)| *arg)
 }
 
 /// Which kind of pipeline source a schema-resolved source path is — the fact
@@ -1037,6 +1183,36 @@ pub(crate) struct ScopeTracker {
     /// plain-function form spends the same single parameter on its argument), so
     /// the call shape has to travel with the name to `on_open`.
     last_ident_after_arrow: bool,
+    /// Whether the identifier [`last_ident`](Self::last_ident) holds was the
+    /// **class extent's own** method name — the `->` it followed was the one N3f
+    /// governs ([`awaiting_extent_method`](Self::awaiting_extent_method)).
+    ///
+    /// Set beside [`last_ident_after_arrow`](Self::last_ident_after_arrow) and for
+    /// the same reason, but it is the strictly stronger fact and two rules need
+    /// it: N3h's argument shape and T6's fourth navExpr shape are both claims
+    /// about a `T[*]` *class extent's* call, not about any arrow call at all.
+    last_ident_on_extent: bool,
+    /// N3h: the call just opened via [`on_open`](ScopeTracker::on_open) was a
+    /// class extent's [`EXTENT_METHOD_ARGS`] entry, carrying the shape that
+    /// method's signature fixes for its first argument. Cleared at the matching
+    /// `on_close` for the same reason
+    /// [`store_call_arity`](Self::store_call_arity) is.
+    extent_call_arg: Option<ExtentArg>,
+    /// T6 (fourth shape): the call just opened was a [`TYPE_PRESERVING_METHODS`]
+    /// step off a class extent, so what it returns is that class at `[1]`.
+    /// Read by [`on_close`](ScopeTracker::on_close) to arm
+    /// [`awaiting_class_call_result`](Self::awaiting_class_call_result), exactly
+    /// as [`store_call_arity`](Self::store_call_arity) is read to arm N4a.
+    extent_call_preserves_class: bool,
+    /// T6 (fourth shape): the call that just closed returned a **class-typed**
+    /// value, so the completed term left of the next operator is no scalar
+    /// primitive. The call-borne twin of a
+    /// [`NavResult::NonScalar`](NavResult::NonScalar) in
+    /// [`last_nav`](Self::last_nav), which a call never sets (a property name
+    /// does, and it is gone by the time a `)` closes). Lives exactly one
+    /// non-whitespace token past that close, like
+    /// [`last_call_type`](Self::last_call_type).
+    awaiting_class_call_result: bool,
     /// N4b: the token just seen was a [`LOGICAL_OPERATORS`] entry, so the operand
     /// it opens is a [`L2Position::LogicalOperand`]. Lives exactly one
     /// non-whitespace token, like [`cmp_pending`](Self::cmp_pending).
@@ -1226,9 +1402,9 @@ impl ScopeTracker {
     /// Buffer a lexeme still open at the token's end into [`Pending`], resolved and
     /// narrowed once a later token closes it (§6.4, B1). A continuation extends
     /// the existing buffer; a fresh run opens a new one, stamping the rule its
-    /// anchor establishes (T1's `ReValue` lever, S1's `SourceMethodArg` and N3d's
-    /// `StoreMethodArg` are
-    /// both whole-token/first-byte shape tests with no prefix/trie walk, so their
+    /// anchor establishes (T1's `ReValue` lever, S1's `SourceMethodArg`, N3d's
+    /// `StoreMethodArg` and N3h's `ExtentMethodArg` are
+    /// all whole-token/first-byte shape tests with no prefix/trie walk, so their
     /// continuation sub-tokens pass through untouched once the anchor token's own
     /// shape has already been narrowed — e.g. a milestoning literal fragmented by
     /// BPE, `%late` + `st`, must not have its second fragment masked for not
@@ -1247,10 +1423,15 @@ impl ScopeTracker {
             // what may follow a bare word still binds — live-rejected,
             // `->filter('SUM(SurfaceArea)'<agg/'…')` ("Can't find the
             // packageable element 'agg'").
-            (LexKind::Ident, L2Position::ReValue(_)) => L2Position::ValueIdent,
+            (LexKind::Ident, L2Position::ReValue(_) | L2Position::ExtentMethodArg(_)) => {
+                L2Position::ValueIdent
+            }
             (
                 _,
-                L2Position::ReValue(_) | L2Position::SourceMethodArg | L2Position::StoreMethodArg,
+                L2Position::ReValue(_)
+                | L2Position::SourceMethodArg
+                | L2Position::StoreMethodArg
+                | L2Position::ExtentMethodArg(_),
             ) => L2Position::None,
             (_, narrowed) => narrowed,
         };
@@ -1353,6 +1534,7 @@ impl ScopeTracker {
         // long enough to type an unrelated later navExpr.
         if !was_close {
             self.last_call_type = None;
+            self.awaiting_class_call_result = false;
         }
         // N4b's operand (any non-operator token after an armed logical operator)
         // clears the arming, exactly as a comparison operand clears T1's.
@@ -1472,6 +1654,10 @@ impl ScopeTracker {
         }
         self.last_ident = Some(text.to_owned());
         self.last_ident_after_arrow = pre_state == State::AfterArrow;
+        // N3f's arming is still live here — `dispatch_token` clears it only once
+        // this call returns — so it reads as the fact it is: this name is the one
+        // the extent's own step arrow opened.
+        self.last_ident_on_extent = self.awaiting_extent_method;
     }
 
     fn resolve_member(
@@ -1735,6 +1921,13 @@ impl ScopeTracker {
             && method
                 .as_deref()
                 .is_some_and(|name| RECEIVER_ONLY_METHODS.contains(&name));
+        // N3h and T6's fourth shape, both keyed on the *extent's* own call: the
+        // first reads the argument shape this method's signature fixes, the
+        // second whether the call hands the extent's class straight back.
+        let extent_method = method.as_deref().filter(|_| self.last_ident_on_extent);
+        self.extent_call_arg = extent_method.and_then(extent_method_arg);
+        self.extent_call_preserves_class =
+            extent_method.is_some_and(|name| TYPE_PRESERVING_METHODS.contains(&name));
         // A `~[` opens a relation column set: latch the pipeline as arm-R, so an
         // `ExpectValue` key identifier inside it is a column name and a following
         // relation-row binder narrows column access. The flag is pushed for *every*
@@ -1790,6 +1983,13 @@ impl ScopeTracker {
         self.awaiting_store_result = self.store_call_arity.is_some();
         self.store_call_arity = None;
         self.receiver_only_call = false;
+        // T6's fourth shape reads this close exactly as N4a reads the store
+        // method's: the call that just closed handed the extent's own class back,
+        // so what follows sits on a class-typed term. Assigned rather than or-ed,
+        // for the reason `awaiting_store_result` states.
+        self.awaiting_class_call_result = self.extent_call_preserves_class;
+        self.extent_call_preserves_class = false;
+        self.extent_call_arg = None;
         // Restore every binder introduced at the closing delimiter's depth to what it
         // shadowed, so a lambda's binder never outlives its scope (§6.4). Deeper
         // scopes have already restored and popped, so the depth-matching saves are
@@ -1875,6 +2075,20 @@ impl ScopeTracker {
     fn in_tilde_key(&self, state: State) -> bool {
         matches!(state, State::ExpectValue | State::ExpectValueReq)
             && self.tilde_open.last() == Some(&true)
+    }
+
+    /// N3h's slot, when `state` is the **first** argument position of an open
+    /// class-extent call whose first argument's shape [`EXTENT_METHOD_ARGS`]
+    /// fixes.
+    ///
+    /// [`State::ExpectValue`] is that first slot and
+    /// [`State::ExpectValueReq`] (a slot after a comma) is not — which is the
+    /// whole of the "first argument only" claim, stated here rather than in the
+    /// caller's cascade so the two states are distinguished exactly once.
+    fn extent_first_arg(&self, state: State) -> Option<ExtentArg> {
+        (state == State::ExpectValue)
+            .then_some(self.extent_call_arg)
+            .flatten()
     }
 
     /// Whether we are inside a column-reference method's arguments *and* a named
@@ -2078,10 +2292,14 @@ impl ScopeTracker {
             // the string arming its last argument set, so only one can hold.
             L2Position::StrOperator { after_dash: false }
         } else {
-            // T2's comparator lever, and T6's ordered-operand mask.
+            // T2's comparator lever, and T6's ordered-operand mask. A completed
+            // *call* sets no `last_nav` (a property name does, and it is gone by
+            // the time a `)` closes), so T6's fourth shape reads its own arming
+            // where the member-borne three leave nothing.
             match self.last_nav {
                 Some(NavResult::Scalar(tc)) => L2Position::Comparator(tc),
                 Some(NavResult::NonScalar) => L2Position::OrderedOperand,
+                None if self.awaiting_class_call_result => L2Position::OrderedOperand,
                 None => L2Position::None,
             }
         }
@@ -2102,6 +2320,8 @@ impl ScopeTracker {
             L2Position::StoreMethodArg
         } else if self.receiver_only_call {
             L2Position::ReceiverOnlyArg
+        } else if let Some(arg) = self.extent_first_arg(state) {
+            L2Position::ExtentMethodArg(arg)
         } else if self.logical_pending {
             L2Position::LogicalOperand
         } else if let Some(tc) = self.cmp_pending {

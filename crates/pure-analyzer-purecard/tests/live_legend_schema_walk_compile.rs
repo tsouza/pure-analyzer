@@ -536,15 +536,29 @@ const RATCHET_SLACK: usize = 3;
 /// L1 tightening Phase 8 wrote, attested and escalated rather than merged: a
 /// `::` binds to a term-start name or a string literal, and to nothing else.
 ///
-/// **Phase 10 (2026-08-31) re-measures at 54/64 = recipe 5/5 + exploration
-/// 49/59**, bit-identical across two consecutive runs and level with Phase 9 on
-/// both partitions, so this baseline is *not* raised. The phase ships N3i, whose
-/// two closed classes (`tableToTDS(String[1])` and `restrict(Boolean[1],…)`)
-/// both sat in `car_1`'s residue and neither in this one — this arm's
-/// exploration stream reaches no relation method on a scalar receiver at all.
-/// Reported because the standing regime measures both arms on every rule, not
-/// only the one a rule was designed to move; the failure *set* here is
-/// unchanged in kind, ten failures across the same six categories.
+/// **Phase 10 (2026-08-31) re-measures at 53/64 = recipe 5/5 + exploration
+/// 48/59**, bit-identical across three consecutive runs — one below the standing
+/// record, so this baseline is *not* raised (floors ratchet upward only) and not
+/// lowered either. 48 clears the 49 − [`RATCHET_SLACK`] = 46 floor.
+///
+/// **The number above is the phase's two rule sets measured *together*.** Phase
+/// 10 landed as two concurrently-developed PRs against the same bucket — N3i (a
+/// relation/store builtin on a scalar receiver) and N3h/N4b/T6 (the extent's
+/// argument slot, the lambda operand of a logical operator, and T6's widened
+/// operator families). Each was measured solo against a tree without the other,
+/// and each solo number is void: they moved the same baseline independently.
+/// This is the re-measure with both present, and it is the only one that
+/// describes the shipped decoder.
+///
+/// Recorded honestly, because the headline number is again not where the work
+/// went. Both of this arm's own targets are closed outright — zero
+/// `or(Boolean[1],LambdaFunction<…>)` walks (was 1) and zero
+/// `groupBy(Countrylanguage[*],Boolean[1])` (was 1) — and across the two
+/// databases the "receiver / signature one category over" bucket falls
+/// **10 → 1**. The `world_1` slots that freed up redrew into the bare-word/`::`
+/// value-position bucket the maintainer declined to scope (Decision 3), two of
+/// them N3h's own reroute: a `groupBy('lit')` the rule closes becomes a
+/// `groupBy(x|'lit')` whose binder the engine cannot type.
 const CRITERION_BASELINE: Baseline = Baseline {
     db_id: CRITERION_DB,
     recipe_compiled: 5,
@@ -665,18 +679,32 @@ const CRITERION_BASELINE: Baseline = Baseline {
 /// the slack that would have absorbed a swing of this size is a repo-wide
 /// constant whose value is its own decision.
 ///
-/// **Phase 10 (2026-08-31) ratchets this to 44/64 = recipe 7/7 + exploration
-/// 37/57**, bit-identical across two consecutive runs, measured on this branch
-/// against its own before-run (42/64 = 7/7 + 35/57) on the same stack. The floor
-/// rises 32 → 34. The phase ships N3i, and the +2 is the two failure *classes*
-/// it names leaving the residue outright: `tableToTDS(String[1])` and
-/// `restrict(Boolean[1],String[1])` are both gone, and nothing that was
-/// compiling stopped. `groupBy(String[1],String[1])` deliberately survives — it
-/// is an arity error on a receiver-generic name, which N3i does not claim.
+/// **Phase 10 (2026-08-31) ratchets this to 46/64 = recipe 7/7 + exploration
+/// 39/57**, bit-identical across three consecutive runs, against a shared
+/// before-run of 42/64 = 7/7 + 35/57 on the same stack. The floor rises 32 → 36,
+/// and this is a new record for the arm.
+///
+/// **Measured with both of the phase's rule sets present, which is the only
+/// honest way to state it.** Phase 10 landed as two concurrently-developed PRs
+/// against the same bucket, and each was measured against a tree without the
+/// other: N3i alone read 37/57, and N3h/N4b/T6 alone read 38/57. Both solo
+/// numbers moved *this* baseline off the same 35, so shipping either would have
+/// pinned a floor no tree ever had. The combined 39 is strictly better than
+/// both, and the reason is that the two rule sets close disjoint classes:
+/// N3i removes `tableToTDS(String[1])` and `restrict(Boolean[1],String[1])`,
+/// while N3h removes `groupBy(CarMakers[*],String[1])` and
+/// `limit(CarMakers[*],String[1])`, and T6's widening removes
+/// `and(Integer[*],String[1])`, `lessThan(CarMakers[1],Integer[1])` and the
+/// `[*]`-multiplicity `times`. All seven signatures are absent from the
+/// after-run, and nothing that was compiling stopped.
+///
+/// `groupBy(String[1],String[1])` deliberately survives, and is now the whole of
+/// the bucket across both databases: it is an arity error on a receiver-generic
+/// name, which neither rule set claims.
 const GENERALIZATION_BASELINE: Baseline = Baseline {
     db_id: GENERALIZATION_DB,
     recipe_compiled: 7,
-    exploration_compiled: 37,
+    exploration_compiled: 39,
 };
 
 /// Decode a walk's token ids back to its Pure text through `grammar`'s own
@@ -818,35 +846,48 @@ fn assert_live_compile_rate(baseline: &Baseline) {
 /// proves that gap is in fact closed (269/269 *real* gold queries compile
 /// against the same grammar this lane uses).
 ///
-/// Phase 10 ships N3i: a relation/store builtin is dead at a `->` whose receiver
-/// the overlay has typed a scalar primitive. What remains, across 10 `world_1` /
-/// 20 `car_1` exploration failures, taxonomised per walk and summing to exactly
-/// 30:
+/// Phase 10 ships two concurrently-developed rule sets against the same bucket:
+/// N3i (a relation/store builtin is dead at a `->` whose receiver the overlay
+/// has typed a scalar primitive) and N3h/N4b/T6 (the class extent's own first
+/// argument slot, the lambda operand of a `&&`/`||`, and T6's widening from the
+/// ordered comparators to every operator family the engine declares over scalar
+/// operands, plus the fourth navExpr shape that reaches it). The taxonomy below
+/// is measured with **both** present — each was also measured solo, and neither
+/// solo number describes the shipped decoder.
+///
+/// Together they take the "receiver / signature one category over" bucket from
+/// **10 → 1**. What remains, across 11 `world_1` / 18 `car_1` exploration
+/// failures, taxonomised per walk and summing to exactly 29:
 ///
 /// - **L1 parse over-approximation — 7.** Two are the arm-R carve-out (a `:`
 ///   that needs a slot-initial bare name, and a binder with no multiplicity),
 ///   which needs the `~` sigil tracked as *mutable per-frame* state — a
-///   `Step`/`Action` the declarative spec (ADR-0010) has no V1 form for. One is
-///   the milestoning slot's content, and four are argument-shape garbage with no
-///   labelled token.
-/// - **A bare word or `::` classpath in a value position — 7.** Unchanged in
-///   kind (one fewer than Phase 9's 8, on the stream's own reshuffle rather than
-///   on anything this phase did): closing them means narrowing a *name* against the
-///   schema's own element set at a value position, the product question about how
-///   much of a closed model the decoder may assume. **Declined by the maintainer**
-///   in the 2026-08-30 decision-ruling comment on #55 (Decision 3), on the
-///   ground that a real host's novel identifiers must stay legal. Permanent
-///   residue, not a backlog item.
-/// - **A receiver / signature one category over — 8.** N3i took two of the ten
-///   Phase 9 recorded — `tableToTDS(String[1])` and
-///   `restrict(Boolean[1],String[1])`, the whole scalar-receiver class. What is
-///   left splits in two, and the split is what a Phase 11 would work from:
-///   **arity on a receiver-generic name** (`groupBy(Countrylanguage[*],Boolean[1])`,
-///   `groupBy(CarMakers[*],String[1])`, `limit(CarMakers[*],String[1])`,
-///   `limit(ModelList[*],String[1])` — the extent-method argument *shape*, which
-///   N3i explicitly does not claim), and **operator operands**
-///   (`and(Integer[*],String[1])`, `lessThan(CarMakers[1],Integer[1])`,
-///   `or(Boolean[1],LambdaFunction<…>[1])` and one more).
+///   `Step`/`Action` the declarative spec (ADR-0010) has no V1 form for. The
+///   rest is argument-shape garbage with no labelled token.
+/// - **A bare word, a `::` classpath, or an unbound binder in a value position —
+///   11.** The phase's own cost, and the only bucket that grew: both streams
+///   redrew into it, and two of `world_1`'s draws are N3h's reroute — a
+///   `groupBy('lit')` the rule closes becomes a `groupBy(x|'lit')` whose binder
+///   the engine cannot type. Closing the class still means narrowing a *name*
+///   against the schema's own element set at a value position, the product
+///   question about how much of a closed model the decoder may assume.
+///   **Declined by the maintainer** in the 2026-08-30 decision-ruling comment on
+///   #55 (Decision 3), on the ground that a real host's novel identifiers must
+///   stay legal. Permanent residue, not a backlog item.
+/// - **A receiver / signature one category over — 1.**
+///   `groupBy(String[1],String[1])`, and it is the whole of what the two rule
+///   sets left: an **arity** error on a receiver-generic name, which neither
+///   claims. N3i denies names by first-parameter category and `groupBy` is
+///   generic over its receiver; N3h fixes the extent's first-argument *shape*
+///   and this receiver is a `String[1]`, not an extent. An arity rule is what
+///   would reach it, and `narrow::fill_extent_method_arg` records why this phase
+///   probed one and declined to ship it.
+/// - **Bucket E's remainder — 1.** `and(DateTime[1],DateTime[1])`: a logical
+///   operator whose operands are both scalar *and* type-matched, so neither
+///   N4b's literal-class test nor T6's non-scalar test reaches it. Needs the
+///   operand's inferred type class, i.e. #116's blocked scope.
+/// - **`.all` on the `Class` metatype — 1.** A nested `all(` whose own argument
+///   slot re-opened a source position.
 /// - **A corpus binder name called as a method — 1.** `row1(ModelList[*],
 ///   Integer[1])` — `row1` is a lambda binder name the gold corpus's join
 ///   lambdas bind 2378 times, not a schema column and not a builtin. Closing it
@@ -855,9 +896,10 @@ fn assert_live_compile_rate(baseline: &Baseline) {
 ///   compile there and appear in no corpus, so any corpus-derived allow-list
 ///   over-masks. Filed with Decision 3's bucket in spirit — it is the same
 ///   closed-vocabulary question, at a method name instead of a value.
-/// - **A property on a `Table` or on an inferred primitive — 4.** `Edispl_t1` and
-///   `Year_T2_2` on `meta::relational::metamodel::relation::Table`, `fullName` on
-///   a `DateTime`, `LifeExpectancy_T1` on a `String`. The `Table` two are **not**
+/// - **A property on a `Table` or on an inferred primitive — 5.** `Edispl_t1`
+///   and `Year_T2_2` on `meta::relational::metamodel::relation::Table`,
+///   `fullName` and `Population` on a `DateTime`, `LifeExpectancy_T1` on a
+///   `String`. The `Table` two are **not**
 ///   the cheap rule they look like: the receiver type is statically known, but
 ///   `Table`'s own property set is rich and overlaps the schema's member
 ///   vocabulary — `.name`, `.schema`, `.columns`, `.primaryKey`, `.milestoning`,
@@ -867,8 +909,6 @@ fn assert_live_compile_rate(baseline: &Baseline) {
 ///   member vocabulary there would mask a legal navigation; an allow-list would
 ///   have to enumerate a metamodel class the engine exposes no listing for.
 ///   These stay with #116's blocked type inference.
-/// - **Bucket E's remainder — 1.** A `[*]` collection element where `[1]` is
-///   required, under `greaterThanEqual`/`times`. Needs left-operand reasoning.
 /// - **Two engine-internal rejections** — `RuntimeException: Not possible!` and
 ///   an `IndexOutOfBoundsException`. Neither states a candidate set, so neither
 ///   gives the overlay anything to encode. **Irreducible.**
