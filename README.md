@@ -12,6 +12,9 @@ infrastructure, but remain independent products.
 Its analyzer crates follow the dependency direction described in the
 [domain model](docs/domain-model.md).
 
+For command use, configuration, output, and safe file-update behavior, see the
+[Pure Analyzer user guide](docs/pure-analyzer.md).
+
 ### pure-analyzer-purecard
 
 [`pure-analyzer-purecard`](crates/pure-analyzer-purecard/) is the PureCARD
