@@ -27,6 +27,23 @@ test("plans the zero-based mutation shard command", () => {
   });
 });
 
+test("plans the verified diff-scoped mutation shard command", () => {
+  expect(
+    parseInvocation(["diff-shard", "2", "3", "target/mutation-scope.diff"]),
+  ).toEqual({
+    mode: "run",
+    label: "diff-shard-2",
+    reportRoot: "target/mutants-diff-shard-2",
+    mutationCommand: [
+      "just",
+      "test-mutation-diff-shard",
+      "2",
+      "3",
+      "target/mutation-scope.diff",
+    ],
+  });
+});
+
 test("plans the diagnostics-only forms without a mutation command", () => {
   expect(parseInvocation(["--collect", "shard", "9"])).toEqual({
     mode: "collect",
@@ -40,11 +57,18 @@ test("plans the diagnostics-only forms without a mutation command", () => {
     reportRoot: "target/mutants-ffi",
     mutationCommand: [],
   });
+  expect(parseInvocation(["--collect", "diff-shard", "2"])).toEqual({
+    mode: "collect",
+    label: "diff-shard-2",
+    reportRoot: "target/mutants-diff-shard-2",
+    mutationCommand: [],
+  });
 });
 
 test("rejects an invalid shard boundary", () => {
   expect(() => parseInvocation(["shard", "12", "12"])).toThrow("usage:");
   expect(() => parseInvocation(["shard", "0", "0"])).toThrow("usage:");
+  expect(() => parseInvocation(["diff-shard", "0", "1", ""])).toThrow("usage:");
   expect(() => parseInvocation(["--collect", "shard", "not-a-number"])).toThrow(
     "usage:",
   );
@@ -117,6 +141,28 @@ test("caps multi-megabyte diagnostic output before it can accumulate", async () 
   expect(new TextEncoder().encode(result.stdout).byteLength).toBeLessThanOrEqual(
     maxBuffer,
   );
+});
+
+test("shares one output cap across streamed stdout and captured stderr", async () => {
+  const maxBuffer = 64 * 1024;
+  let streamedBytes = 0;
+  const result = await runCommand(
+    [
+      process.execPath,
+      "-e",
+      `process.stdout.write("x".repeat(${48 * 1024})); process.stderr.write("y".repeat(${48 * 1024}));`,
+    ],
+    {
+      maxBuffer,
+      onStdout: (chunk) => {
+        streamedBytes += chunk.byteLength;
+      },
+    },
+  );
+
+  const capturedBytes = new TextEncoder().encode(result.stderr).byteLength;
+  expect(result.outputLimitExceeded).toBeTrue();
+  expect(streamedBytes + capturedBytes).toBeLessThanOrEqual(maxBuffer);
 });
 
 test("waits for a backpressured output stream to drain", async () => {

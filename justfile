@@ -134,9 +134,21 @@ test-mutation:
     cargo xtask test-mutation
 
 # One shard of the workspace-wide mutation pass (CI matrix only): `index` is
-# zero-based, matching GitHub Actions' `strategy.job-index`/`strategy.job-total`.
+# zero-based, matching the mutation planner matrix's `index`/`total` fields.
 test-mutation-shard index total:
     cargo xtask test-mutation-shard {{index}} {{total}}
+
+# One verified merge-base-diff-scoped workspace mutation shard (CI only).
+test-mutation-diff-shard index total diff:
+    cargo xtask test-mutation-diff-shard {{index}} {{total}} {{quote(diff)}}
+
+# Plan a fail-closed mutation matrix from the event-pinned pull-request diff.
+plan-mutation:
+    bun scripts/mutation-scope.mjs plan
+
+# Recreate and verify the planner's exact diff in a mutation matrix worker.
+prepare-mutation-diff:
+    bun scripts/mutation-scope.mjs prepare
 
 # Run the M3 parser's mutation pass in isolation while evolving parser
 # contracts. This is an inner-loop aid only; the workspace-wide CI matrix
