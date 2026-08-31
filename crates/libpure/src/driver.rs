@@ -1015,8 +1015,11 @@ Class model::Person
     fn diagnostic_policy_also_applies_to_model_loader_findings() {
         let request = |policy| {
             LintRequest::new(
-                SourceRequest::new([SourceInput::in_memory("query.pure", "model::Person.all()")])
-                    .with_diagnostic_policy(policy),
+                SourceRequest::new([SourceInput::in_memory(
+                    "query.pure",
+                    "model::Person.all()->filter(x| $x.missing)",
+                )])
+                .with_diagnostic_policy(policy),
                 [
                     ModelInput::pmcd(SourceInput::in_memory("first.json", MODEL)),
                     ModelInput::pmcd(SourceInput::in_memory("second.json", MODEL)),
@@ -1044,6 +1047,24 @@ Class model::Person
                 .diagnostics()
                 .iter()
                 .all(|diagnostic| diagnostic.code != DiagCode::ModelMergeConflict)
+        );
+
+        let selected = driver
+            .lint(&request(
+                DiagnosticPolicy::new().select(DiagCode::ModelMergeConflict),
+            ))
+            .expect("lint duplicate models with selected merge finding");
+        assert!(
+            selected
+                .diagnostics()
+                .iter()
+                .any(|diagnostic| diagnostic.code == DiagCode::ModelMergeConflict)
+        );
+        assert!(
+            selected
+                .diagnostics()
+                .iter()
+                .all(|diagnostic| diagnostic.code == DiagCode::ModelMergeConflict)
         );
     }
 
