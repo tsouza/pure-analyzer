@@ -1,7 +1,893 @@
 pub mod libpure
+pub use libpure::BuildError
+pub use libpure::DiagCode
 pub use libpure::Diagnostic
+pub use libpure::FileId
+pub use libpure::FixPlan
+pub use libpure::FixPlanError
 pub use libpure::FormatResult
+pub use libpure::GreenNode
+pub use libpure::ModelError
+pub use libpure::PlannedChange
+pub use libpure::PlannedFile
 pub use libpure::Severity
+pub use libpure::TextRange
+pub use libpure::TextSize
 pub use libpure::format_query
+pub enum libpure::DriverError
+pub libpure::DriverError::MissingSource
+pub libpure::DriverError::MissingSource::file: pure_analyzer_diagnostics::file::FileId
+pub libpure::DriverError::ModelLoad
+pub libpure::DriverError::ModelLoad::source: pure_analyzer_model::error::ModelError
+pub libpure::DriverError::ModelSourceLoad
+pub libpure::DriverError::ModelSourceLoad::source: libpure::SourceStoreError
+pub libpure::DriverError::Parse
+pub libpure::DriverError::Parse::file: pure_analyzer_diagnostics::file::FileId
+pub libpure::DriverError::Parse::source: pure_analyzer_syntax::builder::BuildError
+pub libpure::DriverError::SourceLoad
+pub libpure::DriverError::SourceLoad::source: libpure::SourceStoreError
+pub libpure::DriverError::Usage
+pub libpure::DriverError::Usage::source: libpure::RequestError
+pub libpure::DriverError::WorkerPool
+pub libpure::DriverError::WorkerPool::source: rayon_core::ThreadPoolBuildError
+impl core::error::Error for libpure::DriverError
+pub fn libpure::DriverError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
+impl core::fmt::Debug for libpure::DriverError
+pub fn libpure::DriverError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for libpure::DriverError
+pub fn libpure::DriverError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for libpure::DriverError
+impl core::marker::Send for libpure::DriverError
+impl core::marker::Sync for libpure::DriverError
+impl core::marker::Unpin for libpure::DriverError
+impl core::marker::UnsafeUnpin for libpure::DriverError
+impl !core::panic::unwind_safe::RefUnwindSafe for libpure::DriverError
+impl !core::panic::unwind_safe::UnwindSafe for libpure::DriverError
+impl<T, U> core::convert::Into<U> for libpure::DriverError where U: core::convert::From<T>
+pub fn libpure::DriverError::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for libpure::DriverError where U: core::convert::Into<T>
+pub type libpure::DriverError::Error = never
+pub fn libpure::DriverError::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for libpure::DriverError where U: core::convert::TryFrom<T>
+pub type libpure::DriverError::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn libpure::DriverError::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::string::ToString for libpure::DriverError where T: core::fmt::Display + ?core::marker::Sized
+pub fn libpure::DriverError::to_string(&self) -> alloc::string::String
+impl<T> core::any::Any for libpure::DriverError where T: 'static + ?core::marker::Sized
+pub fn libpure::DriverError::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for libpure::DriverError where T: ?core::marker::Sized
+pub fn libpure::DriverError::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for libpure::DriverError where T: ?core::marker::Sized
+pub fn libpure::DriverError::borrow_mut(&mut self) -> &mut T
+impl<T> core::convert::From<T> for libpure::DriverError
+pub fn libpure::DriverError::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for libpure::DriverError
+pub type libpure::DriverError::Init = T
+pub const libpure::DriverError::ALIGN: usize
+pub unsafe fn libpure::DriverError::deref<'a>(usize) -> &'a T
+pub unsafe fn libpure::DriverError::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn libpure::DriverError::drop(usize)
+pub unsafe fn libpure::DriverError::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for libpure::DriverError
+pub enum libpure::ModelInput
+pub libpure::ModelInput::Pmcd
+pub libpure::ModelInput::Pmcd::source: libpure::SourceInput
+pub libpure::ModelInput::Pure
+pub libpure::ModelInput::Pure::source: libpure::SourceInput
+impl libpure::ModelInput
+pub const fn libpure::ModelInput::pmcd(libpure::SourceInput) -> Self
+pub const fn libpure::ModelInput::pure(libpure::SourceInput) -> Self
+impl core::clone::Clone for libpure::ModelInput
+pub fn libpure::ModelInput::clone(&self) -> libpure::ModelInput
+impl core::cmp::Eq for libpure::ModelInput
+impl core::cmp::PartialEq for libpure::ModelInput
+pub fn libpure::ModelInput::eq(&self, &libpure::ModelInput) -> bool
+impl core::fmt::Debug for libpure::ModelInput
+pub fn libpure::ModelInput::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for libpure::ModelInput
+impl core::marker::Freeze for libpure::ModelInput
+impl core::marker::Send for libpure::ModelInput
+impl core::marker::Sync for libpure::ModelInput
+impl core::marker::Unpin for libpure::ModelInput
+impl core::marker::UnsafeUnpin for libpure::ModelInput
+impl core::panic::unwind_safe::RefUnwindSafe for libpure::ModelInput
+impl core::panic::unwind_safe::UnwindSafe for libpure::ModelInput
+impl<T, U> core::convert::Into<U> for libpure::ModelInput where U: core::convert::From<T>
+pub fn libpure::ModelInput::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for libpure::ModelInput where U: core::convert::Into<T>
+pub type libpure::ModelInput::Error = never
+pub fn libpure::ModelInput::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for libpure::ModelInput where U: core::convert::TryFrom<T>
+pub type libpure::ModelInput::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn libpure::ModelInput::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for libpure::ModelInput where T: core::clone::Clone
+pub type libpure::ModelInput::Owned = T
+pub fn libpure::ModelInput::clone_into(&self, &mut T)
+pub fn libpure::ModelInput::to_owned(&self) -> T
+impl<T> core::any::Any for libpure::ModelInput where T: 'static + ?core::marker::Sized
+pub fn libpure::ModelInput::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for libpure::ModelInput where T: ?core::marker::Sized
+pub fn libpure::ModelInput::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for libpure::ModelInput where T: ?core::marker::Sized
+pub fn libpure::ModelInput::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for libpure::ModelInput where T: core::clone::Clone
+pub unsafe fn libpure::ModelInput::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for libpure::ModelInput
+pub fn libpure::ModelInput::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for libpure::ModelInput
+pub type libpure::ModelInput::Init = T
+pub const libpure::ModelInput::ALIGN: usize
+pub unsafe fn libpure::ModelInput::deref<'a>(usize) -> &'a T
+pub unsafe fn libpure::ModelInput::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn libpure::ModelInput::drop(usize)
+pub unsafe fn libpure::ModelInput::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for libpure::ModelInput
+pub enum libpure::RequestError
+pub libpure::RequestError::NoSources
+pub libpure::RequestError::ZeroJobs
+impl core::clone::Clone for libpure::RequestError
+pub fn libpure::RequestError::clone(&self) -> libpure::RequestError
+impl core::cmp::Eq for libpure::RequestError
+impl core::cmp::PartialEq for libpure::RequestError
+pub fn libpure::RequestError::eq(&self, &libpure::RequestError) -> bool
+impl core::error::Error for libpure::RequestError
+impl core::fmt::Debug for libpure::RequestError
+pub fn libpure::RequestError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for libpure::RequestError
+pub fn libpure::RequestError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for libpure::RequestError
+impl core::marker::StructuralPartialEq for libpure::RequestError
+impl core::marker::Freeze for libpure::RequestError
+impl core::marker::Send for libpure::RequestError
+impl core::marker::Sync for libpure::RequestError
+impl core::marker::Unpin for libpure::RequestError
+impl core::marker::UnsafeUnpin for libpure::RequestError
+impl core::panic::unwind_safe::RefUnwindSafe for libpure::RequestError
+impl core::panic::unwind_safe::UnwindSafe for libpure::RequestError
+impl<T, U> core::convert::Into<U> for libpure::RequestError where U: core::convert::From<T>
+pub fn libpure::RequestError::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for libpure::RequestError where U: core::convert::Into<T>
+pub type libpure::RequestError::Error = never
+pub fn libpure::RequestError::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for libpure::RequestError where U: core::convert::TryFrom<T>
+pub type libpure::RequestError::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn libpure::RequestError::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for libpure::RequestError where T: core::clone::Clone
+pub type libpure::RequestError::Owned = T
+pub fn libpure::RequestError::clone_into(&self, &mut T)
+pub fn libpure::RequestError::to_owned(&self) -> T
+impl<T> alloc::string::ToString for libpure::RequestError where T: core::fmt::Display + ?core::marker::Sized
+pub fn libpure::RequestError::to_string(&self) -> alloc::string::String
+impl<T> core::any::Any for libpure::RequestError where T: 'static + ?core::marker::Sized
+pub fn libpure::RequestError::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for libpure::RequestError where T: ?core::marker::Sized
+pub fn libpure::RequestError::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for libpure::RequestError where T: ?core::marker::Sized
+pub fn libpure::RequestError::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for libpure::RequestError where T: core::clone::Clone
+pub unsafe fn libpure::RequestError::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for libpure::RequestError
+pub fn libpure::RequestError::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for libpure::RequestError
+pub type libpure::RequestError::Init = T
+pub const libpure::RequestError::ALIGN: usize
+pub unsafe fn libpure::RequestError::deref<'a>(usize) -> &'a T
+pub unsafe fn libpure::RequestError::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn libpure::RequestError::drop(usize)
+pub unsafe fn libpure::RequestError::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for libpure::RequestError
+pub enum libpure::SourceInput
+pub libpure::SourceInput::File
+pub libpure::SourceInput::File::path: std::path::PathBuf
+pub libpure::SourceInput::InMemory
+pub libpure::SourceInput::InMemory::name: alloc::string::String
+pub libpure::SourceInput::InMemory::text: alloc::string::String
+pub libpure::SourceInput::Stdin
+pub libpure::SourceInput::Stdin::text: alloc::string::String
+impl libpure::SourceInput
+pub fn libpure::SourceInput::file(impl core::convert::Into<std::path::PathBuf>) -> Self
+pub fn libpure::SourceInput::in_memory(impl core::convert::Into<alloc::string::String>, impl core::convert::Into<alloc::string::String>) -> Self
+pub fn libpure::SourceInput::stdin(impl core::convert::Into<alloc::string::String>) -> Self
+impl core::clone::Clone for libpure::SourceInput
+pub fn libpure::SourceInput::clone(&self) -> libpure::SourceInput
+impl core::cmp::Eq for libpure::SourceInput
+impl core::cmp::PartialEq for libpure::SourceInput
+pub fn libpure::SourceInput::eq(&self, &libpure::SourceInput) -> bool
+impl core::fmt::Debug for libpure::SourceInput
+pub fn libpure::SourceInput::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for libpure::SourceInput
+impl core::marker::Freeze for libpure::SourceInput
+impl core::marker::Send for libpure::SourceInput
+impl core::marker::Sync for libpure::SourceInput
+impl core::marker::Unpin for libpure::SourceInput
+impl core::marker::UnsafeUnpin for libpure::SourceInput
+impl core::panic::unwind_safe::RefUnwindSafe for libpure::SourceInput
+impl core::panic::unwind_safe::UnwindSafe for libpure::SourceInput
+impl<T, U> core::convert::Into<U> for libpure::SourceInput where U: core::convert::From<T>
+pub fn libpure::SourceInput::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for libpure::SourceInput where U: core::convert::Into<T>
+pub type libpure::SourceInput::Error = never
+pub fn libpure::SourceInput::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for libpure::SourceInput where U: core::convert::TryFrom<T>
+pub type libpure::SourceInput::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn libpure::SourceInput::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for libpure::SourceInput where T: core::clone::Clone
+pub type libpure::SourceInput::Owned = T
+pub fn libpure::SourceInput::clone_into(&self, &mut T)
+pub fn libpure::SourceInput::to_owned(&self) -> T
+impl<T> core::any::Any for libpure::SourceInput where T: 'static + ?core::marker::Sized
+pub fn libpure::SourceInput::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for libpure::SourceInput where T: ?core::marker::Sized
+pub fn libpure::SourceInput::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for libpure::SourceInput where T: ?core::marker::Sized
+pub fn libpure::SourceInput::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for libpure::SourceInput where T: core::clone::Clone
+pub unsafe fn libpure::SourceInput::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for libpure::SourceInput
+pub fn libpure::SourceInput::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for libpure::SourceInput
+pub type libpure::SourceInput::Init = T
+pub const libpure::SourceInput::ALIGN: usize
+pub unsafe fn libpure::SourceInput::deref<'a>(usize) -> &'a T
+pub unsafe fn libpure::SourceInput::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn libpure::SourceInput::drop(usize)
+pub unsafe fn libpure::SourceInput::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for libpure::SourceInput
+pub enum libpure::SourceOrigin
+pub libpure::SourceOrigin::File
+pub libpure::SourceOrigin::File::path: std::path::PathBuf
+pub libpure::SourceOrigin::InMemory
+pub libpure::SourceOrigin::Stdin
+impl core::clone::Clone for libpure::SourceOrigin
+pub fn libpure::SourceOrigin::clone(&self) -> libpure::SourceOrigin
+impl core::cmp::Eq for libpure::SourceOrigin
+impl core::cmp::PartialEq for libpure::SourceOrigin
+pub fn libpure::SourceOrigin::eq(&self, &libpure::SourceOrigin) -> bool
+impl core::fmt::Debug for libpure::SourceOrigin
+pub fn libpure::SourceOrigin::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for libpure::SourceOrigin
+impl core::marker::Freeze for libpure::SourceOrigin
+impl core::marker::Send for libpure::SourceOrigin
+impl core::marker::Sync for libpure::SourceOrigin
+impl core::marker::Unpin for libpure::SourceOrigin
+impl core::marker::UnsafeUnpin for libpure::SourceOrigin
+impl core::panic::unwind_safe::RefUnwindSafe for libpure::SourceOrigin
+impl core::panic::unwind_safe::UnwindSafe for libpure::SourceOrigin
+impl<T, U> core::convert::Into<U> for libpure::SourceOrigin where U: core::convert::From<T>
+pub fn libpure::SourceOrigin::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for libpure::SourceOrigin where U: core::convert::Into<T>
+pub type libpure::SourceOrigin::Error = never
+pub fn libpure::SourceOrigin::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for libpure::SourceOrigin where U: core::convert::TryFrom<T>
+pub type libpure::SourceOrigin::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn libpure::SourceOrigin::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for libpure::SourceOrigin where T: core::clone::Clone
+pub type libpure::SourceOrigin::Owned = T
+pub fn libpure::SourceOrigin::clone_into(&self, &mut T)
+pub fn libpure::SourceOrigin::to_owned(&self) -> T
+impl<T> core::any::Any for libpure::SourceOrigin where T: 'static + ?core::marker::Sized
+pub fn libpure::SourceOrigin::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for libpure::SourceOrigin where T: ?core::marker::Sized
+pub fn libpure::SourceOrigin::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for libpure::SourceOrigin where T: ?core::marker::Sized
+pub fn libpure::SourceOrigin::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for libpure::SourceOrigin where T: core::clone::Clone
+pub unsafe fn libpure::SourceOrigin::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for libpure::SourceOrigin
+pub fn libpure::SourceOrigin::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for libpure::SourceOrigin
+pub type libpure::SourceOrigin::Init = T
+pub const libpure::SourceOrigin::ALIGN: usize
+pub unsafe fn libpure::SourceOrigin::deref<'a>(usize) -> &'a T
+pub unsafe fn libpure::SourceOrigin::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn libpure::SourceOrigin::drop(usize)
+pub unsafe fn libpure::SourceOrigin::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for libpure::SourceOrigin
+pub enum libpure::SourceStoreError
+pub libpure::SourceStoreError::EmptyName
+pub libpure::SourceStoreError::Read
+pub libpure::SourceStoreError::Read::path: std::path::PathBuf
+pub libpure::SourceStoreError::Read::source: core::io::error::Error
+pub libpure::SourceStoreError::SourceTooLong
+pub libpure::SourceStoreError::SourceTooLong::length: usize
+pub libpure::SourceStoreError::SourceTooLong::name: alloc::string::String
+pub libpure::SourceStoreError::TooManySources
+impl core::error::Error for libpure::SourceStoreError
+pub fn libpure::SourceStoreError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
+impl core::fmt::Debug for libpure::SourceStoreError
+pub fn libpure::SourceStoreError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for libpure::SourceStoreError
+pub fn libpure::SourceStoreError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for libpure::SourceStoreError
+impl core::marker::Send for libpure::SourceStoreError
+impl core::marker::Sync for libpure::SourceStoreError
+impl core::marker::Unpin for libpure::SourceStoreError
+impl core::marker::UnsafeUnpin for libpure::SourceStoreError
+impl !core::panic::unwind_safe::RefUnwindSafe for libpure::SourceStoreError
+impl !core::panic::unwind_safe::UnwindSafe for libpure::SourceStoreError
+impl<T, U> core::convert::Into<U> for libpure::SourceStoreError where U: core::convert::From<T>
+pub fn libpure::SourceStoreError::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for libpure::SourceStoreError where U: core::convert::Into<T>
+pub type libpure::SourceStoreError::Error = never
+pub fn libpure::SourceStoreError::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for libpure::SourceStoreError where U: core::convert::TryFrom<T>
+pub type libpure::SourceStoreError::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn libpure::SourceStoreError::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::string::ToString for libpure::SourceStoreError where T: core::fmt::Display + ?core::marker::Sized
+pub fn libpure::SourceStoreError::to_string(&self) -> alloc::string::String
+impl<T> core::any::Any for libpure::SourceStoreError where T: 'static + ?core::marker::Sized
+pub fn libpure::SourceStoreError::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for libpure::SourceStoreError where T: ?core::marker::Sized
+pub fn libpure::SourceStoreError::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for libpure::SourceStoreError where T: ?core::marker::Sized
+pub fn libpure::SourceStoreError::borrow_mut(&mut self) -> &mut T
+impl<T> core::convert::From<T> for libpure::SourceStoreError
+pub fn libpure::SourceStoreError::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for libpure::SourceStoreError
+pub type libpure::SourceStoreError::Init = T
+pub const libpure::SourceStoreError::ALIGN: usize
+pub unsafe fn libpure::SourceStoreError::deref<'a>(usize) -> &'a T
+pub unsafe fn libpure::SourceStoreError::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn libpure::SourceStoreError::drop(usize)
+pub unsafe fn libpure::SourceStoreError::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for libpure::SourceStoreError
+pub struct libpure::AnalysisDriver
+impl libpure::AnalysisDriver
+pub fn libpure::AnalysisDriver::format(&self, &libpure::SourceRequest) -> core::result::Result<libpure::FormatOutput, libpure::DriverError>
+pub fn libpure::AnalysisDriver::lint(&self, &libpure::LintRequest) -> core::result::Result<libpure::AnalysisOutput, libpure::DriverError>
+pub fn libpure::AnalysisDriver::parse(&self, &libpure::SourceRequest) -> core::result::Result<libpure::ParseOutput, libpure::DriverError>
+pub fn libpure::AnalysisDriver::validate(&self, &libpure::SourceRequest) -> core::result::Result<libpure::AnalysisOutput, libpure::DriverError>
+impl core::clone::Clone for libpure::AnalysisDriver
+pub fn libpure::AnalysisDriver::clone(&self) -> libpure::AnalysisDriver
+impl core::default::Default for libpure::AnalysisDriver
+pub fn libpure::AnalysisDriver::default() -> libpure::AnalysisDriver
+impl core::fmt::Debug for libpure::AnalysisDriver
+pub fn libpure::AnalysisDriver::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for libpure::AnalysisDriver
+impl core::marker::Freeze for libpure::AnalysisDriver
+impl core::marker::Send for libpure::AnalysisDriver
+impl core::marker::Sync for libpure::AnalysisDriver
+impl core::marker::Unpin for libpure::AnalysisDriver
+impl core::marker::UnsafeUnpin for libpure::AnalysisDriver
+impl core::panic::unwind_safe::RefUnwindSafe for libpure::AnalysisDriver
+impl core::panic::unwind_safe::UnwindSafe for libpure::AnalysisDriver
+impl<T, U> core::convert::Into<U> for libpure::AnalysisDriver where U: core::convert::From<T>
+pub fn libpure::AnalysisDriver::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for libpure::AnalysisDriver where U: core::convert::Into<T>
+pub type libpure::AnalysisDriver::Error = never
+pub fn libpure::AnalysisDriver::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for libpure::AnalysisDriver where U: core::convert::TryFrom<T>
+pub type libpure::AnalysisDriver::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn libpure::AnalysisDriver::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for libpure::AnalysisDriver where T: core::clone::Clone
+pub type libpure::AnalysisDriver::Owned = T
+pub fn libpure::AnalysisDriver::clone_into(&self, &mut T)
+pub fn libpure::AnalysisDriver::to_owned(&self) -> T
+impl<T> core::any::Any for libpure::AnalysisDriver where T: 'static + ?core::marker::Sized
+pub fn libpure::AnalysisDriver::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for libpure::AnalysisDriver where T: ?core::marker::Sized
+pub fn libpure::AnalysisDriver::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for libpure::AnalysisDriver where T: ?core::marker::Sized
+pub fn libpure::AnalysisDriver::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for libpure::AnalysisDriver where T: core::clone::Clone
+pub unsafe fn libpure::AnalysisDriver::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for libpure::AnalysisDriver
+pub fn libpure::AnalysisDriver::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for libpure::AnalysisDriver
+pub type libpure::AnalysisDriver::Init = T
+pub const libpure::AnalysisDriver::ALIGN: usize
+pub unsafe fn libpure::AnalysisDriver::deref<'a>(usize) -> &'a T
+pub unsafe fn libpure::AnalysisDriver::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn libpure::AnalysisDriver::drop(usize)
+pub unsafe fn libpure::AnalysisDriver::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for libpure::AnalysisDriver
+pub struct libpure::AnalysisOutput
+impl libpure::AnalysisOutput
+pub fn libpure::AnalysisOutput::diagnostics(&self) -> &[pure_analyzer_diagnostics::diagnostic::Diagnostic]
+pub fn libpure::AnalysisOutput::into_parts(self) -> (libpure::SourceStore, alloc::vec::Vec<pure_analyzer_diagnostics::diagnostic::Diagnostic>)
+pub fn libpure::AnalysisOutput::plan_fixes(&self) -> core::result::Result<pure_analyzer_diagnostics::fix_plan::FixPlan, pure_analyzer_diagnostics::fix_plan::FixPlanError>
+pub const fn libpure::AnalysisOutput::sources(&self) -> &libpure::SourceStore
+impl core::clone::Clone for libpure::AnalysisOutput
+pub fn libpure::AnalysisOutput::clone(&self) -> libpure::AnalysisOutput
+impl core::cmp::Eq for libpure::AnalysisOutput
+impl core::cmp::PartialEq for libpure::AnalysisOutput
+pub fn libpure::AnalysisOutput::eq(&self, &libpure::AnalysisOutput) -> bool
+impl core::fmt::Debug for libpure::AnalysisOutput
+pub fn libpure::AnalysisOutput::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for libpure::AnalysisOutput
+impl core::marker::Freeze for libpure::AnalysisOutput
+impl core::marker::Send for libpure::AnalysisOutput
+impl core::marker::Sync for libpure::AnalysisOutput
+impl core::marker::Unpin for libpure::AnalysisOutput
+impl core::marker::UnsafeUnpin for libpure::AnalysisOutput
+impl core::panic::unwind_safe::RefUnwindSafe for libpure::AnalysisOutput
+impl core::panic::unwind_safe::UnwindSafe for libpure::AnalysisOutput
+impl<T, U> core::convert::Into<U> for libpure::AnalysisOutput where U: core::convert::From<T>
+pub fn libpure::AnalysisOutput::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for libpure::AnalysisOutput where U: core::convert::Into<T>
+pub type libpure::AnalysisOutput::Error = never
+pub fn libpure::AnalysisOutput::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for libpure::AnalysisOutput where U: core::convert::TryFrom<T>
+pub type libpure::AnalysisOutput::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn libpure::AnalysisOutput::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for libpure::AnalysisOutput where T: core::clone::Clone
+pub type libpure::AnalysisOutput::Owned = T
+pub fn libpure::AnalysisOutput::clone_into(&self, &mut T)
+pub fn libpure::AnalysisOutput::to_owned(&self) -> T
+impl<T> core::any::Any for libpure::AnalysisOutput where T: 'static + ?core::marker::Sized
+pub fn libpure::AnalysisOutput::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for libpure::AnalysisOutput where T: ?core::marker::Sized
+pub fn libpure::AnalysisOutput::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for libpure::AnalysisOutput where T: ?core::marker::Sized
+pub fn libpure::AnalysisOutput::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for libpure::AnalysisOutput where T: core::clone::Clone
+pub unsafe fn libpure::AnalysisOutput::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for libpure::AnalysisOutput
+pub fn libpure::AnalysisOutput::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for libpure::AnalysisOutput
+pub type libpure::AnalysisOutput::Init = T
+pub const libpure::AnalysisOutput::ALIGN: usize
+pub unsafe fn libpure::AnalysisOutput::deref<'a>(usize) -> &'a T
+pub unsafe fn libpure::AnalysisOutput::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn libpure::AnalysisOutput::drop(usize)
+pub unsafe fn libpure::AnalysisOutput::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for libpure::AnalysisOutput
+pub struct libpure::FormatOutput
+impl libpure::FormatOutput
+pub fn libpure::FormatOutput::diagnostics(&self) -> &[pure_analyzer_diagnostics::diagnostic::Diagnostic]
+pub fn libpure::FormatOutput::formatted(&self) -> &[libpure::FormattedSource]
+pub fn libpure::FormatOutput::into_parts(self) -> (libpure::SourceStore, alloc::vec::Vec<libpure::FormattedSource>, alloc::vec::Vec<pure_analyzer_diagnostics::diagnostic::Diagnostic>)
+pub const fn libpure::FormatOutput::sources(&self) -> &libpure::SourceStore
+impl core::clone::Clone for libpure::FormatOutput
+pub fn libpure::FormatOutput::clone(&self) -> libpure::FormatOutput
+impl core::cmp::Eq for libpure::FormatOutput
+impl core::cmp::PartialEq for libpure::FormatOutput
+pub fn libpure::FormatOutput::eq(&self, &libpure::FormatOutput) -> bool
+impl core::fmt::Debug for libpure::FormatOutput
+pub fn libpure::FormatOutput::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for libpure::FormatOutput
+impl core::marker::Freeze for libpure::FormatOutput
+impl core::marker::Send for libpure::FormatOutput
+impl core::marker::Sync for libpure::FormatOutput
+impl core::marker::Unpin for libpure::FormatOutput
+impl core::marker::UnsafeUnpin for libpure::FormatOutput
+impl core::panic::unwind_safe::RefUnwindSafe for libpure::FormatOutput
+impl core::panic::unwind_safe::UnwindSafe for libpure::FormatOutput
+impl<T, U> core::convert::Into<U> for libpure::FormatOutput where U: core::convert::From<T>
+pub fn libpure::FormatOutput::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for libpure::FormatOutput where U: core::convert::Into<T>
+pub type libpure::FormatOutput::Error = never
+pub fn libpure::FormatOutput::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for libpure::FormatOutput where U: core::convert::TryFrom<T>
+pub type libpure::FormatOutput::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn libpure::FormatOutput::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for libpure::FormatOutput where T: core::clone::Clone
+pub type libpure::FormatOutput::Owned = T
+pub fn libpure::FormatOutput::clone_into(&self, &mut T)
+pub fn libpure::FormatOutput::to_owned(&self) -> T
+impl<T> core::any::Any for libpure::FormatOutput where T: 'static + ?core::marker::Sized
+pub fn libpure::FormatOutput::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for libpure::FormatOutput where T: ?core::marker::Sized
+pub fn libpure::FormatOutput::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for libpure::FormatOutput where T: ?core::marker::Sized
+pub fn libpure::FormatOutput::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for libpure::FormatOutput where T: core::clone::Clone
+pub unsafe fn libpure::FormatOutput::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for libpure::FormatOutput
+pub fn libpure::FormatOutput::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for libpure::FormatOutput
+pub type libpure::FormatOutput::Init = T
+pub const libpure::FormatOutput::ALIGN: usize
+pub unsafe fn libpure::FormatOutput::deref<'a>(usize) -> &'a T
+pub unsafe fn libpure::FormatOutput::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn libpure::FormatOutput::drop(usize)
+pub unsafe fn libpure::FormatOutput::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for libpure::FormatOutput
+pub struct libpure::FormattedSource
+impl libpure::FormattedSource
+pub const fn libpure::FormattedSource::file(&self) -> pure_analyzer_diagnostics::file::FileId
+pub fn libpure::FormattedSource::text(&self) -> &str
+impl core::clone::Clone for libpure::FormattedSource
+pub fn libpure::FormattedSource::clone(&self) -> libpure::FormattedSource
+impl core::cmp::Eq for libpure::FormattedSource
+impl core::cmp::PartialEq for libpure::FormattedSource
+pub fn libpure::FormattedSource::eq(&self, &libpure::FormattedSource) -> bool
+impl core::fmt::Debug for libpure::FormattedSource
+pub fn libpure::FormattedSource::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for libpure::FormattedSource
+impl core::marker::Freeze for libpure::FormattedSource
+impl core::marker::Send for libpure::FormattedSource
+impl core::marker::Sync for libpure::FormattedSource
+impl core::marker::Unpin for libpure::FormattedSource
+impl core::marker::UnsafeUnpin for libpure::FormattedSource
+impl core::panic::unwind_safe::RefUnwindSafe for libpure::FormattedSource
+impl core::panic::unwind_safe::UnwindSafe for libpure::FormattedSource
+impl<T, U> core::convert::Into<U> for libpure::FormattedSource where U: core::convert::From<T>
+pub fn libpure::FormattedSource::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for libpure::FormattedSource where U: core::convert::Into<T>
+pub type libpure::FormattedSource::Error = never
+pub fn libpure::FormattedSource::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for libpure::FormattedSource where U: core::convert::TryFrom<T>
+pub type libpure::FormattedSource::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn libpure::FormattedSource::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for libpure::FormattedSource where T: core::clone::Clone
+pub type libpure::FormattedSource::Owned = T
+pub fn libpure::FormattedSource::clone_into(&self, &mut T)
+pub fn libpure::FormattedSource::to_owned(&self) -> T
+impl<T> core::any::Any for libpure::FormattedSource where T: 'static + ?core::marker::Sized
+pub fn libpure::FormattedSource::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for libpure::FormattedSource where T: ?core::marker::Sized
+pub fn libpure::FormattedSource::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for libpure::FormattedSource where T: ?core::marker::Sized
+pub fn libpure::FormattedSource::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for libpure::FormattedSource where T: core::clone::Clone
+pub unsafe fn libpure::FormattedSource::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for libpure::FormattedSource
+pub fn libpure::FormattedSource::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for libpure::FormattedSource
+pub type libpure::FormattedSource::Init = T
+pub const libpure::FormattedSource::ALIGN: usize
+pub unsafe fn libpure::FormattedSource::deref<'a>(usize) -> &'a T
+pub unsafe fn libpure::FormattedSource::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn libpure::FormattedSource::drop(usize)
+pub unsafe fn libpure::FormattedSource::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for libpure::FormattedSource
+pub struct libpure::LineColumn
+pub libpure::LineColumn::column: usize
+pub libpure::LineColumn::line: usize
+impl core::clone::Clone for libpure::LineColumn
+pub fn libpure::LineColumn::clone(&self) -> libpure::LineColumn
+impl core::cmp::Eq for libpure::LineColumn
+impl core::cmp::PartialEq for libpure::LineColumn
+pub fn libpure::LineColumn::eq(&self, &libpure::LineColumn) -> bool
+impl core::fmt::Debug for libpure::LineColumn
+pub fn libpure::LineColumn::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for libpure::LineColumn
+impl core::marker::StructuralPartialEq for libpure::LineColumn
+impl core::marker::Freeze for libpure::LineColumn
+impl core::marker::Send for libpure::LineColumn
+impl core::marker::Sync for libpure::LineColumn
+impl core::marker::Unpin for libpure::LineColumn
+impl core::marker::UnsafeUnpin for libpure::LineColumn
+impl core::panic::unwind_safe::RefUnwindSafe for libpure::LineColumn
+impl core::panic::unwind_safe::UnwindSafe for libpure::LineColumn
+impl<T, U> core::convert::Into<U> for libpure::LineColumn where U: core::convert::From<T>
+pub fn libpure::LineColumn::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for libpure::LineColumn where U: core::convert::Into<T>
+pub type libpure::LineColumn::Error = never
+pub fn libpure::LineColumn::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for libpure::LineColumn where U: core::convert::TryFrom<T>
+pub type libpure::LineColumn::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn libpure::LineColumn::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for libpure::LineColumn where T: core::clone::Clone
+pub type libpure::LineColumn::Owned = T
+pub fn libpure::LineColumn::clone_into(&self, &mut T)
+pub fn libpure::LineColumn::to_owned(&self) -> T
+impl<T> core::any::Any for libpure::LineColumn where T: 'static + ?core::marker::Sized
+pub fn libpure::LineColumn::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for libpure::LineColumn where T: ?core::marker::Sized
+pub fn libpure::LineColumn::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for libpure::LineColumn where T: ?core::marker::Sized
+pub fn libpure::LineColumn::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for libpure::LineColumn where T: core::clone::Clone
+pub unsafe fn libpure::LineColumn::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for libpure::LineColumn
+pub fn libpure::LineColumn::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for libpure::LineColumn
+pub type libpure::LineColumn::Init = T
+pub const libpure::LineColumn::ALIGN: usize
+pub unsafe fn libpure::LineColumn::deref<'a>(usize) -> &'a T
+pub unsafe fn libpure::LineColumn::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn libpure::LineColumn::drop(usize)
+pub unsafe fn libpure::LineColumn::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for libpure::LineColumn
+pub struct libpure::LintRequest
+impl libpure::LintRequest
+pub fn libpure::LintRequest::models(&self) -> &[libpure::ModelInput]
+pub fn libpure::LintRequest::new(libpure::SourceRequest, impl core::iter::traits::collect::IntoIterator<Item = libpure::ModelInput>) -> Self
+pub const fn libpure::LintRequest::sources(&self) -> &libpure::SourceRequest
+impl core::clone::Clone for libpure::LintRequest
+pub fn libpure::LintRequest::clone(&self) -> libpure::LintRequest
+impl core::cmp::Eq for libpure::LintRequest
+impl core::cmp::PartialEq for libpure::LintRequest
+pub fn libpure::LintRequest::eq(&self, &libpure::LintRequest) -> bool
+impl core::fmt::Debug for libpure::LintRequest
+pub fn libpure::LintRequest::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for libpure::LintRequest
+impl core::marker::Freeze for libpure::LintRequest
+impl core::marker::Send for libpure::LintRequest
+impl core::marker::Sync for libpure::LintRequest
+impl core::marker::Unpin for libpure::LintRequest
+impl core::marker::UnsafeUnpin for libpure::LintRequest
+impl core::panic::unwind_safe::RefUnwindSafe for libpure::LintRequest
+impl core::panic::unwind_safe::UnwindSafe for libpure::LintRequest
+impl<T, U> core::convert::Into<U> for libpure::LintRequest where U: core::convert::From<T>
+pub fn libpure::LintRequest::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for libpure::LintRequest where U: core::convert::Into<T>
+pub type libpure::LintRequest::Error = never
+pub fn libpure::LintRequest::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for libpure::LintRequest where U: core::convert::TryFrom<T>
+pub type libpure::LintRequest::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn libpure::LintRequest::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for libpure::LintRequest where T: core::clone::Clone
+pub type libpure::LintRequest::Owned = T
+pub fn libpure::LintRequest::clone_into(&self, &mut T)
+pub fn libpure::LintRequest::to_owned(&self) -> T
+impl<T> core::any::Any for libpure::LintRequest where T: 'static + ?core::marker::Sized
+pub fn libpure::LintRequest::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for libpure::LintRequest where T: ?core::marker::Sized
+pub fn libpure::LintRequest::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for libpure::LintRequest where T: ?core::marker::Sized
+pub fn libpure::LintRequest::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for libpure::LintRequest where T: core::clone::Clone
+pub unsafe fn libpure::LintRequest::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for libpure::LintRequest
+pub fn libpure::LintRequest::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for libpure::LintRequest
+pub type libpure::LintRequest::Init = T
+pub const libpure::LintRequest::ALIGN: usize
+pub unsafe fn libpure::LintRequest::deref<'a>(usize) -> &'a T
+pub unsafe fn libpure::LintRequest::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn libpure::LintRequest::drop(usize)
+pub unsafe fn libpure::LintRequest::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for libpure::LintRequest
+pub struct libpure::ParseOutput
+impl libpure::ParseOutput
+pub fn libpure::ParseOutput::diagnostics(&self) -> &[pure_analyzer_diagnostics::diagnostic::Diagnostic]
+pub fn libpure::ParseOutput::into_parts(self) -> (libpure::SourceStore, alloc::vec::Vec<libpure::ParsedSource>)
+pub fn libpure::ParseOutput::parsed(&self) -> &[libpure::ParsedSource]
+pub const fn libpure::ParseOutput::sources(&self) -> &libpure::SourceStore
+impl core::clone::Clone for libpure::ParseOutput
+pub fn libpure::ParseOutput::clone(&self) -> libpure::ParseOutput
+impl core::cmp::Eq for libpure::ParseOutput
+impl core::cmp::PartialEq for libpure::ParseOutput
+pub fn libpure::ParseOutput::eq(&self, &libpure::ParseOutput) -> bool
+impl core::fmt::Debug for libpure::ParseOutput
+pub fn libpure::ParseOutput::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for libpure::ParseOutput
+impl core::marker::Freeze for libpure::ParseOutput
+impl core::marker::Send for libpure::ParseOutput
+impl core::marker::Sync for libpure::ParseOutput
+impl core::marker::Unpin for libpure::ParseOutput
+impl core::marker::UnsafeUnpin for libpure::ParseOutput
+impl core::panic::unwind_safe::RefUnwindSafe for libpure::ParseOutput
+impl core::panic::unwind_safe::UnwindSafe for libpure::ParseOutput
+impl<T, U> core::convert::Into<U> for libpure::ParseOutput where U: core::convert::From<T>
+pub fn libpure::ParseOutput::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for libpure::ParseOutput where U: core::convert::Into<T>
+pub type libpure::ParseOutput::Error = never
+pub fn libpure::ParseOutput::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for libpure::ParseOutput where U: core::convert::TryFrom<T>
+pub type libpure::ParseOutput::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn libpure::ParseOutput::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for libpure::ParseOutput where T: core::clone::Clone
+pub type libpure::ParseOutput::Owned = T
+pub fn libpure::ParseOutput::clone_into(&self, &mut T)
+pub fn libpure::ParseOutput::to_owned(&self) -> T
+impl<T> core::any::Any for libpure::ParseOutput where T: 'static + ?core::marker::Sized
+pub fn libpure::ParseOutput::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for libpure::ParseOutput where T: ?core::marker::Sized
+pub fn libpure::ParseOutput::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for libpure::ParseOutput where T: ?core::marker::Sized
+pub fn libpure::ParseOutput::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for libpure::ParseOutput where T: core::clone::Clone
+pub unsafe fn libpure::ParseOutput::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for libpure::ParseOutput
+pub fn libpure::ParseOutput::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for libpure::ParseOutput
+pub type libpure::ParseOutput::Init = T
+pub const libpure::ParseOutput::ALIGN: usize
+pub unsafe fn libpure::ParseOutput::deref<'a>(usize) -> &'a T
+pub unsafe fn libpure::ParseOutput::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn libpure::ParseOutput::drop(usize)
+pub unsafe fn libpure::ParseOutput::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for libpure::ParseOutput
+pub struct libpure::ParsedSource
+impl libpure::ParsedSource
+pub fn libpure::ParsedSource::diagnostics(&self) -> &[pure_analyzer_diagnostics::diagnostic::Diagnostic]
+pub const fn libpure::ParsedSource::file(&self) -> pure_analyzer_diagnostics::file::FileId
+pub const fn libpure::ParsedSource::syntax(&self) -> &pure_analyzer_syntax::green::GreenNode
+impl core::clone::Clone for libpure::ParsedSource
+pub fn libpure::ParsedSource::clone(&self) -> libpure::ParsedSource
+impl core::cmp::Eq for libpure::ParsedSource
+impl core::cmp::PartialEq for libpure::ParsedSource
+pub fn libpure::ParsedSource::eq(&self, &libpure::ParsedSource) -> bool
+impl core::fmt::Debug for libpure::ParsedSource
+pub fn libpure::ParsedSource::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for libpure::ParsedSource
+impl core::marker::Freeze for libpure::ParsedSource
+impl core::marker::Send for libpure::ParsedSource
+impl core::marker::Sync for libpure::ParsedSource
+impl core::marker::Unpin for libpure::ParsedSource
+impl core::marker::UnsafeUnpin for libpure::ParsedSource
+impl core::panic::unwind_safe::RefUnwindSafe for libpure::ParsedSource
+impl core::panic::unwind_safe::UnwindSafe for libpure::ParsedSource
+impl<T, U> core::convert::Into<U> for libpure::ParsedSource where U: core::convert::From<T>
+pub fn libpure::ParsedSource::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for libpure::ParsedSource where U: core::convert::Into<T>
+pub type libpure::ParsedSource::Error = never
+pub fn libpure::ParsedSource::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for libpure::ParsedSource where U: core::convert::TryFrom<T>
+pub type libpure::ParsedSource::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn libpure::ParsedSource::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for libpure::ParsedSource where T: core::clone::Clone
+pub type libpure::ParsedSource::Owned = T
+pub fn libpure::ParsedSource::clone_into(&self, &mut T)
+pub fn libpure::ParsedSource::to_owned(&self) -> T
+impl<T> core::any::Any for libpure::ParsedSource where T: 'static + ?core::marker::Sized
+pub fn libpure::ParsedSource::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for libpure::ParsedSource where T: ?core::marker::Sized
+pub fn libpure::ParsedSource::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for libpure::ParsedSource where T: ?core::marker::Sized
+pub fn libpure::ParsedSource::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for libpure::ParsedSource where T: core::clone::Clone
+pub unsafe fn libpure::ParsedSource::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for libpure::ParsedSource
+pub fn libpure::ParsedSource::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for libpure::ParsedSource
+pub type libpure::ParsedSource::Init = T
+pub const libpure::ParsedSource::ALIGN: usize
+pub unsafe fn libpure::ParsedSource::deref<'a>(usize) -> &'a T
+pub unsafe fn libpure::ParsedSource::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn libpure::ParsedSource::drop(usize)
+pub unsafe fn libpure::ParsedSource::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for libpure::ParsedSource
+pub struct libpure::SourceFile
+impl libpure::SourceFile
+pub const fn libpure::SourceFile::id(&self) -> pure_analyzer_diagnostics::file::FileId
+pub fn libpure::SourceFile::line_column(&self, text_size::size::TextSize) -> core::option::Option<libpure::LineColumn>
+pub fn libpure::SourceFile::name(&self) -> &str
+pub const fn libpure::SourceFile::origin(&self) -> &libpure::SourceOrigin
+pub fn libpure::SourceFile::text(&self) -> &str
+impl core::clone::Clone for libpure::SourceFile
+pub fn libpure::SourceFile::clone(&self) -> libpure::SourceFile
+impl core::cmp::Eq for libpure::SourceFile
+impl core::cmp::PartialEq for libpure::SourceFile
+pub fn libpure::SourceFile::eq(&self, &libpure::SourceFile) -> bool
+impl core::fmt::Debug for libpure::SourceFile
+pub fn libpure::SourceFile::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for libpure::SourceFile
+impl core::marker::Freeze for libpure::SourceFile
+impl core::marker::Send for libpure::SourceFile
+impl core::marker::Sync for libpure::SourceFile
+impl core::marker::Unpin for libpure::SourceFile
+impl core::marker::UnsafeUnpin for libpure::SourceFile
+impl core::panic::unwind_safe::RefUnwindSafe for libpure::SourceFile
+impl core::panic::unwind_safe::UnwindSafe for libpure::SourceFile
+impl<T, U> core::convert::Into<U> for libpure::SourceFile where U: core::convert::From<T>
+pub fn libpure::SourceFile::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for libpure::SourceFile where U: core::convert::Into<T>
+pub type libpure::SourceFile::Error = never
+pub fn libpure::SourceFile::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for libpure::SourceFile where U: core::convert::TryFrom<T>
+pub type libpure::SourceFile::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn libpure::SourceFile::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for libpure::SourceFile where T: core::clone::Clone
+pub type libpure::SourceFile::Owned = T
+pub fn libpure::SourceFile::clone_into(&self, &mut T)
+pub fn libpure::SourceFile::to_owned(&self) -> T
+impl<T> core::any::Any for libpure::SourceFile where T: 'static + ?core::marker::Sized
+pub fn libpure::SourceFile::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for libpure::SourceFile where T: ?core::marker::Sized
+pub fn libpure::SourceFile::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for libpure::SourceFile where T: ?core::marker::Sized
+pub fn libpure::SourceFile::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for libpure::SourceFile where T: core::clone::Clone
+pub unsafe fn libpure::SourceFile::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for libpure::SourceFile
+pub fn libpure::SourceFile::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for libpure::SourceFile
+pub type libpure::SourceFile::Init = T
+pub const libpure::SourceFile::ALIGN: usize
+pub unsafe fn libpure::SourceFile::deref<'a>(usize) -> &'a T
+pub unsafe fn libpure::SourceFile::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn libpure::SourceFile::drop(usize)
+pub unsafe fn libpure::SourceFile::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for libpure::SourceFile
+pub struct libpure::SourceRequest
+impl libpure::SourceRequest
+pub const fn libpure::SourceRequest::jobs(&self) -> usize
+pub fn libpure::SourceRequest::new(impl core::iter::traits::collect::IntoIterator<Item = libpure::SourceInput>) -> Self
+pub fn libpure::SourceRequest::sources(&self) -> &[libpure::SourceInput]
+pub const fn libpure::SourceRequest::with_jobs(self, usize) -> Self
+impl core::clone::Clone for libpure::SourceRequest
+pub fn libpure::SourceRequest::clone(&self) -> libpure::SourceRequest
+impl core::cmp::Eq for libpure::SourceRequest
+impl core::cmp::PartialEq for libpure::SourceRequest
+pub fn libpure::SourceRequest::eq(&self, &libpure::SourceRequest) -> bool
+impl core::fmt::Debug for libpure::SourceRequest
+pub fn libpure::SourceRequest::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for libpure::SourceRequest
+impl core::marker::Freeze for libpure::SourceRequest
+impl core::marker::Send for libpure::SourceRequest
+impl core::marker::Sync for libpure::SourceRequest
+impl core::marker::Unpin for libpure::SourceRequest
+impl core::marker::UnsafeUnpin for libpure::SourceRequest
+impl core::panic::unwind_safe::RefUnwindSafe for libpure::SourceRequest
+impl core::panic::unwind_safe::UnwindSafe for libpure::SourceRequest
+impl<T, U> core::convert::Into<U> for libpure::SourceRequest where U: core::convert::From<T>
+pub fn libpure::SourceRequest::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for libpure::SourceRequest where U: core::convert::Into<T>
+pub type libpure::SourceRequest::Error = never
+pub fn libpure::SourceRequest::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for libpure::SourceRequest where U: core::convert::TryFrom<T>
+pub type libpure::SourceRequest::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn libpure::SourceRequest::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for libpure::SourceRequest where T: core::clone::Clone
+pub type libpure::SourceRequest::Owned = T
+pub fn libpure::SourceRequest::clone_into(&self, &mut T)
+pub fn libpure::SourceRequest::to_owned(&self) -> T
+impl<T> core::any::Any for libpure::SourceRequest where T: 'static + ?core::marker::Sized
+pub fn libpure::SourceRequest::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for libpure::SourceRequest where T: ?core::marker::Sized
+pub fn libpure::SourceRequest::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for libpure::SourceRequest where T: ?core::marker::Sized
+pub fn libpure::SourceRequest::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for libpure::SourceRequest where T: core::clone::Clone
+pub unsafe fn libpure::SourceRequest::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for libpure::SourceRequest
+pub fn libpure::SourceRequest::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for libpure::SourceRequest
+pub type libpure::SourceRequest::Init = T
+pub const libpure::SourceRequest::ALIGN: usize
+pub unsafe fn libpure::SourceRequest::deref<'a>(usize) -> &'a T
+pub unsafe fn libpure::SourceRequest::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn libpure::SourceRequest::drop(usize)
+pub unsafe fn libpure::SourceRequest::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for libpure::SourceRequest
+pub struct libpure::SourceStore
+impl libpure::SourceStore
+pub fn libpure::SourceStore::files(&self) -> impl core::iter::traits::exact_size::ExactSizeIterator<Item = &libpure::SourceFile> + core::iter::traits::double_ended::DoubleEndedIterator
+pub fn libpure::SourceStore::get(&self, pure_analyzer_diagnostics::file::FileId) -> core::option::Option<&libpure::SourceFile>
+pub fn libpure::SourceStore::is_empty(&self) -> bool
+pub fn libpure::SourceStore::len(&self) -> usize
+pub fn libpure::SourceStore::load(impl core::iter::traits::collect::IntoIterator<Item = libpure::SourceInput>) -> core::result::Result<Self, libpure::SourceStoreError>
+impl core::clone::Clone for libpure::SourceStore
+pub fn libpure::SourceStore::clone(&self) -> libpure::SourceStore
+impl core::cmp::Eq for libpure::SourceStore
+impl core::cmp::PartialEq for libpure::SourceStore
+pub fn libpure::SourceStore::eq(&self, &libpure::SourceStore) -> bool
+impl core::default::Default for libpure::SourceStore
+pub fn libpure::SourceStore::default() -> libpure::SourceStore
+impl core::fmt::Debug for libpure::SourceStore
+pub fn libpure::SourceStore::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for libpure::SourceStore
+impl core::marker::Freeze for libpure::SourceStore
+impl core::marker::Send for libpure::SourceStore
+impl core::marker::Sync for libpure::SourceStore
+impl core::marker::Unpin for libpure::SourceStore
+impl core::marker::UnsafeUnpin for libpure::SourceStore
+impl core::panic::unwind_safe::RefUnwindSafe for libpure::SourceStore
+impl core::panic::unwind_safe::UnwindSafe for libpure::SourceStore
+impl<T, U> core::convert::Into<U> for libpure::SourceStore where U: core::convert::From<T>
+pub fn libpure::SourceStore::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for libpure::SourceStore where U: core::convert::Into<T>
+pub type libpure::SourceStore::Error = never
+pub fn libpure::SourceStore::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for libpure::SourceStore where U: core::convert::TryFrom<T>
+pub type libpure::SourceStore::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn libpure::SourceStore::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for libpure::SourceStore where T: core::clone::Clone
+pub type libpure::SourceStore::Owned = T
+pub fn libpure::SourceStore::clone_into(&self, &mut T)
+pub fn libpure::SourceStore::to_owned(&self) -> T
+impl<T> core::any::Any for libpure::SourceStore where T: 'static + ?core::marker::Sized
+pub fn libpure::SourceStore::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for libpure::SourceStore where T: ?core::marker::Sized
+pub fn libpure::SourceStore::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for libpure::SourceStore where T: ?core::marker::Sized
+pub fn libpure::SourceStore::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for libpure::SourceStore where T: core::clone::Clone
+pub unsafe fn libpure::SourceStore::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for libpure::SourceStore
+pub fn libpure::SourceStore::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for libpure::SourceStore
+pub type libpure::SourceStore::Init = T
+pub const libpure::SourceStore::ALIGN: usize
+pub unsafe fn libpure::SourceStore::deref<'a>(usize) -> &'a T
+pub unsafe fn libpure::SourceStore::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn libpure::SourceStore::drop(usize)
+pub unsafe fn libpure::SourceStore::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for libpure::SourceStore
 pub fn libpure::engine_crate_versions() -> alloc::vec::Vec<libpure::CrateVersion>
 pub type libpure::CrateVersion = (&'static str, &'static str)

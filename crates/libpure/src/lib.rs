@@ -3,9 +3,24 @@
 
 //! Facade exposing shared diagnostics and analyzer-crate versions.
 
+mod driver;
+mod source;
+
+pub use driver::{
+    AnalysisDriver, AnalysisOutput, DriverError, FormatOutput, FormattedSource, LintRequest,
+    ModelInput, ParseOutput, ParsedSource, RequestError, SourceRequest,
+};
 /// Formatter API exposed to front ends through the workspace facade.
 pub use pure_analyzer_analysis::{FormatResult, format_query};
-pub use pure_analyzer_diagnostics::{Diagnostic, Severity};
+pub use pure_analyzer_diagnostics::{
+    DiagCode, Diagnostic, FileId, FixPlan, FixPlanError, PlannedChange, PlannedFile, Severity,
+    TextRange, TextSize,
+};
+pub use pure_analyzer_model::ModelError;
+pub use pure_analyzer_syntax::{BuildError, GreenNode};
+pub use source::{
+    LineColumn, SourceFile, SourceInput, SourceOrigin, SourceStore, SourceStoreError,
+};
 
 /// One entry of [`engine_crate_versions`]: a crate name paired with its
 /// `Cargo.toml`-declared semantic version.

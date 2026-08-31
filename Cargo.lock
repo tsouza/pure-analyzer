@@ -824,6 +824,8 @@ dependencies = [
  "pure-analyzer-parser",
  "pure-analyzer-resolve",
  "pure-analyzer-syntax",
+ "rayon",
+ "thiserror",
 ]
 
 [[package]]
