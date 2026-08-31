@@ -125,10 +125,10 @@ fn every_in_scope_gold_query_streams_soundly_under_l2() {
     assert_eq!(total, IN_SCOPE_TOTAL, "total in-scope replay count");
 }
 
-/// The gate that closes N3h's bug class (constitution §5), not just its one
+/// The gate that closes N3i's bug class (constitution §5), not just its one
 /// instance.
 ///
-/// Pure's arrow sugar is `a->f(b, …)` ≡ `f(a, b, …)`, so a name N3h denies at a
+/// Pure's arrow sugar is `a->f(b, …)` ≡ `f(a, b, …)`, so a name N3i denies at a
 /// scalar receiver is a name that may never legally take a scalar as its **first
 /// parameter**. The corpus is the spec (§8.6), and it states that fact directly:
 /// a plain-function call `f('lit', …)` in a gold query *is* an attested
@@ -161,7 +161,7 @@ fn no_denied_name_is_one_the_corpus_writes_with_a_scalar_first_argument() {
     }
     assert!(
         offenders.is_empty(),
-        "N3h would mask a construct the gold corpus attests. Pure's arrow sugar \
+        "N3i would mask a construct the gold corpus attests. Pure's arrow sugar \
          makes `f('lit', …)` and `'lit'->f(…)` the same call, so a denied name \
          written this way is legal on a scalar receiver and belongs in \
          `EXTENT_ONLY_DENIED_METHODS`, not `RELATION_RECEIVER_METHODS`:\n{}",

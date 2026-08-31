@@ -461,9 +461,11 @@ pub enum L2Position {
     /// Two rules share it, because both are claims about the same receiver and
     /// neither is a claim about the other's names:
     ///
-    /// * **N3h** — a [`RELATION_RECEIVER_METHODS`] name is dead here whatever the
+    /// * **N3i** — a [`RELATION_RECEIVER_METHODS`] name is dead here whatever the
     ///   type class is. A scalar primitive is no more a `TabularDataSet` than a
-    ///   class extent is.
+    ///   class extent is. (The tag skips `N3h`: that letter belongs to the rule at
+    ///   the extent's own *argument* slot, N3f/N3g's direct successor at the same
+    ///   position, developed concurrently with this one.)
     /// * **T4** — a String-only builtin (`narrow::STRING_ONLY_METHODS`) is legal
     ///   only on a `String` receiver; every other type class rejects it by
     ///   signature. See `narrow::keeps_scalar_method` for the live evidence.
@@ -585,7 +587,7 @@ pub const RELATION_RECEIVER_METHODS: &[&str] = &[
 ];
 
 /// The method names a **class extent** can present no first parameter for, but a
-/// **scalar** can — so N3f denies them and N3h must not.
+/// **scalar** can — so N3f denies them and N3i must not.
 ///
 /// Read off the registry the same way [`RELATION_RECEIVER_METHODS`] is, and the
 /// operative property is uniform even though two different signature shapes

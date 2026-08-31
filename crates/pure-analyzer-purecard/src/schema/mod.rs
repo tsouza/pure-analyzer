@@ -47,7 +47,7 @@ pub use model::{Schema, SchemaError};
 pub use model::TypeClass;
 #[doc(hidden)]
 pub use scope::L2Position;
-// N3h's deny set, promoted the same way and for the same reason: the gate that
+// N3i's deny set, promoted the same way and for the same reason: the gate that
 // closes its bug class
 // (`l2_soundness::no_denied_name_is_one_the_corpus_writes_with_a_scalar_first_argument`)
 // has to read the *shipped* list, never a second copy of it, or a name added

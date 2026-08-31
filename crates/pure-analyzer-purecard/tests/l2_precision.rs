@@ -468,7 +468,7 @@ fn t4_masks_a_string_method_on_a_non_string_receiver() {
     assert_frozen("t4-string-method");
 }
 
-/// N3h, T4's co-tenant at the same position: a `RELATION_RECEIVER_METHODS`
+/// N3i, T4's co-tenant at the same position: a `RELATION_RECEIVER_METHODS`
 /// name is dead on a scalar-primitive receiver whatever its type class, on each
 /// of the four routes the overlay types one from — a completed string literal
 /// (`'car_makers'->`), a receiver-only builtin's fixed Boolean
@@ -481,11 +481,11 @@ fn t4_masks_a_string_method_on_a_non_string_receiver() {
 /// each answered with a candidate set every entry of which wants a relation or a
 /// store.
 #[test]
-fn n3h_masks_a_relation_method_on_a_scalar_receiver() {
-    assert_frozen("n3h-scalar-receiver-method");
+fn n3i_masks_a_relation_method_on_a_scalar_receiver() {
+    assert_frozen("n3i-scalar-receiver-method");
 }
 
-/// N3h's soundness edge, the mirror of
+/// N3i's soundness edge, the mirror of
 /// [`t4_keeps_every_string_method_on_a_string_receiver`]: the builtins a scalar
 /// primitive receiver really does admit stay admissible on one.
 ///
@@ -496,10 +496,10 @@ fn n3h_masks_a_relation_method_on_a_scalar_receiver() {
 /// The list is not decorative — every call below came back **compiling** against
 /// the pinned engine on the receiver it is written on, including the four names
 /// whose arity, not whose receiver, is what the failing walks got wrong
-/// (`groupBy`, `project`, `limit`, `sort`). Masking any of them would be N3h
+/// (`groupBy`, `project`, `limit`, `sort`). Masking any of them would be N3i
 /// over-reaching from an arity error into a receiver claim.
 #[test]
-fn n3h_keeps_a_receiver_generic_method_on_a_scalar_receiver() {
+fn n3i_keeps_a_receiver_generic_method_on_a_scalar_receiver() {
     const EXTENT: &str = "|spider::car_1::model::default::CarMakers.all()";
     // `agg` first: its arrow form is the exact construct the first revision of
     // this rule masked, and the gold corpus writes its plain-function twin 2367
@@ -778,7 +778,7 @@ const FROZEN_FAMILIES: &[(&str, &str)] = &[
          every overload wants a receiver a `T[*]` class collection cannot be",
     ),
     (
-        "n3h-scalar-receiver-method",
+        "n3i-scalar-receiver-method",
         "Phase 10 · bucket D — a relation/store builtin arrowed off a receiver the \
          overlay has typed a scalar primitive: a string literal, or a \
          receiver-only builtin's fixed Boolean/Integer result",
@@ -1132,11 +1132,11 @@ static FROZEN_KILLS: &[FrozenKill] = &[
             closed_by: "->",
         },
     },
-    // N3h's own two kills, taken verbatim from the live lane on this branch (the
+    // N3i's own two kills, taken verbatim from the live lane on this branch (the
     // `car_1` exploration walks the phase set out to close), from the `{` their
     // leading whitespace run opens.
     FrozenKill {
-        fixture: "n3h-scalar-receiver-method",
+        fixture: "n3i-scalar-receiver-method",
         db: "car_1",
         closer: Closer::L2("ScalarMethod"),
         kill: Kill::Walk {
@@ -1145,7 +1145,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
         },
     },
     FrozenKill {
-        fixture: "n3h-scalar-receiver-method",
+        fixture: "n3i-scalar-receiver-method",
         db: "car_1",
         closer: Closer::L2("ScalarMethod"),
         kill: Kill::Walk {
@@ -1159,7 +1159,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     // like N3f's, the clear lands on the token that *closes* the denied name
     // (`(`), never on the name itself.
     FrozenKill {
-        fixture: "n3h-scalar-receiver-method",
+        fixture: "n3i-scalar-receiver-method",
         db: "car_1",
         closer: Closer::L2("ScalarMethod"),
         kill: Kill::Walk {
@@ -1168,7 +1168,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
         },
     },
     FrozenKill {
-        fixture: "n3h-scalar-receiver-method",
+        fixture: "n3i-scalar-receiver-method",
         db: "car_1",
         closer: Closer::L2("ScalarMethod"),
         kill: Kill::Walk {
@@ -3523,7 +3523,7 @@ fn n3f_forbids_a_stream_ending_on_a_denied_extent_method_name() {
     );
 }
 
-/// N3h's completion half, the twin of
+/// N3i's completion half, the twin of
 /// [`n3f_forbids_a_stream_ending_on_a_denied_extent_method_name`] one receiver
 /// category over: a stream may not *end* on a denied whole name at a scalar
 /// receiver either.
@@ -3543,7 +3543,7 @@ fn n3f_forbids_a_stream_ending_on_a_denied_extent_method_name() {
 /// rule's doing and not L1's: a strict prefix is an open lexeme, and a name this
 /// rule does not deny keeps whatever completion L1 gives it.
 #[test]
-fn n3h_forbids_a_stream_ending_on_a_denied_scalar_method_name() {
+fn n3i_forbids_a_stream_ending_on_a_denied_scalar_method_name() {
     const EXTENT: &str = "|spider::car_1::model::default::CarMakers.all()";
     for receiver in [
         format!("{EXTENT}->isNotEmpty()"),

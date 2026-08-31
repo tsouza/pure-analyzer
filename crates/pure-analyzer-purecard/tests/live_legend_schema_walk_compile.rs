@@ -538,7 +538,7 @@ const RATCHET_SLACK: usize = 3;
 ///
 /// **Phase 10 (2026-08-31) re-measures at 54/64 = recipe 5/5 + exploration
 /// 49/59**, bit-identical across two consecutive runs and level with Phase 9 on
-/// both partitions, so this baseline is *not* raised. The phase ships N3h, whose
+/// both partitions, so this baseline is *not* raised. The phase ships N3i, whose
 /// two closed classes (`tableToTDS(String[1])` and `restrict(Boolean[1],…)`)
 /// both sat in `car_1`'s residue and neither in this one — this arm's
 /// exploration stream reaches no relation method on a scalar receiver at all.
@@ -668,11 +668,11 @@ const CRITERION_BASELINE: Baseline = Baseline {
 /// **Phase 10 (2026-08-31) ratchets this to 44/64 = recipe 7/7 + exploration
 /// 37/57**, bit-identical across two consecutive runs, measured on this branch
 /// against its own before-run (42/64 = 7/7 + 35/57) on the same stack. The floor
-/// rises 32 → 34. The phase ships N3h, and the +2 is the two failure *classes*
+/// rises 32 → 34. The phase ships N3i, and the +2 is the two failure *classes*
 /// it names leaving the residue outright: `tableToTDS(String[1])` and
 /// `restrict(Boolean[1],String[1])` are both gone, and nothing that was
 /// compiling stopped. `groupBy(String[1],String[1])` deliberately survives — it
-/// is an arity error on a receiver-generic name, which N3h does not claim.
+/// is an arity error on a receiver-generic name, which N3i does not claim.
 const GENERALIZATION_BASELINE: Baseline = Baseline {
     db_id: GENERALIZATION_DB,
     recipe_compiled: 7,
@@ -818,7 +818,7 @@ fn assert_live_compile_rate(baseline: &Baseline) {
 /// proves that gap is in fact closed (269/269 *real* gold queries compile
 /// against the same grammar this lane uses).
 ///
-/// Phase 10 ships N3h: a relation/store builtin is dead at a `->` whose receiver
+/// Phase 10 ships N3i: a relation/store builtin is dead at a `->` whose receiver
 /// the overlay has typed a scalar primitive. What remains, across 10 `world_1` /
 /// 20 `car_1` exploration failures, taxonomised per walk and summing to exactly
 /// 30:
@@ -837,14 +837,14 @@ fn assert_live_compile_rate(baseline: &Baseline) {
 ///   in the 2026-08-30 decision-ruling comment on #55 (Decision 3), on the
 ///   ground that a real host's novel identifiers must stay legal. Permanent
 ///   residue, not a backlog item.
-/// - **A receiver / signature one category over — 8.** N3h took two of the ten
+/// - **A receiver / signature one category over — 8.** N3i took two of the ten
 ///   Phase 9 recorded — `tableToTDS(String[1])` and
 ///   `restrict(Boolean[1],String[1])`, the whole scalar-receiver class. What is
 ///   left splits in two, and the split is what a Phase 11 would work from:
 ///   **arity on a receiver-generic name** (`groupBy(Countrylanguage[*],Boolean[1])`,
 ///   `groupBy(CarMakers[*],String[1])`, `limit(CarMakers[*],String[1])`,
 ///   `limit(ModelList[*],String[1])` — the extent-method argument *shape*, which
-///   N3h explicitly does not claim), and **operator operands**
+///   N3i explicitly does not claim), and **operator operands**
 ///   (`and(Integer[*],String[1])`, `lessThan(CarMakers[1],Integer[1])`,
 ///   `or(Boolean[1],LambdaFunction<…>[1])` and one more).
 /// - **A corpus binder name called as a method — 1.** `row1(ModelList[*],

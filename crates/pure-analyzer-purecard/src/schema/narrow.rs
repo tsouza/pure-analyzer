@@ -130,9 +130,9 @@ enum CacheKey {
     /// T3 reducer class — the aggregation-reducer lever (cursor-independent).
     Reducer(TypeClass),
     /// The scalar-receiver method set: the receiver's type class (T4's lever) and
-    /// the cursor node N3h's [`SCALAR_DENY`] trie has walked to. Both halves key
+    /// the cursor node N3i's [`SCALAR_DENY`] trie has walked to. Both halves key
     /// it because the two rules that share the position read different inputs —
-    /// T4 the type, N3h the open name.
+    /// T4 the type, N3i the open name.
     ScalarMethod(TypeClass, u32),
     /// N6 column set at a given emitted-column count (monotonic within a stream,
     /// so the count pins the set exactly).
@@ -238,7 +238,7 @@ pub(crate) fn narrow_into(
         }
         L2Position::ScalarMethod(tc) => {
             let masked_by = *tc;
-            // Past the last denied name N3h knows, the position constrains
+            // Past the last denied name N3i knows, the position constrains
             // nothing: T4's own half is a whole-token match, which no non-empty
             // prefix can reach.
             let Some(cursor) = deny_cursor(&SCALAR_DENY, prefix) else {
@@ -1050,7 +1050,7 @@ const STRING_ONLY_METHODS: &[&[u8]] = &[b"toLower", b"toUpper", b"startsWith", b
 /// (§6.6 T4): a [`STRING_ONLY_METHODS`] name is legal only on a `String`
 /// receiver.
 ///
-/// A whole-token match rather than a trie walk, unlike N3h's half of
+/// A whole-token match rather than a trie walk, unlike N3i's half of
 /// [`L2Position::ScalarMethod`] — deliberately, and the doc on
 /// [`STRING_ONLY_METHODS`] is why: the family a name here prefixes
 /// (`toUpperFirstCharacter`) is String-only too, so denying the token outright
@@ -1212,7 +1212,7 @@ static EXTENT_DENY: LazyLock<Trie> = LazyLock::new(|| {
     )
 });
 
-/// N3h's deny trie: the relation/store first-parameter names alone
+/// N3i's deny trie: the relation/store first-parameter names alone
 /// ([`RELATION_RECEIVER_METHODS`]), which is all a *scalar primitive* receiver
 /// rules out — [`EXTENT_ONLY_DENIED_METHODS`] is exactly what such a receiver
 /// does admit (`'car_makers'->substring(0,1)` and `'COUNT()'->agg(map, reduce)`
@@ -1239,7 +1239,7 @@ fn deny_cursor(deny: &Trie, prefix: &[u8]) -> Option<u32> {
 
 /// Refill `dst` with a receiver-category rule's set: every vocabulary token, less
 /// the ones that would **close** the open method name on an entry of `deny`, and
-/// — where the receiver's type class is known, which is N3h's position and not
+/// — where the receiver's type class is known, which is N3i's position and not
 /// N3f's — less the String-only names T4 rules out at it.
 ///
 /// Subtractive by construction, which is what keeps both rules that use it sound
