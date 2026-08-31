@@ -1,13 +1,15 @@
 //! Process-boundary workflows over libpure and renderer-neutral outputs.
 
 mod input;
+mod write;
 
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::io::{IsTerminal, Write};
 
 use libpure::{
-    AnalysisDriver, AnalysisOutput, Diagnostic, DriverError, FormatOutput, LintRequest, Severity,
-    SourceInput, SourceOrigin, SourceRequest, SourceStore,
+    AnalysisDriver, AnalysisOutput, Diagnostic, DriverError, FormatOutput, LintRequest, ModelInput,
+    PlannedChange, Severity, SourceFile, SourceInput, SourceOrigin, SourceRequest, SourceStore,
 };
 use pure_analyzer_render::{ColorPolicy, RenderInput, render_human, render_json, render_sarif};
 use thiserror::Error;
@@ -15,6 +17,7 @@ use thiserror::Error;
 use crate::CompletionShell;
 use crate::config::{ColorChoice, OutputFormat, ResolvedConfig};
 use input::{model_sources, query_sources};
+use write::{Replacement, replace_all};
 
 /// Successful command execution.
 pub(crate) const EXIT_SUCCESS: u8 = 0;
@@ -30,6 +33,8 @@ pub(crate) const EXIT_INTERNAL: u8 = 4;
 
 const IN_PLACE_FORMAT_WRITE_UNAVAILABLE: &str =
     "in-place formatter writes are not available; use --check, --stdout, or --diff";
+const FIX_STDIN_WRITE_UNAVAILABLE: &str =
+    "lint --fix cannot update standard input; use --fix --check, --fix --stdout, or --fix --diff";
 
 /// A classified CLI boundary failure with a stable process exit code.
 #[derive(Debug, Error)]
@@ -105,6 +110,39 @@ impl FormatMode {
     }
 }
 
+/// Fix behavior selected by the `lint --fix` flags.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) struct FixMode {
+    enabled: bool,
+    check: bool,
+    stdout: bool,
+    diff: bool,
+}
+
+impl FixMode {
+    /// Construct one fix mode validated by clap.
+    pub(crate) const fn new(enabled: bool, check: bool, stdout: bool, diff: bool) -> Self {
+        Self {
+            enabled,
+            check,
+            stdout,
+            diff,
+        }
+    }
+
+    const fn enabled(self) -> bool {
+        self.enabled
+    }
+
+    const fn previews_changes(self) -> bool {
+        self.check || self.diff
+    }
+
+    const fn writes_in_place(self) -> bool {
+        self.enabled && !self.check && !self.stdout && !self.diff
+    }
+}
+
 /// Execute model-free validation and render the retained analysis snapshot.
 pub(crate) fn validate(files: &[String], config: &ResolvedConfig) -> Result<u8, Failure> {
     let sources = query_sources(files)?;
@@ -118,23 +156,42 @@ pub(crate) fn validate(files: &[String], config: &ResolvedConfig) -> Result<u8, 
     Ok(diagnostic_exit(output.diagnostics()))
 }
 
-/// Execute model-aware linting.
-pub(crate) fn lint(files: &[String], config: &ResolvedConfig) -> Result<u8, Failure> {
+/// Execute model-aware linting, optionally previewing or applying proven fixes.
+pub(crate) fn lint(
+    files: &[String],
+    mode: FixMode,
+    config: &ResolvedConfig,
+) -> Result<u8, Failure> {
     let sources = query_sources(files)?;
+    if mode.writes_in_place()
+        && sources
+            .iter()
+            .any(|source| matches!(source, SourceInput::Stdin { .. }))
+    {
+        return Err(Failure::usage(FIX_STDIN_WRITE_UNAVAILABLE));
+    }
+    if mode.stdout && sources.len() != 1 {
+        return Err(Failure::usage(
+            "lint --fix --stdout requires exactly one resolved input",
+        ));
+    }
     let models = model_sources(config.model_paths())?;
-    let request = || -> Result<LintRequest, Failure> {
-        Ok(LintRequest::new(
-            source_request(
-                sources.clone(),
-                config.jobs(),
-                config.lint_policy().map_err(Failure::usage)?,
-            ),
-            models.clone(),
-        ))
-    };
-    let output = AnalysisDriver.lint(&request()?).map_err(driver_failure)?;
-    emit_analysis(&output, config)?;
-    Ok(diagnostic_exit(output.diagnostics()))
+    let request = LintRequest::new(
+        source_request(
+            sources,
+            config.jobs(),
+            config.lint_policy().map_err(Failure::usage)?,
+        ),
+        models,
+    );
+    let driver = AnalysisDriver;
+    let output = driver.lint(&request).map_err(driver_failure)?;
+    if !mode.enabled() {
+        emit_analysis(&output, config)?;
+        return Ok(diagnostic_exit(output.diagnostics()));
+    }
+
+    finish_lint_fixes(&driver, &request, &output, mode, config)
 }
 
 /// Execute canonical formatting without modifying filesystem inputs.
@@ -279,6 +336,18 @@ fn emit_analysis(output: &AnalysisOutput, config: &ResolvedConfig) -> Result<(),
     )
 }
 
+fn emit_fix_analysis(output: &AnalysisOutput, config: &ResolvedConfig) -> Result<(), Failure> {
+    if config.quiet() {
+        return Ok(());
+    }
+    emit_diagnostics(
+        output.sources(),
+        output.diagnostics(),
+        config,
+        Destination::Stderr,
+    )
+}
+
 fn emit_diagnostics(
     sources: &SourceStore,
     diagnostics: &[Diagnostic],
@@ -338,6 +407,165 @@ fn has_actionable_diagnostics(diagnostics: &[Diagnostic]) -> bool {
         .any(|diagnostic| diagnostic.severity == Severity::Error)
 }
 
+fn finish_lint_fixes(
+    driver: &AnalysisDriver,
+    request: &LintRequest,
+    output: &AnalysisOutput,
+    mode: FixMode,
+    config: &ResolvedConfig,
+) -> Result<u8, Failure> {
+    let changes = planned_fix_changes(output)?;
+
+    if mode.diff {
+        let mut rendered = String::new();
+        for change in &changes {
+            let source = output.sources().get(change.file).ok_or_else(|| {
+                Failure::internal(format!("fix plan lost source file {}", change.file))
+            })?;
+            append_fix_diff(&mut rendered, source.name(), &change.before, &change.after);
+        }
+        if !rendered.is_empty() {
+            write_stdout(&rendered)?;
+        }
+        emit_fix_analysis(output, config)?;
+        return Ok(fix_preview_exit(output, mode, !changes.is_empty()));
+    }
+
+    if mode.stdout {
+        let source = output
+            .sources()
+            .files()
+            .nth(request.models().len())
+            .ok_or_else(|| Failure::internal("lint lost its resolved input"))?;
+        let preview_text = changes
+            .iter()
+            .find(|change| change.file == source.id())
+            .map_or_else(|| source.text(), |change| change.after.as_str());
+        let preview_request = lint_preview_request(request, output, &changes)?;
+        let reanalyzed = driver.lint(&preview_request).map_err(driver_failure)?;
+        write_stdout(preview_text)?;
+        emit_fix_analysis(&reanalyzed, config)?;
+        return Ok(diagnostic_exit(reanalyzed.diagnostics()));
+    }
+
+    if mode.check {
+        emit_fix_analysis(output, config)?;
+        return Ok(fix_preview_exit(output, mode, !changes.is_empty()));
+    }
+
+    if changes.is_empty() {
+        emit_fix_analysis(output, config)?;
+        return Ok(diagnostic_exit(output.diagnostics()));
+    }
+
+    replace_all(fix_replacements(output.sources(), changes)?)?;
+    let reanalyzed = driver.lint(request).map_err(driver_failure)?;
+    emit_fix_analysis(&reanalyzed, config)?;
+    Ok(diagnostic_exit(reanalyzed.diagnostics()))
+}
+
+fn planned_fix_changes(output: &AnalysisOutput) -> Result<Vec<PlannedChange>, Failure> {
+    let snapshots = output
+        .sources()
+        .files()
+        .map(|source| (source.id(), source.text().to_owned()))
+        .collect::<BTreeMap<_, _>>();
+    let plan = output.plan_fixes().map_err(Failure::internal)?;
+    if !plan.check(&snapshots).map_err(Failure::internal)? {
+        return Ok(Vec::new());
+    }
+    plan.preview(&snapshots).map_err(Failure::internal)
+}
+
+fn lint_preview_request(
+    request: &LintRequest,
+    output: &AnalysisOutput,
+    changes: &[PlannedChange],
+) -> Result<LintRequest, Failure> {
+    let replacements = changes
+        .iter()
+        .map(|change| (change.file, change.after.as_str()))
+        .collect::<BTreeMap<_, _>>();
+    let model_count = request.models().len();
+    let expected_source_count = model_count
+        .checked_add(request.sources().sources().len())
+        .ok_or_else(|| Failure::internal("lint preview source count overflow"))?;
+    let retained = output.sources().files().collect::<Vec<_>>();
+    if retained.len() != expected_source_count {
+        return Err(Failure::internal(
+            "lint preview lost its original query-source boundary",
+        ));
+    }
+    let models = request
+        .models()
+        .iter()
+        .zip(&retained[..model_count])
+        .map(|(model, source)| snapshot_model_input(model, source))
+        .collect::<Vec<_>>();
+    let sources = retained[model_count..]
+        .iter()
+        .map(|source| {
+            let text = replacements
+                .get(&source.id())
+                .copied()
+                .unwrap_or(source.text());
+            snapshot_source_input(source, text)
+        })
+        .collect::<Vec<_>>();
+    let source_request = SourceRequest::new(sources)
+        .with_jobs(request.sources().jobs())
+        .with_diagnostic_policy(request.sources().diagnostic_policy().clone());
+    Ok(LintRequest::new(source_request, models))
+}
+
+fn snapshot_model_input(model: &ModelInput, source: &SourceFile) -> ModelInput {
+    let snapshot = snapshot_source_input(source, source.text());
+    match model {
+        ModelInput::Pmcd { .. } => ModelInput::pmcd(snapshot),
+        ModelInput::Pure { .. } => ModelInput::pure(snapshot),
+    }
+}
+
+fn snapshot_source_input(source: &SourceFile, text: &str) -> SourceInput {
+    match source.origin() {
+        SourceOrigin::File { path } => SourceInput::file_snapshot(path.clone(), text),
+        SourceOrigin::InMemory => SourceInput::in_memory(source.name(), text),
+        SourceOrigin::Stdin => SourceInput::stdin(text),
+    }
+}
+
+fn fix_replacements(
+    sources: &SourceStore,
+    changes: Vec<PlannedChange>,
+) -> Result<Vec<Replacement>, Failure> {
+    let mut replacements = Vec::with_capacity(changes.len());
+    for change in changes {
+        let source = sources.get(change.file).ok_or_else(|| {
+            Failure::internal(format!("fix plan lost source file {}", change.file))
+        })?;
+        let SourceOrigin::File { path } = source.origin() else {
+            return Err(Failure::usage(format!(
+                "lint --fix cannot update {} from standard input",
+                source.name()
+            )));
+        };
+        replacements.push(Replacement {
+            path: path.clone(),
+            before: change.before,
+            after: change.after,
+        });
+    }
+    Ok(replacements)
+}
+
+fn fix_preview_exit(output: &AnalysisOutput, mode: FixMode, changed: bool) -> u8 {
+    if has_actionable_diagnostics(output.diagnostics()) || (mode.previews_changes() && changed) {
+        EXIT_ACTIONABLE
+    } else {
+        EXIT_SUCCESS
+    }
+}
+
 fn finish_format(output: &FormatOutput, mode: FormatMode) -> Result<bool, Failure> {
     let mut changed = false;
     let mut rendered = String::new();
@@ -377,6 +605,25 @@ fn append_diff(output: &mut String, path: &str, before: &str, after: &str) {
     output.push_str("+++ ");
     output.push_str(path);
     output.push_str(" (formatted)\n");
+    for line in before.lines() {
+        output.push('-');
+        output.push_str(line);
+        output.push('\n');
+    }
+    for line in after.lines() {
+        output.push('+');
+        output.push_str(line);
+        output.push('\n');
+    }
+}
+
+fn append_fix_diff(output: &mut String, path: &str, before: &str, after: &str) {
+    output.push_str("--- ");
+    output.push_str(path);
+    output.push('\n');
+    output.push_str("+++ ");
+    output.push_str(path);
+    output.push_str(" (fixed)\n");
     for line in before.lines() {
         output.push('-');
         output.push_str(line);
