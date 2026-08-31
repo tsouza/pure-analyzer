@@ -163,9 +163,10 @@ test("reports optional postmortem aborts and failures without failing the runner
     console.error = originalError;
   }
 
+  const noticePrefix = process.env.GITHUB_ACTIONS ? "::notice::" : "";
   expect(messages).toEqual([
-    "optional mutation diagnostic file inventory failed: inventory unavailable",
-    "optional mutation diagnostic telemetry stopped before completion",
+    `${noticePrefix}optional mutation diagnostic file inventory failed: inventory unavailable`,
+    `${noticePrefix}optional mutation diagnostic telemetry stopped before completion`,
   ]);
 });
 
