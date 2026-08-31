@@ -252,6 +252,29 @@ fn assert_sarif_contract(sarif: &str) {
     assert_sarif_result(&log["runs"][0]["results"][0]);
 }
 
+#[test]
+fn sarif_emits_properties_for_a_reason_without_verdict_or_documentation() {
+    let sources = fixture_sources();
+    let diagnostics = vec![
+        Diagnostic::builder(
+            DiagCode::UnknownProperty,
+            Severity::Error,
+            "reason-only finding",
+            Label::new(FileId::new(0), range(4, 6)),
+        )
+        .reason(ReasonCode::IndOpaquePredicate)
+        .build(),
+    ];
+
+    let sarif = render_sarif(RenderInput::new(&sources, &diagnostics)).expect("SARIF renders");
+    let log: Value = serde_json::from_str(&sarif).expect("renderer output is SARIF JSON");
+    let properties = &log["runs"][0]["results"][0]["properties"];
+
+    assert_eq!(properties["reason"]["id"], "IND_OPAQUE_PREDICATE");
+    assert!(properties.get("verdict").is_none());
+    assert!(properties.get("documentationUrl").is_none());
+}
+
 fn assert_sarif_rule(rule: &Value) {
     assert_eq!(rule["id"], "PUR2002");
     assert_eq!(rule["shortDescription"]["text"], "unknown property");
