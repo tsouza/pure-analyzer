@@ -170,6 +170,26 @@ fn ordered_fix_diagnostic(applicability: Applicability, provenance: FixProvenanc
     .build()
 }
 
+fn edit_order_diagnostic(replacement: &str) -> Diagnostic {
+    Diagnostic::builder(
+        DiagCode::UnknownProperty,
+        Severity::Error,
+        "same fix metadata except replacement text",
+        Label::new(FileId::new(0), range(4, 6)),
+    )
+    .fix(Fix {
+        title: "replace the query symbol".to_owned(),
+        applicability: Applicability::Suggested,
+        provenance: FixProvenance::SyntaxOnly,
+        edits: vec![TextEdit {
+            file: FileId::new(0),
+            span: range(4, 6),
+            new_text: replacement.to_owned(),
+        }],
+    })
+    .build()
+}
+
 #[test]
 fn rich_fixture_cross_format_contract() {
     let sources = fixture_sources();
@@ -705,6 +725,27 @@ fn diagnostic_order_uses_fix_applicability_after_title() {
         .collect::<Vec<_>>();
 
     assert_eq!(applicability, ["machine_applicable", "suggested", "unsafe"]);
+}
+
+#[test]
+fn diagnostic_order_uses_fix_replacement_after_other_fix_metadata() {
+    let sources = fixture_sources();
+    let diagnostics = vec![edit_order_diagnostic("z"), edit_order_diagnostic("a")];
+
+    let json = render_json(RenderInput::new(&sources, &diagnostics)).expect("JSON renders");
+    let document: Value = serde_json::from_str(&json).expect("renderer output is JSON");
+    let replacements = document["diagnostics"]
+        .as_array()
+        .expect("diagnostics array")
+        .iter()
+        .map(|diagnostic| {
+            diagnostic["fix"]["edits"][0]["replacement"]
+                .as_str()
+                .expect("fix replacement")
+        })
+        .collect::<Vec<_>>();
+
+    assert_eq!(replacements, ["a", "z"]);
 }
 
 #[test]
