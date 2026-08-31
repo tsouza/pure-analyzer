@@ -108,7 +108,17 @@ export class SnapshotCoordinator {
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    const clearTimer = () => clearTimeout(timer);
+    controller.signal.addEventListener("abort", clearTimer, { once: true });
     const work = Promise.resolve().then(() => task(controller.signal));
+    // A bounded caller may observe an abort before a diagnostic cooperates, but
+    // that work still owns the single-flight slot until it has actually settled.
+    const release = () => {
+      clearTimer();
+      controller.signal.removeEventListener("abort", clearTimer);
+      if (this.current?.controller === controller) this.current = undefined;
+    };
+    work.then(release, release);
     const completion = abortable(work, controller.signal)
       .then(
         () => ({ aborted: false }),
@@ -116,11 +126,7 @@ export class SnapshotCoordinator {
           if (error instanceof DiagnosticAbortError) return { aborted: true };
           throw error;
         },
-      )
-      .finally(() => {
-        clearTimeout(timer);
-        if (this.current?.controller === controller) this.current = undefined;
-      });
+      );
 
     this.current = { controller, completion };
     return completion;
@@ -197,11 +203,90 @@ export function containedCommand({ wallLimit, killGrace, mutationCommand }) {
   ];
 }
 
-function streamText(stream) {
-  return stream ? new Response(stream).text() : Promise.resolve("");
+class OutputCapture {
+  constructor(maxBytes, terminate) {
+    this.maxBytes = maxBytes;
+    this.terminate = terminate;
+    this.bytes = 0;
+    this.exceeded = false;
+  }
+
+  take(chunk) {
+    const available = Math.max(this.maxBytes - this.bytes, 0);
+    const captured = chunk.slice(0, available);
+    this.bytes += captured.byteLength;
+    if (captured.byteLength !== chunk.byteLength && !this.exceeded) {
+      this.exceeded = true;
+      this.terminate();
+    }
+    return captured;
+  }
 }
 
-async function runCommand(command, options = {}) {
+function decodeChunks(chunks, byteLength) {
+  const output = new Uint8Array(byteLength);
+  let offset = 0;
+  for (const chunk of chunks) {
+    output.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(output);
+}
+
+async function captureStream(stream, capture) {
+  if (!stream) return "";
+  const reader = stream.getReader();
+  const chunks = [];
+  let byteLength = 0;
+  try {
+    while (!capture.exceeded) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = capture.take(value);
+      if (chunk.byteLength > 0) {
+        chunks.push(chunk);
+        byteLength += chunk.byteLength;
+      }
+    }
+  } catch (error) {
+    if (!capture.exceeded) throw error;
+  } finally {
+    if (capture.exceeded) await reader.cancel().catch(() => {});
+    reader.releaseLock();
+  }
+  return decodeChunks(chunks, byteLength);
+}
+
+/** Write to an inherited stream without buffering excess child output here. */
+export function writeWithBackpressure(output, value) {
+  return new Promise((resolve, reject) => {
+    const cleanup = () => {
+      output.removeListener("drain", onDrain);
+      output.removeListener("error", onError);
+    };
+    const onDrain = () => {
+      cleanup();
+      resolve();
+    };
+    const onError = (error) => {
+      cleanup();
+      reject(error);
+    };
+    output.once("drain", onDrain);
+    output.once("error", onError);
+    try {
+      if (output.write(value)) {
+        cleanup();
+        resolve();
+      }
+    } catch (error) {
+      cleanup();
+      reject(error);
+    }
+  });
+}
+
+export async function runCommand(command, options = {}) {
   const child = Bun.spawn(command, {
     cwd: options.cwd,
     env: options.env,
@@ -211,18 +296,32 @@ async function runCommand(command, options = {}) {
     signal: options.signal,
     timeout: options.timeoutMs,
     killSignal: options.killSignal ?? "SIGKILL",
-    maxBuffer: options.maxBuffer,
   });
+  const capture = new OutputCapture(
+    options.maxBuffer ?? Number.POSITIVE_INFINITY,
+    () => {
+      try {
+        child.kill("SIGKILL");
+      } catch {
+        // The command may have exited while the stream was being drained.
+      }
+    },
+  );
   const stdout =
     options.stdout === "pipe" || options.stdout === undefined
-      ? streamText(child.stdout)
+      ? captureStream(child.stdout, capture)
       : "";
   const stderr =
     options.stderr === "pipe" || options.stderr === undefined
-      ? streamText(child.stderr)
+      ? captureStream(child.stderr, capture)
       : "";
   const [code, out, err] = await Promise.all([child.exited, stdout, stderr]);
-  return { code, stdout: out, stderr: err };
+  return {
+    code,
+    stdout: out,
+    stderr: err,
+    outputLimitExceeded: capture.exceeded,
+  };
 }
 
 async function runChecked(command, options) {
@@ -306,9 +405,12 @@ async function commandOutput(command, { signal } = {}) {
     });
     throwIfAborted(signal);
     const output = `${result.stdout}${result.stderr}`;
+    const capped = result.outputLimitExceeded
+      ? `diagnostic command output exceeded ${DIAGNOSTIC_COMMAND_MAX_BUFFER_BYTES} bytes; process killed\n`
+      : "";
     return result.code === 0
-      ? output
-      : `${output}diagnostic command exited with status ${result.code}\n`;
+      ? `${output}${capped}`
+      : `${output}${capped}diagnostic command exited with status ${result.code}\n`;
   } catch (error) {
     if (error instanceof DiagnosticAbortError) throw error;
     throwIfAborted(signal);
@@ -879,7 +981,7 @@ export class MutationRunner {
       "",
     ].join("\n");
     await writeFile(this.classificationLog, contents);
-    process.stdout.write(contents);
+    await writeWithBackpressure(process.stdout, contents);
     return reportedStatus;
   }
 
@@ -891,7 +993,14 @@ export class MutationRunner {
       while (true) {
         const { done, value } = await reader.read();
         if (done) return;
-        output.write(value);
+        try {
+          await writeWithBackpressure(output, value);
+        } catch (error) {
+          teeStatus = 1;
+          console.error(
+            `mutation output write failed: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
         try {
           await appendFile(this.mutationLog, value);
         } catch (error) {
@@ -934,7 +1043,7 @@ export class MutationRunner {
     const { commandStatus, teeStatus } = await this.teeChildOutput(child);
     const summary = `command_status=${commandStatus} tee_status=${teeStatus}\n`;
     await appendFile(this.mutationLog, summary);
-    process.stdout.write(summary);
+    await writeWithBackpressure(process.stdout, summary);
     return commandStatus !== 0 ? commandStatus : teeStatus;
   }
 

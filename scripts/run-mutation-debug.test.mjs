@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { EventEmitter } from "node:events";
 
 import {
   CGROUP_COMMAND_TIMEOUT_MS,
@@ -13,6 +14,8 @@ import {
   SnapshotCoordinator,
   containedCommand,
   parseInvocation,
+  runCommand,
+  writeWithBackpressure,
 } from "./run-mutation-debug.mjs";
 
 test("plans the zero-based mutation shard command", () => {
@@ -79,37 +82,62 @@ test("reserves cleanup time inside the immutable outer wall limit", () => {
   );
 });
 
-test("coalesces telemetry and makes an in-flight snapshot abortable", async () => {
-  const coordinator = new SnapshotCoordinator(60_000);
-  let startFirst;
-  const firstStarted = new Promise((resolve) => {
-    startFirst = resolve;
+test("keeps a timed-out snapshot single-flight until ignored work settles", async () => {
+  const coordinator = new SnapshotCoordinator(1);
+  let releaseIgnoredWork;
+  const ignoredWork = new Promise((resolve) => {
+    releaseIgnoredWork = resolve;
   });
-  const neverCompletes = new Promise(() => {});
-  const first = coordinator.start(async () => {
-    startFirst();
-    await neverCompletes;
-  });
+  const first = coordinator.start(() => ignoredWork);
 
-  await firstStarted;
+  await expect(first).resolves.toEqual({ aborted: true });
   expect(coordinator.active).toBeTrue();
   expect(coordinator.start(async () => {})).toBeUndefined();
 
-  coordinator.abort();
-  await expect(first).resolves.toEqual({ aborted: true });
+  releaseIgnoredWork();
+  await Bun.sleep(0);
   expect(coordinator.active).toBeFalse();
-
   await expect(coordinator.start(async () => {})).resolves.toEqual({
     aborted: false,
   });
 });
 
-test("bounds a snapshot that does not cooperate with its abort signal", async () => {
-  const coordinator = new SnapshotCoordinator(1);
-  const result = await coordinator.start(async () => Bun.sleep(20));
+test("caps multi-megabyte diagnostic output before it can accumulate", async () => {
+  const maxBuffer = 64 * 1024;
+  const result = await runCommand(
+    [
+      process.execPath,
+      "-e",
+      `process.stdout.write("x".repeat(${3 * 1024 * 1024}));`,
+    ],
+    { maxBuffer },
+  );
 
-  expect(result).toEqual({ aborted: true });
-  expect(coordinator.active).toBeFalse();
+  expect(result.outputLimitExceeded).toBeTrue();
+  expect(new TextEncoder().encode(result.stdout).byteLength).toBeLessThanOrEqual(
+    maxBuffer,
+  );
+});
+
+test("waits for a backpressured output stream to drain", async () => {
+  const output = new EventEmitter();
+  const writes = [];
+  output.write = (value) => {
+    writes.push(value);
+    return false;
+  };
+
+  const completion = writeWithBackpressure(output, "classification=success\n");
+  let resolved = false;
+  void completion.then(() => {
+    resolved = true;
+  });
+  await Promise.resolve();
+  expect(resolved).toBeFalse();
+  expect(writes).toEqual(["classification=success\n"]);
+
+  output.emit("drain");
+  await expect(completion).resolves.toBeUndefined();
 });
 
 test("reports optional postmortem aborts and failures without failing the runner", async () => {

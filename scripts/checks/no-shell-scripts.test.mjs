@@ -48,6 +48,15 @@ test("rejects shell shebangs even without a shell extension", () => {
   expect(hasShellShebang("#!/usr/bin/env bun")).toBeFalse();
 });
 
+test("rejects quoted env split-string shell shebangs safely", () => {
+  expect(hasShellShebang("#!/usr/bin/env -S 'bash -eu'")).toBeTrue();
+  expect(
+    hasShellShebang("#!/usr/bin/env --split-string='zsh -eu'"),
+  ).toBeTrue();
+  expect(hasShellShebang("#!/usr/bin/env --split-string=bash -eu")).toBeTrue();
+  expect(hasShellShebang("#!/usr/bin/env --split-string")).toBeFalse();
+});
+
 test("reports tracked executable and non-executable shell shebangs", () => {
   expect(
     shellScriptEntries([

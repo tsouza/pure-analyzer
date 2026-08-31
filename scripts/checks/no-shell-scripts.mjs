@@ -19,20 +19,77 @@ export const SHELL_SCRIPT_SUFFIXES = [
 export const SHELL_INTERPRETERS = ["sh", "bash", "zsh", "ksh", "dash", "fish"];
 export const SHEBANG_READ_BYTES = 4 * 1024;
 
-function basename(path) {
+function basename(path = "") {
   return path.split("/").at(-1)?.toLowerCase() ?? "";
+}
+
+// `env -S` carries a shell-like split string, so retain quoted arguments.
+function commandWords(text) {
+  const words = [];
+  let word = "";
+  let quote = "";
+  let escaped = false;
+  let hasWord = false;
+  for (const character of text) {
+    if (escaped) {
+      word += character;
+      escaped = false;
+      hasWord = true;
+      continue;
+    }
+    if (character === "\\" && quote !== "'") {
+      escaped = true;
+      hasWord = true;
+      continue;
+    }
+    if (quote) {
+      if (character === quote) quote = "";
+      else word += character;
+      continue;
+    }
+    if (character === "'" || character === '"') {
+      quote = character;
+      hasWord = true;
+      continue;
+    }
+    if (/\s/.test(character)) {
+      if (hasWord) words.push(word);
+      word = "";
+      hasWord = false;
+      continue;
+    }
+    word += character;
+    hasWord = true;
+  }
+  if (escaped) word += "\\";
+  if (hasWord) words.push(word);
+  return words;
+}
+
+function splitStringInterpreter(value) {
+  return basename(commandWords(value)[0]);
+}
+
+function envInterpreter(words) {
+  for (let index = 0; index < words.length; index += 1) {
+    const word = words[index];
+    if (word === "-S" || word === "--split-string") {
+      return splitStringInterpreter(words[index + 1] ?? "");
+    }
+    if (word.startsWith("--split-string=")) {
+      return splitStringInterpreter(word.slice("--split-string=".length));
+    }
+    if (word === "--") return basename(words[index + 1]);
+    if (!word.startsWith("-")) return basename(word);
+  }
+  return "";
 }
 
 function shellInterpreter(firstLine) {
   if (!firstLine.startsWith("#!")) return "";
-  const words = firstLine.slice(2).trim().split(/\s+/).filter(Boolean);
-  let index = 0;
-  let interpreter = basename(words[index]);
-  if (interpreter !== "env") return interpreter;
-
-  index += 1;
-  while (words[index]?.startsWith("-")) index += 1;
-  return basename(words[index]);
+  const [executable, ...arguments_] = commandWords(firstLine.slice(2).trim());
+  const interpreter = basename(executable);
+  return interpreter === "env" ? envInterpreter(arguments_) : interpreter;
 }
 
 /** Return tracked paths whose extension makes them prohibited shell scripts. */
