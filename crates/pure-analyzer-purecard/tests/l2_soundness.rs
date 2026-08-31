@@ -35,6 +35,7 @@ mod lex;
 use corpus::load_gold;
 use fixture_dbs::FIXTURE_DBS;
 use l2::{TokenVocab, lex, load_schema};
+use purecard::schema::RELATION_RECEIVER_METHODS;
 use purecard::{CompiledGrammar, DecoderSession};
 
 /// Total in-scope gold queries (the 8 fixtures). A named constant, not a
@@ -122,4 +123,99 @@ fn every_in_scope_gold_query_streams_soundly_under_l2() {
     assert_eq!(arm_a, IN_SCOPE_ARM_A, "arm-A in-scope count");
     assert_eq!(arm_c, IN_SCOPE_ARM_C, "arm-C in-scope count");
     assert_eq!(total, IN_SCOPE_TOTAL, "total in-scope replay count");
+}
+
+/// The gate that closes N3h's bug class (constitution §5), not just its one
+/// instance.
+///
+/// Pure's arrow sugar is `a->f(b, …)` ≡ `f(a, b, …)`, so a name N3h denies at a
+/// scalar receiver is a name that may never legally take a scalar as its **first
+/// parameter**. The corpus is the spec (§8.6), and it states that fact directly:
+/// a plain-function call `f('lit', …)` in a gold query *is* an attested
+/// `'lit'->f(…)`, so a denied name appearing in that shape is a real construct
+/// the rule would mask.
+///
+/// This is exactly the class that shipped and was caught in review: `agg`'s
+/// signature is `agg(String[1]|FunctionDefinition<…>[1],…)`, the corpus writes
+/// `agg('COUNT()', map, reduce)` **2367** times, and `'COUNT()'->agg(map, reduce)`
+/// compiles live against the pinned engine. Probing the name in isolation could
+/// not see it — a zero-argument probe answers with the full candidate set for a
+/// receiver-compatible name and a receiver-incompatible one alike, because that
+/// refusal is about *arity*. The corpus can see it, mechanically, for every name
+/// in the list at once, which is why the gate lives here and reads
+/// [`RELATION_RECEIVER_METHODS`] itself rather than a copy.
+///
+/// Deliberately **not** restricted to the 8 fixture DBs: this is a fact about the
+/// vocabulary of Pure, not about a schema, so it runs over the whole corpus.
+#[test]
+fn no_denied_name_is_one_the_corpus_writes_with_a_scalar_first_argument() {
+    let mut offenders: BTreeMap<&str, (usize, String)> = BTreeMap::new();
+    for record in load_gold(&corpus_path()).expect("open the committed gold corpus") {
+        let text = record.expect("gold record parses").pure_text;
+        for name in RELATION_RECEIVER_METHODS {
+            for call in plain_calls_with_a_scalar_first_argument(&text, name) {
+                let entry = offenders.entry(name).or_insert((0, call));
+                entry.0 += 1;
+            }
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "N3h would mask a construct the gold corpus attests. Pure's arrow sugar \
+         makes `f('lit', …)` and `'lit'->f(…)` the same call, so a denied name \
+         written this way is legal on a scalar receiver and belongs in \
+         `EXTENT_ONLY_DENIED_METHODS`, not `RELATION_RECEIVER_METHODS`:\n{}",
+        offenders
+            .iter()
+            .map(|(name, (count, first))| format!("  {name}: {count} occurrence(s), e.g. {first}"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+}
+
+/// Every plain-function call of `name` in `text` whose first argument opens with
+/// a **scalar literal** — a `'` (string), an ASCII digit (number) or a `%` (date).
+///
+/// A hand-rolled scan rather than a parse, and the three carve-outs are what make
+/// it honest about the format (constitution §4, "bespoke code owns the format's
+/// edge cases"): the match must be a whole identifier (`agg` must not fire inside
+/// `myagg`), it must not be an *arrow* call (`->agg(` already has its receiver),
+/// and whitespace may sit on either side of the `(`.
+fn plain_calls_with_a_scalar_first_argument(text: &str, name: &str) -> Vec<String> {
+    let bytes = text.as_bytes();
+    let mut found = Vec::new();
+    for (at, _) in text.match_indices(name) {
+        let before = bytes[..at]
+            .iter()
+            .rev()
+            .take(2)
+            .copied()
+            .collect::<Vec<_>>();
+        let preceded_by_ident = before
+            .first()
+            .is_some_and(|b| b.is_ascii_alphanumeric() || *b == b'_');
+        let preceded_by_arrow = before.len() == 2 && before[0] == b'>' && before[1] == b'-';
+        if preceded_by_ident || preceded_by_arrow {
+            continue;
+        }
+        let mut cursor = at + name.len();
+        while bytes.get(cursor).is_some_and(u8::is_ascii_whitespace) {
+            cursor += 1;
+        }
+        if bytes.get(cursor) != Some(&b'(') {
+            continue;
+        }
+        cursor += 1;
+        while bytes.get(cursor).is_some_and(u8::is_ascii_whitespace) {
+            cursor += 1;
+        }
+        if bytes
+            .get(cursor)
+            .is_some_and(|b| *b == b'\'' || b.is_ascii_digit() || *b == b'%')
+        {
+            let end = text.len().min(cursor + 24);
+            found.push(text[at..end].replace('\n', " "));
+        }
+    }
+    found
 }

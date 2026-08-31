@@ -33,7 +33,7 @@ use crate::grammar::pda::{is_ident_start, is_ident_tail};
 use crate::mask::BitMask;
 use crate::schema::model::{Schema, TypeClass};
 use crate::schema::scope::{
-    L2Position, Lexeme, PRIMITIVE_RECEIVER_METHODS, RELATION_RECEIVER_METHODS, SOURCE_METHOD,
+    EXTENT_ONLY_DENIED_METHODS, L2Position, Lexeme, RELATION_RECEIVER_METHODS, SOURCE_METHOD,
     STORE_METHODS, classify,
 };
 use crate::schema::trie::{NameClose, NameShape, Trie, Walk, walk};
@@ -249,9 +249,7 @@ pub(crate) fn narrow_into(
                 cache,
                 CacheKey::ScalarMethod(masked_by, cursor),
                 |dst| {
-                    fill_denied_method(dst, vocab, eos_bit, &SCALAR_DENY, cursor, |bytes| {
-                        denied_string_method(bytes, masked_by)
-                    });
+                    fill_denied_method(dst, vocab, eos_bit, &SCALAR_DENY, cursor, Some(masked_by));
                 },
             )
         }
@@ -278,7 +276,7 @@ pub(crate) fn narrow_into(
                 return false;
             };
             with_cache(dst, cache, CacheKey::ExtentMethod(cursor), |dst| {
-                fill_denied_method(dst, vocab, eos_bit, &EXTENT_DENY, cursor, |_| false);
+                fill_denied_method(dst, vocab, eos_bit, &EXTENT_DENY, cursor, None);
             })
         }
         L2Position::ReceiverOnlyArg => with_cache(dst, cache, CacheKey::ReceiverOnlyArg, |dst| {
@@ -1202,22 +1200,23 @@ fn fill_source_extent(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32, after_dash
 
 /// N3f's deny trie: the method names no class extent can present a receiver for —
 /// both halves of the receiver-category evidence at once
-/// ([`RELATION_RECEIVER_METHODS`] and [`PRIMITIVE_RECEIVER_METHODS`]). Built
+/// ([`RELATION_RECEIVER_METHODS`] and [`EXTENT_ONLY_DENIED_METHODS`]). Built
 /// once — the set is a compile-time constant with no schema, column or vocabulary
 /// input, so it needs neither a per-session cache entry nor a rebuild.
 static EXTENT_DENY: LazyLock<Trie> = LazyLock::new(|| {
     Trie::from_names(
         RELATION_RECEIVER_METHODS
             .iter()
-            .chain(PRIMITIVE_RECEIVER_METHODS)
+            .chain(EXTENT_ONLY_DENIED_METHODS)
             .copied(),
     )
 });
 
-/// N3h's deny trie: the relation/store-receiver names alone
+/// N3h's deny trie: the relation/store first-parameter names alone
 /// ([`RELATION_RECEIVER_METHODS`]), which is all a *scalar primitive* receiver
-/// rules out — the primitive half is exactly what such a receiver does admit
-/// (`'car_makers'->substring(0,1)` compiles).
+/// rules out — [`EXTENT_ONLY_DENIED_METHODS`] is exactly what such a receiver
+/// does admit (`'car_makers'->substring(0,1)` and `'COUNT()'->agg(map, reduce)`
+/// both compile).
 static SCALAR_DENY: LazyLock<Trie> =
     LazyLock::new(|| Trie::from_names(RELATION_RECEIVER_METHODS.iter().copied()));
 
@@ -1240,7 +1239,8 @@ fn deny_cursor(deny: &Trie, prefix: &[u8]) -> Option<u32> {
 
 /// Refill `dst` with a receiver-category rule's set: every vocabulary token, less
 /// the ones that would **close** the open method name on an entry of `deny`, and
-/// less the ones `also_denied` rejects outright.
+/// — where the receiver's type class is known, which is N3h's position and not
+/// N3f's — less the String-only names T4 rules out at it.
 ///
 /// Subtractive by construction, which is what keeps both rules that use it sound
 /// in the direction that matters. Neither names a legal set — there is none to
@@ -1260,12 +1260,13 @@ fn fill_denied_method(
     eos_bit: u32,
     deny: &Trie,
     cursor: u32,
-    also_denied: impl Fn(&[u8]) -> bool,
+    receiver: Option<TypeClass>,
 ) {
     dst.clear_all();
     for id in 0..vocab.len() as u32 {
         let bytes = vocab.bytes(id).unwrap_or(&[]);
-        if keeps_denied_method(deny, cursor, bytes) && !also_denied(bytes) {
+        let string_only = receiver.is_some_and(|tc| denied_string_method(bytes, tc));
+        if does_not_close_denied(deny, cursor, bytes) && !string_only {
             dst.set(id);
         }
     }
@@ -1274,9 +1275,9 @@ fn fill_denied_method(
     }
 }
 
-/// Whether `bytes` may continue a method name without closing a `deny` entry —
-/// see [`fill_denied_method`].
-fn keeps_denied_method(deny: &Trie, cursor: u32, bytes: &[u8]) -> bool {
+/// Whether `bytes` may continue an open method name without **closing** a `deny`
+/// entry — see [`fill_denied_method`].
+fn does_not_close_denied(deny: &Trie, cursor: u32, bytes: &[u8]) -> bool {
     !matches!(
         walk(deny, cursor, bytes, NameShape::Plain),
         Walk::Complete { .. }

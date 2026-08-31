@@ -404,9 +404,9 @@ pub enum L2Position {
     /// `removeDuplicates` and `fold` all compile here and appear in no corpus, so
     /// §4 forbids the allow-list that would mask them. What *is* closed is the
     /// complement this rule states: the names whose entire overload set demands a
-    /// relation/store ([`RELATION_RECEIVER_METHODS`]) or primitive-scalar
-    /// ([`PRIMITIVE_RECEIVER_METHODS`]) receiver, which a class extent can never
-    /// present.
+    /// relation/store ([`RELATION_RECEIVER_METHODS`]) or extent-incompatible
+    /// ([`EXTENT_ONLY_DENIED_METHODS`]) first parameter, which a class extent can
+    /// never present.
     ///
     /// A denied name is cleared at the token that **closes its lexeme**, not at
     /// its first byte — `pair` must stay walkable as the live prefix of a longer
@@ -520,15 +520,17 @@ pub(crate) const SOURCE_METHOD: &str = "all";
 /// about one method's signature, never about the set.
 pub(crate) const STORE_METHODS: &[(&str, usize)] = &[("tableReference", 2)];
 
-/// The method names whose **every** engine overload demands a **relation or
-/// store** receiver — a `TabularDataSet`, a `Relation<T>`, a `Database` or a
-/// `Table`.
+/// The method names whose **every** engine overload declares a **relation or
+/// store** first parameter — a `TabularDataSet`, a `Relation<T>`, a `Database`
+/// or a `Table`.
 ///
-/// Read off the engine's own function registry, never invented. Asked for one of
-/// these names on a receiver it cannot match, the compiler prints back the whole
-/// candidate set it *could* have matched, and not one candidate's receiver
+/// The *first parameter*, not "the receiver", and the precision is load-bearing:
+/// Pure's arrow sugar is `a->f(b, …)` ≡ `f(a, b, …)`, so a name is dead at a
+/// receiver exactly when no overload's **first** parameter admits it. Read off
+/// the engine's own function registry, never invented — asked for one of these
+/// names on a receiver it cannot match, the compiler prints back the whole
+/// candidate set it *could* have matched, and not one candidate's first
 /// parameter admits anything but a relation or a store:
-/// `agg(String[1]|FunctionDefinition<…>[1],…)`,
 /// `asOfJoin(Relation<T>[1],…)`, `extend(Relation<T>[1]|TabularDataSet[1],…)`,
 /// `join(Relation<T>[1]|TabularDataSet[1],…)`,
 /// `olapGroupBy(TabularDataSet[1],…)`, `pivot(Relation<T>[1],…)`,
@@ -544,19 +546,33 @@ pub(crate) const STORE_METHODS: &[(&str, usize)] = &[("tableReference", 2)];
 /// `Boolean[1]` and an `Integer[1]` before it was written down, and every one of
 /// the five answers named the same candidate set.
 ///
-/// Two neighbours are deliberately absent, on §4's rule that the overlay invents
-/// no constraint the oracle does not state: `select` answers a bare
-/// `NullPointerException` and `distinct` a bare `RuntimeException: Not possible!`,
-/// neither of which names a candidate set. Four more are absent because they are
-/// *legal* — `project`, `groupBy`, `limit` and `sort` are generic over their
-/// receiver (`groupBy(K[*],Function<{K[1]->Any[*]}>[*],AggregateValue<K,V,U>[*],
+/// **`agg` is deliberately not here, and it is the reason this doc says "first
+/// parameter".** Its signature is `agg(String[1]|FunctionDefinition<…>[1],…)`,
+/// whose first parameter admits a `String[1]` — so `'COUNT()'->agg(map, reduce)`
+/// is the corpus's own `agg('COUNT()', map, reduce)` written the other way round,
+/// and it **compiles live**. A zero-argument probe (`'lit'->agg()`) answers with
+/// the full candidate set exactly as a genuinely receiver-incompatible name does,
+/// because the refusal there is about *arity*; probing the name is not enough,
+/// and
+/// `l2_soundness::no_denied_name_is_one_the_corpus_writes_with_a_scalar_first_argument`
+/// is the gate that says so mechanically, over the whole list at once. `agg`
+/// stays denied at the class extent only ([`EXTENT_ONLY_DENIED_METHODS`]).
+///
+/// Two neighbours are absent on §4's rule that the overlay invents no constraint
+/// the oracle does not state: `select` answers a bare `NullPointerException` and
+/// `distinct` a bare `RuntimeException: Not possible!`, neither of which names a
+/// candidate set. Four more are absent because they are *legal* — `project`,
+/// `groupBy`, `limit` and `sort` are generic over their receiver
+/// (`groupBy(K[*],Function<{K[1]->Any[*]}>[*],AggregateValue<K,V,U>[*],
 /// String[*])`) and compile live on a `String[1]` and a `Boolean[1]` alike once
 /// their argument list is right; the walks that fail on them fail on **arity**,
 /// which is not this rule's claim to make.
 ///
-/// `pub(crate)` so `narrow.rs` builds both rules' tries from the same list.
-pub(crate) const RELATION_RECEIVER_METHODS: &[&str] = &[
-    "agg",
+/// `narrow.rs` builds both rules' tries from this list, and the corpus gate above
+/// reads it directly — hence the `#[doc(hidden)] pub` promotion re-exported at
+/// `schema::mod`, on the same terms as [`L2Position`]'s.
+#[doc(hidden)]
+pub const RELATION_RECEIVER_METHODS: &[&str] = &[
     "asOfJoin",
     "extend",
     "join",
@@ -568,23 +584,31 @@ pub(crate) const RELATION_RECEIVER_METHODS: &[&str] = &[
     "tableToTDS",
 ];
 
-/// The method names whose **every** engine overload demands a **primitive
-/// scalar** receiver — `average(Float|Integer|Number[*])`,
-/// `between(StrictDate|DateTime|Number|String[0..1],…)`,
-/// `endsWith(String[…],String[1])`, `in(Any[1]|Any[0..1],Any[*])`,
-/// `pair(U[1],V[1])`, `parseFloat(String[1])`,
-/// `startsWith(String[…],String[1])`, `substring(String[1],…)`,
-/// `sum(Float|Integer|Number[*])`, `toLower(String[1])`, `toString(Any[1])`,
-/// `year(Date[1]|Date[0..1])`.
+/// The method names a **class extent** can present no first parameter for, but a
+/// **scalar** can — so N3f denies them and N3h must not.
 ///
-/// Read off the registry the same way, and — unlike
-/// [`RELATION_RECEIVER_METHODS`] — true of a class extent **only**. Every one of
-/// these compiles live on a `String[1]` (`'car_makers'->substring(0,1)`,
-/// `->pair('a')`, `->in(['a'])`), which is exactly why
-/// [`ScalarMethod`](L2Position::ScalarMethod) does not carry this half.
+/// Read off the registry the same way [`RELATION_RECEIVER_METHODS`] is, and the
+/// operative property is uniform even though two different signature shapes
+/// produce it:
+///
+/// * twelve want a **primitive scalar** — `average(Float|Integer|Number[*])`,
+///   `between(StrictDate|DateTime|Number|String[0..1],…)`,
+///   `endsWith(String[…],String[1])`, `in(Any[1]|Any[0..1],Any[*])`,
+///   `pair(U[1],V[1])`, `parseFloat(String[1])`,
+///   `startsWith(String[…],String[1])`, `substring(String[1],…)`,
+///   `sum(Float|Integer|Number[*])`, `toLower(String[1])`, `toString(Any[1])`,
+///   `year(Date[1]|Date[0..1])`. Every one compiles live on a `String[1]`
+///   (`'car_makers'->substring(0,1)`, `->pair('a')`, `->in(['a'])`);
+/// * `agg` wants a **column name**, `agg(String[1]|FunctionDefinition<…>[1],…)`.
+///   A `T[*]` class extent is neither, so N3f's refusal
+///   (`agg(CarMakers[*],String[1])`) stands — but a `String[1]` is the first
+///   alternative outright. `'COUNT()'->agg(row: TDSRow[1]|$row, y: TDSRow[*]|
+///   $y->count())` compiles live against the pinned stack, and it is the arrow
+///   spelling of a shape the gold corpus writes **2367** times.
 ///
 /// `pub(crate)` so `narrow.rs` builds N3f's trie from the same list.
-pub(crate) const PRIMITIVE_RECEIVER_METHODS: &[&str] = &[
+pub(crate) const EXTENT_ONLY_DENIED_METHODS: &[&str] = &[
+    "agg",
     "average",
     "between",
     "endsWith",
@@ -599,34 +623,6 @@ pub(crate) const PRIMITIVE_RECEIVER_METHODS: &[&str] = &[
     "year",
 ];
 
-/// N3g's set: the builtins whose **entire** engine overload set is
-/// receiver-only, so an arrow call of one takes no further argument
-/// ([`L2Position::ReceiverOnlyArg`]).
-///
-/// Read off the engine's own registry, exactly as N3f's deny set is. Asked for
-/// one of these names with an argument, the compiler prints back the complete
-/// candidate list it *could* have matched, and every candidate has arity one —
-/// the receiver:
-///
-/// * `count(Any[*]):Integer[1]`;
-/// * `isEmpty(Any[0..1]):Boolean[1]`, `isEmpty(Any[*]):Boolean[1]`;
-/// * `isNotEmpty(Any[0..1]):Boolean[1]`, `isNotEmpty(Any[*]):Boolean[1]`;
-/// * `size(Relation<T>[1]):Integer[1]`, `size(Any[*]):Integer[1]`;
-/// * `toOne(T[*]):T[1]`.
-///
-/// The receiver parameter is `Any`/`T`, so the arity is a fact about the name
-/// alone and not about what it is arrowed off — live-confirmed on a class
-/// extent, a `TableTDS`, a primitive collection and a `filter` result alike. The
-/// corpus agrees and adds nothing: across the 5034 gold queries these names are
-/// called 3048 times and **never** with an argument.
-///
-/// Names the engine would not adjudicate are left out rather than guessed:
-/// `->distinct('x')` answers `RuntimeException: Not possible!` with no candidate
-/// list, so `distinct` is not here (§4 — invent no constraint the oracle does
-/// not state), and `sort` is excluded outright, taking a comparator argument in
-/// all 1048 of its corpus calls.
-///
-/// `pub(crate)` so `narrow.rs` and the tracker share one list.
 pub(crate) const RECEIVER_ONLY_METHODS: &[&str] =
     &["count", "isEmpty", "isNotEmpty", "size", "toOne"];
 
