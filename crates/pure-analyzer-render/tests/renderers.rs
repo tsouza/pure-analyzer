@@ -192,6 +192,7 @@ fn assert_sarif_contract(sarif: &str) {
         "https://json.schemastore.org/sarif-2.1.0.json"
     );
     assert_eq!(log["version"], "2.1.0");
+    assert_eq!(log["runs"][0]["columnKind"], "utf8CodeUnits");
     assert_sarif_rule(&log["runs"][0]["tool"]["driver"]["rules"][0]);
     assert_sarif_result(&log["runs"][0]["results"][0]);
 }
@@ -215,6 +216,10 @@ fn assert_sarif_result(result: &Value) {
 }
 
 fn assert_sarif_locations(result: &Value) {
+    assert_eq!(
+        result["locations"][0]["physicalLocation"]["artifactLocation"]["uri"],
+        "queries/%CE%B1.pure"
+    );
     assert_sarif_region(
         &result["locations"][0]["physicalLocation"]["region"],
         (4, 1, 5),
@@ -222,6 +227,10 @@ fn assert_sarif_locations(result: &Value) {
     );
     assert_eq!(result["locations"][0]["message"]["text"], "query symbol");
     assert_eq!(result["relatedLocations"][0]["id"], 1);
+    assert_eq!(
+        result["relatedLocations"][0]["physicalLocation"]["artifactLocation"]["uri"],
+        "models/%CE%B2.pure"
+    );
     assert_sarif_region(
         &result["relatedLocations"][0]["physicalLocation"]["region"],
         (6, 1, 7),
@@ -393,11 +402,84 @@ fn fix_edits_use_canonical_order_in_every_format() {
     let log: Value = serde_json::from_str(&sarif).expect("renderer output is SARIF JSON");
     assert_eq!(
         log["runs"][0]["results"][0]["fixes"][0]["artifactChanges"][0]["artifactLocation"]["uri"],
-        "queries/α.pure"
+        "queries/%CE%B1.pure"
     );
     assert_eq!(
         log["runs"][0]["results"][0]["fixes"][0]["artifactChanges"][1]["artifactLocation"]["uri"],
-        "models/β.pure"
+        "models/%CE%B2.pure"
+    );
+}
+
+#[test]
+fn sarif_declares_utf8_columns_for_unicode_locations_and_fixes() {
+    let sources =
+        SourceStore::load([SourceInput::in_memory("unicode.pure", "aβ\n")]).expect("source loads");
+    let diagnostics = vec![
+        Diagnostic::builder(
+            DiagCode::BadToken,
+            Severity::Error,
+            "unicode token",
+            Label::new(FileId::new(0), range(1, 3)),
+        )
+        .fix(Fix::model_dependent(
+            "replace unicode token",
+            vec![TextEdit {
+                file: FileId::new(0),
+                span: range(1, 3),
+                new_text: "γ".to_owned(),
+            }],
+        ))
+        .build(),
+    ];
+
+    let sarif = render_sarif(RenderInput::new(&sources, &diagnostics)).expect("SARIF renders");
+    let log: Value = serde_json::from_str(&sarif).expect("renderer output is SARIF JSON");
+    assert_eq!(log["runs"][0]["columnKind"], "utf8CodeUnits");
+
+    assert_sarif_region(
+        &log["runs"][0]["results"][0]["locations"][0]["physicalLocation"]["region"],
+        (1, 1, 2),
+        (3, 1, 4),
+    );
+    assert_sarif_region(
+        &log["runs"][0]["results"][0]["fixes"][0]["artifactChanges"][0]["replacements"][0]["deletedRegion"],
+        (1, 1, 2),
+        (3, 1, 4),
+    );
+}
+
+#[test]
+fn sarif_encodes_arbitrary_display_names_as_uri_paths() {
+    let sources = SourceStore::load([SourceInput::in_memory(r"C:\work space\α#%.pure", "α")])
+        .expect("source loads");
+    let diagnostics = vec![
+        Diagnostic::builder(
+            DiagCode::BadToken,
+            Severity::Error,
+            "escaped artifact name",
+            Label::new(FileId::new(0), range(0, 2)),
+        )
+        .fix(Fix::model_dependent(
+            "replace unicode token",
+            vec![TextEdit {
+                file: FileId::new(0),
+                span: range(0, 2),
+                new_text: "β".to_owned(),
+            }],
+        ))
+        .build(),
+    ];
+
+    let sarif = render_sarif(RenderInput::new(&sources, &diagnostics)).expect("SARIF renders");
+    let log: Value = serde_json::from_str(&sarif).expect("renderer output is SARIF JSON");
+    let artifact_uri = "C%3A/work%20space/%CE%B1%23%25.pure";
+    assert_eq!(
+        log["runs"][0]["results"][0]["locations"][0]["physicalLocation"]["artifactLocation"]["uri"],
+        artifact_uri
+    );
+    assert_eq!(
+        log["runs"][0]["results"][0]["fixes"][0]["artifactChanges"][0]["artifactLocation"]["uri"],
+        artifact_uri
     );
 }
 

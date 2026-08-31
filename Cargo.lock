@@ -1214,6 +1214,7 @@ name = "pure-analyzer-render"
 version = "0.1.0"
 dependencies = [
  "libpure",
+ "percent-encoding",
  "pure-analyzer-diagnostics",
  "serde",
  "serde_json",

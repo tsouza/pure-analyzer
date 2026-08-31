@@ -14,6 +14,7 @@ workspace = true
 
 [dependencies]
 libpure.workspace = true
+percent-encoding.workspace = true
 pure-analyzer-diagnostics.workspace = true
 serde.workspace = true
 serde_json.workspace = true

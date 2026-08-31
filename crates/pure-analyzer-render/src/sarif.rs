@@ -3,6 +3,7 @@
 use std::collections::BTreeMap;
 
 use libpure::{LineColumn, SourceFile};
+use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, utf8_percent_encode};
 use pure_analyzer_diagnostics::{
     Applicability, DiagCode, DiagFamily, FixProvenance, ReasonCode, Severity, TextRange, Verdict,
 };
@@ -15,8 +16,15 @@ use crate::{
 
 const SARIF_SCHEMA: &str = "https://json.schemastore.org/sarif-2.1.0.json";
 const SARIF_VERSION: &str = "2.1.0";
+const SARIF_COLUMN_KIND: &str = "utf8CodeUnits";
 const PROJECT_URI: &str = "https://github.com/tsouza/pure-analyzer";
 const DOCUMENTATION_URI: &str = "https://github.com/tsouza/pure-analyzer/tree/main/docs";
+const ARTIFACT_PATH_ENCODE_SET: &AsciiSet = &NON_ALPHANUMERIC
+    .remove(b'-')
+    .remove(b'.')
+    .remove(b'_')
+    .remove(b'/')
+    .remove(b'~');
 
 pub(crate) fn render(input: RenderInput<'_>) -> Result<String, RenderError> {
     let prepared = PreparedInput::new(input)?;
@@ -31,6 +39,7 @@ pub(crate) fn render(input: RenderInput<'_>) -> Result<String, RenderError> {
                     rules: sarif_rules(&prepared.diagnostics),
                 },
             },
+            column_kind: SARIF_COLUMN_KIND,
             results: prepared.diagnostics.iter().map(sarif_result).collect(),
             invocations: vec![SarifInvocation {
                 execution_successful: true,
@@ -57,6 +66,8 @@ struct SarifLog<'a> {
 #[derive(Serialize)]
 struct SarifRun<'a> {
     tool: SarifTool<'a>,
+    #[serde(rename = "columnKind")]
+    column_kind: &'static str,
     results: Vec<SarifResult<'a>>,
     invocations: Vec<SarifInvocation>,
 }
@@ -118,7 +129,7 @@ struct SarifMessage<'a> {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SarifLocation<'a> {
-    physical_location: SarifPhysicalLocation<'a>,
+    physical_location: SarifPhysicalLocation,
     #[serde(skip_serializing_if = "Option::is_none")]
     message: Option<SarifMessage<'a>>,
 }
@@ -127,21 +138,21 @@ struct SarifLocation<'a> {
 #[serde(rename_all = "camelCase")]
 struct SarifRelatedLocation<'a> {
     id: usize,
-    physical_location: SarifPhysicalLocation<'a>,
+    physical_location: SarifPhysicalLocation,
     #[serde(skip_serializing_if = "Option::is_none")]
     message: Option<SarifMessage<'a>>,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct SarifPhysicalLocation<'a> {
-    artifact_location: SarifArtifactLocation<'a>,
+struct SarifPhysicalLocation {
+    artifact_location: SarifArtifactLocation,
     region: SarifRegion,
 }
 
 #[derive(Serialize)]
-struct SarifArtifactLocation<'a> {
-    uri: &'a str,
+struct SarifArtifactLocation {
+    uri: String,
 }
 
 #[derive(Serialize)]
@@ -166,7 +177,7 @@ struct SarifFix<'a> {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SarifArtifactChange<'a> {
-    artifact_location: SarifArtifactLocation<'a>,
+    artifact_location: SarifArtifactLocation,
     replacements: Vec<SarifReplacement<'a>>,
 }
 
@@ -304,7 +315,7 @@ fn sarif_fix<'a>(fix: &crate::input::PreparedFix<'a>) -> SarifFix<'a> {
 fn sarif_artifact_change<'a>(edit: &PreparedEdit<'a>) -> SarifArtifactChange<'a> {
     SarifArtifactChange {
         artifact_location: SarifArtifactLocation {
-            uri: edit.source.name(),
+            uri: artifact_uri(edit.source.name()),
         },
         replacements: vec![SarifReplacement {
             deleted_region: sarif_region(edit.edit.span, edit.start, edit.end),
@@ -332,11 +343,18 @@ fn physical_location(
     span: TextRange,
     start: LineColumn,
     end: LineColumn,
-) -> SarifPhysicalLocation<'_> {
+) -> SarifPhysicalLocation {
     SarifPhysicalLocation {
-        artifact_location: SarifArtifactLocation { uri: source.name() },
+        artifact_location: SarifArtifactLocation {
+            uri: artifact_uri(source.name()),
+        },
         region: sarif_region(span, start, end),
     }
+}
+
+fn artifact_uri(name: &str) -> String {
+    let normalized = name.replace('\\', "/");
+    utf8_percent_encode(&normalized, ARTIFACT_PATH_ENCODE_SET).to_string()
 }
 
 fn sarif_region(span: TextRange, start: LineColumn, end: LineColumn) -> SarifRegion {

@@ -25,6 +25,7 @@
           ]
         }
       },
+      "columnKind": "utf8CodeUnits",
       "results": [
         {
           "ruleId": "PUR2002",
@@ -36,7 +37,7 @@
             {
               "physicalLocation": {
                 "artifactLocation": {
-                  "uri": "queries/α.pure"
+                  "uri": "queries/%CE%B1.pure"
                 },
                 "region": {
                   "startLine": 1,
@@ -57,7 +58,7 @@
               "id": 1,
               "physicalLocation": {
                 "artifactLocation": {
-                  "uri": "models/β.pure"
+                  "uri": "models/%CE%B2.pure"
                 },
                 "region": {
                   "startLine": 1,
@@ -81,7 +82,7 @@
               "artifactChanges": [
                 {
                   "artifactLocation": {
-                    "uri": "queries/α.pure"
+                    "uri": "queries/%CE%B1.pure"
                   },
                   "replacements": [
                     {
