@@ -676,6 +676,174 @@ mod tests {
     }
 
     #[test]
+    fn accepts_insertions_at_eof_and_replacements_ending_at_eof() {
+        let (files, source_map) = sources();
+        let plan = FixPlan::build(
+            files,
+            [diagnostic(
+                FileId::new(1),
+                "finish source",
+                Applicability::MachineApplicable,
+                vec![edit(4, 5, "A"), edit(5, 5, "!")],
+            )],
+        )
+        .expect("an edit may end at EOF and an insertion may start at EOF");
+
+        assert_eq!(
+            plan.apply(&source_map).expect("apply exact source")[&FileId::new(1)],
+            "alphA!"
+        );
+    }
+
+    #[test]
+    fn accepts_adjacent_edits_and_distinct_insertions_within_one_fix() {
+        let (files, source_map) = sources();
+        let adjacent = FixPlan::build(
+            files.clone(),
+            [diagnostic(
+                FileId::new(1),
+                "adjacent replacements",
+                Applicability::MachineApplicable,
+                vec![edit(0, 1, "A"), edit(1, 2, "L")],
+            )],
+        )
+        .expect("adjacent replacement ranges do not overlap");
+        assert_eq!(
+            adjacent
+                .apply(&source_map)
+                .expect("apply adjacent replacements")[&FileId::new(1)],
+            "ALpha"
+        );
+
+        let insertions = FixPlan::build(
+            files,
+            [diagnostic(
+                FileId::new(1),
+                "separate insertions",
+                Applicability::MachineApplicable,
+                vec![edit(1, 1, "-"), edit(4, 4, "+")],
+            )],
+        )
+        .expect("distinct zero-width edits in one fix do not overlap");
+        assert_eq!(
+            insertions.apply(&source_map).expect("apply insertions")[&FileId::new(1)],
+            "a-lph+a"
+        );
+    }
+
+    #[test]
+    fn accepts_adjacent_and_distinct_zero_width_fix_candidates() {
+        let (files, source_map) = sources();
+        let adjacent = FixPlan::build(
+            files.clone(),
+            [
+                diagnostic(
+                    FileId::new(1),
+                    "later replacement",
+                    Applicability::MachineApplicable,
+                    vec![edit(1, 2, "L")],
+                ),
+                diagnostic(
+                    FileId::new(1),
+                    "earlier replacement",
+                    Applicability::MachineApplicable,
+                    vec![edit(0, 1, "A")],
+                ),
+            ],
+        )
+        .expect("adjacent fixes do not overlap");
+        assert_eq!(
+            adjacent.apply(&source_map).expect("apply adjacent fixes")[&FileId::new(1)],
+            "ALpha"
+        );
+
+        let insertions = FixPlan::build(
+            files,
+            [
+                diagnostic(
+                    FileId::new(1),
+                    "later insertion",
+                    Applicability::MachineApplicable,
+                    vec![edit(4, 4, "+")],
+                ),
+                diagnostic(
+                    FileId::new(1),
+                    "earlier insertion",
+                    Applicability::MachineApplicable,
+                    vec![edit(1, 1, "-")],
+                ),
+            ],
+        )
+        .expect("distinct zero-width fixes do not overlap");
+        assert_eq!(
+            insertions
+                .apply(&source_map)
+                .expect("apply distinct insertions")[&FileId::new(1)],
+            "a-lph+a"
+        );
+    }
+
+    #[test]
+    fn accepts_adjacent_edits_when_an_earlier_candidate_has_multiple_edits() {
+        let (files, source_map) = sources();
+        let plan = FixPlan::build(
+            files,
+            [
+                diagnostic(
+                    FileId::new(1),
+                    "split outer edits",
+                    Applicability::MachineApplicable,
+                    vec![edit(0, 1, "A"), edit(4, 5, "A")],
+                ),
+                diagnostic(
+                    FileId::new(1),
+                    "middle edit",
+                    Applicability::MachineApplicable,
+                    vec![edit(1, 4, "MID")],
+                ),
+            ],
+        )
+        .expect("adjacent edits in separate candidates do not overlap");
+
+        assert_eq!(
+            plan.apply(&source_map).expect("apply adjacent edits")[&FileId::new(1)],
+            "AMIDA"
+        );
+    }
+
+    #[test]
+    fn reports_overlapping_fix_conflicts_in_source_order() {
+        let (files, _) = sources();
+        let err = FixPlan::build(
+            files,
+            [
+                diagnostic(
+                    FileId::new(1),
+                    "later source span",
+                    Applicability::MachineApplicable,
+                    vec![edit(2, 4, "X")],
+                ),
+                diagnostic(
+                    FileId::new(1),
+                    "earlier source span",
+                    Applicability::MachineApplicable,
+                    vec![edit(1, 3, "Y")],
+                ),
+            ],
+        )
+        .expect_err("overlapping fixes conflict");
+
+        assert_eq!(
+            err,
+            FixPlanError::Conflict {
+                file: FileId::new(1),
+                first: "earlier source span".to_owned(),
+                second: "later source span".to_owned(),
+            }
+        );
+    }
+
+    #[test]
     fn rejects_ordering_and_cross_fix_conflicts_deterministically() {
         let (files, _) = sources();
         let err = FixPlan::build(
