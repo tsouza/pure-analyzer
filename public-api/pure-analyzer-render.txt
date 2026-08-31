@@ -1,0 +1,205 @@
+pub mod pure_analyzer_render
+pub enum pure_analyzer_render::RenderError
+pub pure_analyzer_render::RenderError::InvalidSpan
+pub pure_analyzer_render::RenderError::InvalidSpan::diagnostic_index: usize
+pub pure_analyzer_render::RenderError::InvalidSpan::end: u32
+pub pure_analyzer_render::RenderError::InvalidSpan::file: pure_analyzer_diagnostics::file::FileId
+pub pure_analyzer_render::RenderError::InvalidSpan::kind: pure_analyzer_render::SpanKind
+pub pure_analyzer_render::RenderError::InvalidSpan::start: u32
+pub pure_analyzer_render::RenderError::Serialization
+pub pure_analyzer_render::RenderError::Serialization::format: &'static str
+pub pure_analyzer_render::RenderError::Serialization::source: serde_json::error::Error
+pub pure_analyzer_render::RenderError::UnknownFile
+pub pure_analyzer_render::RenderError::UnknownFile::diagnostic_index: usize
+pub pure_analyzer_render::RenderError::UnknownFile::file: pure_analyzer_diagnostics::file::FileId
+pub pure_analyzer_render::RenderError::UnknownFile::kind: pure_analyzer_render::SpanKind
+impl core::error::Error for pure_analyzer_render::RenderError
+pub fn pure_analyzer_render::RenderError::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
+impl core::fmt::Debug for pure_analyzer_render::RenderError
+pub fn pure_analyzer_render::RenderError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for pure_analyzer_render::RenderError
+pub fn pure_analyzer_render::RenderError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for pure_analyzer_render::RenderError
+impl core::marker::Send for pure_analyzer_render::RenderError
+impl core::marker::Sync for pure_analyzer_render::RenderError
+impl core::marker::Unpin for pure_analyzer_render::RenderError
+impl core::marker::UnsafeUnpin for pure_analyzer_render::RenderError
+impl !core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_render::RenderError
+impl !core::panic::unwind_safe::UnwindSafe for pure_analyzer_render::RenderError
+impl<T, U> core::convert::Into<U> for pure_analyzer_render::RenderError where U: core::convert::From<T>
+pub fn pure_analyzer_render::RenderError::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_render::RenderError where U: core::convert::Into<T>
+pub type pure_analyzer_render::RenderError::Error = never
+pub fn pure_analyzer_render::RenderError::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_render::RenderError where U: core::convert::TryFrom<T>
+pub type pure_analyzer_render::RenderError::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_render::RenderError::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::string::ToString for pure_analyzer_render::RenderError where T: core::fmt::Display + ?core::marker::Sized
+pub fn pure_analyzer_render::RenderError::to_string(&self) -> alloc::string::String
+impl<T> core::any::Any for pure_analyzer_render::RenderError where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_render::RenderError::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_render::RenderError where T: ?core::marker::Sized
+pub fn pure_analyzer_render::RenderError::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_render::RenderError where T: ?core::marker::Sized
+pub fn pure_analyzer_render::RenderError::borrow_mut(&mut self) -> &mut T
+impl<T> core::convert::From<T> for pure_analyzer_render::RenderError
+pub fn pure_analyzer_render::RenderError::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for pure_analyzer_render::RenderError
+pub type pure_analyzer_render::RenderError::Init = T
+pub const pure_analyzer_render::RenderError::ALIGN: usize
+pub unsafe fn pure_analyzer_render::RenderError::deref<'a>(usize) -> &'a T
+pub unsafe fn pure_analyzer_render::RenderError::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn pure_analyzer_render::RenderError::drop(usize)
+pub unsafe fn pure_analyzer_render::RenderError::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for pure_analyzer_render::RenderError
+pub enum pure_analyzer_render::SpanKind
+pub pure_analyzer_render::SpanKind::FixEdit(usize)
+pub pure_analyzer_render::SpanKind::Primary
+pub pure_analyzer_render::SpanKind::Secondary(usize)
+impl core::clone::Clone for pure_analyzer_render::SpanKind
+pub fn pure_analyzer_render::SpanKind::clone(&self) -> pure_analyzer_render::SpanKind
+impl core::cmp::Eq for pure_analyzer_render::SpanKind
+impl core::cmp::PartialEq for pure_analyzer_render::SpanKind
+pub fn pure_analyzer_render::SpanKind::eq(&self, &pure_analyzer_render::SpanKind) -> bool
+impl core::fmt::Debug for pure_analyzer_render::SpanKind
+pub fn pure_analyzer_render::SpanKind::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for pure_analyzer_render::SpanKind
+pub fn pure_analyzer_render::SpanKind::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_render::SpanKind
+impl core::marker::Freeze for pure_analyzer_render::SpanKind
+impl core::marker::Send for pure_analyzer_render::SpanKind
+impl core::marker::Sync for pure_analyzer_render::SpanKind
+impl core::marker::Unpin for pure_analyzer_render::SpanKind
+impl core::marker::UnsafeUnpin for pure_analyzer_render::SpanKind
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_render::SpanKind
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_render::SpanKind
+impl<T, U> core::convert::Into<U> for pure_analyzer_render::SpanKind where U: core::convert::From<T>
+pub fn pure_analyzer_render::SpanKind::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_render::SpanKind where U: core::convert::Into<T>
+pub type pure_analyzer_render::SpanKind::Error = never
+pub fn pure_analyzer_render::SpanKind::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_render::SpanKind where U: core::convert::TryFrom<T>
+pub type pure_analyzer_render::SpanKind::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_render::SpanKind::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_render::SpanKind where T: core::clone::Clone
+pub type pure_analyzer_render::SpanKind::Owned = T
+pub fn pure_analyzer_render::SpanKind::clone_into(&self, &mut T)
+pub fn pure_analyzer_render::SpanKind::to_owned(&self) -> T
+impl<T> alloc::string::ToString for pure_analyzer_render::SpanKind where T: core::fmt::Display + ?core::marker::Sized
+pub fn pure_analyzer_render::SpanKind::to_string(&self) -> alloc::string::String
+impl<T> core::any::Any for pure_analyzer_render::SpanKind where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_render::SpanKind::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_render::SpanKind where T: ?core::marker::Sized
+pub fn pure_analyzer_render::SpanKind::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_render::SpanKind where T: ?core::marker::Sized
+pub fn pure_analyzer_render::SpanKind::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_render::SpanKind where T: core::clone::Clone
+pub unsafe fn pure_analyzer_render::SpanKind::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_render::SpanKind
+pub fn pure_analyzer_render::SpanKind::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for pure_analyzer_render::SpanKind
+pub type pure_analyzer_render::SpanKind::Init = T
+pub const pure_analyzer_render::SpanKind::ALIGN: usize
+pub unsafe fn pure_analyzer_render::SpanKind::deref<'a>(usize) -> &'a T
+pub unsafe fn pure_analyzer_render::SpanKind::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn pure_analyzer_render::SpanKind::drop(usize)
+pub unsafe fn pure_analyzer_render::SpanKind::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for pure_analyzer_render::SpanKind
+pub struct pure_analyzer_render::HumanOptions
+pub pure_analyzer_render::HumanOptions::color: bool
+impl core::clone::Clone for pure_analyzer_render::HumanOptions
+pub fn pure_analyzer_render::HumanOptions::clone(&self) -> pure_analyzer_render::HumanOptions
+impl core::cmp::Eq for pure_analyzer_render::HumanOptions
+impl core::cmp::PartialEq for pure_analyzer_render::HumanOptions
+pub fn pure_analyzer_render::HumanOptions::eq(&self, &pure_analyzer_render::HumanOptions) -> bool
+impl core::default::Default for pure_analyzer_render::HumanOptions
+pub fn pure_analyzer_render::HumanOptions::default() -> pure_analyzer_render::HumanOptions
+impl core::fmt::Debug for pure_analyzer_render::HumanOptions
+pub fn pure_analyzer_render::HumanOptions::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for pure_analyzer_render::HumanOptions
+impl core::marker::StructuralPartialEq for pure_analyzer_render::HumanOptions
+impl core::marker::Freeze for pure_analyzer_render::HumanOptions
+impl core::marker::Send for pure_analyzer_render::HumanOptions
+impl core::marker::Sync for pure_analyzer_render::HumanOptions
+impl core::marker::Unpin for pure_analyzer_render::HumanOptions
+impl core::marker::UnsafeUnpin for pure_analyzer_render::HumanOptions
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_render::HumanOptions
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_render::HumanOptions
+impl<T, U> core::convert::Into<U> for pure_analyzer_render::HumanOptions where U: core::convert::From<T>
+pub fn pure_analyzer_render::HumanOptions::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_render::HumanOptions where U: core::convert::Into<T>
+pub type pure_analyzer_render::HumanOptions::Error = never
+pub fn pure_analyzer_render::HumanOptions::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_render::HumanOptions where U: core::convert::TryFrom<T>
+pub type pure_analyzer_render::HumanOptions::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_render::HumanOptions::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_render::HumanOptions where T: core::clone::Clone
+pub type pure_analyzer_render::HumanOptions::Owned = T
+pub fn pure_analyzer_render::HumanOptions::clone_into(&self, &mut T)
+pub fn pure_analyzer_render::HumanOptions::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_render::HumanOptions where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_render::HumanOptions::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_render::HumanOptions where T: ?core::marker::Sized
+pub fn pure_analyzer_render::HumanOptions::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_render::HumanOptions where T: ?core::marker::Sized
+pub fn pure_analyzer_render::HumanOptions::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_render::HumanOptions where T: core::clone::Clone
+pub unsafe fn pure_analyzer_render::HumanOptions::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_render::HumanOptions
+pub fn pure_analyzer_render::HumanOptions::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for pure_analyzer_render::HumanOptions
+pub type pure_analyzer_render::HumanOptions::Init = T
+pub const pure_analyzer_render::HumanOptions::ALIGN: usize
+pub unsafe fn pure_analyzer_render::HumanOptions::deref<'a>(usize) -> &'a T
+pub unsafe fn pure_analyzer_render::HumanOptions::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn pure_analyzer_render::HumanOptions::drop(usize)
+pub unsafe fn pure_analyzer_render::HumanOptions::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for pure_analyzer_render::HumanOptions
+pub struct pure_analyzer_render::RenderInput<'a>
+impl<'a> pure_analyzer_render::RenderInput<'a>
+pub const fn pure_analyzer_render::RenderInput<'a>::new(&'a libpure::source::SourceStore, &'a [pure_analyzer_diagnostics::diagnostic::Diagnostic]) -> Self
+impl<'a> core::clone::Clone for pure_analyzer_render::RenderInput<'a>
+pub fn pure_analyzer_render::RenderInput<'a>::clone(&self) -> pure_analyzer_render::RenderInput<'a>
+impl<'a> core::fmt::Debug for pure_analyzer_render::RenderInput<'a>
+pub fn pure_analyzer_render::RenderInput<'a>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl<'a> core::marker::Copy for pure_analyzer_render::RenderInput<'a>
+impl<'a> core::marker::Freeze for pure_analyzer_render::RenderInput<'a>
+impl<'a> core::marker::Send for pure_analyzer_render::RenderInput<'a>
+impl<'a> core::marker::Sync for pure_analyzer_render::RenderInput<'a>
+impl<'a> core::marker::Unpin for pure_analyzer_render::RenderInput<'a>
+impl<'a> core::marker::UnsafeUnpin for pure_analyzer_render::RenderInput<'a>
+impl<'a> core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_render::RenderInput<'a>
+impl<'a> core::panic::unwind_safe::UnwindSafe for pure_analyzer_render::RenderInput<'a>
+impl<T, U> core::convert::Into<U> for pure_analyzer_render::RenderInput<'a> where U: core::convert::From<T>
+pub fn pure_analyzer_render::RenderInput<'a>::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_render::RenderInput<'a> where U: core::convert::Into<T>
+pub type pure_analyzer_render::RenderInput<'a>::Error = never
+pub fn pure_analyzer_render::RenderInput<'a>::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_render::RenderInput<'a> where U: core::convert::TryFrom<T>
+pub type pure_analyzer_render::RenderInput<'a>::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_render::RenderInput<'a>::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_render::RenderInput<'a> where T: core::clone::Clone
+pub type pure_analyzer_render::RenderInput<'a>::Owned = T
+pub fn pure_analyzer_render::RenderInput<'a>::clone_into(&self, &mut T)
+pub fn pure_analyzer_render::RenderInput<'a>::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_render::RenderInput<'a> where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_render::RenderInput<'a>::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_render::RenderInput<'a> where T: ?core::marker::Sized
+pub fn pure_analyzer_render::RenderInput<'a>::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_render::RenderInput<'a> where T: ?core::marker::Sized
+pub fn pure_analyzer_render::RenderInput<'a>::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_render::RenderInput<'a> where T: core::clone::Clone
+pub unsafe fn pure_analyzer_render::RenderInput<'a>::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_render::RenderInput<'a>
+pub fn pure_analyzer_render::RenderInput<'a>::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for pure_analyzer_render::RenderInput<'a>
+pub type pure_analyzer_render::RenderInput<'a>::Init = T
+pub const pure_analyzer_render::RenderInput<'a>::ALIGN: usize
+pub unsafe fn pure_analyzer_render::RenderInput<'a>::deref<'a>(usize) -> &'a T
+pub unsafe fn pure_analyzer_render::RenderInput<'a>::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn pure_analyzer_render::RenderInput<'a>::drop(usize)
+pub unsafe fn pure_analyzer_render::RenderInput<'a>::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for pure_analyzer_render::RenderInput<'a>
+pub fn pure_analyzer_render::render_human(pure_analyzer_render::RenderInput<'_>, pure_analyzer_render::HumanOptions) -> core::result::Result<alloc::string::String, pure_analyzer_render::RenderError>
+pub fn pure_analyzer_render::render_json(pure_analyzer_render::RenderInput<'_>) -> core::result::Result<alloc::string::String, pure_analyzer_render::RenderError>
+pub fn pure_analyzer_render::render_sarif(pure_analyzer_render::RenderInput<'_>) -> core::result::Result<alloc::string::String, pure_analyzer_render::RenderError>

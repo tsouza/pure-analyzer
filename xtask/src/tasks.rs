@@ -1721,6 +1721,10 @@ const ALLOWED_INTERNAL_DEPS: &[(&str, &[&str])] = &[
         ],
     ),
     (
+        "pure-analyzer-render",
+        &["libpure", "pure-analyzer-diagnostics"],
+    ),
+    (
         "pure-analyzer-cli",
         &["libpure", "pure-analyzer-diagnostics"],
     ),

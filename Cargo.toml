@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
     "crates/pure-analyzer-diagnostics",
+    "crates/pure-analyzer-render",
     "crates/pure-analyzer-lexer",
     "crates/pure-analyzer-syntax",
     "crates/pure-analyzer-parser",
@@ -63,6 +64,7 @@ rust-version = "1.90"
 # ---------------------------------------------------------------------------
 [workspace.dependencies]
 pure-analyzer-diagnostics = { path = "crates/pure-analyzer-diagnostics" }
+pure-analyzer-render = { path = "crates/pure-analyzer-render" }
 pure-analyzer-lexer = { path = "crates/pure-analyzer-lexer" }
 pure-analyzer-syntax = { path = "crates/pure-analyzer-syntax" }
 pure-analyzer-parser = { path = "crates/pure-analyzer-parser" }
