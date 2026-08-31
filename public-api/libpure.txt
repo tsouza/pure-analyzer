@@ -182,6 +182,9 @@ impl<T> either::into_either::IntoEither for libpure::RequestError
 pub enum libpure::SourceInput
 pub libpure::SourceInput::File
 pub libpure::SourceInput::File::path: std::path::PathBuf
+pub libpure::SourceInput::FileSnapshot
+pub libpure::SourceInput::FileSnapshot::path: std::path::PathBuf
+pub libpure::SourceInput::FileSnapshot::text: alloc::string::String
 pub libpure::SourceInput::InMemory
 pub libpure::SourceInput::InMemory::name: alloc::string::String
 pub libpure::SourceInput::InMemory::text: alloc::string::String
@@ -189,6 +192,7 @@ pub libpure::SourceInput::Stdin
 pub libpure::SourceInput::Stdin::text: alloc::string::String
 impl libpure::SourceInput
 pub fn libpure::SourceInput::file(impl core::convert::Into<std::path::PathBuf>) -> Self
+pub fn libpure::SourceInput::file_snapshot(impl core::convert::Into<std::path::PathBuf>, impl core::convert::Into<alloc::string::String>) -> Self
 pub fn libpure::SourceInput::in_memory(impl core::convert::Into<alloc::string::String>, impl core::convert::Into<alloc::string::String>) -> Self
 pub fn libpure::SourceInput::stdin(impl core::convert::Into<alloc::string::String>) -> Self
 impl core::clone::Clone for libpure::SourceInput

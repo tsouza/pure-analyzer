@@ -54,6 +54,18 @@ enum Command {
         /// PMCD JSON and/or Pure-model-file model sources; may repeat.
         #[arg(long)]
         model: Vec<String>,
+        /// Apply machine-applicable fixes transactionally in place.
+        #[arg(long)]
+        fix: bool,
+        /// Check whether `--fix` would change any input without writing.
+        #[arg(long, requires = "fix", conflicts_with_all = ["stdout", "diff"])]
+        check: bool,
+        /// Print one `--fix` preview to standard output without writing.
+        #[arg(long, requires = "fix", conflicts_with_all = ["check", "diff"])]
+        stdout: bool,
+        /// Print a compact `--fix` diff without writing.
+        #[arg(long, requires = "fix", conflicts_with_all = ["check", "stdout"])]
+        diff: bool,
     },
     /// Canonical formatting through read-only modes.
     Fmt {
@@ -146,7 +158,18 @@ fn run(cli: Cli) -> Result<u8, Failure> {
 
     match command {
         Command::Validate { files, .. } => workflow::validate(&files, &resolved),
-        Command::Lint { files, .. } => workflow::lint(&files, &resolved),
+        Command::Lint {
+            files,
+            fix,
+            check,
+            stdout,
+            diff,
+            ..
+        } => workflow::lint(
+            &files,
+            workflow::FixMode::new(fix, check, stdout, diff),
+            &resolved,
+        ),
         Command::Fmt {
             files,
             check,
@@ -234,6 +257,40 @@ mod tests {
             Some(Command::Lint { model, .. }) => assert_eq!(model, vec!["a.json", "b.pure"]),
             other => panic!("expected Lint, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn lint_fix_modes_require_fix_and_are_mutually_exclusive() {
+        let cli = Cli::try_parse_from(["pure-analyzer", "lint", "query.pure", "--fix", "--diff"])
+            .expect("parses fix diff mode");
+        match cli.command {
+            Some(Command::Lint {
+                fix,
+                check,
+                stdout,
+                diff,
+                ..
+            }) => {
+                assert!(fix);
+                assert!(!check);
+                assert!(!stdout);
+                assert!(diff);
+            }
+            other => panic!("expected Lint, got {other:?}"),
+        }
+
+        assert!(Cli::try_parse_from(["pure-analyzer", "lint", "query.pure", "--check"]).is_err());
+        assert!(
+            Cli::try_parse_from([
+                "pure-analyzer",
+                "lint",
+                "query.pure",
+                "--fix",
+                "--check",
+                "--diff",
+            ])
+            .is_err()
+        );
     }
 
     #[test]

@@ -10,7 +10,7 @@ _pure_analyzer() {
     done
     case "$command" in
         validate) words="--color --config --deny --format --help --ignore --jobs --no-config --no-quiet --no-strict --print-config --quiet --select --strict --version --warn" ;;
-        lint) words="--color --config --deny --format --help --ignore --jobs --model --no-config --no-quiet --print-config --quiet --select --version --warn" ;;
+        lint) words="--check --color --config --deny --diff --fix --format --help --ignore --jobs --model --no-config --no-quiet --print-config --quiet --select --stdout --version --warn" ;;
         fmt) words="--check --color --config --deny --diff --format --help --ignore --jobs --line-width --no-config --no-quiet --print-config --quiet --select --stdout --version --warn" ;;
         completions) words="--color --config --deny --format --help --ignore --jobs --no-config --no-quiet --print-config --quiet --select --version --warn" ;;
         *) words="--color --config --deny --format --help --ignore --jobs --no-config --no-quiet --print-config --quiet --select --version --warn completions fmt lint validate" ;;

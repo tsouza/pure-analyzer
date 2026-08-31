@@ -342,13 +342,10 @@ fn lint_model_merge_warning_can_be_denied_without_changing_its_code() {
 }
 
 #[test]
-fn lint_fix_is_not_exposed_before_transactional_apply() {
-    let fixture = Fixture::new("lint-fix");
-    let query = "model::Person.all()->filter(x| $x.missing)";
-    fixture.write("query.pure", query);
-    fixture.write("model.json", &person_model());
+fn lint_fix_applies_a_real_single_file_change() {
+    let (fixture, _, fixed) = lint_fix_fixture("lint-fix-single");
 
-    let output = run(
+    let applied = run(
         &fixture.root,
         &[
             "lint",
@@ -360,10 +357,205 @@ fn lint_fix_is_not_exposed_before_transactional_apply() {
             "--no-config",
         ],
     );
-    assert_eq!(output.status.code(), Some(EXIT_USAGE));
-    assert!(output.stdout.is_empty());
-    assert!(utf8(&output.stderr).contains("--fix"));
+
+    assert!(applied.status.success());
+    assert!(applied.stdout.is_empty());
+    assert!(applied.stderr.is_empty());
+    assert_eq!(fixture.read("query.pure"), fixed);
+}
+
+#[test]
+fn lint_fix_applies_real_multi_file_changes_and_is_idempotent() {
+    let fixture = Fixture::new("lint-fix-write");
+    let first = "model::Source.all()->filter(x| $x.point())";
+    let second = "model::Source.all()->filter(x| $x.point(/* second */))";
+    fixture.write("first.pure", first);
+    fixture.write("second.pure", second);
+    fixture.write("model.json", &milestoning_model());
+
+    let first_apply = run(
+        &fixture.root,
+        &[
+            "lint",
+            "first.pure",
+            "second.pure",
+            "--model",
+            "model.json",
+            "--fix",
+            "--quiet",
+            "--no-config",
+        ],
+    );
+    assert!(first_apply.status.success());
+    assert!(first_apply.stdout.is_empty());
+    assert!(first_apply.stderr.is_empty());
+    assert_eq!(
+        fixture.read("first.pure"),
+        "model::Source.all()->filter(x| $x.point(%latest))"
+    );
+    assert_eq!(
+        fixture.read("second.pure"),
+        "model::Source.all()->filter(x| $x.point(/* second */%latest))"
+    );
+
+    let repeated = run(
+        &fixture.root,
+        &[
+            "lint",
+            "first.pure",
+            "second.pure",
+            "--model",
+            "model.json",
+            "--fix",
+            "--quiet",
+            "--no-config",
+        ],
+    );
+    assert!(repeated.status.success());
+    assert!(repeated.stdout.is_empty());
+    assert!(repeated.stderr.is_empty());
+}
+
+#[test]
+fn lint_fix_check_reports_pending_changes_without_writing() {
+    let (fixture, query, _) = lint_fix_fixture("lint-fix-check");
+
+    let check = run(
+        &fixture.root,
+        &[
+            "lint",
+            "query.pure",
+            "--model",
+            "model.json",
+            "--fix",
+            "--check",
+            "--quiet",
+            "--no-config",
+        ],
+    );
+    assert_eq!(check.status.code(), Some(EXIT_ACTIONABLE));
+    assert!(check.stdout.is_empty());
+    assert!(check.stderr.is_empty());
     assert_eq!(fixture.read("query.pure"), query);
+
+    let warned_check = run(
+        &fixture.root,
+        &[
+            "lint",
+            "query.pure",
+            "--model",
+            "model.json",
+            "--fix",
+            "--check",
+            "--warn",
+            "PUR2001",
+            "--quiet",
+            "--no-config",
+        ],
+    );
+    assert_eq!(warned_check.status.code(), Some(EXIT_ACTIONABLE));
+    assert!(warned_check.stdout.is_empty());
+    assert!(warned_check.stderr.is_empty());
+    assert_eq!(fixture.read("query.pure"), query);
+}
+
+#[test]
+fn lint_fix_diff_preserves_files_and_routes_diagnostics_to_stderr() {
+    let (fixture, query, _) = lint_fix_fixture("lint-fix-diff");
+
+    let diff = run(
+        &fixture.root,
+        &[
+            "lint",
+            "query.pure",
+            "--model",
+            "model.json",
+            "--fix",
+            "--diff",
+            "--format",
+            "json",
+            "--no-config",
+        ],
+    );
+    assert_eq!(diff.status.code(), Some(EXIT_ACTIONABLE));
+    assert!(utf8(&diff.stdout).contains("--- query.pure"));
+    assert!(utf8(&diff.stdout).contains("+++ query.pure (fixed)"));
+    let diagnostics: Value = serde_json::from_slice(&diff.stderr).expect("JSON diagnostics");
+    assert_eq!(diagnostics["diagnostics"][0]["code"], "PUR2001");
+    assert_eq!(fixture.read("query.pure"), query);
+}
+
+#[test]
+fn lint_fix_stdout_is_machine_clean_and_reflects_the_fixed_snapshot() {
+    let (fixture, query, fixed) = lint_fix_fixture("lint-fix-stdout");
+
+    let stdout = run(
+        &fixture.root,
+        &[
+            "lint",
+            "query.pure",
+            "--model",
+            "model.json",
+            "--fix",
+            "--stdout",
+            "--format",
+            "json",
+            "--no-config",
+        ],
+    );
+    assert!(stdout.status.success());
+    assert_eq!(stdout.stdout, fixed.as_bytes());
+    let diagnostics: Value = serde_json::from_slice(&stdout.stderr).expect("JSON diagnostics");
+    assert_eq!(diagnostics["summary"]["errors"], 0);
+    assert_eq!(diagnostics["diagnostics"], Value::Array(Vec::new()));
+    let files = diagnostics["files"].as_array().expect("JSON source files");
+    assert!(
+        files
+            .iter()
+            .any(|file| { file["name"] == "query.pure" && file["origin"] == "file" })
+    );
+    assert!(files.iter().any(|file| {
+        file["name"]
+            .as_str()
+            .is_some_and(|name| name.ends_with("model.json"))
+            && file["origin"] == "file"
+    }));
+    assert_eq!(fixture.read("query.pure"), query);
+}
+
+#[test]
+fn lint_fix_has_a_deterministic_standard_input_policy() {
+    let fixture = Fixture::new("lint-fix-stdin");
+    let query = "model::Source.all()->filter(x| $x.point())";
+    let fixed = "model::Source.all()->filter(x| $x.point(%latest))";
+    fixture.write("model.json", &milestoning_model());
+
+    let write = run_with_stdin(
+        &fixture.root,
+        &["lint", "-", "--model", "model.json", "--fix", "--no-config"],
+        query,
+    );
+    assert_eq!(write.status.code(), Some(EXIT_USAGE));
+    assert!(write.stdout.is_empty());
+    assert!(utf8(&write.stderr).contains("cannot update standard input"));
+
+    let preview = run_with_stdin(
+        &fixture.root,
+        &[
+            "lint",
+            "-",
+            "--model",
+            "model.json",
+            "--fix",
+            "--stdout",
+            "--quiet",
+            "--no-config",
+        ],
+        query,
+    );
+    assert!(preview.status.success());
+    assert_eq!(preview.stdout, fixed.as_bytes());
+    assert!(preview.stderr.is_empty());
 }
 
 #[test]
@@ -703,6 +895,60 @@ fn analyzer(root: &Path) -> Command {
 
 fn person_model() -> String {
     r#"{"_type":"data","elements":[{"_type":"class","package":"model","name":"Person","stereotypes":[],"superTypes":[],"properties":[{"name":"name","genericType":{"rawType":"String","typeArguments":[]},"multiplicity":{"lowerBound":0,"upperBound":1}}],"qualifiedProperties":[]}]}"#.to_owned()
+}
+
+fn lint_fix_fixture(label: &str) -> (Fixture, &'static str, &'static str) {
+    let fixture = Fixture::new(label);
+    let query = "model::Source.all()->filter(x| $x.point())";
+    let fixed = "model::Source.all()->filter(x| $x.point(%latest))";
+    fixture.write("query.pure", query);
+    fixture.write("model.json", &milestoning_model());
+    (fixture, query, fixed)
+}
+
+fn milestoning_model() -> String {
+    r#"{
+        "_type": "data",
+        "elements": [
+            {
+                "_type": "class",
+                "package": "model",
+                "name": "TemporalTarget",
+                "stereotypes": [{
+                    "profile": "meta::pure::profiles::temporal",
+                    "value": "processingtemporal"
+                }],
+                "superTypes": [],
+                "properties": [],
+                "qualifiedProperties": []
+            },
+            {
+                "_type": "class",
+                "package": "model",
+                "name": "Source",
+                "stereotypes": [],
+                "superTypes": [],
+                "properties": [],
+                "qualifiedProperties": [{
+                    "name": "point",
+                    "returnGenericType": {
+                        "rawType": "model::TemporalTarget",
+                        "typeArguments": []
+                    },
+                    "returnMultiplicity": {
+                        "lowerBound": 0,
+                        "upperBound": 1
+                    },
+                    "stereotypes": [{
+                        "profile": "meta::pure::profiles::milestoning",
+                        "value": "generatedmilestoningproperty"
+                    }],
+                    "parameters": []
+                }]
+            }
+        ]
+    }"#
+    .to_owned()
 }
 
 fn utf8(bytes: &[u8]) -> &str {
