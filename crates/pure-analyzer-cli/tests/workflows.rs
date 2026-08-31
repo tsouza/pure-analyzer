@@ -41,7 +41,10 @@ fn command_surface_completion_and_config_independence_are_stable() {
     let completion = command.output().expect("generate Bash completion");
     assert!(completion.status.success());
     assert!(completion.stderr.is_empty());
-    assert_eq!(completion.stdout, include_bytes!("golden/completions.bash"));
+    assert_eq!(
+        completion.stdout,
+        include_bytes!("golden/completions.bash.golden")
+    );
 }
 
 #[test]

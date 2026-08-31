@@ -449,7 +449,7 @@ mod tests {
         command.build();
         assert_eq!(
             bash_completion(&command),
-            include_str!("../../tests/golden/completions.bash")
+            include_str!("../../tests/golden/completions.bash.golden")
         );
     }
 }
