@@ -46,6 +46,9 @@ const KNOWN_ENVIRONMENT: &[&str] = &[
 #[derive(Debug, Args)]
 pub(crate) struct ConfigFlags {
     /// Read this configuration file instead of repository discovery.
+    ///
+    /// User configuration still applies below this layer; environment variables
+    /// and command-line flags retain higher precedence.
     #[arg(long, global = true, conflicts_with = "no_config")]
     config: Option<PathBuf>,
     /// Disable user and repository configuration files.
@@ -679,21 +682,34 @@ fn discover_repository_config(cwd: &Path) -> Option<PathBuf> {
 fn user_config_path() -> Option<PathBuf> {
     #[cfg(windows)]
     {
-        std::env::var_os("APPDATA")
-            .map(PathBuf::from)
-            .map(|root| root.join(USER_CONFIG_DIRECTORY).join(USER_CONFIG_NAME))
+        user_config_path_from_roots(std::env::var_os("APPDATA"))
     }
     #[cfg(not(windows))]
     {
-        std::env::var_os("XDG_CONFIG_HOME")
-            .map(PathBuf::from)
-            .or_else(|| {
-                std::env::var_os("HOME")
-                    .map(PathBuf::from)
-                    .map(|home| home.join(".config"))
-            })
-            .map(|root| root.join(USER_CONFIG_DIRECTORY).join(USER_CONFIG_NAME))
+        user_config_path_from_roots(
+            std::env::var_os("XDG_CONFIG_HOME"),
+            std::env::var_os("HOME"),
+        )
     }
+}
+
+#[cfg(windows)]
+fn user_config_path_from_roots(appdata: Option<OsString>) -> Option<PathBuf> {
+    absolute_path(appdata).map(|root| root.join(USER_CONFIG_DIRECTORY).join(USER_CONFIG_NAME))
+}
+
+#[cfg(not(windows))]
+fn user_config_path_from_roots(
+    xdg_config_home: Option<OsString>,
+    home: Option<OsString>,
+) -> Option<PathBuf> {
+    absolute_path(xdg_config_home)
+        .or_else(|| absolute_path(home).map(|home| home.join(".config")))
+        .map(|root| root.join(USER_CONFIG_DIRECTORY).join(USER_CONFIG_NAME))
+}
+
+fn absolute_path(value: Option<OsString>) -> Option<PathBuf> {
+    value.map(PathBuf::from).filter(|path| path.is_absolute())
 }
 
 fn environment_layer(
@@ -985,6 +1001,56 @@ mod tests {
     }
 
     #[test]
+    fn serialization_canonicalizes_policy_set_order() {
+        let fixture = DirectoryFixture::new("serialization-order");
+        let first_path = fixture.write(
+            "first.toml",
+            "version = 1\n[lint]\nselect = [\"PUR2002\", \"PUR2001\"]\nignore = [\"PUR2101\", \"PUR2100\"]\ndeny = [\"PUR9000\", \"PUR2003\"]\nwarn = [\"PUR1202\", \"PUR1201\"]\n[model]\npaths = [\"first.pure\", \"second.pure\"]\n",
+        );
+        let second_path = fixture.write(
+            "second.toml",
+            "version = 1\n[lint]\nselect = [\"PUR2001\", \"PUR2002\"]\nignore = [\"PUR2100\", \"PUR2101\"]\ndeny = [\"PUR2003\", \"PUR9000\"]\nwarn = [\"PUR1201\", \"PUR1202\"]\n[model]\npaths = [\"first.pure\", \"second.pure\"]\n",
+        );
+        let first_arguments = [
+            "test",
+            "--config",
+            first_path.to_str().expect("utf8 fixture"),
+        ];
+        let second_arguments = [
+            "test",
+            "--config",
+            second_path.to_str().expect("utf8 fixture"),
+        ];
+        let first = resolve(
+            &fixture.path,
+            None,
+            BTreeMap::new(),
+            &first_arguments,
+            ConfigOverrides::default(),
+        )
+        .expect("resolve first ordering");
+        let second = resolve(
+            &fixture.path,
+            None,
+            BTreeMap::new(),
+            &second_arguments,
+            ConfigOverrides::default(),
+        )
+        .expect("resolve second ordering");
+
+        assert_eq!(first, second);
+        let serialized = first.to_toml().expect("serialize first ordering");
+        assert_eq!(
+            serialized,
+            second.to_toml().expect("serialize second ordering")
+        );
+        assert!(serialized.contains("select = [\"PUR2001\", \"PUR2002\"]"));
+        assert!(serialized.contains("ignore = [\"PUR2100\", \"PUR2101\"]"));
+        assert!(serialized.contains("deny = [\"PUR2003\", \"PUR9000\"]"));
+        assert!(serialized.contains("warn = [\"PUR1201\", \"PUR1202\"]"));
+    }
+
+    #[test]
     fn closed_schema_rejects_missing_version_unknown_fields_and_wrong_types() {
         let fixture = DirectoryFixture::new("schema");
         for (name, text) in [
@@ -1062,7 +1128,10 @@ mod tests {
     #[test]
     fn explicit_config_and_no_config_control_file_discovery() {
         let fixture = DirectoryFixture::new("explicit");
-        let discovered = fixture.write(REPOSITORY_CONFIG_NAME, "version = 1\njobs = 2\n");
+        let discovered = fixture.write(
+            REPOSITORY_CONFIG_NAME,
+            "version = 1\njobs = 2\n[output]\ncolor = \"always\"\n",
+        );
         let explicit = fixture.write("chosen.toml", "version = 1\njobs = 5\n");
         let explicit_args = ["test", "--config", explicit.to_str().expect("utf8 fixture")];
         let chosen = resolve(
@@ -1083,6 +1152,7 @@ mod tests {
         .expect("disable config files");
 
         assert_eq!(chosen.jobs, 5);
+        assert_eq!(chosen.output.color, ColorChoice::Always);
         assert_eq!(disabled.jobs, DEFAULT_JOBS);
         assert!(TestCli::try_parse_from(["test", "--config", "a", "--no-config"]).is_err());
         let missing = fixture.path.join("missing.toml");
@@ -1270,6 +1340,96 @@ mod tests {
     }
 
     #[test]
+    fn severity_patterns_reclassify_model_and_source_findings_without_changing_identity() {
+        const MODEL: &str = r#"{
+            "_type": "data",
+            "elements": [{
+                "_type": "class",
+                "package": "model",
+                "name": "Person",
+                "stereotypes": [],
+                "superTypes": [],
+                "properties": [{
+                    "name": "name",
+                    "genericType": {"rawType": "String", "typeArguments": []},
+                    "multiplicity": {"lowerBound": 0, "upperBound": 1}
+                }],
+                "qualifiedProperties": []
+            }]
+        }"#;
+
+        let fixture = DirectoryFixture::new("severity-policy");
+        let config = fixture.write(
+            "policy.toml",
+            "version = 1\n[lint]\ndeny = [\"PUR9000\"]\nwarn = [\"PUR2002\"]\n",
+        );
+        let arguments = ["test", "--config", config.to_str().expect("utf8 fixture")];
+        let resolved = resolve(
+            &fixture.path,
+            None,
+            BTreeMap::new(),
+            &arguments,
+            ConfigOverrides::default(),
+        )
+        .expect("resolve severity policy");
+        let request = |policy| {
+            libpure::LintRequest::new(
+                libpure::SourceRequest::new([libpure::SourceInput::in_memory(
+                    "query.pure",
+                    "model::Person.all()->filter(x| $x.missing)",
+                )])
+                .with_diagnostic_policy(policy),
+                [
+                    libpure::ModelInput::pmcd(libpure::SourceInput::in_memory("first.json", MODEL)),
+                    libpure::ModelInput::pmcd(libpure::SourceInput::in_memory(
+                        "second.json",
+                        MODEL,
+                    )),
+                ],
+            )
+        };
+        let driver = libpure::AnalysisDriver;
+        let baseline = driver
+            .lint(&request(libpure::DiagnosticPolicy::new()))
+            .expect("lint without severity overrides");
+        let transformed = driver
+            .lint(&request(
+                resolved.lint_policy().expect("compile severity policy"),
+            ))
+            .expect("lint with severity overrides");
+
+        for (code, baseline_severity, transformed_severity) in [
+            (
+                DiagCode::ModelMergeConflict,
+                Severity::Warning,
+                Severity::Error,
+            ),
+            (
+                DiagCode::UnknownProperty,
+                Severity::Error,
+                Severity::Warning,
+            ),
+        ] {
+            let original = baseline
+                .diagnostics()
+                .iter()
+                .find(|diagnostic| diagnostic.code == code)
+                .expect("baseline finding");
+            let changed = transformed
+                .diagnostics()
+                .iter()
+                .find(|diagnostic| diagnostic.code == code)
+                .expect("reclassified finding");
+            assert_eq!(original.severity, baseline_severity);
+            assert_eq!(changed.severity, transformed_severity);
+            assert_eq!(changed.code, original.code);
+            assert_eq!(changed.message, original.message);
+            assert_eq!(changed.primary, original.primary);
+            assert_eq!(changed.secondary, original.secondary);
+        }
+    }
+
+    #[test]
     fn zero_jobs_line_width_and_empty_model_paths_are_rejected() {
         let fixture = DirectoryFixture::new("numeric");
         for text in [
@@ -1289,6 +1449,43 @@ mod tests {
                 )
                 .is_err()
             );
+        }
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn empty_or_relative_xdg_config_home_falls_back_to_absolute_home() {
+        let home = PathBuf::from("/home/config-user");
+        assert_eq!(
+            user_config_path_from_roots(Some(OsString::new()), Some(home.clone().into_os_string())),
+            Some(
+                home.join(".config")
+                    .join(USER_CONFIG_DIRECTORY)
+                    .join(USER_CONFIG_NAME)
+            )
+        );
+        assert_eq!(
+            user_config_path_from_roots(
+                Some(OsString::from("relative-config")),
+                Some(home.clone().into_os_string()),
+            ),
+            Some(
+                home.join(".config")
+                    .join(USER_CONFIG_DIRECTORY)
+                    .join(USER_CONFIG_NAME)
+            )
+        );
+        assert_eq!(
+            user_config_path_from_roots(Some(OsString::new()), Some(OsString::new())),
+            None
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn empty_or_relative_appdata_does_not_create_a_relative_user_config_path() {
+        for appdata in [OsString::new(), OsString::from("relative-appdata")] {
+            assert_eq!(user_config_path_from_roots(Some(appdata)), None);
         }
     }
 }

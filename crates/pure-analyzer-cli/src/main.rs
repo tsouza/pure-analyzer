@@ -13,7 +13,13 @@ use tracing_subscriber::EnvFilter;
 
 /// Mechanical, standalone static analysis for Legend Pure.
 #[derive(Debug, Parser)]
-#[command(name = "pure-analyzer", version, about, long_about = None)]
+#[command(
+    name = "pure-analyzer",
+    version,
+    about,
+    long_about = None,
+    after_long_help = "Configuration precedence, from lowest to highest: built-in defaults; the user config file; the nearest repository config (or --config); PURE_ANALYZER_* environment variables; command-line flags. --no-config disables only file layers. Use --print-config to inspect the complete versioned result."
+)]
 struct Cli {
     /// Configuration discovery and diagnostic policy.
     #[command(flatten)]
@@ -298,5 +304,13 @@ mod tests {
             .expect("parse standalone print-config invocation");
         assert!(cli.command.is_none());
         assert!(cli.config.print_requested());
+    }
+
+    #[test]
+    fn long_help_documents_configuration_precedence() {
+        let help = Cli::command().render_long_help().to_string();
+        assert!(help.contains("Configuration precedence, from lowest to highest"));
+        assert!(help.contains("PURE_ANALYZER_* environment variables"));
+        assert!(help.contains("--print-config"));
     }
 }
