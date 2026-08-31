@@ -1,17 +1,18 @@
 #!/usr/bin/env bun
 // Plan a fail-closed incremental cargo-mutants run for a pull request. Direct
 // PR runs use the event head; merge groups stay on the full synthetic candidate.
-import { appendFile, mkdir, readFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { appendFile, mkdir, open, rename, rm } from "node:fs/promises";
+import { dirname, join, posix } from "node:path";
 
 import { notice } from "./lib/ci.mjs";
 import { repoRoot } from "./lib/git.mjs";
+import { runCommand } from "./lib/process.mjs";
 
 export const FULL_MUTATION_SHARDS = 12;
 export const MUTANTS_PER_DIFF_SHARD = 75;
 export const MUTATION_COMMAND_TIMEOUT_SECONDS = "120";
-export const MUTATION_LIST_TIMEOUT_MS = 2 * 60 * 1_000;
-export const MUTATION_LIST_MAX_BUFFER_BYTES = 8 * 1024 * 1024;
+export const PLANNER_COMMAND_TIMEOUT_MS = 2 * 60 * 1_000;
+export const PLANNER_COMMAND_MAX_BUFFER_BYTES = 8 * 1024 * 1024;
 export const FFI_SOURCE = "crates/pure-analyzer-purecard/src/ffi.rs";
 export const MUTATION_DIFF_PATH = "target/mutation-scope.diff";
 
@@ -29,8 +30,13 @@ const ROOT_DOCUMENTATION_FILES = new Set([
 const PRODUCTION_RUST = /^crates\/[^/]+\/src\/.+\.rs$/;
 // Test-only paths, and source files declaring inline test attributes, take full.
 const TEST_ONLY_RUST = /^crates\/[^/]+\/(?:tests\/.+\.rs$|src\/(?:tests?(?:\/|\.rs$)|test_[^/]*\.rs$|[^/]*_tests?\.rs$))/;
-const INLINE_TEST_ATTRIBUTE = /#\s*\[\s*(?:test\b|cfg(?:_attr)?\s*\([\s\S]*?\btest\b[\s\S]*?\))\s*\]/;
-const DIFF_OPTIONS = ["--no-ext-diff", "--no-renames", "--unified=0"];
+const INLINE_TEST_ATTRIBUTE = /#\s*\[\s*(?:(?:[A-Za-z_]\w*::)*\w*test\w*\b[^\]]*|cfg(?:_attr)?\s*\([\s\S]*?\btest\b[\s\S]*?\))\s*\]/;
+const INLINE_TEST_MACRO = /\b(?:\w*test\w*|quickcheck)\s*!/;
+const RUSTDOC_FENCE = /```/;
+const DIFF_OPTIONS = ["--no-ext-diff", "--no-renames", "--no-textconv", "--unified=0"];
+const INCLUDE_FILE_CALL = /\binclude_(?:str|bytes)!\s*\(([\s\S]*?)\)/g;
+// `git grep -E` accepts POSIX ERE rather than JavaScript regular expressions.
+export const INCLUDE_FILE_GREP_PATTERN = "include_(str|bytes)!";
 const USAGE = "usage: bun scripts/mutation-scope.mjs <plan|prepare>";
 
 /** Parse NUL-delimited `git diff --name-status -z` output. */
@@ -82,7 +88,7 @@ export function isTestOnlyRustPath(path) {
   return TEST_ONLY_RUST.test(path);
 }
 
-/** Whether either revision of an eligible source change declares a test attribute. */
+/** Whether either revision of an eligible source change declares a test surface. */
 export async function hasInlineTestSurface(
   root,
   mergeBase,
@@ -95,13 +101,21 @@ export async function hasInlineTestSurface(
     if (!isDiffEligibleRustPath(path)) continue;
 
     const headSource = await readSource(root, headSha, path);
-    if (INLINE_TEST_ATTRIBUTE.test(headSource)) return true;
+    if (hasTestSurface(headSource)) return true;
     if (change.kind !== "A") {
       const baseSource = await readSource(root, mergeBase, path);
-      if (INLINE_TEST_ATTRIBUTE.test(baseSource)) return true;
+      if (hasTestSurface(baseSource)) return true;
     }
   }
   return false;
+}
+
+function hasTestSurface(source) {
+  return (
+    INLINE_TEST_ATTRIBUTE.test(source) ||
+    INLINE_TEST_MACRO.test(source) ||
+    RUSTDOC_FENCE.test(source)
+  );
 }
 
 /** Classify a checked-out change set, including conservative inline-test detection. */
@@ -111,8 +125,22 @@ export async function classifyCheckedOutChanges(
   headSha,
   changes,
   readSource = readRevisionSource,
+  hasIncludedDocumentation = hasIncludedDocumentationSurface,
 ) {
   const classification = classifyChanges(changes);
+  const hasDocumentationChange = changes
+    .flatMap(({ paths }) => paths)
+    .some(isDocumentationPath);
+  if (classification.scope !== "full" && hasDocumentationChange) {
+    try {
+      if (await hasIncludedDocumentation(root, headSha, changes)) {
+        return { scope: "full", reason: "included-documentation-surface" };
+      }
+    } catch {
+      return { scope: "full", reason: "included-documentation-inspection-failed" };
+    }
+  }
+  if (classification.scope === "skip") return classification;
   if (classification.scope !== "diff") return classification;
   try {
     if (await hasInlineTestSurface(root, mergeBase, headSha, changes, readSource)) {
@@ -122,6 +150,67 @@ export async function classifyCheckedOutChanges(
     return { scope: "full", reason: "inline-test-inspection-failed" };
   }
   return classification;
+}
+
+async function hasIncludedDocumentationSurface(root, headSha, changes) {
+  const documentationPaths = new Set(
+    changes.flatMap(({ paths }) => paths).filter(isDocumentationPath),
+  );
+  const command = includeFileSearchCommand(headSha);
+  const result = await runCommand(command, {
+    cwd: root,
+    ...mutationListRunOptions(),
+  });
+  if (result.outputLimitExceeded) {
+    throw new Error("included-file source inventory exceeded the configured output limit");
+  }
+  if (result.code === 1) return false;
+  if (result.code !== 0) throw commandError(command, result);
+
+  const prefix = `${headSha}:`;
+  for (const entry of result.stdout.split("\0")) {
+    if (!entry) continue;
+    if (!entry.startsWith(prefix)) {
+      throw new Error("git grep returned an invalid revision-qualified source path");
+    }
+    const sourcePath = entry.slice(prefix.length);
+    const source = await readRevisionSource(root, headSha, sourcePath);
+    if (sourceIncludesDocumentation(source, sourcePath, documentationPaths)) return true;
+  }
+  return false;
+}
+
+/** Build the revision-qualified POSIX ERE search used for include-file inventory. */
+export function includeFileSearchCommand(headSha) {
+  return [
+    "git",
+    "grep",
+    "-l",
+    "-z",
+    "--full-name",
+    "-E",
+    INCLUDE_FILE_GREP_PATTERN,
+    headSha,
+    "--",
+    "*.rs",
+  ];
+}
+
+export function sourceIncludesDocumentation(source, sourcePath, documentationPaths) {
+  for (const match of source.matchAll(INCLUDE_FILE_CALL)) {
+    const literal = /^"([^"\\]*)"$/.exec(match[1].trim());
+    if (!literal) return true;
+    // `include_str!` accepts absolute paths too. They cannot be resolved against
+    // the repository's changed-path inventory, so treating one as harmless
+    // would let a documentation change bypass mutation testing.
+    if (posix.isAbsolute(literal[1])) return true;
+    const includedPath = posix.normalize(posix.join(posix.dirname(sourcePath), literal[1]));
+    // Likewise, never reason incrementally about an include that escapes the
+    // checked-out tree. Git's source inventory is deliberately repo-relative.
+    if (includedPath === ".." || includedPath.startsWith("../")) return true;
+    if (documentationPaths.has(includedPath)) return true;
+  }
+  return false;
 }
 
 /** Classify changed paths without ever treating an unknown shape as incremental. */
@@ -231,31 +320,26 @@ export function planFromClassification(classification, details = {}) {
   };
 }
 
-function digest(bytes) {
-  const hasher = new Bun.CryptoHasher("sha256");
-  hasher.update(bytes);
-  return hasher.digest("hex");
+export async function run(command, cwd, options = {}) {
+  const result = await runCommand(command, {
+    ...options,
+    cwd,
+    killSignal: "SIGKILL",
+    maxBuffer: options.maxBuffer ?? PLANNER_COMMAND_MAX_BUFFER_BYTES,
+    timeoutMs: options.timeoutMs ?? PLANNER_COMMAND_TIMEOUT_MS,
+  });
+  if (result.outputLimitExceeded) {
+    throw new Error(`\`${command.join(" ")}\` output exceeded the configured limit`);
+  }
+  if (result.code !== 0) {
+    throw commandError(command, result);
+  }
+  return result.stdout;
 }
 
-async function run(command, cwd, options = {}) {
-  const child = Bun.spawn(command, {
-    cwd,
-    stderr: "pipe",
-    stdout: "pipe",
-    timeout: options.timeoutMs,
-    killSignal: "SIGKILL",
-    maxBuffer: options.maxBuffer,
-  });
-  const [status, stdout, stderr] = await Promise.all([
-    child.exited,
-    new Response(child.stdout).text(),
-    new Response(child.stderr).text(),
-  ]);
-  if (status !== 0) {
-    const detail = stderr.trim() || stdout.trim() || "no command output";
-    throw new Error(`\`${command.join(" ")}\` exited ${status}: ${detail.slice(0, 1_000)}`);
-  }
-  return stdout;
+function commandError(command, result) {
+  const detail = result.stderr.trim() || result.stdout.trim() || "no command output";
+  return new Error(`\`${command.join(" ")}\` exited ${result.code}: ${detail.slice(0, 1_000)}`);
 }
 
 async function readRevisionSource(root, revision, path) {
@@ -284,22 +368,66 @@ async function mergeBase(root, baseSha, headSha) {
 
 async function changedPaths(root, baseSha, headSha) {
   const output = await run(
-    ["git", "diff", "--name-status", "-z", "--find-renames", baseSha, headSha],
+    [
+      "git",
+      "diff",
+      "--name-status",
+      "-z",
+      "--no-ext-diff",
+      "--no-renames",
+      "--no-textconv",
+      baseSha,
+      headSha,
+    ],
     root,
   );
   return parseNameStatus(output);
 }
 
 /** Write the exact zero-context diff used by cargo-mutants and return its digest. */
-export async function writeDiff(root, baseSha, headSha, outputPath) {
+export async function writeDiff(root, baseSha, headSha, outputPath, execute = runCommand) {
   await mkdir(dirname(outputPath), { recursive: true });
-  await run(
-    ["git", "diff", ...DIFF_OPTIONS, `--output=${outputPath}`, baseSha, headSha, "--"],
-    root,
-  );
-  const contents = await readFile(outputPath);
-  if (contents.byteLength === 0) throw new Error("generated mutation diff is empty");
-  return digest(contents);
+  const temporaryPath = `${outputPath}.${crypto.randomUUID()}.tmp`;
+  const file = await open(temporaryPath, "wx");
+  const hasher = new Bun.CryptoHasher("sha256");
+  let byteLength = 0;
+  let closed = false;
+  let published = false;
+
+  try {
+    const result = await execute(
+      ["git", "diff", ...DIFF_OPTIONS, baseSha, headSha, "--"],
+      {
+        cwd: root,
+        ...mutationListRunOptions(),
+        onStdout: async (chunk) => {
+          let offset = 0;
+          while (offset < chunk.byteLength) {
+            const { bytesWritten } = await file.write(chunk.subarray(offset));
+            if (bytesWritten === 0) {
+              throw new Error("writing mutation diff made no progress");
+            }
+            offset += bytesWritten;
+          }
+          hasher.update(chunk);
+          byteLength += chunk.byteLength;
+        },
+      },
+    );
+    if (result.outputLimitExceeded) {
+      throw new Error("generated mutation diff exceeded the configured output limit");
+    }
+    if (result.code !== 0) throw commandError(["git", "diff"], result);
+    if (byteLength === 0) throw new Error("generated mutation diff is empty");
+    await file.close();
+    closed = true;
+    await rename(temporaryPath, outputPath);
+    published = true;
+    return hasher.digest("hex");
+  } finally {
+    if (!closed) await file.close().catch(() => {});
+    if (!published) await rm(temporaryPath, { force: true }).catch(() => {});
+  }
 }
 
 /** Build the listing command from the same workspace scope as mutation execution. */
@@ -320,11 +448,11 @@ export function mutationListCommand(diffPath) {
   ];
 }
 
-/** Fixed resource limits for the planner's untrusted cargo-mutants list output. */
+/** Fixed resource limits for every planner subprocess. */
 export function mutationListRunOptions() {
   return {
-    timeoutMs: MUTATION_LIST_TIMEOUT_MS,
-    maxBuffer: MUTATION_LIST_MAX_BUFFER_BYTES,
+    timeoutMs: PLANNER_COMMAND_TIMEOUT_MS,
+    maxBuffer: PLANNER_COMMAND_MAX_BUFFER_BYTES,
   };
 }
 

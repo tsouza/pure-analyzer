@@ -1,11 +1,15 @@
 import { expect, test } from "bun:test";
+import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import {
   FFI_SOURCE,
   FULL_MUTATION_SHARDS,
+  INCLUDE_FILE_GREP_PATTERN,
   MUTATION_COMMAND_TIMEOUT_SECONDS,
-  MUTATION_LIST_MAX_BUFFER_BYTES,
-  MUTATION_LIST_TIMEOUT_MS,
+  PLANNER_COMMAND_MAX_BUFFER_BYTES,
+  PLANNER_COMMAND_TIMEOUT_MS,
   MUTANTS_PER_DIFF_SHARD,
   classifyCheckedOutChanges,
   classifyChanges,
@@ -16,11 +20,15 @@ import {
   isGitSha,
   isTestOnlyRustPath,
   hasInlineTestSurface,
+  includeFileSearchCommand,
   mutationMatrix,
   mutationListCommand,
   mutationListRunOptions,
   parseNameStatus,
   planFromClassification,
+  run,
+  sourceIncludesDocumentation,
+  writeDiff,
 } from "./mutation-scope.mjs";
 
 const changed = (path, status = "M") => ({ kind: status[0], paths: [path], status });
@@ -197,6 +205,192 @@ test("finds inline test attributes in both revisions of eligible production sour
   ).resolves.toEqual({ reason: "inline-test-inspection-failed", scope: "full" });
 });
 
+test("finds attribute, macro, and doctest surfaces in either source revision", async () => {
+  const baseRevision = "base";
+  const headRevision = "head";
+  const surfaces = [
+    {
+      base: "pub fn production_only() {}",
+      head: "#[tokio::test]\nasync fn asynchronous() {}",
+      path: "crates/pure-analyzer-model/src/tokio.rs",
+    },
+    {
+      base: "#[rstest]\nfn parameterized() {}",
+      head: "pub fn production_only() {}",
+      path: "crates/pure-analyzer-model/src/rstest.rs",
+    },
+    {
+      base: "pub fn production_only() {}",
+      head: "#[test_case(1)]\nfn table_driven(_: u8) {}",
+      path: "crates/pure-analyzer-model/src/cases.rs",
+    },
+    {
+      base: "#[proptest]\nfn generated() {}",
+      head: "pub fn production_only() {}",
+      path: "crates/pure-analyzer-model/src/proptest_attribute.rs",
+    },
+    {
+      base: "pub fn production_only() {}",
+      head: "proptest! { #[test] fn generated() {} }",
+      path: "crates/pure-analyzer-model/src/proptest_macro.rs",
+    },
+    {
+      base: "quickcheck! { fn generated() -> bool { true } }",
+      head: "pub fn production_only() {}",
+      path: "crates/pure-analyzer-model/src/quickcheck_macro.rs",
+    },
+    {
+      base: "/**\n * ```rust\n * assert!(true);\n * ```\n */",
+      head: "pub fn production_only() {}",
+      path: "crates/pure-analyzer-model/src/block_doctest.rs",
+    },
+    {
+      base: "pub fn production_only() {}",
+      head: "/// ```rust\n/// assert!(true);\n/// ```\npub fn documented() {}",
+      path: "crates/pure-analyzer-model/src/line_doctest.rs",
+    },
+    {
+      base: "pub fn production_only() {}",
+      head: "#[doc = \"```rust\\nassert!(true);\\n```\"]\npub fn documented() {}",
+      path: "crates/pure-analyzer-model/src/attribute_doctest.rs",
+    },
+  ];
+  const sources = new Map(
+    surfaces.flatMap(({ base, head, path }) => [
+      [`${baseRevision}:${path}`, base],
+      [`${headRevision}:${path}`, head],
+    ]),
+  );
+  const readSource = async (_root, revision, path) => {
+    const source = sources.get(`${revision}:${path}`);
+    if (source === undefined) throw new Error("source is absent");
+    return source;
+  };
+
+  for (const { path } of surfaces) {
+    await expect(
+      hasInlineTestSurface(
+        "/workspace",
+        baseRevision,
+        headRevision,
+        [changed(path)],
+        readSource,
+      ),
+    ).resolves.toBeTrue();
+  }
+});
+
+test("resolves literal documentation include_str calls and rejects dynamic forms", () => {
+  const documentationPaths = new Set(["docs/guide.md"]);
+  const sourcePath = "crates/pure-analyzer-model/src/lib.rs";
+  expect(
+    sourceIncludesDocumentation(
+      "#[doc = include_str!(\"../../../docs/guide.md\")]",
+      sourcePath,
+      documentationPaths,
+    ),
+  ).toBeTrue();
+  expect(
+    sourceIncludesDocumentation(
+      "const FIXTURE: &str = include_str!(\"fixture.json\");",
+      sourcePath,
+      documentationPaths,
+    ),
+  ).toBeFalse();
+  expect(
+    sourceIncludesDocumentation(
+      "const GUIDE: &[u8] = include_bytes!(\"../../../docs/guide.md\");",
+      sourcePath,
+      documentationPaths,
+    ),
+  ).toBeTrue();
+  expect(
+    sourceIncludesDocumentation(
+      "#[doc = include_str!(concat!(\"../../../docs/\", \"guide.md\"))]",
+      sourcePath,
+      documentationPaths,
+    ),
+  ).toBeTrue();
+  expect(
+    sourceIncludesDocumentation(
+      "const GUIDE: &str = include_str!(\"/opt/project/docs/guide.md\");",
+      sourcePath,
+      documentationPaths,
+    ),
+  ).toBeTrue();
+  expect(
+    sourceIncludesDocumentation(
+      "const GUIDE: &str = include_str!(\"../../../../../../outside.md\");",
+      sourcePath,
+      documentationPaths,
+    ),
+  ).toBeTrue();
+});
+
+test("uses POSIX ERE syntax for the revision-qualified include-file inventory", () => {
+  expect(INCLUDE_FILE_GREP_PATTERN).toBe("include_(str|bytes)!");
+  expect(includeFileSearchCommand(headSha)).toEqual([
+    "git",
+    "grep",
+    "-l",
+    "-z",
+    "--full-name",
+    "-E",
+    "include_(str|bytes)!",
+    headSha,
+    "--",
+    "*.rs",
+  ]);
+});
+
+test("fails closed when documentation changes feed or cannot inspect include_str", async () => {
+  const documentationChanges = [changed("docs/guide.md")];
+  await expect(
+    classifyCheckedOutChanges(
+      "/workspace",
+      mergeBase,
+      headSha,
+      documentationChanges,
+      async () => "",
+      async () => true,
+    ),
+  ).resolves.toEqual({
+    reason: "included-documentation-surface",
+    scope: "full",
+  });
+  await expect(
+    classifyCheckedOutChanges(
+      "/workspace",
+      mergeBase,
+      headSha,
+      documentationChanges,
+      async () => "",
+      async () => {
+        throw new Error("source inventory unavailable");
+      },
+    ),
+  ).resolves.toEqual({
+    reason: "included-documentation-inspection-failed",
+    scope: "full",
+  });
+  await expect(
+    classifyCheckedOutChanges(
+      "/workspace",
+      mergeBase,
+      headSha,
+      [
+        changed("crates/pure-analyzer-model/src/loader.rs"),
+        changed("docs/guide.md"),
+      ],
+      async () => "",
+      async () => true,
+    ),
+  ).resolves.toEqual({
+    reason: "included-documentation-surface",
+    scope: "full",
+  });
+});
+
 test("uses diff scope for production Rust plus harmless documentation", () => {
   expect(
     classifyChanges([
@@ -289,11 +483,71 @@ test("lists the same workspace scope as the mutation runner without unsupported 
 
 test("bounds the planner mutant list subprocess", () => {
   expect(mutationListRunOptions()).toEqual({
-    maxBuffer: MUTATION_LIST_MAX_BUFFER_BYTES,
-    timeoutMs: MUTATION_LIST_TIMEOUT_MS,
+    maxBuffer: PLANNER_COMMAND_MAX_BUFFER_BYTES,
+    timeoutMs: PLANNER_COMMAND_TIMEOUT_MS,
   });
-  expect(MUTATION_LIST_TIMEOUT_MS).toBe(2 * 60 * 1_000);
-  expect(MUTATION_LIST_MAX_BUFFER_BYTES).toBe(8 * 1024 * 1024);
+  expect(PLANNER_COMMAND_TIMEOUT_MS).toBe(2 * 60 * 1_000);
+  expect(PLANNER_COMMAND_MAX_BUFFER_BYTES).toBe(8 * 1024 * 1024);
+});
+
+test("fails closed when bounded planner output exceeds its cap", async () => {
+  const maxBuffer = 64 * 1024;
+  await expect(
+    run(
+      [
+        process.execPath,
+        "-e",
+        `process.stdout.write("x".repeat(${3 * 1024 * 1024}));`,
+      ],
+      process.cwd(),
+      { maxBuffer },
+    ),
+  ).rejects.toThrow("output exceeded the configured limit");
+});
+
+test("writes the diff atomically and discards a capped stream", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "mutation-scope-"));
+  const outputPath = join(directory, "scope.diff");
+  const mergeBase = "a".repeat(40);
+  const headSha = "b".repeat(40);
+  let command;
+  try {
+    await writeFile(outputPath, "stale diff");
+    await expect(
+      writeDiff(
+        "/workspace",
+        mergeBase,
+        headSha,
+        outputPath,
+        async (nextCommand, options) => {
+          command = nextCommand;
+          expect(options.maxBuffer).toBe(PLANNER_COMMAND_MAX_BUFFER_BYTES);
+          await options.onStdout(new Uint8Array(64 * 1024));
+          return {
+            code: 137,
+            outputLimitExceeded: true,
+            stderr: "",
+            stdout: "",
+          };
+        },
+      ),
+    ).rejects.toThrow("generated mutation diff exceeded the configured output limit");
+    expect(command).toEqual([
+      "git",
+      "diff",
+      "--no-ext-diff",
+      "--no-renames",
+      "--no-textconv",
+      "--unified=0",
+      mergeBase,
+      headSha,
+      "--",
+    ]);
+    await expect(readFile(outputPath, "utf8")).resolves.toBe("stale diff");
+    expect(await readdir(directory)).toEqual(["scope.diff"]);
+  } finally {
+    await rm(directory, { force: true, recursive: true });
+  }
 });
 
 test("requires event-pinned head metadata and a nonempty incremental list", () => {
