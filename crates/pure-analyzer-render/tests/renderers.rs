@@ -1,5 +1,10 @@
 //! End-to-end contracts for each diagnostic representation.
 
+use std::{
+    path::PathBuf,
+    sync::atomic::{AtomicUsize, Ordering},
+};
+
 use pure_analyzer_diagnostics::{
     DiagCode, Diagnostic, FileId, Fix, Label, ReasonCode, Severity, TextEdit, TextRange, Verdict,
 };
@@ -10,6 +15,32 @@ use pure_analyzer_render::{
 use serde_json::Value;
 
 use libpure::{SourceInput, SourceStore};
+
+const TEMP_FILE_PREFIX: &str = "pure-analyzer-render-test";
+
+static TEMP_FILE_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+struct FileFixture {
+    path: PathBuf,
+}
+
+impl FileFixture {
+    fn new(name: &str, text: &str) -> Self {
+        let counter = TEMP_FILE_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!(
+            "{TEMP_FILE_PREFIX}-{}-{counter}-{name}",
+            std::process::id()
+        ));
+        std::fs::write(&path, text).expect("write file fixture");
+        Self { path }
+    }
+}
+
+impl Drop for FileFixture {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.path);
+    }
+}
 
 fn fixture_sources() -> SourceStore {
     SourceStore::load([
@@ -286,6 +317,172 @@ fn assert_sarif_region(region: &Value, start: (u32, u64, u64), end: (u32, u64, u
     assert_eq!(region["startColumn"], start.2);
     assert_eq!(region["endLine"], end.1);
     assert_eq!(region["endColumn"], end.2);
+}
+
+#[test]
+fn severity_mappings_and_counters_are_consistent_across_formats() {
+    let sources =
+        SourceStore::load([SourceInput::in_memory("severity.pure", "abcd")]).expect("source loads");
+    let diagnostics = [
+        (DiagCode::BadToken, Severity::Error, "error"),
+        (DiagCode::MalformedSyntax, Severity::Warning, "warning"),
+        (DiagCode::UnknownProperty, Severity::Info, "info"),
+        (DiagCode::ModelRequired, Severity::Hint, "hint"),
+    ]
+    .into_iter()
+    .enumerate()
+    .map(|(offset, (code, severity, message))| {
+        let start = u32::try_from(offset).expect("fixture offset fits a span");
+        Diagnostic::builder(
+            code,
+            severity,
+            message,
+            Label::new(FileId::new(0), range(start, start.saturating_add(1))),
+        )
+        .build()
+    })
+    .collect::<Vec<_>>();
+    let input = RenderInput::new(&sources, &diagnostics);
+
+    let human = render_human(input, HumanOptions::default()).expect("human renders");
+    for header in [
+        "error[PUR0102]: error",
+        "warning[PUR1200]: warning",
+        "info[PUR2002]: info",
+        "hint[PUR9001]: hint",
+    ] {
+        assert!(
+            human.contains(header),
+            "human output must contain `{header}`"
+        );
+    }
+    assert!(human.contains("summary: 1 errors, 1 warnings, 1 info, 1 hints (4 total)"));
+
+    let json = render_json(input).expect("JSON renders");
+    let document: Value = serde_json::from_str(&json).expect("renderer output is JSON");
+    let json_severities = document["diagnostics"]
+        .as_array()
+        .expect("JSON diagnostics")
+        .iter()
+        .map(|diagnostic| diagnostic["severity"].as_str().expect("JSON severity"))
+        .collect::<Vec<_>>();
+    assert_eq!(json_severities, ["error", "warning", "info", "hint"]);
+    assert_eq!(document["summary"]["errors"], 1);
+    assert_eq!(document["summary"]["warnings"], 1);
+    assert_eq!(document["summary"]["info"], 1);
+    assert_eq!(document["summary"]["hints"], 1);
+    assert_eq!(document["summary"]["total"], 4);
+
+    let sarif = render_sarif(input).expect("SARIF renders");
+    let log: Value = serde_json::from_str(&sarif).expect("renderer output is SARIF JSON");
+    let run = &log["runs"][0];
+    let result_levels = run["results"]
+        .as_array()
+        .expect("SARIF results")
+        .iter()
+        .map(|result| result["level"].as_str().expect("SARIF result level"))
+        .collect::<Vec<_>>();
+    assert_eq!(result_levels, ["error", "warning", "note", "none"]);
+    let rule_levels = run["tool"]["driver"]["rules"]
+        .as_array()
+        .expect("SARIF rules")
+        .iter()
+        .map(|rule| {
+            rule["defaultConfiguration"]["level"]
+                .as_str()
+                .expect("SARIF rule level")
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(rule_levels, ["error", "warning", "note", "none"]);
+}
+
+#[test]
+fn json_lists_file_and_stdin_origins_with_their_display_names() {
+    let file = FileFixture::new("json-origin.pure", "file()\n");
+    let expected_file_name = file.path.display().to_string();
+    let sources = SourceStore::load([
+        SourceInput::file(&file.path),
+        SourceInput::stdin("stdin()\n"),
+    ])
+    .expect("sources load");
+    let diagnostics = Vec::<Diagnostic>::new();
+
+    let output = render_json(RenderInput::new(&sources, &diagnostics)).expect("JSON renders");
+    let document: Value = serde_json::from_str(&output).expect("renderer output is JSON");
+    let files = document["files"].as_array().expect("JSON files");
+
+    assert_eq!(files.len(), 2);
+    assert_eq!(files[0]["id"], 0);
+    assert_eq!(files[0]["name"].as_str(), Some(expected_file_name.as_str()));
+    assert_eq!(files[0]["origin"], "file");
+    assert_eq!(files[1]["id"], 1);
+    assert_eq!(files[1]["name"], "<stdin>");
+    assert_eq!(files[1]["origin"], "stdin");
+}
+
+#[test]
+fn sarif_aggregates_duplicate_rule_ids_by_minimum_severity_in_code_order() {
+    let sources =
+        SourceStore::load([SourceInput::in_memory("rules.pure", "abc")]).expect("source loads");
+    let diagnostics = vec![
+        Diagnostic::builder(
+            DiagCode::UnknownProperty,
+            Severity::Hint,
+            "late hint",
+            Label::new(FileId::new(0), range(2, 3)),
+        )
+        .build(),
+        Diagnostic::builder(
+            DiagCode::UnknownProperty,
+            Severity::Error,
+            "duplicate error",
+            Label::new(FileId::new(0), range(1, 2)),
+        )
+        .build(),
+        Diagnostic::builder(
+            DiagCode::BadToken,
+            Severity::Warning,
+            "early warning",
+            Label::new(FileId::new(0), range(0, 1)),
+        )
+        .build(),
+    ];
+
+    let output = render_sarif(RenderInput::new(&sources, &diagnostics)).expect("SARIF renders");
+    let log: Value = serde_json::from_str(&output).expect("renderer output is SARIF JSON");
+    let run = &log["runs"][0];
+    let rules = run["tool"]["driver"]["rules"]
+        .as_array()
+        .expect("SARIF rules");
+    assert_eq!(rules.len(), 2);
+    assert_eq!(rules[0]["id"], "PUR0102");
+    assert_eq!(rules[0]["defaultConfiguration"]["level"], "warning");
+    assert_eq!(rules[1]["id"], "PUR2002");
+    assert_eq!(rules[1]["defaultConfiguration"]["level"], "error");
+
+    let results = run["results"].as_array().expect("SARIF results");
+    let result_ids = results
+        .iter()
+        .map(|result| result["ruleId"].as_str().expect("SARIF result rule ID"))
+        .collect::<Vec<_>>();
+    assert_eq!(result_ids, ["PUR0102", "PUR2002", "PUR2002"]);
+    let result_levels = results
+        .iter()
+        .map(|result| result["level"].as_str().expect("SARIF result level"))
+        .collect::<Vec<_>>();
+    assert_eq!(result_levels, ["warning", "error", "none"]);
+    let result_messages = results
+        .iter()
+        .map(|result| {
+            result["message"]["text"]
+                .as_str()
+                .expect("SARIF result message")
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        result_messages,
+        ["early warning", "duplicate error", "late hint"]
+    );
 }
 
 #[test]
@@ -650,17 +847,32 @@ fn invalid_unicode_boundary_is_an_internal_error_in_every_format() {
 }
 
 #[test]
-fn stale_primary_spans_are_internal_errors_in_every_format() {
+fn stale_primary_spans_report_exact_internal_errors_in_every_format() {
     let sources = SourceStore::load([SourceInput::in_memory("stale-primary.pure", "ok")])
         .expect("source loads");
-    let stale = Diagnostic::builder(
-        DiagCode::BadToken,
-        Severity::Error,
-        "stale primary",
-        Label::new(FileId::new(0), range(3, 3)),
-    )
-    .build();
-    assert_invalid_span_kind(&sources, vec![stale], SpanKind::Primary);
+    let diagnostics = vec![
+        Diagnostic::builder(
+            DiagCode::BadToken,
+            Severity::Error,
+            "stale primary",
+            Label::new(FileId::new(0), range(3, 3)),
+        )
+        .build(),
+    ];
+    let input = RenderInput::new(&sources, &diagnostics);
+
+    for result in all_formats(input) {
+        assert!(matches!(
+            result,
+            Err(RenderError::InvalidSpan {
+                diagnostic_index: 0,
+                kind: SpanKind::Primary,
+                file,
+                start: 3,
+                end: 3,
+            }) if file == FileId::new(0)
+        ));
+    }
 }
 
 #[test]

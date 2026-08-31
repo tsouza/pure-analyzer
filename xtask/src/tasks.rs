@@ -847,7 +847,15 @@ pub fn release_plz_check() -> Result<()> {
     let overrides = release_plz_override_names(&src);
     let members = workspace_member_names()?;
 
-    let unknown = missing_names(&overrides, &members);
+    validate_release_plz_overrides(&overrides, &members)
+}
+
+/// Check release-plz overrides against the provided workspace member names.
+///
+/// Keeping this validation independent of filesystem and Cargo access makes the
+/// release policy's two failure paths directly testable.
+fn validate_release_plz_overrides(overrides: &[String], members: &[String]) -> Result<()> {
+    let unknown = missing_names(overrides, members);
     if !unknown.is_empty() {
         anyhow::bail!(
             "{RELEASE_PLZ_CONFIG} has [[package]] overrides not present in the workspace: {}. \
@@ -857,8 +865,8 @@ pub fn release_plz_check() -> Result<()> {
         );
     }
 
-    let analyzer_packages = analyzer_release_package_names(&members);
-    let unregistered = missing_names(&analyzer_packages, &overrides);
+    let analyzer_packages = analyzer_release_package_names(members);
+    let unregistered = missing_names(&analyzer_packages, overrides);
     if !unregistered.is_empty() {
         anyhow::bail!(
             "{RELEASE_PLZ_CONFIG} is missing [[package]] overrides for analyzer workspace crates: {}. \
@@ -2808,7 +2816,7 @@ release = false
     }
 
     #[test]
-    fn analyzer_release_packages_require_renderer_registration() {
+    fn release_plz_validation_rejects_missing_analyzer_package_overrides() {
         let members = [
             "libpure".to_string(),
             "pure-analyzer-analysis".to_string(),
@@ -2819,9 +2827,13 @@ release = false
         ];
         let overrides = ["libpure".to_string(), "pure-analyzer-analysis".to_string()];
 
+        let error = validate_release_plz_overrides(&overrides, &members)
+            .expect_err("a missing analyzer package must fail release validation");
         assert_eq!(
-            missing_names(&analyzer_release_package_names(&members), &overrides),
-            ["pure-analyzer-render"]
+            error.to_string(),
+            "release-plz.toml is missing [[package]] overrides for analyzer workspace crates: \
+             pure-analyzer-render. Add the package configuration before release automation reaches \
+             main."
         );
     }
 
