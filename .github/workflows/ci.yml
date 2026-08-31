@@ -162,6 +162,7 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
       - uses: taiki-e/install-action@b6ff580856c41316412a0b9b60540fbc6f8c82cc # v2.86.7
         with:
           tool: cargo-mutants,cargo-nextest,just
@@ -170,14 +171,14 @@ jobs:
           MUTATION_SHARD_INDEX: ${{ matrix.shard }}
           MUTATION_SHARD_TOTAL: ${{ strategy.job-total }}
         run: >-
-          .github/scripts/run-mutation-debug.sh shard
+          bun scripts/run-mutation-debug.mjs shard
           "$MUTATION_SHARD_INDEX" "$MUTATION_SHARD_TOTAL"
       - name: Collect mutation diagnostics
         if: always()
         env:
           MUTATION_SHARD_INDEX: ${{ matrix.shard }}
         run: >-
-          .github/scripts/run-mutation-debug.sh
+          bun scripts/run-mutation-debug.mjs
           --collect shard "$MUTATION_SHARD_INDEX"
       - name: Upload mutation report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -217,14 +218,15 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
       - uses: taiki-e/install-action@b6ff580856c41316412a0b9b60540fbc6f8c82cc # v2.86.7
         with:
           tool: cargo-mutants,cargo-nextest,just
       - name: cargo mutants (FFI boundary)
-        run: .github/scripts/run-mutation-debug.sh ffi
+        run: bun scripts/run-mutation-debug.mjs ffi
       - name: Collect mutation diagnostics
         if: always()
-        run: .github/scripts/run-mutation-debug.sh --collect ffi
+        run: bun scripts/run-mutation-debug.mjs --collect ffi
       - name: Upload mutation report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
@@ -304,11 +306,10 @@ jobs:
       - name: public API snapshot
         run: just public-api
 
-  # --- Structural rules + work-ledger + postponed-marker gates (ast-grep) ---
+  # --- Structural rules + work-ledger + shell + postponed-marker gates ------
   structural:
-    name: ast-grep / work-ledger / postponed-markers
+    name: ast-grep / work-ledger / shell / postponed-markers
     needs: changes
-    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -324,6 +325,8 @@ jobs:
         run: ast-grep scan
       - name: Checked-in work-ledger gate
         run: just no-work-ledger
+      - name: Shell-script gate
+        run: just no-shell-scripts
       - name: Postponed-marker gate
         run: just postponed-markers
 

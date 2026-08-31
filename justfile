@@ -397,6 +397,10 @@ postponed-markers:
 no-work-ledger:
     bun scripts/checks/no-work-ledger.mjs
 
+# Reject tracked shell files and shell shebangs: repository automation is just, xtask, or Bun.
+no-shell-scripts:
+    bun scripts/checks/no-shell-scripts.mjs
+
 # Reject stale milestone/scaffold self-description in shipped PureCARD source
 # docs. The restored scanner is monorepo-aware and intentionally crate-scoped.
 lint-purecard-stale:
@@ -453,7 +457,7 @@ ci: no-work-ledger
 # are only enforced in CI. Run the relevant fuzz-smoke directly with `just fuzz <target>
 # 60` if you have nightly. Use before a PR when a change touches what the fast
 # gate skips.
-ci-full: ci coverage test-mutation deny audit vet machete release-plz-check semver public-api sweep postponed-markers docs test-scripts lint-actions zizmor
+ci-full: ci coverage test-mutation deny audit vet machete release-plz-check semver public-api sweep no-shell-scripts postponed-markers docs test-scripts lint-actions zizmor
     @echo "ci-full: ran every locally reproducible PR gate; codspeed bench, the no-warnings log sweep, and the fuzz-smoke are enforced only in CI"
 
 # Install git hooks (managed by lefthook.yml). Also run automatically by the
