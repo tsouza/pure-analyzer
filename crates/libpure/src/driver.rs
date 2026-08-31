@@ -713,6 +713,21 @@ Class model::Person
     }
 
     #[test]
+    fn run_sources_with_default_jobs_executes_on_the_calling_thread() {
+        let sources = SourceStore::load([SourceInput::in_memory("query.pure", "query()")])
+            .expect("load source snapshot");
+        let files = sources.files().map(SourceFile::id).collect::<Vec<_>>();
+        let calling_thread = std::thread::current().id();
+
+        let executing_threads = run_sources(&sources, &files, DEFAULT_JOBS, |_| {
+            Ok(std::thread::current().id())
+        })
+        .expect("run source on the default execution path");
+
+        assert_eq!(executing_threads, vec![calling_thread]);
+    }
+
+    #[test]
     fn lint_results_are_identical_sequentially_in_parallel_and_on_repeat() {
         let driver = AnalysisDriver;
         let sequential = driver
