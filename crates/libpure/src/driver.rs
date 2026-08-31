@@ -1071,6 +1071,57 @@ Class model::Person
     }
 
     #[test]
+    fn diagnostic_policy_select_excludes_unselected_findings() {
+        let request = |policy| {
+            LintRequest::new(
+                SourceRequest::new([
+                    SourceInput::in_memory("tuple.pure", "(first, second)"),
+                    SourceInput::in_memory(
+                        "unknown-property.pure",
+                        "model::Person.all()->filter(x| $x.missing)",
+                    ),
+                ])
+                .with_diagnostic_policy(policy),
+                [ModelInput::pmcd(SourceInput::in_memory(
+                    "model.json",
+                    MODEL,
+                ))],
+            )
+        };
+        let driver = AnalysisDriver;
+
+        let unfiltered = driver
+            .lint(&request(DiagnosticPolicy::new()))
+            .expect("lint sources without selection");
+        assert!(
+            unfiltered
+                .diagnostics()
+                .iter()
+                .any(|diagnostic| diagnostic.code == DiagCode::ParenthesizedTuple)
+        );
+        assert!(
+            unfiltered
+                .diagnostics()
+                .iter()
+                .any(|diagnostic| diagnostic.code == DiagCode::UnknownProperty)
+        );
+
+        let selected = driver
+            .lint(&request(
+                DiagnosticPolicy::new().select(DiagCode::UnknownProperty),
+            ))
+            .expect("lint sources with selected finding");
+        assert_eq!(
+            selected
+                .diagnostics()
+                .iter()
+                .map(|diagnostic| diagnostic.code)
+                .collect::<Vec<_>>(),
+            vec![DiagCode::UnknownProperty]
+        );
+    }
+
+    #[test]
     fn diagnostic_policy_also_applies_to_model_loader_findings() {
         let request = |policy| {
             LintRequest::new(
