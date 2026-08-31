@@ -6,7 +6,6 @@ import { join } from "node:path";
 import {
   FFI_SOURCE,
   FULL_MUTATION_SHARDS,
-  INCLUDE_FILE_GREP_PATTERN,
   MUTATION_COMMAND_TIMEOUT_SECONDS,
   PLANNER_COMMAND_MAX_BUFFER_BYTES,
   PLANNER_COMMAND_TIMEOUT_MS,
@@ -20,14 +19,12 @@ import {
   isGitSha,
   isTestOnlyRustPath,
   hasInlineTestSurface,
-  includeFileSearchCommand,
   mutationMatrix,
   mutationListCommand,
   mutationListRunOptions,
   parseNameStatus,
   planFromClassification,
   run,
-  sourceIncludesDocumentation,
   writeDiff,
 } from "./mutation-scope.mjs";
 
@@ -280,124 +277,13 @@ test("finds attribute, macro, and doctest surfaces in either source revision", a
   }
 });
 
-test("resolves literal documentation include_str calls and rejects dynamic forms", () => {
-  const documentationPaths = new Set(["docs/guide.md"]);
-  const sourcePath = "crates/pure-analyzer-model/src/lib.rs";
-  expect(
-    sourceIncludesDocumentation(
-      "#[doc = include_str!(\"../../../docs/guide.md\")]",
-      sourcePath,
-      documentationPaths,
-    ),
-  ).toBeTrue();
-  expect(
-    sourceIncludesDocumentation(
-      "const FIXTURE: &str = include_str!(\"fixture.json\");",
-      sourcePath,
-      documentationPaths,
-    ),
-  ).toBeFalse();
-  expect(
-    sourceIncludesDocumentation(
-      "const GUIDE: &[u8] = include_bytes!(\"../../../docs/guide.md\");",
-      sourcePath,
-      documentationPaths,
-    ),
-  ).toBeTrue();
-  expect(
-    sourceIncludesDocumentation(
-      "#[doc = include_str!(concat!(\"../../../docs/\", \"guide.md\"))]",
-      sourcePath,
-      documentationPaths,
-    ),
-  ).toBeTrue();
-  expect(
-    sourceIncludesDocumentation(
-      "const GUIDE: &str = include_str!(\"/opt/project/docs/guide.md\");",
-      sourcePath,
-      documentationPaths,
-    ),
-  ).toBeTrue();
-  expect(
-    sourceIncludesDocumentation(
-      "const GUIDE: &str = include_str!(\"../../../../../../outside.md\");",
-      sourcePath,
-      documentationPaths,
-    ),
-  ).toBeTrue();
-});
-
-test("uses POSIX ERE syntax for the revision-qualified include-file inventory", () => {
-  expect(INCLUDE_FILE_GREP_PATTERN).toBe("include_(str|bytes)!");
-  expect(includeFileSearchCommand(headSha)).toEqual([
-    "git",
-    "grep",
-    "-l",
-    "-z",
-    "--full-name",
-    "-E",
-    "include_(str|bytes)!",
-    headSha,
-    "--",
-    "*.rs",
-  ]);
-});
-
-test("fails closed when documentation changes feed or cannot inspect include_str", async () => {
-  const documentationChanges = [changed("docs/guide.md")];
-  await expect(
-    classifyCheckedOutChanges(
-      "/workspace",
-      mergeBase,
-      headSha,
-      documentationChanges,
-      async () => "",
-      async () => true,
-    ),
-  ).resolves.toEqual({
-    reason: "included-documentation-surface",
-    scope: "full",
-  });
-  await expect(
-    classifyCheckedOutChanges(
-      "/workspace",
-      mergeBase,
-      headSha,
-      documentationChanges,
-      async () => "",
-      async () => {
-        throw new Error("source inventory unavailable");
-      },
-    ),
-  ).resolves.toEqual({
-    reason: "included-documentation-inspection-failed",
-    scope: "full",
-  });
-  await expect(
-    classifyCheckedOutChanges(
-      "/workspace",
-      mergeBase,
-      headSha,
-      [
-        changed("crates/pure-analyzer-model/src/loader.rs"),
-        changed("docs/guide.md"),
-      ],
-      async () => "",
-      async () => true,
-    ),
-  ).resolves.toEqual({
-    reason: "included-documentation-surface",
-    scope: "full",
-  });
-});
-
-test("uses diff scope for production Rust plus harmless documentation", () => {
+test("keeps production Rust plus documentation on the full mutation floor", () => {
   expect(
     classifyChanges([
       changed("crates/pure-analyzer-model/src/loader.rs"),
       changed("docs/architecture/ci.md"),
     ]),
-  ).toEqual({ reason: "production-rust-only", scope: "diff" });
+  ).toEqual({ reason: "documentation-change", scope: "full" });
 });
 
 test("fails closed when production and test Rust paths mix", () => {
@@ -413,10 +299,10 @@ test("fails closed when production and test Rust paths mix", () => {
   });
 });
 
-test("skips documentation-only changes", () => {
+test("keeps documentation-only changes on the full mutation floor", () => {
   expect(
     classifyChanges([changed("README.md"), changed("docs/architecture/ci.md", "A")]),
-  ).toEqual({ reason: "documentation-only", scope: "skip" });
+  ).toEqual({ reason: "documentation-change", scope: "full" });
 });
 
 test("fails closed for test-only, configuration, FFI, renames, deletions, and an empty diff", () => {

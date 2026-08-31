@@ -2,7 +2,7 @@
 // Plan a fail-closed incremental cargo-mutants run for a pull request. Direct
 // PR runs use the event head; merge groups stay on the full synthetic candidate.
 import { appendFile, mkdir, open, rename, rm } from "node:fs/promises";
-import { dirname, join, posix } from "node:path";
+import { dirname, join } from "node:path";
 
 import { notice } from "./lib/ci.mjs";
 import { repoRoot } from "./lib/git.mjs";
@@ -34,9 +34,6 @@ const INLINE_TEST_ATTRIBUTE = /#\s*\[\s*(?:(?:[A-Za-z_]\w*::)*\w*test\w*\b[^\]]*
 const INLINE_TEST_MACRO = /\b(?:\w*test\w*|quickcheck)\s*!/;
 const RUSTDOC_FENCE = /```/;
 const DIFF_OPTIONS = ["--no-ext-diff", "--no-renames", "--no-textconv", "--unified=0"];
-const INCLUDE_FILE_CALL = /\binclude_(?:str|bytes)!\s*\(([\s\S]*?)\)/g;
-// `git grep -E` accepts POSIX ERE rather than JavaScript regular expressions.
-export const INCLUDE_FILE_GREP_PATTERN = "include_(str|bytes)!";
 const USAGE = "usage: bun scripts/mutation-scope.mjs <plan|prepare>";
 
 /** Parse NUL-delimited `git diff --name-status -z` output. */
@@ -64,7 +61,7 @@ export function parseNameStatus(output) {
   return changes;
 }
 
-/** Whether a path is documentation only, with no executable/configuration meaning. */
+/** Whether a path belongs to repository documentation. */
 export function isDocumentationPath(path) {
   return path.startsWith(DOCUMENTATION_ROOT) || ROOT_DOCUMENTATION_FILES.has(path);
 }
@@ -125,22 +122,8 @@ export async function classifyCheckedOutChanges(
   headSha,
   changes,
   readSource = readRevisionSource,
-  hasIncludedDocumentation = hasIncludedDocumentationSurface,
 ) {
   const classification = classifyChanges(changes);
-  const hasDocumentationChange = changes
-    .flatMap(({ paths }) => paths)
-    .some(isDocumentationPath);
-  if (classification.scope !== "full" && hasDocumentationChange) {
-    try {
-      if (await hasIncludedDocumentation(root, headSha, changes)) {
-        return { scope: "full", reason: "included-documentation-surface" };
-      }
-    } catch {
-      return { scope: "full", reason: "included-documentation-inspection-failed" };
-    }
-  }
-  if (classification.scope === "skip") return classification;
   if (classification.scope !== "diff") return classification;
   try {
     if (await hasInlineTestSurface(root, mergeBase, headSha, changes, readSource)) {
@@ -150,67 +133,6 @@ export async function classifyCheckedOutChanges(
     return { scope: "full", reason: "inline-test-inspection-failed" };
   }
   return classification;
-}
-
-async function hasIncludedDocumentationSurface(root, headSha, changes) {
-  const documentationPaths = new Set(
-    changes.flatMap(({ paths }) => paths).filter(isDocumentationPath),
-  );
-  const command = includeFileSearchCommand(headSha);
-  const result = await runCommand(command, {
-    cwd: root,
-    ...mutationListRunOptions(),
-  });
-  if (result.outputLimitExceeded) {
-    throw new Error("included-file source inventory exceeded the configured output limit");
-  }
-  if (result.code === 1) return false;
-  if (result.code !== 0) throw commandError(command, result);
-
-  const prefix = `${headSha}:`;
-  for (const entry of result.stdout.split("\0")) {
-    if (!entry) continue;
-    if (!entry.startsWith(prefix)) {
-      throw new Error("git grep returned an invalid revision-qualified source path");
-    }
-    const sourcePath = entry.slice(prefix.length);
-    const source = await readRevisionSource(root, headSha, sourcePath);
-    if (sourceIncludesDocumentation(source, sourcePath, documentationPaths)) return true;
-  }
-  return false;
-}
-
-/** Build the revision-qualified POSIX ERE search used for include-file inventory. */
-export function includeFileSearchCommand(headSha) {
-  return [
-    "git",
-    "grep",
-    "-l",
-    "-z",
-    "--full-name",
-    "-E",
-    INCLUDE_FILE_GREP_PATTERN,
-    headSha,
-    "--",
-    "*.rs",
-  ];
-}
-
-export function sourceIncludesDocumentation(source, sourcePath, documentationPaths) {
-  for (const match of source.matchAll(INCLUDE_FILE_CALL)) {
-    const literal = /^"([^"\\]*)"$/.exec(match[1].trim());
-    if (!literal) return true;
-    // `include_str!` accepts absolute paths too. They cannot be resolved against
-    // the repository's changed-path inventory, so treating one as harmless
-    // would let a documentation change bypass mutation testing.
-    if (posix.isAbsolute(literal[1])) return true;
-    const includedPath = posix.normalize(posix.join(posix.dirname(sourcePath), literal[1]));
-    // Likewise, never reason incrementally about an include that escapes the
-    // checked-out tree. Git's source inventory is deliberately repo-relative.
-    if (includedPath === ".." || includedPath.startsWith("../")) return true;
-    if (documentationPaths.has(includedPath)) return true;
-  }
-  return false;
 }
 
 /** Classify changed paths without ever treating an unknown shape as incremental. */
@@ -223,14 +145,14 @@ export function classifyChanges(changes) {
     return { scope: "full", reason: "rename-delete-or-type-change" };
   }
 
-  const nonDocumentationPaths = changes
-    .flatMap(({ paths }) => paths)
-    .filter((path) => !isDocumentationPath(path));
-  if (nonDocumentationPaths.length === 0) {
-    return { scope: "skip", reason: "documentation-only" };
+  if (changes.flatMap(({ paths }) => paths).some(isDocumentationPath)) {
+    // Rust permits source files and build scripts to consume arbitrary files.
+    // A path-based documentation exemption cannot prove a documentation change
+    // is inert, including when it accompanies an otherwise eligible Rust diff.
+    return { scope: "full", reason: "documentation-change" };
   }
 
-  const ineligiblePath = nonDocumentationPaths.find(
+  const ineligiblePath = changes.flatMap(({ paths }) => paths).find(
     (path) => !isDiffEligibleRustPath(path),
   );
   if (ineligiblePath) {

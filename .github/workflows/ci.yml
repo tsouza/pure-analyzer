@@ -223,7 +223,7 @@ jobs:
           "$MUTATION_SHARD_INDEX" "$MUTATION_SHARD_TOTAL"
       - name: No mutation required
         if: matrix.scope == 'skip'
-        run: echo "mutation is skipped for this documentation-only or draft pull request"
+        run: echo "mutation is skipped for this draft pull request"
       - name: Collect mutation diagnostics
         if: always() && matrix.scope != 'skip'
         run: >-
