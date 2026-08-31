@@ -22,6 +22,16 @@ pub enum SourceInput {
         /// The path to read.
         path: PathBuf,
     },
+    /// Analyze a caller-owned source snapshot while retaining its file origin.
+    ///
+    /// The path is used only as the diagnostic display name and
+    /// [`SourceOrigin::File`] value. It is never read by [`SourceStore`].
+    FileSnapshot {
+        /// The filesystem path from which the caller obtained the snapshot.
+        path: PathBuf,
+        /// The exact UTF-8 source bytes captured by the caller.
+        text: String,
+    },
     /// Analyze caller-owned source text under a stable display name.
     InMemory {
         /// The name used by diagnostics and renderers.
@@ -43,6 +53,18 @@ impl SourceInput {
         Self::File { path: path.into() }
     }
 
+    /// Construct a caller-owned snapshot that retains a filesystem origin.
+    ///
+    /// Unlike [`SourceInput::file`], this constructor does not cause
+    /// [`SourceStore`] to access `path`.
+    #[must_use]
+    pub fn file_snapshot(path: impl Into<PathBuf>, text: impl Into<String>) -> Self {
+        Self::FileSnapshot {
+            path: path.into(),
+            text: text.into(),
+        }
+    }
+
     /// Construct an in-memory input with an explicit diagnostic name.
     #[must_use]
     pub fn in_memory(name: impl Into<String>, text: impl Into<String>) -> Self {
@@ -62,9 +84,12 @@ impl SourceInput {
 /// The origin category of one retained source snapshot.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SourceOrigin {
-    /// The source was read once from this path.
+    /// The source originated from this path.
+    ///
+    /// It was either read by [`SourceStore`] or supplied as a caller-owned
+    /// [`SourceInput::FileSnapshot`].
     File {
-        /// The path used for the one read.
+        /// The path associated with the source snapshot.
         path: PathBuf,
     },
     /// The source was supplied directly by an API caller.
@@ -199,6 +224,11 @@ impl SourceFile {
                     text,
                 )
             }
+            SourceInput::FileSnapshot { path, text } => (
+                path.display().to_string(),
+                SourceOrigin::File { path },
+                text,
+            ),
             SourceInput::InMemory { name, text } => (name, SourceOrigin::InMemory, text),
             SourceInput::Stdin { text } => (STDIN_NAME.to_owned(), SourceOrigin::Stdin, text),
         };
@@ -331,6 +361,23 @@ mod tests {
         assert!(matches!(files[0].origin(), SourceOrigin::File { .. }));
         assert!(matches!(files[1].origin(), SourceOrigin::InMemory));
         assert!(matches!(files[2].origin(), SourceOrigin::Stdin));
+    }
+
+    #[test]
+    fn retains_caller_owned_file_snapshot_without_rereading_its_path() {
+        let path = temporary_path();
+        assert!(
+            !path.exists(),
+            "the fixture path must not exist so a disk read would fail"
+        );
+
+        let store = SourceStore::load([SourceInput::file_snapshot(&path, "captured()\n")])
+            .expect("caller-owned file snapshot must not read its path");
+        let source = store.get(FileId::new(0)).expect("retained source");
+
+        assert_eq!(source.name(), path.display().to_string());
+        assert_eq!(source.text(), "captured()\n");
+        assert_eq!(source.origin(), &SourceOrigin::File { path });
     }
 
     #[test]
