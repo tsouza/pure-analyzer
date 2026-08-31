@@ -18,8 +18,8 @@ use serde_json::Value;
 use libpure::{SourceInput, SourceStore};
 
 const TEMP_FILE_PREFIX: &str = "pure-analyzer-render-test";
-const TERMINAL_CONTROLS: &str = "\x1b]8;;https://example.invalid\x07\r\u{009b}β";
-const ESCAPED_TERMINAL_CONTROLS: &str = r"\u{1b}]8;;https://example.invalid\u{7}\r\u{9b}β";
+const TERMINAL_CONTROLS: &str = "\0\t\x1b]8;;https://example.invalid\x07\r\u{009b}β";
+const ESCAPED_TERMINAL_CONTROLS: &str = r"\0\t\u{1b}]8;;https://example.invalid\u{7}\r\u{9b}β";
 const TERMINAL_CONTROL_TARGET: &str = "target";
 
 static TEMP_FILE_COUNTER: AtomicUsize = AtomicUsize::new(0);
@@ -1203,6 +1203,13 @@ fn stale_secondary_and_fix_spans_are_internal_errors_in_every_format() {
 
     assert_invalid_span_kind(&sources, vec![secondary], SpanKind::Secondary(0));
     assert_invalid_span_kind(&sources, vec![fix], SpanKind::FixEdit(0));
+}
+
+#[test]
+fn span_kind_display_identifies_every_diagnostic_role() {
+    assert_eq!(SpanKind::Primary.to_string(), "primary label");
+    assert_eq!(SpanKind::Secondary(2).to_string(), "secondary label #2");
+    assert_eq!(SpanKind::FixEdit(3).to_string(), "fix edit #3");
 }
 
 fn assert_invalid_span_kind(sources: &SourceStore, diagnostics: Vec<Diagnostic>, kind: SpanKind) {
