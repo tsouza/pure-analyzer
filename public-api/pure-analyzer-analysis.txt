@@ -198,10 +198,12 @@ impl<T> core::convert::From<T> for pure_analyzer_analysis::AnalysisResult
 pub fn pure_analyzer_analysis::AnalysisResult::from(T) -> T
 pub struct pure_analyzer_analysis::FindingPolicy
 impl pure_analyzer_analysis::FindingPolicy
+pub fn pure_analyzer_analysis::FindingPolicy::apply(&self, pure_analyzer_diagnostics::diagnostic::Diagnostic) -> core::option::Option<pure_analyzer_diagnostics::diagnostic::Diagnostic>
 pub fn pure_analyzer_analysis::FindingPolicy::new() -> Self
 pub fn pure_analyzer_analysis::FindingPolicy::suppress(self, pure_analyzer_diagnostics::code::DiagCode) -> Self
 pub const fn pure_analyzer_analysis::FindingPolicy::with_minimum_severity(self, pure_analyzer_diagnostics::diagnostic::Severity) -> Self
 pub fn pure_analyzer_analysis::FindingPolicy::with_severity(self, pure_analyzer_diagnostics::code::DiagCode, pure_analyzer_diagnostics::diagnostic::Severity) -> Self
+pub const fn pure_analyzer_analysis::FindingPolicy::with_warnings_as_errors(self, bool) -> Self
 impl core::clone::Clone for pure_analyzer_analysis::FindingPolicy
 pub fn pure_analyzer_analysis::FindingPolicy::clone(&self) -> pure_analyzer_analysis::FindingPolicy
 impl core::cmp::Eq for pure_analyzer_analysis::FindingPolicy

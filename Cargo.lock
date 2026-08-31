@@ -1141,6 +1141,10 @@ dependencies = [
  "clap",
  "libpure",
  "pure-analyzer-diagnostics",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "toml",
  "tracing",
  "tracing-subscriber",
 ]

@@ -4,7 +4,11 @@ use pure_analyzer_analysis::{
     AnalysisEngine, AnalysisInput, AnalysisPass, FindingPolicy, MilestoningArityLintPass,
     NavigationLintPass, ValidatePass, format_query,
 };
-use pure_analyzer_diagnostics::{Diagnostic, FileId, FixPlan, FixPlanError, PlannedFile};
+use std::collections::{BTreeMap, BTreeSet};
+
+use pure_analyzer_diagnostics::{
+    ALL_DIAG_CODES, DiagCode, Diagnostic, FileId, FixPlan, FixPlanError, PlannedFile, Severity,
+};
 use pure_analyzer_model::{
     ModelDocument, ModelError, ModelGraph, PmcdDocument, PureDocument, load_model_documents,
 };
@@ -17,11 +21,78 @@ use crate::{SourceFile, SourceInput, SourceStore, SourceStoreError};
 
 const DEFAULT_JOBS: usize = 1;
 
+/// Renderer-neutral selection and severity policy for analyzer findings.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct DiagnosticPolicy {
+    selected: Option<BTreeSet<DiagCode>>,
+    ignored: BTreeSet<DiagCode>,
+    severity_overrides: BTreeMap<DiagCode, Severity>,
+    warnings_as_errors: bool,
+}
+
+impl DiagnosticPolicy {
+    /// Construct a policy that retains every warning and error unchanged.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Restrict findings to the supplied registered code.
+    ///
+    /// Calling this method more than once grows the selected set. A policy
+    /// with no selected codes retains every registered code.
+    #[must_use]
+    pub fn select(mut self, code: DiagCode) -> Self {
+        self.selected.get_or_insert_with(BTreeSet::new).insert(code);
+        self
+    }
+
+    /// Suppress findings with the supplied registered code.
+    #[must_use]
+    pub fn ignore(mut self, code: DiagCode) -> Self {
+        self.ignored.insert(code);
+        self
+    }
+
+    /// Override the presentation severity for the supplied registered code.
+    #[must_use]
+    pub fn with_severity(mut self, code: DiagCode, severity: Severity) -> Self {
+        self.severity_overrides.insert(code, severity);
+        self
+    }
+
+    /// Promote default warnings before applying exact-code overrides.
+    #[must_use]
+    pub const fn with_warnings_as_errors(mut self, enabled: bool) -> Self {
+        self.warnings_as_errors = enabled;
+        self
+    }
+
+    fn finding_policy(&self) -> FindingPolicy {
+        let mut policy = FindingPolicy::new().with_warnings_as_errors(self.warnings_as_errors);
+        if let Some(selected) = &self.selected {
+            for &code in ALL_DIAG_CODES {
+                if !selected.contains(&code) {
+                    policy = policy.suppress(code);
+                }
+            }
+        }
+        for &code in &self.ignored {
+            policy = policy.suppress(code);
+        }
+        for (&code, &severity) in &self.severity_overrides {
+            policy = policy.with_severity(code, severity);
+        }
+        policy
+    }
+}
+
 /// Source inputs and execution policy shared by parse, validate, and format.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SourceRequest {
     sources: Vec<SourceInput>,
     jobs: usize,
+    policy: DiagnosticPolicy,
 }
 
 impl SourceRequest {
@@ -31,6 +102,7 @@ impl SourceRequest {
         Self {
             sources: sources.into_iter().collect(),
             jobs: DEFAULT_JOBS,
+            policy: DiagnosticPolicy::new(),
         }
     }
 
@@ -53,6 +125,19 @@ impl SourceRequest {
     #[must_use]
     pub const fn jobs(&self) -> usize {
         self.jobs
+    }
+
+    /// Set the finding selection and severity policy used by analysis methods.
+    #[must_use]
+    pub fn with_diagnostic_policy(mut self, policy: DiagnosticPolicy) -> Self {
+        self.policy = policy;
+        self
+    }
+
+    /// Return the finding selection and severity policy.
+    #[must_use]
+    pub const fn diagnostic_policy(&self) -> &DiagnosticPolicy {
+        &self.policy
     }
 
     fn validate(&self) -> Result<(), RequestError> {
@@ -326,7 +411,12 @@ impl AnalysisDriver {
         let sources = load_source_request(request)?;
         let files = sources.files().map(SourceFile::id).collect::<Vec<_>>();
         let diagnostics = flatten(run_sources(&sources, &files, request.jobs(), |source| {
-            analyze_source(source, None, AnalysisKind::Validate)
+            analyze_source(
+                source,
+                None,
+                AnalysisKind::Validate,
+                request.diagnostic_policy(),
+            )
         })?);
         Ok(AnalysisOutput {
             sources,
@@ -348,11 +438,24 @@ impl AnalysisDriver {
             &sources,
             &files,
             request.sources.jobs(),
-            |source| analyze_source(source, model.as_ref(), AnalysisKind::Lint),
+            |source| {
+                analyze_source(
+                    source,
+                    model.as_ref(),
+                    AnalysisKind::Lint,
+                    request.sources.diagnostic_policy(),
+                )
+            },
         )?);
-        let mut all_diagnostics = model
-            .as_ref()
-            .map_or_else(Vec::new, |graph| graph.diagnostics().to_vec());
+        let finding_policy = request.sources.diagnostic_policy().finding_policy();
+        let mut all_diagnostics = model.as_ref().map_or_else(Vec::new, |graph| {
+            graph
+                .diagnostics()
+                .iter()
+                .cloned()
+                .filter_map(|diagnostic| finding_policy.apply(diagnostic))
+                .collect()
+        });
         all_diagnostics.extend(diagnostics);
         Ok(AnalysisOutput {
             sources,
@@ -566,11 +669,12 @@ fn analyze_source(
     source: &SourceFile,
     model: Option<&ModelGraph>,
     kind: AnalysisKind,
+    policy: &DiagnosticPolicy,
 ) -> Result<Vec<Diagnostic>, DriverError> {
     let parsed = parse_query(source.text(), source.id())
         .map_err(|error| DriverError::parse(source.id(), error))?;
     let passes = passes(kind);
-    let engine = AnalysisEngine::new(passes, FindingPolicy::new());
+    let engine = AnalysisEngine::new(passes, policy.finding_policy());
     Ok(engine
         .analyze(AnalysisInput::new(
             source.id(),
@@ -842,6 +946,134 @@ Class model::Person
                 .any(|diagnostic| diagnostic.code == DiagCode::ParenthesizedTuple)
         );
         assert!(output.plan_fixes().expect("empty fix plan").is_empty());
+    }
+
+    #[test]
+    fn diagnostic_policy_filters_and_reclassifies_without_changing_identity() {
+        let driver = AnalysisDriver;
+        let source =
+            SourceInput::in_memory("query.pure", "model::Person.all()->filter(x| $x.missing)");
+        let base = driver
+            .lint(&LintRequest::new(
+                SourceRequest::new([source.clone()]),
+                [ModelInput::pmcd(SourceInput::in_memory(
+                    "model.json",
+                    MODEL,
+                ))],
+            ))
+            .expect("lint with default policy");
+        let warning = driver
+            .lint(&LintRequest::new(
+                SourceRequest::new([source]).with_diagnostic_policy(
+                    DiagnosticPolicy::new()
+                        .with_severity(DiagCode::UnknownProperty, Severity::Warning),
+                ),
+                [ModelInput::pmcd(SourceInput::in_memory(
+                    "model.json",
+                    MODEL,
+                ))],
+            ))
+            .expect("lint with severity policy");
+
+        let base_finding = base
+            .diagnostics()
+            .iter()
+            .find(|diagnostic| diagnostic.code == DiagCode::UnknownProperty)
+            .expect("default unknown-property finding");
+        let warning_finding = warning
+            .diagnostics()
+            .iter()
+            .find(|diagnostic| diagnostic.code == DiagCode::UnknownProperty)
+            .expect("reclassified unknown-property finding");
+        assert_eq!(base_finding.code, warning_finding.code);
+        assert_eq!(base_finding.message, warning_finding.message);
+        assert_eq!(base_finding.primary, warning_finding.primary);
+        assert_eq!(warning_finding.severity, Severity::Warning);
+
+        let ignored = driver
+            .lint(&LintRequest::new(
+                SourceRequest::new([SourceInput::in_memory(
+                    "query.pure",
+                    "model::Person.all()->filter(x| $x.missing)",
+                )])
+                .with_diagnostic_policy(DiagnosticPolicy::new().ignore(DiagCode::UnknownProperty)),
+                [ModelInput::pmcd(SourceInput::in_memory(
+                    "model.json",
+                    MODEL,
+                ))],
+            ))
+            .expect("lint with ignored code");
+        assert!(
+            ignored
+                .diagnostics()
+                .iter()
+                .all(|diagnostic| diagnostic.code != DiagCode::UnknownProperty)
+        );
+    }
+
+    #[test]
+    fn diagnostic_policy_also_applies_to_model_loader_findings() {
+        let request = |policy| {
+            LintRequest::new(
+                SourceRequest::new([SourceInput::in_memory("query.pure", "model::Person.all()")])
+                    .with_diagnostic_policy(policy),
+                [
+                    ModelInput::pmcd(SourceInput::in_memory("first.json", MODEL)),
+                    ModelInput::pmcd(SourceInput::in_memory("second.json", MODEL)),
+                ],
+            )
+        };
+        let driver = AnalysisDriver;
+        let default = driver
+            .lint(&request(DiagnosticPolicy::new()))
+            .expect("lint duplicate model inputs");
+        let ignored = driver
+            .lint(&request(
+                DiagnosticPolicy::new().ignore(DiagCode::ModelMergeConflict),
+            ))
+            .expect("lint duplicate models with ignored merge finding");
+
+        assert!(
+            default
+                .diagnostics()
+                .iter()
+                .any(|diagnostic| diagnostic.code == DiagCode::ModelMergeConflict)
+        );
+        assert!(
+            ignored
+                .diagnostics()
+                .iter()
+                .all(|diagnostic| diagnostic.code != DiagCode::ModelMergeConflict)
+        );
+    }
+
+    #[test]
+    fn diagnostic_policy_is_deterministic_across_worker_counts() {
+        let policy = DiagnosticPolicy::new()
+            .select(DiagCode::UnknownProperty)
+            .with_severity(DiagCode::UnknownProperty, Severity::Warning)
+            .with_warnings_as_errors(true);
+        let request = |jobs| {
+            LintRequest::new(
+                query_request(jobs).with_diagnostic_policy(policy.clone()),
+                [ModelInput::pmcd(SourceInput::in_memory(
+                    "model.json",
+                    MODEL,
+                ))],
+            )
+        };
+        let driver = AnalysisDriver;
+        let sequential = driver
+            .lint(&request(DEFAULT_JOBS))
+            .expect("sequential policy run");
+        let parallel = driver
+            .lint(&request(PARALLEL_JOBS))
+            .expect("parallel policy run");
+
+        assert_eq!(sequential, parallel);
+        assert!(sequential.diagnostics().iter().all(|diagnostic| {
+            diagnostic.code == DiagCode::UnknownProperty && diagnostic.severity == Severity::Warning
+        }));
     }
 
     #[test]
