@@ -175,6 +175,127 @@ impl<T> core::clone::CloneToUninit for pure_analyzer_diagnostics::DiagFamily whe
 pub unsafe fn pure_analyzer_diagnostics::DiagFamily::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for pure_analyzer_diagnostics::DiagFamily
 pub fn pure_analyzer_diagnostics::DiagFamily::from(T) -> T
+pub enum pure_analyzer_diagnostics::FixPlanError
+pub pure_analyzer_diagnostics::FixPlanError::ApplicabilityPolicy
+pub pure_analyzer_diagnostics::FixPlanError::ApplicabilityPolicy::provenance: pure_analyzer_diagnostics::FixProvenance
+pub pure_analyzer_diagnostics::FixPlanError::ApplicabilityPolicy::title: alloc::string::String
+pub pure_analyzer_diagnostics::FixPlanError::Conflict
+pub pure_analyzer_diagnostics::FixPlanError::Conflict::file: pure_analyzer_diagnostics::FileId
+pub pure_analyzer_diagnostics::FixPlanError::Conflict::first: alloc::string::String
+pub pure_analyzer_diagnostics::FixPlanError::Conflict::second: alloc::string::String
+pub pure_analyzer_diagnostics::FixPlanError::DuplicateFile
+pub pure_analyzer_diagnostics::FixPlanError::DuplicateFile::file: pure_analyzer_diagnostics::FileId
+pub pure_analyzer_diagnostics::FixPlanError::EmptyFix
+pub pure_analyzer_diagnostics::FixPlanError::EmptyFix::title: alloc::string::String
+pub pure_analyzer_diagnostics::FixPlanError::InvalidUtf8Boundary
+pub pure_analyzer_diagnostics::FixPlanError::InvalidUtf8Boundary::file: pure_analyzer_diagnostics::FileId
+pub pure_analyzer_diagnostics::FixPlanError::InvalidUtf8Boundary::span: text_size::range::TextRange
+pub pure_analyzer_diagnostics::FixPlanError::InvalidUtf8Boundary::title: alloc::string::String
+pub pure_analyzer_diagnostics::FixPlanError::OutOfBounds
+pub pure_analyzer_diagnostics::FixPlanError::OutOfBounds::file: pure_analyzer_diagnostics::FileId
+pub pure_analyzer_diagnostics::FixPlanError::OutOfBounds::span: text_size::range::TextRange
+pub pure_analyzer_diagnostics::FixPlanError::OutOfBounds::title: alloc::string::String
+pub pure_analyzer_diagnostics::FixPlanError::StaleSource
+pub pure_analyzer_diagnostics::FixPlanError::StaleSource::file: pure_analyzer_diagnostics::FileId
+pub pure_analyzer_diagnostics::FixPlanError::UnexpectedSource
+pub pure_analyzer_diagnostics::FixPlanError::UnexpectedSource::file: pure_analyzer_diagnostics::FileId
+pub pure_analyzer_diagnostics::FixPlanError::UnknownFile
+pub pure_analyzer_diagnostics::FixPlanError::UnknownFile::file: pure_analyzer_diagnostics::FileId
+pub pure_analyzer_diagnostics::FixPlanError::UnknownFile::title: alloc::string::String
+pub pure_analyzer_diagnostics::FixPlanError::UnorderedEdits
+pub pure_analyzer_diagnostics::FixPlanError::UnorderedEdits::file: pure_analyzer_diagnostics::FileId
+pub pure_analyzer_diagnostics::FixPlanError::UnorderedEdits::title: alloc::string::String
+impl core::clone::Clone for pure_analyzer_diagnostics::FixPlanError
+pub fn pure_analyzer_diagnostics::FixPlanError::clone(&self) -> pure_analyzer_diagnostics::FixPlanError
+impl core::cmp::Eq for pure_analyzer_diagnostics::FixPlanError
+impl core::cmp::PartialEq for pure_analyzer_diagnostics::FixPlanError
+pub fn pure_analyzer_diagnostics::FixPlanError::eq(&self, &pure_analyzer_diagnostics::FixPlanError) -> bool
+impl core::error::Error for pure_analyzer_diagnostics::FixPlanError
+impl core::fmt::Debug for pure_analyzer_diagnostics::FixPlanError
+pub fn pure_analyzer_diagnostics::FixPlanError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for pure_analyzer_diagnostics::FixPlanError
+pub fn pure_analyzer_diagnostics::FixPlanError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_diagnostics::FixPlanError
+impl core::marker::Freeze for pure_analyzer_diagnostics::FixPlanError
+impl core::marker::Send for pure_analyzer_diagnostics::FixPlanError
+impl core::marker::Sync for pure_analyzer_diagnostics::FixPlanError
+impl core::marker::Unpin for pure_analyzer_diagnostics::FixPlanError
+impl core::marker::UnsafeUnpin for pure_analyzer_diagnostics::FixPlanError
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_diagnostics::FixPlanError
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_diagnostics::FixPlanError
+impl<T, U> core::convert::Into<U> for pure_analyzer_diagnostics::FixPlanError where U: core::convert::From<T>
+pub fn pure_analyzer_diagnostics::FixPlanError::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_diagnostics::FixPlanError where U: core::convert::Into<T>
+pub type pure_analyzer_diagnostics::FixPlanError::Error = never
+pub fn pure_analyzer_diagnostics::FixPlanError::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_diagnostics::FixPlanError where U: core::convert::TryFrom<T>
+pub type pure_analyzer_diagnostics::FixPlanError::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_diagnostics::FixPlanError::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_diagnostics::FixPlanError where T: core::clone::Clone
+pub type pure_analyzer_diagnostics::FixPlanError::Owned = T
+pub fn pure_analyzer_diagnostics::FixPlanError::clone_into(&self, &mut T)
+pub fn pure_analyzer_diagnostics::FixPlanError::to_owned(&self) -> T
+impl<T> alloc::string::ToString for pure_analyzer_diagnostics::FixPlanError where T: core::fmt::Display + ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::FixPlanError::to_string(&self) -> alloc::string::String
+impl<T> core::any::Any for pure_analyzer_diagnostics::FixPlanError where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::FixPlanError::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_diagnostics::FixPlanError where T: ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::FixPlanError::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_diagnostics::FixPlanError where T: ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::FixPlanError::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_diagnostics::FixPlanError where T: core::clone::Clone
+pub unsafe fn pure_analyzer_diagnostics::FixPlanError::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_diagnostics::FixPlanError
+pub fn pure_analyzer_diagnostics::FixPlanError::from(T) -> T
+pub enum pure_analyzer_diagnostics::FixProvenance
+pub pure_analyzer_diagnostics::FixProvenance::ModelDependent
+pub pure_analyzer_diagnostics::FixProvenance::SingleArityProven
+pub pure_analyzer_diagnostics::FixProvenance::SyntaxOnly
+impl pure_analyzer_diagnostics::FixProvenance
+pub const fn pure_analyzer_diagnostics::FixProvenance::permits_machine_application(self) -> bool
+impl core::clone::Clone for pure_analyzer_diagnostics::FixProvenance
+pub fn pure_analyzer_diagnostics::FixProvenance::clone(&self) -> pure_analyzer_diagnostics::FixProvenance
+impl core::cmp::Eq for pure_analyzer_diagnostics::FixProvenance
+impl core::cmp::PartialEq for pure_analyzer_diagnostics::FixProvenance
+pub fn pure_analyzer_diagnostics::FixProvenance::eq(&self, &pure_analyzer_diagnostics::FixProvenance) -> bool
+impl core::fmt::Debug for pure_analyzer_diagnostics::FixProvenance
+pub fn pure_analyzer_diagnostics::FixProvenance::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for pure_analyzer_diagnostics::FixProvenance
+impl core::marker::StructuralPartialEq for pure_analyzer_diagnostics::FixProvenance
+impl serde_core::ser::Serialize for pure_analyzer_diagnostics::FixProvenance
+pub fn pure_analyzer_diagnostics::FixProvenance::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for pure_analyzer_diagnostics::FixProvenance
+pub fn pure_analyzer_diagnostics::FixProvenance::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for pure_analyzer_diagnostics::FixProvenance
+impl core::marker::Send for pure_analyzer_diagnostics::FixProvenance
+impl core::marker::Sync for pure_analyzer_diagnostics::FixProvenance
+impl core::marker::Unpin for pure_analyzer_diagnostics::FixProvenance
+impl core::marker::UnsafeUnpin for pure_analyzer_diagnostics::FixProvenance
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_diagnostics::FixProvenance
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_diagnostics::FixProvenance
+impl<T, U> core::convert::Into<U> for pure_analyzer_diagnostics::FixProvenance where U: core::convert::From<T>
+pub fn pure_analyzer_diagnostics::FixProvenance::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_diagnostics::FixProvenance where U: core::convert::Into<T>
+pub type pure_analyzer_diagnostics::FixProvenance::Error = never
+pub fn pure_analyzer_diagnostics::FixProvenance::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_diagnostics::FixProvenance where U: core::convert::TryFrom<T>
+pub type pure_analyzer_diagnostics::FixProvenance::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_diagnostics::FixProvenance::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_diagnostics::FixProvenance where T: core::clone::Clone
+pub type pure_analyzer_diagnostics::FixProvenance::Owned = T
+pub fn pure_analyzer_diagnostics::FixProvenance::clone_into(&self, &mut T)
+pub fn pure_analyzer_diagnostics::FixProvenance::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_diagnostics::FixProvenance where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::FixProvenance::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_diagnostics::FixProvenance where T: ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::FixProvenance::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_diagnostics::FixProvenance where T: ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::FixProvenance::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_diagnostics::FixProvenance where T: core::clone::Clone
+pub unsafe fn pure_analyzer_diagnostics::FixProvenance::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_diagnostics::FixProvenance
+pub fn pure_analyzer_diagnostics::FixProvenance::from(T) -> T
+impl<T> serde_core::de::DeserializeOwned for pure_analyzer_diagnostics::FixProvenance where T: for<'de> serde_core::de::Deserialize<'de>
 pub enum pure_analyzer_diagnostics::ReasonBucket
 pub pure_analyzer_diagnostics::ReasonBucket::Fundamental
 pub pure_analyzer_diagnostics::ReasonBucket::Recoverable
@@ -549,7 +670,11 @@ impl<T> serde_core::de::DeserializeOwned for pure_analyzer_diagnostics::FileId w
 pub struct pure_analyzer_diagnostics::Fix
 pub pure_analyzer_diagnostics::Fix::applicability: pure_analyzer_diagnostics::Applicability
 pub pure_analyzer_diagnostics::Fix::edits: alloc::vec::Vec<pure_analyzer_diagnostics::TextEdit>
+pub pure_analyzer_diagnostics::Fix::provenance: pure_analyzer_diagnostics::FixProvenance
 pub pure_analyzer_diagnostics::Fix::title: alloc::string::String
+impl pure_analyzer_diagnostics::Fix
+pub fn pure_analyzer_diagnostics::Fix::model_dependent(impl core::convert::Into<alloc::string::String>, alloc::vec::Vec<pure_analyzer_diagnostics::TextEdit>) -> Self
+pub fn pure_analyzer_diagnostics::Fix::single_arity_proven(impl core::convert::Into<alloc::string::String>, alloc::vec::Vec<pure_analyzer_diagnostics::TextEdit>) -> Self
 impl core::clone::Clone for pure_analyzer_diagnostics::Fix
 pub fn pure_analyzer_diagnostics::Fix::clone(&self) -> pure_analyzer_diagnostics::Fix
 impl core::cmp::Eq for pure_analyzer_diagnostics::Fix
@@ -592,6 +717,50 @@ pub unsafe fn pure_analyzer_diagnostics::Fix::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for pure_analyzer_diagnostics::Fix
 pub fn pure_analyzer_diagnostics::Fix::from(T) -> T
 impl<T> serde_core::de::DeserializeOwned for pure_analyzer_diagnostics::Fix where T: for<'de> serde_core::de::Deserialize<'de>
+pub struct pure_analyzer_diagnostics::FixPlan
+impl pure_analyzer_diagnostics::FixPlan
+pub fn pure_analyzer_diagnostics::FixPlan::apply(&self, &alloc::collections::btree::map::BTreeMap<pure_analyzer_diagnostics::FileId, alloc::string::String>) -> core::result::Result<alloc::collections::btree::map::BTreeMap<pure_analyzer_diagnostics::FileId, alloc::string::String>, pure_analyzer_diagnostics::FixPlanError>
+pub fn pure_analyzer_diagnostics::FixPlan::build(impl core::iter::traits::collect::IntoIterator<Item = pure_analyzer_diagnostics::PlannedFile>, impl core::iter::traits::collect::IntoIterator<Item = pure_analyzer_diagnostics::Diagnostic>) -> core::result::Result<Self, pure_analyzer_diagnostics::FixPlanError>
+pub fn pure_analyzer_diagnostics::FixPlan::check(&self, &alloc::collections::btree::map::BTreeMap<pure_analyzer_diagnostics::FileId, alloc::string::String>) -> core::result::Result<bool, pure_analyzer_diagnostics::FixPlanError>
+pub fn pure_analyzer_diagnostics::FixPlan::is_empty(&self) -> bool
+pub fn pure_analyzer_diagnostics::FixPlan::preview(&self, &alloc::collections::btree::map::BTreeMap<pure_analyzer_diagnostics::FileId, alloc::string::String>) -> core::result::Result<alloc::vec::Vec<pure_analyzer_diagnostics::PlannedChange>, pure_analyzer_diagnostics::FixPlanError>
+impl core::clone::Clone for pure_analyzer_diagnostics::FixPlan
+pub fn pure_analyzer_diagnostics::FixPlan::clone(&self) -> pure_analyzer_diagnostics::FixPlan
+impl core::cmp::Eq for pure_analyzer_diagnostics::FixPlan
+impl core::cmp::PartialEq for pure_analyzer_diagnostics::FixPlan
+pub fn pure_analyzer_diagnostics::FixPlan::eq(&self, &pure_analyzer_diagnostics::FixPlan) -> bool
+impl core::fmt::Debug for pure_analyzer_diagnostics::FixPlan
+pub fn pure_analyzer_diagnostics::FixPlan::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_diagnostics::FixPlan
+impl core::marker::Freeze for pure_analyzer_diagnostics::FixPlan
+impl core::marker::Send for pure_analyzer_diagnostics::FixPlan
+impl core::marker::Sync for pure_analyzer_diagnostics::FixPlan
+impl core::marker::Unpin for pure_analyzer_diagnostics::FixPlan
+impl core::marker::UnsafeUnpin for pure_analyzer_diagnostics::FixPlan
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_diagnostics::FixPlan
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_diagnostics::FixPlan
+impl<T, U> core::convert::Into<U> for pure_analyzer_diagnostics::FixPlan where U: core::convert::From<T>
+pub fn pure_analyzer_diagnostics::FixPlan::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_diagnostics::FixPlan where U: core::convert::Into<T>
+pub type pure_analyzer_diagnostics::FixPlan::Error = never
+pub fn pure_analyzer_diagnostics::FixPlan::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_diagnostics::FixPlan where U: core::convert::TryFrom<T>
+pub type pure_analyzer_diagnostics::FixPlan::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_diagnostics::FixPlan::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_diagnostics::FixPlan where T: core::clone::Clone
+pub type pure_analyzer_diagnostics::FixPlan::Owned = T
+pub fn pure_analyzer_diagnostics::FixPlan::clone_into(&self, &mut T)
+pub fn pure_analyzer_diagnostics::FixPlan::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_diagnostics::FixPlan where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::FixPlan::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_diagnostics::FixPlan where T: ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::FixPlan::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_diagnostics::FixPlan where T: ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::FixPlan::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_diagnostics::FixPlan where T: core::clone::Clone
+pub unsafe fn pure_analyzer_diagnostics::FixPlan::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_diagnostics::FixPlan
+pub fn pure_analyzer_diagnostics::FixPlan::from(T) -> T
 pub struct pure_analyzer_diagnostics::Label
 pub pure_analyzer_diagnostics::Label::file: pure_analyzer_diagnostics::FileId
 pub pure_analyzer_diagnostics::Label::note: alloc::string::String
@@ -641,7 +810,91 @@ pub unsafe fn pure_analyzer_diagnostics::Label::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for pure_analyzer_diagnostics::Label
 pub fn pure_analyzer_diagnostics::Label::from(T) -> T
 impl<T> serde_core::de::DeserializeOwned for pure_analyzer_diagnostics::Label where T: for<'de> serde_core::de::Deserialize<'de>
+pub struct pure_analyzer_diagnostics::PlannedChange
+pub pure_analyzer_diagnostics::PlannedChange::after: alloc::string::String
+pub pure_analyzer_diagnostics::PlannedChange::before: alloc::string::String
+pub pure_analyzer_diagnostics::PlannedChange::file: pure_analyzer_diagnostics::FileId
+impl core::clone::Clone for pure_analyzer_diagnostics::PlannedChange
+pub fn pure_analyzer_diagnostics::PlannedChange::clone(&self) -> pure_analyzer_diagnostics::PlannedChange
+impl core::cmp::Eq for pure_analyzer_diagnostics::PlannedChange
+impl core::cmp::PartialEq for pure_analyzer_diagnostics::PlannedChange
+pub fn pure_analyzer_diagnostics::PlannedChange::eq(&self, &pure_analyzer_diagnostics::PlannedChange) -> bool
+impl core::fmt::Debug for pure_analyzer_diagnostics::PlannedChange
+pub fn pure_analyzer_diagnostics::PlannedChange::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_diagnostics::PlannedChange
+impl core::marker::Freeze for pure_analyzer_diagnostics::PlannedChange
+impl core::marker::Send for pure_analyzer_diagnostics::PlannedChange
+impl core::marker::Sync for pure_analyzer_diagnostics::PlannedChange
+impl core::marker::Unpin for pure_analyzer_diagnostics::PlannedChange
+impl core::marker::UnsafeUnpin for pure_analyzer_diagnostics::PlannedChange
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_diagnostics::PlannedChange
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_diagnostics::PlannedChange
+impl<T, U> core::convert::Into<U> for pure_analyzer_diagnostics::PlannedChange where U: core::convert::From<T>
+pub fn pure_analyzer_diagnostics::PlannedChange::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_diagnostics::PlannedChange where U: core::convert::Into<T>
+pub type pure_analyzer_diagnostics::PlannedChange::Error = never
+pub fn pure_analyzer_diagnostics::PlannedChange::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_diagnostics::PlannedChange where U: core::convert::TryFrom<T>
+pub type pure_analyzer_diagnostics::PlannedChange::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_diagnostics::PlannedChange::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_diagnostics::PlannedChange where T: core::clone::Clone
+pub type pure_analyzer_diagnostics::PlannedChange::Owned = T
+pub fn pure_analyzer_diagnostics::PlannedChange::clone_into(&self, &mut T)
+pub fn pure_analyzer_diagnostics::PlannedChange::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_diagnostics::PlannedChange where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::PlannedChange::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_diagnostics::PlannedChange where T: ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::PlannedChange::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_diagnostics::PlannedChange where T: ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::PlannedChange::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_diagnostics::PlannedChange where T: core::clone::Clone
+pub unsafe fn pure_analyzer_diagnostics::PlannedChange::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_diagnostics::PlannedChange
+pub fn pure_analyzer_diagnostics::PlannedChange::from(T) -> T
+pub struct pure_analyzer_diagnostics::PlannedFile
+pub pure_analyzer_diagnostics::PlannedFile::file: pure_analyzer_diagnostics::FileId
+pub pure_analyzer_diagnostics::PlannedFile::source: alloc::string::String
+impl pure_analyzer_diagnostics::PlannedFile
+pub fn pure_analyzer_diagnostics::PlannedFile::new(pure_analyzer_diagnostics::FileId, impl core::convert::Into<alloc::string::String>) -> Self
+impl core::clone::Clone for pure_analyzer_diagnostics::PlannedFile
+pub fn pure_analyzer_diagnostics::PlannedFile::clone(&self) -> pure_analyzer_diagnostics::PlannedFile
+impl core::cmp::Eq for pure_analyzer_diagnostics::PlannedFile
+impl core::cmp::PartialEq for pure_analyzer_diagnostics::PlannedFile
+pub fn pure_analyzer_diagnostics::PlannedFile::eq(&self, &pure_analyzer_diagnostics::PlannedFile) -> bool
+impl core::fmt::Debug for pure_analyzer_diagnostics::PlannedFile
+pub fn pure_analyzer_diagnostics::PlannedFile::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_diagnostics::PlannedFile
+impl core::marker::Freeze for pure_analyzer_diagnostics::PlannedFile
+impl core::marker::Send for pure_analyzer_diagnostics::PlannedFile
+impl core::marker::Sync for pure_analyzer_diagnostics::PlannedFile
+impl core::marker::Unpin for pure_analyzer_diagnostics::PlannedFile
+impl core::marker::UnsafeUnpin for pure_analyzer_diagnostics::PlannedFile
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_diagnostics::PlannedFile
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_diagnostics::PlannedFile
+impl<T, U> core::convert::Into<U> for pure_analyzer_diagnostics::PlannedFile where U: core::convert::From<T>
+pub fn pure_analyzer_diagnostics::PlannedFile::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_diagnostics::PlannedFile where U: core::convert::Into<T>
+pub type pure_analyzer_diagnostics::PlannedFile::Error = never
+pub fn pure_analyzer_diagnostics::PlannedFile::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_diagnostics::PlannedFile where U: core::convert::TryFrom<T>
+pub type pure_analyzer_diagnostics::PlannedFile::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_diagnostics::PlannedFile::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_diagnostics::PlannedFile where T: core::clone::Clone
+pub type pure_analyzer_diagnostics::PlannedFile::Owned = T
+pub fn pure_analyzer_diagnostics::PlannedFile::clone_into(&self, &mut T)
+pub fn pure_analyzer_diagnostics::PlannedFile::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_diagnostics::PlannedFile where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::PlannedFile::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_diagnostics::PlannedFile where T: ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::PlannedFile::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_diagnostics::PlannedFile where T: ?core::marker::Sized
+pub fn pure_analyzer_diagnostics::PlannedFile::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_diagnostics::PlannedFile where T: core::clone::Clone
+pub unsafe fn pure_analyzer_diagnostics::PlannedFile::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_diagnostics::PlannedFile
+pub fn pure_analyzer_diagnostics::PlannedFile::from(T) -> T
 pub struct pure_analyzer_diagnostics::TextEdit
+pub pure_analyzer_diagnostics::TextEdit::file: pure_analyzer_diagnostics::FileId
 pub pure_analyzer_diagnostics::TextEdit::new_text: alloc::string::String
 pub pure_analyzer_diagnostics::TextEdit::span: text_size::range::TextRange
 impl core::clone::Clone for pure_analyzer_diagnostics::TextEdit
