@@ -12,7 +12,11 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use serde_json::Value;
 
 const EXIT_ACTIONABLE: i32 = 1;
+#[cfg(not(any(target_os = "linux", target_vendor = "apple")))]
+const EXIT_INTERNAL: i32 = 4;
 const EXIT_USAGE: i32 = 3;
+const FORMATTER_VALID_SOURCE: &str = "model::Person . all ( )";
+const FORMATTER_BROKEN_SOURCE: &str = "\0";
 
 #[test]
 fn command_surface_completion_and_config_independence_are_stable() {
@@ -24,6 +28,10 @@ fn command_surface_completion_and_config_independence_are_stable() {
     for command in ["validate", "lint", "fmt", "completions"] {
         assert!(help.contains(command), "help omitted {command}: {help}");
     }
+    assert!(
+        help.contains("transactional in-place file updates"),
+        "fmt help omitted its write contract: {help}"
+    );
     for unavailable in ["eq", "diff", "explain"] {
         let output = run(&fixture.root, &[unavailable]);
         assert_eq!(output.status.code(), Some(EXIT_USAGE));
@@ -341,6 +349,7 @@ fn lint_model_merge_warning_can_be_denied_without_changing_its_code() {
     assert_eq!(document["summary"]["total"], 1);
 }
 
+#[cfg(any(target_os = "linux", target_vendor = "apple"))]
 #[test]
 fn lint_fix_applies_a_real_single_file_change() {
     let (fixture, _, fixed) = lint_fix_fixture("lint-fix-single");
@@ -364,6 +373,7 @@ fn lint_fix_applies_a_real_single_file_change() {
     assert_eq!(fixture.read("query.pure"), fixed);
 }
 
+#[cfg(any(target_os = "linux", target_vendor = "apple"))]
 #[test]
 fn lint_fix_applies_real_multi_file_changes_and_is_idempotent() {
     let fixture = Fixture::new("lint-fix-write");
@@ -414,6 +424,31 @@ fn lint_fix_applies_real_multi_file_changes_and_is_idempotent() {
     assert!(repeated.status.success());
     assert!(repeated.stdout.is_empty());
     assert!(repeated.stderr.is_empty());
+}
+
+#[cfg(not(any(target_os = "linux", target_vendor = "apple")))]
+#[test]
+fn lint_fix_fails_closed_without_changing_source() {
+    let (fixture, query, _) = lint_fix_fixture("lint-fix-unsupported-exchange");
+
+    let applied = run(
+        &fixture.root,
+        &[
+            "lint",
+            "query.pure",
+            "--model",
+            "model.json",
+            "--fix",
+            "--quiet",
+            "--no-config",
+        ],
+    );
+
+    assert_eq!(applied.status.code(), Some(EXIT_INTERNAL));
+    assert!(applied.stdout.is_empty());
+    assert!(utf8(&applied.stderr).contains("atomic file exchange is unavailable on this platform"));
+    assert_eq!(fixture.read("query.pure"), query);
+    fixture.assert_no_writer_artifacts();
 }
 
 #[test]
@@ -559,7 +594,7 @@ fn lint_fix_has_a_deterministic_standard_input_policy() {
 }
 
 #[test]
-fn formatter_read_only_modes_and_unavailable_in_place_write_have_distinct_behavior() {
+fn formatter_read_only_modes_and_transactional_write_have_distinct_behavior() {
     let fixture = Fixture::new("format-modes");
     let original = "model::Person . all ( )";
     fixture.write("query.pure", original);
@@ -590,14 +625,57 @@ fn formatter_read_only_modes_and_unavailable_in_place_write_have_distinct_behavi
     assert_ne!(formatted, original);
     assert_eq!(fixture.read("query.pure"), original);
 
-    let write = run(&fixture.root, &["fmt", "query.pure", "--no-config"]);
-    assert_eq!(write.status.code(), Some(EXIT_ACTIONABLE));
-    assert!(write.stdout.is_empty());
-    assert_eq!(
-        utf8(&write.stderr),
-        "error: in-place formatter writes are not available; use --check, --stdout, or --diff\n"
+    #[cfg(any(target_os = "linux", target_vendor = "apple"))]
+    {
+        let write = run(&fixture.root, &["fmt", "query.pure", "--no-config"]);
+        assert!(write.status.success());
+        assert!(write.stdout.is_empty());
+        assert!(write.stderr.is_empty());
+        assert_eq!(fixture.read("query.pure"), formatted);
+        fixture.assert_no_writer_artifacts();
+    }
+
+    #[cfg(not(any(target_os = "linux", target_vendor = "apple")))]
+    {
+        let write = run(&fixture.root, &["fmt", "query.pure", "--no-config"]);
+        assert_eq!(write.status.code(), Some(EXIT_INTERNAL));
+        assert!(write.stdout.is_empty());
+        assert!(
+            utf8(&write.stderr).contains("atomic file exchange is unavailable on this platform")
+        );
+        assert_eq!(fixture.read("query.pure"), original);
+        fixture.assert_no_writer_artifacts();
+    }
+}
+
+#[cfg(any(target_os = "linux", target_vendor = "apple"))]
+#[test]
+fn formatter_default_write_updates_multiple_files_and_is_idempotent() {
+    let fixture = Fixture::new("format-write-multiple");
+    fixture.write("first.pure", "model::Person . all ( )");
+    fixture.write("second.pure", "model::Order . all ( )");
+
+    let apply = run(
+        &fixture.root,
+        &["fmt", "first.pure", "second.pure", "--no-config"],
     );
-    assert_eq!(fixture.read("query.pure"), original);
+    assert!(apply.status.success());
+    assert!(apply.stdout.is_empty());
+    assert!(apply.stderr.is_empty());
+    assert_eq!(fixture.read("first.pure"), "model::Person.all()\n");
+    assert_eq!(fixture.read("second.pure"), "model::Order.all()\n");
+    fixture.assert_no_writer_artifacts();
+
+    let repeated = run(
+        &fixture.root,
+        &["fmt", "first.pure", "second.pure", "--no-config"],
+    );
+    assert!(repeated.status.success());
+    assert!(repeated.stdout.is_empty());
+    assert!(repeated.stderr.is_empty());
+    assert_eq!(fixture.read("first.pure"), "model::Person.all()\n");
+    assert_eq!(fixture.read("second.pure"), "model::Order.all()\n");
+    fixture.assert_no_writer_artifacts();
 }
 
 #[test]
@@ -705,28 +783,52 @@ fn formatter_line_width_environment_applies_with_no_config() {
 }
 
 #[test]
-fn formatter_stdin_is_machine_clean_and_read_only_recovery_preserves_files() {
-    let fixture = Fixture::new("format-stdin-error");
-    let stdin = run_with_stdin(
-        &fixture.root,
-        &["fmt", "-", "--no-config"],
-        "model::Person . all ( )",
-    );
-    assert!(stdin.status.success());
-    assert!(!stdin.stdout.is_empty());
-    assert!(stdin.stderr.is_empty());
+fn formatter_default_stdin_is_machine_clean_and_idempotent() {
+    let fixture = Fixture::new("format-stdin-default");
+    let source = "model::Person . all ( )";
+    let formatted = run_with_stdin(&fixture.root, &["fmt", "-", "--no-config"], source);
+    assert!(formatted.status.success());
+    assert_eq!(formatted.stdout, b"model::Person.all()\n");
+    assert!(formatted.stderr.is_empty());
+
     let stable = run_with_stdin(
         &fixture.root,
         &["fmt", "-", "--no-config"],
-        utf8(&stdin.stdout),
+        utf8(&formatted.stdout),
     );
     assert!(stable.status.success());
-    assert_eq!(stable.stdout, stdin.stdout);
+    assert_eq!(stable.stdout, formatted.stdout);
+    assert!(stable.stderr.is_empty());
+}
 
+#[test]
+fn formatter_stdin_stdout_is_machine_clean_and_idempotent() {
+    let fixture = Fixture::new("format-stdin-stdout");
+    let source = "model::Person . all ( )";
+    let stdout = run_with_stdin(
+        &fixture.root,
+        &["fmt", "-", "--stdout", "--no-config"],
+        source,
+    );
+    assert!(stdout.status.success());
+    assert!(!stdout.stdout.is_empty());
+    assert!(stdout.stderr.is_empty());
+    let stable = run_with_stdin(
+        &fixture.root,
+        &["fmt", "-", "--stdout", "--no-config"],
+        utf8(&stdout.stdout),
+    );
+    assert!(stable.status.success());
+    assert_eq!(stable.stdout, stdout.stdout);
+}
+
+#[test]
+fn formatter_stdin_check_and_diff_are_read_only() {
+    let fixture = Fixture::new("format-stdin-read-only");
     let check = run_with_stdin(
         &fixture.root,
         &["fmt", "-", "--check", "--no-config"],
-        utf8(&stdin.stdout),
+        "model::Person.all()\n",
     );
     assert!(check.status.success());
     assert!(check.stdout.is_empty());
@@ -738,7 +840,11 @@ fn formatter_stdin_is_machine_clean_and_read_only_recovery_preserves_files() {
     );
     assert_eq!(diff.status.code(), Some(EXIT_ACTIONABLE));
     assert!(utf8(&diff.stdout).contains("--- <stdin>"));
+}
 
+#[test]
+fn formatter_check_recovery_preserves_file_input() {
+    let fixture = Fixture::new("format-check-recovery");
     fixture.write("broken.pure", "a  +  \0");
     let before = fixture.read("broken.pure");
     let broken = run(
@@ -749,6 +855,24 @@ fn formatter_stdin_is_machine_clean_and_read_only_recovery_preserves_files() {
     assert!(broken.stdout.is_empty());
     assert!(utf8(&broken.stderr).contains("PUR0102"));
     assert_eq!(fixture.read("broken.pure"), before);
+}
+
+#[test]
+fn formatter_default_mode_rejects_mixed_file_and_stdin() {
+    let fixture = Fixture::new("format-mixed-inputs");
+    let source = "model::Person . all ( )";
+    fixture.write("query.pure", source);
+    let mixed = run_with_stdin(
+        &fixture.root,
+        &["fmt", "query.pure", "-", "--no-config"],
+        source,
+    );
+    assert_eq!(mixed.status.code(), Some(EXIT_USAGE));
+    assert!(mixed.stdout.is_empty());
+    assert!(
+        utf8(&mixed.stderr).contains("cannot combine standard input with in-place file writes")
+    );
+    assert_eq!(fixture.read("query.pure"), source);
 }
 
 #[test]
@@ -796,15 +920,18 @@ fn formatter_applies_global_policy_to_recovery_diagnostics_on_stderr() {
 }
 
 #[test]
-fn formatter_in_place_write_remains_actionable_after_a_policy_downgrade() {
+fn formatter_recovery_blocks_every_default_write_even_when_the_diagnostic_is_hidden() {
     let fixture = Fixture::new("format-policy-atomic");
-    let valid_before = "model::Person . all ( )";
-    let broken_before = "\0";
-    fixture.write("valid.pure", valid_before);
-    fixture.write("broken.pure", broken_before);
+    fixture.write("valid.pure", FORMATTER_VALID_SOURCE);
+    fixture.write("broken.pure", FORMATTER_BROKEN_SOURCE);
 
-    let output = run(
-        &fixture.root,
+    assert_default_format_write_is_blocked(
+        &fixture,
+        &["fmt", "valid.pure", "broken.pure", "--no-config"],
+        Some("PUR0102"),
+    );
+    assert_default_format_write_is_blocked(
+        &fixture,
         &[
             "fmt",
             "valid.pure",
@@ -813,16 +940,38 @@ fn formatter_in_place_write_remains_actionable_after_a_policy_downgrade() {
             "PUR0102",
             "--no-config",
         ],
+        Some("PUR0102"),
     );
+    assert_default_format_write_is_blocked(
+        &fixture,
+        &[
+            "fmt",
+            "valid.pure",
+            "broken.pure",
+            "--ignore",
+            "PUR0102",
+            "--no-config",
+        ],
+        None,
+    );
+    fixture.assert_no_writer_artifacts();
+}
+
+fn assert_default_format_write_is_blocked(
+    fixture: &Fixture,
+    arguments: &[&str],
+    expected_diagnostic: Option<&str>,
+) {
+    let output = run(&fixture.root, arguments);
 
     assert_eq!(output.status.code(), Some(EXIT_ACTIONABLE));
     assert!(output.stdout.is_empty());
-    assert_eq!(
-        utf8(&output.stderr),
-        "error: in-place formatter writes are not available; use --check, --stdout, or --diff\n"
-    );
-    assert_eq!(fixture.read("valid.pure"), valid_before);
-    assert_eq!(fixture.read("broken.pure"), broken_before);
+    match expected_diagnostic {
+        Some(diagnostic) => assert!(utf8(&output.stderr).contains(diagnostic)),
+        None => assert!(output.stderr.is_empty()),
+    }
+    assert_eq!(fixture.read("valid.pure"), FORMATTER_VALID_SOURCE);
+    assert_eq!(fixture.read("broken.pure"), FORMATTER_BROKEN_SOURCE);
 }
 
 #[test]
@@ -977,6 +1126,20 @@ impl Fixture {
 
     fn read(&self, relative: &str) -> String {
         fs::read_to_string(self.root.join(relative)).expect("read fixture")
+    }
+
+    fn assert_no_writer_artifacts(&self) {
+        for entry in fs::read_dir(&self.root).expect("read fixture directory") {
+            let entry = entry.expect("read fixture entry");
+            assert!(
+                !entry
+                    .file_name()
+                    .to_string_lossy()
+                    .contains("pure-analyzer"),
+                "writer artifact remained at {}",
+                entry.path().display()
+            );
+        }
     }
 }
 

@@ -1140,6 +1140,7 @@ dependencies = [
  "clap",
  "libpure",
  "pure-analyzer-render",
+ "rustix",
  "serde",
  "serde_json",
  "thiserror",

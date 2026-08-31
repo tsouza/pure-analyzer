@@ -105,6 +105,9 @@ percent-encoding = "2.3.2"
 # --- Parallelism (CLI multi-file processing) ---
 rayon = "1.12.0"
 
+# --- Portable filesystem syscalls (CLI transactional writes) ---
+rustix = { version = "1.1.4", default-features = false, features = ["fs", "std"] }
+
 # --- Benchmarking ---
 # default-features off: no plotters/gnuplot/rayon HTML-report tree, just the
 # cargo_bench_support harness `harness = false` benches need. A consumer that

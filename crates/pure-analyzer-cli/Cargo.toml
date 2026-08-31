@@ -31,3 +31,11 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 toml.workspace = true
+
+# A staged formatter write needs an atomic exchange rather than a plain rename:
+# it lets us inspect the exact destination entry displaced at the commit point
+# and restore an edit that raced the final stale-snapshot validation. rustix
+# exposes the Linux renameat2 and Apple renameatx_np exchange operations without
+# introducing unsafe code into this crate.
+[target.'cfg(any(target_os = "linux", target_vendor = "apple"))'.dependencies]
+rustix.workspace = true

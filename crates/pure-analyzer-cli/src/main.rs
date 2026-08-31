@@ -54,7 +54,8 @@ enum Command {
         /// PMCD JSON and/or Pure-model-file model sources; may repeat.
         #[arg(long)]
         model: Vec<String>,
-        /// Apply machine-applicable fixes transactionally in place.
+        /// Apply machine-applicable fixes transactionally in place where atomic path exchange is
+        /// available.
         #[arg(long)]
         fix: bool,
         /// Check whether `--fix` would change any input without writing.
@@ -67,7 +68,8 @@ enum Command {
         #[arg(long, requires = "fix", conflicts_with_all = ["check", "stdout"])]
         diff: bool,
     },
-    /// Canonical formatting through read-only modes.
+    /// Canonical formatting with transactional in-place file updates where atomic path exchange is
+    /// available.
     Fmt {
         /// Input files/globs; `-` reads one source from stdin.
         files: Vec<String>,
