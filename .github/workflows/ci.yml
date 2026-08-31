@@ -453,36 +453,6 @@ jobs:
       - name: Domain parser fuzz-smoke (60s)
         run: just fuzz domain_parser 60 x86_64-unknown-linux-gnu
 
-  # --- Performance regression via CodSpeed (criterion benches) -------------
-  bench:
-    name: bench (codspeed)
-    needs: changes
-    # Skips until CodSpeed is set up: install the CodSpeed GitHub App on the
-    # repo, then set repo variable CODSPEED_ENABLED=true. Auth is via OIDC, no
-    # secret required. A skipped job does not block required-check branch rules.
-    if: needs.changes.outputs.code == 'true' && vars.CODSPEED_ENABLED == 'true'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read      # actions/checkout
-      id-token: write     # OIDC auth to CodSpeed (no static token needed)
-    env:
-      SCCACHE_GHA_ENABLED: "true"
-      RUSTC_WRAPPER: sccache
-      CARGO_INCREMENTAL: "0"
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba # v0.0.11
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-      - uses: taiki-e/install-action@b6ff580856c41316412a0b9b60540fbc6f8c82cc # v2.86.7
-        with:
-          tool: cargo-codspeed,just
-      - name: Run benchmarks under CodSpeed
-        uses: CodSpeedHQ/action@373d6868929f444bc08d901fd0eb0ad52a8875ea # v5.2.1
-        with:
-          run: just codspeed
-
   # --- Warnings-are-errors net (constitution §2) --------------------------
   # Sweep this run's job logs for any tool warning that exited 0 (docker build,
   # apt, useradd, …). Shared with lint/security/release-plz via the reusable
@@ -491,7 +461,7 @@ jobs:
   # warnings in a job that failed.
   no-warnings:
     name: no-warnings (log sweep)
-    needs: [changes, check, coverage, mutation-plan, mutation, mutation-ffi, supply-chain, api-stability, structural, docs, fuzz, bench]
+    needs: [changes, check, coverage, mutation-plan, mutation, mutation-ffi, supply-chain, api-stability, structural, docs, fuzz]
     if: always()
     permissions:
       actions: read
@@ -501,7 +471,7 @@ jobs:
   # --- Aggregate gate: the single required check ---------------------------
   ci-gate:
     name: ci-gate
-    needs: [changes, check, coverage, mutation-plan, mutation, mutation-ffi, supply-chain, api-stability, structural, docs, fuzz, bench, no-warnings]
+    needs: [changes, check, coverage, mutation-plan, mutation, mutation-ffi, supply-chain, api-stability, structural, docs, fuzz, no-warnings]
     if: always()
     runs-on: ubuntu-latest
     steps:

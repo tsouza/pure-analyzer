@@ -280,14 +280,9 @@ real-model-infer-run:
 test-real-model: real-model-infer
     cargo xtask test-real-model
 
-# Criterion benchmarks. On CI these run under CodSpeed (see ci.yml).
+# Criterion benchmarks.
 bench:
     cargo bench --workspace
-
-# Build and run the workspace benchmarks under cargo-codspeed.
-codspeed:
-    cargo codspeed build --workspace
-    cargo codspeed run
 
 # ---------------------------------------------------------------------------
 # Coverage, supply-chain & API-stability gates
@@ -462,15 +457,14 @@ ci: no-work-ledger
 
 # The full local gate: every PR-blocking CI gate, chained in CI's job order,
 # fail-fast, reusing the same targets CI runs. Slow (coverage + mutation +
-# supply-chain + API snapshots + docs + scripts). Three CI gates are
-# environment-bound and cannot run faithfully here — the CodSpeed bench (needs
-# the CodSpeed service), the no-warnings log sweep (reads the run's own Actions
-# logs), and the fuzz-smoke (needs nightly for cargo-fuzz's sanitizers) — so they
-# are only enforced in CI. Run the relevant fuzz-smoke directly with `just fuzz <target>
+# supply-chain + API snapshots + docs + scripts). Two CI gates are
+# environment-bound and cannot run faithfully here — the no-warnings log sweep
+# (reads the run's own Actions logs) and the fuzz-smoke (needs nightly for
+# cargo-fuzz's sanitizers) — so they are only enforced in CI. Run the relevant fuzz-smoke directly with `just fuzz <target>
 # 60` if you have nightly. Use before a PR when a change touches what the fast
 # gate skips.
 ci-full: ci coverage test-mutation deny audit vet machete release-plz-check semver public-api sweep no-shell-scripts postponed-markers docs test-scripts lint-actions zizmor
-    @echo "ci-full: ran every locally reproducible PR gate; codspeed bench, the no-warnings log sweep, and the fuzz-smoke are enforced only in CI"
+    @echo "ci-full: ran every locally reproducible PR gate; the no-warnings log sweep and fuzz-smoke are enforced only in CI"
 
 # Install git hooks (managed by lefthook.yml). Also run automatically by the
 # `install-cargo-tools` onboarding step, so a fresh clone is never left unwired;

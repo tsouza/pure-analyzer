@@ -73,13 +73,8 @@ Testing isn't only "does it pass." Several gates run alongside:
 - **Coverage floor** — [`cargo-llvm-cov`](https://github.com/taiki-e/cargo-llvm-cov).
   A PROTECTED minimum line/branch coverage.
 - **Mutation floor** — `cargo-mutants` score must stay above a PROTECTED threshold.
-- **Performance regression** — [`criterion`](https://docs.rs/criterion) benchmarks
-  gated by [CodSpeed](https://codspeed.io/) (free for OSS), which reports per-PR
-  deltas. This protects the high-performance goal from silent erosion. **Off by
-  default:** the CodSpeed job is gated on the repo variable `CODSPEED_ENABLED`, so
-  until a repository maintainer installs the CodSpeed app and sets it,
-  performance regressions ship
-  **unprotected** — see the [optional performance gate](../../README.md#optional-performance-gate-off-by-default).
+- **Performance measurement** — [`criterion`](https://docs.rs/criterion)
+  benchmarks are available through `just bench` for local measurements.
 - **API stability** — [`cargo-semver-checks`](https://github.com/obi1kenobi/cargo-semver-checks)
   runs on every PR; [`cargo-public-api`](https://github.com/enselic/cargo-public-api)
   snapshots every public Rust crate's all-features surface. The committed

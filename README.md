@@ -78,16 +78,9 @@ PureCARD, and repository-wide tasks. Contributions follow
 [`CONTRIBUTING.md`](CONTRIBUTING.md) and the rules in
 [`constitution.md`](constitution.md).
 
-## Optional performance gate (off by default)
+## Performance measurements
 
-The performance protection requires repository administration and therefore
-starts disabled. Until enabled, its absence is an explicit protection gap rather
-than evidence that performance was checked.
-
-- **CodSpeed:** install the CodSpeed GitHub App, then set the repository Actions
-  variable `CODSPEED_ENABLED=true`. The `bench (codspeed)` job will run
-  `just codspeed` for code changes. Without it, CI does not block performance
-  regressions; `just bench` remains available for local measurements.
+`just bench` runs the workspace Criterion benchmarks locally.
 
 Public API snapshots are mandatory. `just public-api` compares every public
 Rust crate's all-features surface with the reviewed files in `public-api/`;

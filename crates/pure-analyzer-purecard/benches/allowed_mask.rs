@@ -1,5 +1,5 @@
 //! Per-step masking benchmarks (`docs/spec/architecture.md` §4, G3) — the shipped
-//! M5 performance baseline locked behind the CodSpeed regression guard.
+//! M5 performance baseline.
 //!
 //! The mask is consumed on the model's critical path — one call per generated
 //! token over a ~150k vocabulary — so it must never bottleneck the forward pass:
