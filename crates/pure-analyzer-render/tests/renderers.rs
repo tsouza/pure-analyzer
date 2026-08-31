@@ -192,7 +192,7 @@ fn assert_sarif_contract(sarif: &str) {
         "https://json.schemastore.org/sarif-2.1.0.json"
     );
     assert_eq!(log["version"], "2.1.0");
-    assert_eq!(log["runs"][0]["columnKind"], "utf8CodeUnits");
+    assert_eq!(log["runs"][0]["columnKind"], "unicodeCodePoints");
     assert_sarif_rule(&log["runs"][0]["tool"]["driver"]["rules"][0]);
     assert_sarif_result(&log["runs"][0]["results"][0]);
 }
@@ -223,7 +223,7 @@ fn assert_sarif_locations(result: &Value) {
     assert_sarif_region(
         &result["locations"][0]["physicalLocation"]["region"],
         (4, 1, 5),
-        (6, 1, 7),
+        (6, 1, 6),
     );
     assert_eq!(result["locations"][0]["message"]["text"], "query symbol");
     assert_eq!(result["relatedLocations"][0]["id"], 1);
@@ -234,7 +234,7 @@ fn assert_sarif_locations(result: &Value) {
     assert_sarif_region(
         &result["relatedLocations"][0]["physicalLocation"]["region"],
         (6, 1, 7),
-        (8, 1, 9),
+        (8, 1, 8),
     );
     assert_eq!(
         result["relatedLocations"][0]["message"]["text"],
@@ -246,7 +246,7 @@ fn assert_sarif_fix_and_metadata(result: &Value) {
     assert_sarif_region(
         &result["fixes"][0]["artifactChanges"][0]["replacements"][0]["deletedRegion"],
         (4, 1, 5),
-        (6, 1, 7),
+        (6, 1, 6),
     );
     assert_eq!(
         result["fixes"][0]["artifactChanges"][0]["replacements"][0]["insertedContent"]["text"],
@@ -411,22 +411,22 @@ fn fix_edits_use_canonical_order_in_every_format() {
 }
 
 #[test]
-fn sarif_declares_utf8_columns_for_unicode_locations_and_fixes() {
+fn sarif_declares_unicode_code_point_columns_for_locations_and_fixes() {
     let sources =
-        SourceStore::load([SourceInput::in_memory("unicode.pure", "aβ\n")]).expect("source loads");
+        SourceStore::load([SourceInput::in_memory("unicode.pure", "aβγ\n")]).expect("source loads");
     let diagnostics = vec![
         Diagnostic::builder(
             DiagCode::BadToken,
             Severity::Error,
             "unicode token",
-            Label::new(FileId::new(0), range(1, 3)),
+            Label::new(FileId::new(0), range(3, 5)),
         )
         .fix(Fix::model_dependent(
             "replace unicode token",
             vec![TextEdit {
                 file: FileId::new(0),
-                span: range(1, 3),
-                new_text: "γ".to_owned(),
+                span: range(3, 5),
+                new_text: "δ".to_owned(),
             }],
         ))
         .build(),
@@ -434,17 +434,17 @@ fn sarif_declares_utf8_columns_for_unicode_locations_and_fixes() {
 
     let sarif = render_sarif(RenderInput::new(&sources, &diagnostics)).expect("SARIF renders");
     let log: Value = serde_json::from_str(&sarif).expect("renderer output is SARIF JSON");
-    assert_eq!(log["runs"][0]["columnKind"], "utf8CodeUnits");
+    assert_eq!(log["runs"][0]["columnKind"], "unicodeCodePoints");
 
     assert_sarif_region(
         &log["runs"][0]["results"][0]["locations"][0]["physicalLocation"]["region"],
-        (1, 1, 2),
-        (3, 1, 4),
+        (3, 1, 3),
+        (5, 1, 4),
     );
     assert_sarif_region(
         &log["runs"][0]["results"][0]["fixes"][0]["artifactChanges"][0]["replacements"][0]["deletedRegion"],
-        (1, 1, 2),
-        (3, 1, 4),
+        (3, 1, 3),
+        (5, 1, 4),
     );
 }
 

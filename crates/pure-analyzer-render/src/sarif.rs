@@ -16,7 +16,7 @@ use crate::{
 
 const SARIF_SCHEMA: &str = "https://json.schemastore.org/sarif-2.1.0.json";
 const SARIF_VERSION: &str = "2.1.0";
-const SARIF_COLUMN_KIND: &str = "utf8CodeUnits";
+const SARIF_COLUMN_KIND: &str = "unicodeCodePoints";
 const PROJECT_URI: &str = "https://github.com/tsouza/pure-analyzer";
 const DOCUMENTATION_URI: &str = "https://github.com/tsouza/pure-analyzer/tree/main/docs";
 const ARTIFACT_PATH_ENCODE_SET: &AsciiSet = &NON_ALPHANUMERIC
@@ -318,7 +318,7 @@ fn sarif_artifact_change<'a>(edit: &PreparedEdit<'a>) -> SarifArtifactChange<'a>
             uri: artifact_uri(edit.source.name()),
         },
         replacements: vec![SarifReplacement {
-            deleted_region: sarif_region(edit.edit.span, edit.start, edit.end),
+            deleted_region: sarif_region(edit.source, edit.edit.span, edit.start, edit.end),
             inserted_content: SarifInsertedContent {
                 text: &edit.edit.new_text,
             },
@@ -348,7 +348,7 @@ fn physical_location(
         artifact_location: SarifArtifactLocation {
             uri: artifact_uri(source.name()),
         },
-        region: sarif_region(span, start, end),
+        region: sarif_region(source, span, start, end),
     }
 }
 
@@ -357,17 +357,30 @@ fn artifact_uri(name: &str) -> String {
     utf8_percent_encode(&normalized, ARTIFACT_PATH_ENCODE_SET).to_string()
 }
 
-fn sarif_region(span: TextRange, start: LineColumn, end: LineColumn) -> SarifRegion {
+fn sarif_region(
+    source: &SourceFile,
+    span: TextRange,
+    start: LineColumn,
+    end: LineColumn,
+) -> SarifRegion {
     let start_byte = u32::from(span.start());
     let end_byte = u32::from(span.end());
     SarifRegion {
         start_line: start.line,
-        start_column: start.column,
+        start_column: code_point_column(source, usize::from(span.start())),
         end_line: end.line,
-        end_column: end.column,
+        end_column: code_point_column(source, usize::from(span.end())),
         byte_offset: start_byte,
         byte_length: end_byte - start_byte,
     }
+}
+
+fn code_point_column(source: &SourceFile, offset: usize) -> usize {
+    let text = source.text();
+    // `PreparedInput` has already established that `offset` is a UTF-8 boundary.
+    let prefix = &text[..offset];
+    let line_start = prefix.rfind('\n').map_or(0, |newline| newline + 1);
+    text[line_start..offset].chars().count() + 1
 }
 
 const fn sarif_level(severity: Severity) -> &'static str {

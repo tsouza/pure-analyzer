@@ -25,7 +25,7 @@
           ]
         }
       },
-      "columnKind": "utf8CodeUnits",
+      "columnKind": "unicodeCodePoints",
       "results": [
         {
           "ruleId": "PUR2002",
@@ -43,7 +43,7 @@
                   "startLine": 1,
                   "startColumn": 5,
                   "endLine": 1,
-                  "endColumn": 7,
+                  "endColumn": 6,
                   "byteOffset": 4,
                   "byteLength": 2
                 }
@@ -64,7 +64,7 @@
                   "startLine": 1,
                   "startColumn": 7,
                   "endLine": 1,
-                  "endColumn": 9,
+                  "endColumn": 8,
                   "byteOffset": 6,
                   "byteLength": 2
                 }
@@ -90,7 +90,7 @@
                         "startLine": 1,
                         "startColumn": 5,
                         "endLine": 1,
-                        "endColumn": 7,
+                        "endColumn": 6,
                         "byteOffset": 4,
                         "byteLength": 2
                       },

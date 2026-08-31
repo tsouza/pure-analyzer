@@ -106,7 +106,7 @@ pub fn render_json(input: RenderInput<'_>) -> Result<String, RenderError> {
 
 /// Render findings as a SARIF 2.1.0 log.
 ///
-/// Regions use one-based UTF-8 code-unit columns and artifact locations use
+/// Regions use one-based Unicode code-point columns and artifact locations use
 /// percent-encoded URI paths.
 ///
 /// # Errors
