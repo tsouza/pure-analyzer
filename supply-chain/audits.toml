@@ -2,3 +2,24 @@
 # cargo-vet audits file
 
 [audits]
+
+[[trusted.errno]]
+criteria = "safe-to-deploy"
+user-id = 6825 # Dan Gohman (sunfishcode)
+start = "2023-08-29"
+end = "2027-08-31"
+notes = "Required transitively by rustix for the atomic write exchange."
+
+[[trusted.linux-raw-sys]]
+criteria = "safe-to-deploy"
+user-id = 6825 # Dan Gohman (sunfishcode)
+start = "2021-06-12"
+end = "2027-08-31"
+notes = "Generated Linux syscall bindings used transitively by rustix for atomic file exchange."
+
+[[trusted.rustix]]
+criteria = "safe-to-deploy"
+user-id = 6825 # Dan Gohman (sunfishcode)
+start = "2021-10-29"
+end = "2027-08-31"
+notes = "Provides the Linux and Apple atomic file-exchange primitive used by transactional formatter writes."
