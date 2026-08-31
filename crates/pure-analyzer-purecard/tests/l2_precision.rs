@@ -462,10 +462,73 @@ fn t7_keeps_a_projection_lambda_closer_on_a_class_typed_or_to_many_body() {
 /// own signature table, so each is masked on the Integer receiver while a
 /// type-agnostic step (`toOne`) stays admissible. `contains` is *not* masked:
 /// it matches the generic collection overload on any receiver (see
-/// `narrow::keeps_string_method`'s doc comment for the live evidence).
+/// `narrow::denied_string_method`'s doc comment for the live evidence).
 #[test]
 fn t4_masks_a_string_method_on_a_non_string_receiver() {
     assert_frozen("t4-string-method");
+}
+
+/// N3i, T4's co-tenant at the same position: a `RELATION_RECEIVER_METHODS`
+/// name is dead on a scalar-primitive receiver whatever its type class, on each
+/// of the four routes the overlay types one from — a completed string literal
+/// (`'car_makers'->`), a receiver-only builtin's fixed Boolean
+/// (`->isNotEmpty()->`) and Integer (`->count()->`) result, and a bare property
+/// navigation (`$x.maker->`).
+///
+/// Attested live on the pinned engine on every one of them before it was
+/// written: `tableToTDS(String[1])`, `restrict(Boolean[1],String[1])`,
+/// `renameColumns(Integer[1],String[1])`, `restrict(String[0..1],String[1])` —
+/// each answered with a candidate set every entry of which wants a relation or a
+/// store.
+#[test]
+fn n3i_masks_a_relation_method_on_a_scalar_receiver() {
+    assert_frozen("n3i-scalar-receiver-method");
+}
+
+/// N3i's soundness edge, the mirror of
+/// [`t4_keeps_every_string_method_on_a_string_receiver`]: the builtins a scalar
+/// primitive receiver really does admit stay admissible on one.
+///
+/// Streamed whole rather than probed one token at a time, because the rule's
+/// clear lands on the token that *closes* a denied name: a name that survives
+/// its own bytes proves nothing until its `(` is admitted too.
+///
+/// The list is not decorative — every call below came back **compiling** against
+/// the pinned engine on the receiver it is written on, including the four names
+/// whose arity, not whose receiver, is what the failing walks got wrong
+/// (`groupBy`, `project`, `limit`, `sort`). Masking any of them would be N3i
+/// over-reaching from an arity error into a receiver claim.
+#[test]
+fn n3i_keeps_a_receiver_generic_method_on_a_scalar_receiver() {
+    const EXTENT: &str = "|spider::car_1::model::default::CarMakers.all()";
+    // `agg` first: its arrow form is the exact construct the first revision of
+    // this rule masked, and the gold corpus writes its plain-function twin 2367
+    // times. `no_denied_name_is_one_the_corpus_writes_with_a_scalar_first_argument`
+    // is the gate that closes the class; this pins the instance beside its
+    // siblings, where the rule's own soundness edge is stated.
+    for tail in [
+        "->project('COUNT()'->agg(row: meta::pure::tds::TDSRow[1]|$row, \
+         y: meta::pure::tds::TDSRow[*]|$y->count()))",
+        "->project('car_makers'->substring(0,1))",
+        "->project('car_makers'->parseFloat())",
+        "->project('car_makers'->pair('_c1'))",
+        "->project('car_makers'->in(['_c1']))",
+        "->project('car_makers'->toOne())",
+        "->project('car_makers'->count())",
+        "->project('car_makers'->limit(1))",
+        "->project('car_makers'->sort())",
+        "->project('car_makers'->groupBy([x|$x],[],['_c1']))",
+        "->project('car_makers'->project([x|$x],['_c1']))",
+        "->isNotEmpty()->toString()",
+        "->isNotEmpty()->toOne()",
+        "->isNotEmpty()->in([true])",
+        "->count()->toString()",
+        "->count()->sort()",
+        "->filter(x|$x.maker->in(['_c1']))",
+        "->filter(x|$x.maker->toUpper()=='_c1')",
+    ] {
+        assert_streams_soundly_under_l2("car_1", &format!("{{{EXTENT}{tail}}}"));
+    }
 }
 
 /// T4's soundness edge: on a receiver the overlay types `String` — a
@@ -497,7 +560,7 @@ fn t4_keeps_every_string_method_on_a_string_receiver() {
     }
     // `contains` is unconstrained on a *non*-String receiver too — the generic
     // collection overload compiles there (live-attested; see
-    // `narrow::keeps_string_method`).
+    // `narrow::denied_string_method`).
     let numeric = "|spider::car_1::model::default::CarsData.all()->filter(x|$x.cylinders->";
     assert!(
         admissible_after("car_1", numeric, &[b"contains"])[0],
@@ -713,6 +776,12 @@ const FROZEN_FAMILIES: &[(&str, &str)] = &[
         "n3f-extent-method",
         "Phase 5 · bucket D — a builtin arrowed off a `Class.all()` extent whose \
          every overload wants a receiver a `T[*]` class collection cannot be",
+    ),
+    (
+        "n3i-scalar-receiver-method",
+        "Phase 10 · bucket D — a relation/store builtin arrowed off a receiver the \
+         overlay has typed a scalar primitive: a string literal, or a \
+         receiver-only builtin's fixed Boolean/Integer result",
     ),
     (
         "n3g-receiver-only-arg",
@@ -1063,6 +1132,51 @@ static FROZEN_KILLS: &[FrozenKill] = &[
             closed_by: "->",
         },
     },
+    // N3i's own two kills, taken verbatim from the live lane on this branch (the
+    // `car_1` exploration walks the phase set out to close), from the `{` their
+    // leading whitespace run opens.
+    FrozenKill {
+        fixture: "n3i-scalar-receiver-method",
+        db: "car_1",
+        closer: Closer::L2("ScalarMethod"),
+        kill: Kill::Walk {
+            walk: "{\n\n\n     \n         \n  \n      \n      \n        \n      \n \n          |spider::car_1::model::default::CarMakers.\nall(\n)->project('car_makers'->tableToTDS()=='ContId'+'Weight_T3'>limit|'MakeId_T2'||spider::car_1::model::default::CarMakers<'Weight_T4')!='europe'}",
+            closed_by: "(",
+        },
+    },
+    FrozenKill {
+        fixture: "n3i-scalar-receiver-method",
+        db: "car_1",
+        closer: Closer::L2("ScalarMethod"),
+        kill: Kill::Walk {
+            walk: "{ \n  \n      \n        |spider::car_1::model::default::CarMakers.\n      \n           all(\n  \n        )\n    ->isNotEmpty()->restrict('Horsepower_T2')=='Id_T2'&&'Accelerate_T2_2'==b||String}",
+            closed_by: "(",
+        },
+    },
+    // The two receiver routes the live walks above do not reach — a
+    // receiver-only builtin's fixed `Integer[1]` and a bare `String[0..1]`
+    // property navigation. Stated as walks rather than one-token probes because,
+    // like N3f's, the clear lands on the token that *closes* the denied name
+    // (`(`), never on the name itself.
+    FrozenKill {
+        fixture: "n3i-scalar-receiver-method",
+        db: "car_1",
+        closer: Closer::L2("ScalarMethod"),
+        kill: Kill::Walk {
+            walk: "{|spider::car_1::model::default::CarMakers.all()->count()->renameColumns('_c1')}",
+            closed_by: "(",
+        },
+    },
+    FrozenKill {
+        fixture: "n3i-scalar-receiver-method",
+        db: "car_1",
+        closer: Closer::L2("ScalarMethod"),
+        kill: Kill::Walk {
+            walk: "{|spider::car_1::model::default::CarMakers.all()\
+             ->filter(x|$x.maker->restrict('_c1'))}",
+            closed_by: "(",
+        },
+    },
     FrozenKill {
         fixture: "n3f-extent-method",
         db: "world_1",
@@ -1070,6 +1184,45 @@ static FROZEN_KILLS: &[FrozenKill] = &[
         kill: Kill::Walk {
             walk: "{|spider::world_1::model::default::Countrylanguage.all()\
              ->pair('LifeExpectancy_T3_1')!='GNP_T3_1'}",
+            closed_by: "(",
+        },
+    },
+    // The four names the same relation/store evidence adds to N3f's own deny set
+    // (`RELATION_RECEIVER_METHODS`), each refused live on a class extent with the
+    // relation-only candidate set named back.
+    FrozenKill {
+        fixture: "n3f-extent-method",
+        db: "world_1",
+        closer: Closer::L2("ExtentMethod"),
+        kill: Kill::Walk {
+            walk: "{|spider::world_1::model::default::Country.all()->extend('_c1')}",
+            closed_by: "(",
+        },
+    },
+    FrozenKill {
+        fixture: "n3f-extent-method",
+        db: "world_1",
+        closer: Closer::L2("ExtentMethod"),
+        kill: Kill::Walk {
+            walk: "{|spider::world_1::model::default::Country.all()->pivot('_c1')}",
+            closed_by: "(",
+        },
+    },
+    FrozenKill {
+        fixture: "n3f-extent-method",
+        db: "world_1",
+        closer: Closer::L2("ExtentMethod"),
+        kill: Kill::Walk {
+            walk: "{|spider::world_1::model::default::Country.all()->asOfJoin('_c1')}",
+            closed_by: "(",
+        },
+    },
+    FrozenKill {
+        fixture: "n3f-extent-method",
+        db: "world_1",
+        closer: Closer::L2("ExtentMethod"),
+        kill: Kill::Walk {
+            walk: "{|spider::world_1::model::default::Country.all()->olapGroupBy('_c1')}",
             closed_by: "(",
         },
     },
@@ -1997,7 +2150,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "t4-string-method",
         db: "car_1",
-        closer: Closer::L2("StringMethod"),
+        closer: Closer::L2("ScalarMethod"),
         kill: Kill::Probe {
             prefix: "|spider::car_1::model::default::CarsData.all()\
          ->project([x|$x.cylinders], ['Cylinders'])\
@@ -2009,7 +2162,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "t4-string-method",
         db: "car_1",
-        closer: Closer::L2("StringMethod"),
+        closer: Closer::L2("ScalarMethod"),
         kill: Kill::Probe {
             prefix: "|spider::car_1::model::default::CarsData.all()->filter(x|$x.cylinders->",
             real: "toOne",
@@ -2019,7 +2172,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
     FrozenKill {
         fixture: "t4-string-method",
         db: "car_1",
-        closer: Closer::L2("StringMethod"),
+        closer: Closer::L2("ScalarMethod"),
         kill: Kill::Probe {
             prefix: "|spider::car_1::model::default::CarsData.all()\
          ->filter(x|$x.cylinders->toOne()->",
@@ -2238,7 +2391,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
         closer: Closer::L2("LogicalOperand"),
         kill: Kill::Walk {
             walk: "{|spider::world_1::model::default::Country.all()\
-             ->extend('Percentage_T4_2'=='IndepYear_T1_1'&&'GNP_T1_3')}",
+             ->filter('Percentage_T4_2'=='IndepYear_T1_1'&&'GNP_T1_3')}",
             closed_by: "'GNP_T1_3'",
         },
     },
@@ -2278,7 +2431,7 @@ static FROZEN_KILLS: &[FrozenKill] = &[
         closer: Closer::L2("StrOperator"),
         kill: Kill::Walk {
             walk: "{|spider::world_1::model::default::Country.all()\
-             ->extend('Percentage_T4_2'=='IndepYear_T1_1'/'COUNT(DISTINCT Language)')}",
+             ->filter('Percentage_T4_2'=='IndepYear_T1_1'/'COUNT(DISTINCT Language)')}",
             closed_by: "/",
         },
     },
@@ -3251,7 +3404,7 @@ fn n4a_still_admits_what_a_table_result_really_accepts() {
 /// opens can never match:
 ///
 /// ```text
-/// {|…::Country.all()->extend('Percentage_T4_2'=='IndepYear_T1_1'&&'GNP_T1_3')}
+/// {|…::Country.all()->filter('Percentage_T4_2'=='IndepYear_T1_1'&&'GNP_T1_3')}
 ///     => and(Boolean[1],String[1])
 /// {|…::CarMakers.all()->filter(x|$x.country=='usa'||1930)}
 ///     => or(Boolean[1],Integer[1])
@@ -3288,7 +3441,7 @@ fn n4b_still_admits_every_operand_that_can_be_boolean() {
 /// ```text
 /// {|…::ModelList.all().fk3DefaultCarNames<='Id_T2'-'Maker_t1_1'}      minus(String[2])
 /// {|…::Countrylanguage.all()->isEmpty()>'LifeExpectancy'*'Continent…'} times(String[2])
-/// {|…::Country.all()->extend('Percentage_T4_2'=='IndepYear…'/'COUNT…')} divide(String[1],String[1])
+/// {|…::Country.all()->filter('Percentage_T4_2'=='IndepYear…'/'COUNT…')} divide(String[1],String[1])
 /// ```
 ///
 /// The first is the reassembly guard again, and lands on the operand rather than
@@ -3368,6 +3521,52 @@ fn n3f_forbids_a_stream_ending_on_a_denied_extent_method_name() {
         walk_may_end("world_1", &format!("{extent}->count")),
         "a name the rule does not deny keeps whatever completion L1 gives it"
     );
+}
+
+/// N3i's completion half, the twin of
+/// [`n3f_forbids_a_stream_ending_on_a_denied_extent_method_name`] one receiver
+/// category over: a stream may not *end* on a denied whole name at a scalar
+/// receiver either.
+///
+/// The same argument and the same mechanism — EOS is a name's closure by another
+/// route, so `admits_eos` clears it at a `SCALAR_DENY` terminal — and it needs
+/// its own fixture because the two rules read *different* tries: the extent's
+/// carries `sum`, `pair` and `agg`, this one must not, since all three compile on
+/// a scalar receiver.
+///
+/// Only the two **receiver-only-call** routes appear here, and their absence
+/// elsewhere is a fact about the grammar rather than an omission: the other two
+/// receivers a `ScalarMethod` arms on — a string literal and a property
+/// navigation — are reachable only *inside* a call or a lambda, so an
+/// L1-accepting stream that reaches one still owes a `)` and can never end at
+/// this position at all. The two counterfactuals are what make the denial this
+/// rule's doing and not L1's: a strict prefix is an open lexeme, and a name this
+/// rule does not deny keeps whatever completion L1 gives it.
+#[test]
+fn n3i_forbids_a_stream_ending_on_a_denied_scalar_method_name() {
+    const EXTENT: &str = "|spider::car_1::model::default::CarMakers.all()";
+    for receiver in [
+        format!("{EXTENT}->isNotEmpty()"),
+        format!("{EXTENT}->count()"),
+    ] {
+        assert!(
+            walk_may_end("car_1", &format!("{receiver}->res")),
+            "a strict prefix of a denied name is an open lexeme, not a denial"
+        );
+        for denied in ["restrict", "tableToTDS", "renameColumns"] {
+            assert!(
+                !walk_may_end("car_1", &format!("{receiver}->{denied}")),
+                "a stream may not end on the denied name {denied:?} after {receiver}"
+            );
+        }
+        for kept in ["count", "sum", "pair", "agg"] {
+            assert!(
+                walk_may_end("car_1", &format!("{receiver}->{kept}")),
+                "{kept:?} is legal on a scalar receiver and must keep whatever \
+                 completion L1 gives it after {receiver}"
+            );
+        }
+    }
 }
 
 /// N3f under a vocabulary that splits the step connector. Phase 4 found N3c had

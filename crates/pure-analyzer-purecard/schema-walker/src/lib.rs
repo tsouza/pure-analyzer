@@ -893,7 +893,7 @@ const COLLAPSE_STEP: &[u8] = b"toOne";
 /// the navigation and the comparator — `Class.all()->filter(a|$a.<member>->toOne()
 /// < <digit>)`, confirmed live against a real PMCD.
 ///
-/// The shape that fires T4 (`StringMethod`): the `->` after a resolved numeric
+/// The shape that fires T4 (`ScalarMethod`): the `->` after a resolved numeric
 /// member is the position where the overlay knows the receiver's type and
 /// masks the String-only methods, and no other recipe or random walk reaches
 /// it (issue #116 — the arrow-after-navigation shape needs the same alignment

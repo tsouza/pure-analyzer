@@ -404,8 +404,9 @@ pub enum L2Position {
     /// `removeDuplicates` and `fold` all compile here and appear in no corpus, so
     /// §4 forbids the allow-list that would mask them. What *is* closed is the
     /// complement this rule states: the names whose entire overload set demands a
-    /// relation/store or primitive-scalar receiver, which a class extent can never
-    /// present ([`EXTENT_INCOMPATIBLE_METHODS`]).
+    /// relation/store ([`RELATION_RECEIVER_METHODS`]) or extent-incompatible
+    /// ([`EXTENT_ONLY_DENIED_METHODS`]) first parameter, which a class extent can
+    /// never present.
     ///
     /// A denied name is cleared at the token that **closes its lexeme**, not at
     /// its first byte — `pair` must stay walkable as the live prefix of a longer
@@ -451,13 +452,24 @@ pub enum L2Position {
     /// element type is numeric; `min`/`max`/`count` are unconstrained (see
     /// `narrow::keeps_reducer`'s doc comment for the corpus evidence).
     Reducer(TypeClass),
-    /// T4: the method name after a `->` whose receiver the overlay has already
-    /// typed. The String-only builtins (`narrow::STRING_ONLY_METHODS`) are
-    /// legal only on a `String` receiver; every other type class rejects them
-    /// by signature. See `narrow::keeps_string_method` for the live evidence,
-    /// and [`arrow_receiver_type`](ScopeTracker::arrow_receiver_type) for the
-    /// three routes a receiver gets its type from.
-    StringMethod(TypeClass),
+    /// The method name after a `->` whose receiver the overlay has already typed
+    /// as a **scalar primitive** — the receiver-category position
+    /// [`ExtentMethod`](L2Position::ExtentMethod) is, one category over. See
+    /// [`arrow_receiver_type`](ScopeTracker::arrow_receiver_type) for the four
+    /// routes a receiver gets its type from.
+    ///
+    /// Two rules share it, because both are claims about the same receiver and
+    /// neither is a claim about the other's names:
+    ///
+    /// * **N3i** — a [`RELATION_RECEIVER_METHODS`] name is dead here whatever the
+    ///   type class is. A scalar primitive is no more a `TabularDataSet` than a
+    ///   class extent is. (The tag skips `N3h`: that letter belongs to the rule at
+    ///   the extent's own *argument* slot, N3f/N3g's direct successor at the same
+    ///   position, developed concurrently with this one.)
+    /// * **T4** — a String-only builtin (`narrow::STRING_ONLY_METHODS`) is legal
+    ///   only on a `String` receiver; every other type class rejects it by
+    ///   signature. See `narrow::keeps_scalar_method` for the live evidence.
+    ScalarMethod(TypeClass),
     /// N6: a relation-column string reference must name an emitted column.
     Column,
     /// N6 (arm-R): a *bare-ident* column access `$row.<Col>` on a relation row
@@ -510,86 +522,109 @@ pub(crate) const SOURCE_METHOD: &str = "all";
 /// about one method's signature, never about the set.
 pub(crate) const STORE_METHODS: &[(&str, usize)] = &[("tableReference", 2)];
 
-/// N3f's deny set: the vocabulary method names whose **every** overload demands a
-/// receiver category a class extent can never be ([`L2Position::ExtentMethod`]).
+/// The method names whose **every** engine overload declares a **relation or
+/// store** first parameter — a `TabularDataSet`, a `Relation<T>`, a `Database`
+/// or a `Table`.
 ///
-/// Read off the engine's own function registry, never invented. Asked for a name
-/// it cannot match, the compiler prints the whole candidate set it *could* have
-/// matched; for each name below not one candidate's receiver parameter admits the
-/// `T[*]` a `Class.all()` produces, so no argument list can rescue the call. Two
-/// receiver categories account for all of them:
+/// The *first parameter*, not "the receiver", and the precision is load-bearing:
+/// Pure's arrow sugar is `a->f(b, …)` ≡ `f(a, b, …)`, so a name is dead at a
+/// receiver exactly when no overload's **first** parameter admits it. Read off
+/// the engine's own function registry, never invented — asked for one of these
+/// names on a receiver it cannot match, the compiler prints back the whole
+/// candidate set it *could* have matched, and not one candidate's first
+/// parameter admits anything but a relation or a store:
+/// `asOfJoin(Relation<T>[1],…)`, `extend(Relation<T>[1]|TabularDataSet[1],…)`,
+/// `join(Relation<T>[1]|TabularDataSet[1],…)`,
+/// `olapGroupBy(TabularDataSet[1],…)`, `pivot(Relation<T>[1],…)`,
+/// `renameColumns(TabularDataSet[1],…)`, `restrict(TabularDataSet[1],String[*])`,
+/// `tableReference(Database[1],String[1],String[1])`, `tableToTDS(Table[1])`.
 ///
-/// * **relation / store** receivers — `agg(String[1]|FunctionDefinition<…>[1],…)`,
-///   `join(Relation<T>[1]|TabularDataSet[1],…)`,
-///   `renameColumns(TabularDataSet[1],…)`, `restrict(TabularDataSet[1],String[*])`,
-///   `tableReference(Database[1],String[1],String[1])`, `tableToTDS(Table[1])`;
-/// * **primitive scalar** receivers — `average(Float|Integer|Number[*])`,
+/// So the deny holds at **every** receiver category the overlay can recognize
+/// that is not one of those two, which is why one list serves both
+/// [`ExtentMethod`](L2Position::ExtentMethod) (a `T[*]` class extent) and
+/// [`ScalarMethod`](L2Position::ScalarMethod) (a typed scalar primitive). Each
+/// name was sent through the running engine on this branch against a class
+/// extent, a `String[1]` literal, a `String[0..1]` property navigation, a
+/// `Boolean[1]` and an `Integer[1]` before it was written down, and every one of
+/// the five answers named the same candidate set.
+///
+/// **`agg` is deliberately not here, and it is the reason this doc says "first
+/// parameter".** Its signature is `agg(String[1]|FunctionDefinition<…>[1],…)`,
+/// whose first parameter admits a `String[1]` — so `'COUNT()'->agg(map, reduce)`
+/// is the corpus's own `agg('COUNT()', map, reduce)` written the other way round,
+/// and it **compiles live**. A zero-argument probe (`'lit'->agg()`) answers with
+/// the full candidate set exactly as a genuinely receiver-incompatible name does,
+/// because the refusal there is about *arity*; probing the name is not enough,
+/// and
+/// `l2_soundness::no_denied_name_is_one_the_corpus_writes_with_a_scalar_first_argument`
+/// is the gate that says so mechanically, over the whole list at once. `agg`
+/// stays denied at the class extent only ([`EXTENT_ONLY_DENIED_METHODS`]).
+///
+/// Two neighbours are absent on §4's rule that the overlay invents no constraint
+/// the oracle does not state: `select` answers a bare `NullPointerException` and
+/// `distinct` a bare `RuntimeException: Not possible!`, neither of which names a
+/// candidate set. Four more are absent because they are *legal* — `project`,
+/// `groupBy`, `limit` and `sort` are generic over their receiver
+/// (`groupBy(K[*],Function<{K[1]->Any[*]}>[*],AggregateValue<K,V,U>[*],
+/// String[*])`) and compile live on a `String[1]` and a `Boolean[1]` alike once
+/// their argument list is right; the walks that fail on them fail on **arity**,
+/// which is not this rule's claim to make.
+///
+/// `narrow.rs` builds both rules' tries from this list, and the corpus gate above
+/// reads it directly — hence the `#[doc(hidden)] pub` promotion re-exported at
+/// `schema::mod`, on the same terms as [`L2Position`]'s.
+#[doc(hidden)]
+pub const RELATION_RECEIVER_METHODS: &[&str] = &[
+    "asOfJoin",
+    "extend",
+    "join",
+    "olapGroupBy",
+    "pivot",
+    "renameColumns",
+    "restrict",
+    "tableReference",
+    "tableToTDS",
+];
+
+/// The method names a **class extent** can present no first parameter for, but a
+/// **scalar** can — so N3f denies them and N3i must not.
+///
+/// Read off the registry the same way [`RELATION_RECEIVER_METHODS`] is, and the
+/// operative property is uniform even though two different signature shapes
+/// produce it:
+///
+/// * twelve want a **primitive scalar** — `average(Float|Integer|Number[*])`,
 ///   `between(StrictDate|DateTime|Number|String[0..1],…)`,
 ///   `endsWith(String[…],String[1])`, `in(Any[1]|Any[0..1],Any[*])`,
 ///   `pair(U[1],V[1])`, `parseFloat(String[1])`,
 ///   `startsWith(String[…],String[1])`, `substring(String[1],…)`,
 ///   `sum(Float|Integer|Number[*])`, `toLower(String[1])`, `toString(Any[1])`,
-///   `year(Date[1]|Date[0..1])`.
+///   `year(Date[1]|Date[0..1])`. Every one compiles live on a `String[1]`
+///   (`'car_makers'->substring(0,1)`, `->pair('a')`, `->in(['a'])`);
+/// * `agg` wants a **column name**, `agg(String[1]|FunctionDefinition<…>[1],…)`.
+///   A `T[*]` class extent is neither, so N3f's refusal
+///   (`agg(CarMakers[*],String[1])`) stands — but a `String[1]` is the first
+///   alternative outright. `'COUNT()'->agg(row: TDSRow[1]|$row, y: TDSRow[*]|
+///   $y->count())` compiles live against the pinned stack, and it is the arrow
+///   spelling of a shape the gold corpus writes **2367** times.
 ///
-/// A class extent is neither, which is the whole rule — and why this is a
-/// *deny* set rather than the permit set N3c gets for the store arm. There is no
-/// closed permit set to have: `at`, `drop`, `slice`, `add`, `init`, `tail`,
-/// `first`, `last`, `removeDuplicates`, `reverse` and `fold` all compile on a
-/// class extent while appearing nowhere in the corpus, so an allow-list built
-/// from corpus names would mask eleven legal collection builtins. Every entry
-/// here was sent through the running engine on this branch first, at zero, one
-/// and two literal arguments and with a lambda, before it was written down.
-///
-/// `pub(crate)` so `narrow.rs` builds the rule's trie from the same list.
-pub(crate) const EXTENT_INCOMPATIBLE_METHODS: &[&str] = &[
+/// `pub(crate)` so `narrow.rs` builds N3f's trie from the same list.
+pub(crate) const EXTENT_ONLY_DENIED_METHODS: &[&str] = &[
     "agg",
     "average",
     "between",
     "endsWith",
     "in",
-    "join",
     "pair",
     "parseFloat",
-    "renameColumns",
-    "restrict",
     "startsWith",
     "substring",
     "sum",
-    "tableReference",
-    "tableToTDS",
     "toLower",
     "toString",
     "year",
 ];
 
-/// N3g's set: the builtins whose **entire** engine overload set is
-/// receiver-only, so an arrow call of one takes no further argument
-/// ([`L2Position::ReceiverOnlyArg`]).
-///
-/// Read off the engine's own registry, exactly as N3f's deny set is. Asked for
-/// one of these names with an argument, the compiler prints back the complete
-/// candidate list it *could* have matched, and every candidate has arity one —
-/// the receiver:
-///
-/// * `count(Any[*]):Integer[1]`;
-/// * `isEmpty(Any[0..1]):Boolean[1]`, `isEmpty(Any[*]):Boolean[1]`;
-/// * `isNotEmpty(Any[0..1]):Boolean[1]`, `isNotEmpty(Any[*]):Boolean[1]`;
-/// * `size(Relation<T>[1]):Integer[1]`, `size(Any[*]):Integer[1]`;
-/// * `toOne(T[*]):T[1]`.
-///
-/// The receiver parameter is `Any`/`T`, so the arity is a fact about the name
-/// alone and not about what it is arrowed off — live-confirmed on a class
-/// extent, a `TableTDS`, a primitive collection and a `filter` result alike. The
-/// corpus agrees and adds nothing: across the 5034 gold queries these names are
-/// called 3048 times and **never** with an argument.
-///
-/// Names the engine would not adjudicate are left out rather than guessed:
-/// `->distinct('x')` answers `RuntimeException: Not possible!` with no candidate
-/// list, so `distinct` is not here (§4 — invent no constraint the oracle does
-/// not state), and `sort` is excluded outright, taking a comparator argument in
-/// all 1048 of its corpus calls.
-///
-/// `pub(crate)` so `narrow.rs` and the tracker share one list.
 pub(crate) const RECEIVER_ONLY_METHODS: &[&str] =
     &["count", "isEmpty", "isNotEmpty", "size", "toOne"];
 
@@ -688,9 +723,48 @@ const TYPED_ACCESSORS: &[(&str, TypeClass)] = &[
 /// occurrences).
 const TYPE_PRESERVING_METHODS: &[&str] = &["toOne"];
 
+/// The return type each [`RECEIVER_ONLY_METHODS`] entry that is *not* type-
+/// preserving fixes by its own signature, independent of what it is arrowed off.
+///
+/// N3g already establishes that these names' entire overload set takes the
+/// receiver and nothing else; each of those overloads also declares one fixed
+/// return: `count(Any[*]):Integer[1]` and `size(…):Integer[1]`,
+/// `isEmpty(…):Boolean[1]` and `isNotEmpty(…):Boolean[1]`. So the receiver
+/// cannot vary the answer, which is exactly what makes this readable off the
+/// name alone — the same argument N3g's arity rests on, one column over.
+///
+/// Live-attested on the pinned engine through the type errors the *next* step
+/// then reports: `Class.all()->isNotEmpty()->toLower()` is refused as
+/// `toLower(Boolean[1])` and `->count()->toUpper()` as `toUpper(Integer[1])`,
+/// while `->count()->toString()`, `->count()->in([1])` and
+/// `->isNotEmpty()->toOne()` all compile.
+///
+/// [`RECEIVER_ONLY_METHODS`]'s fifth entry, `toOne`, is absent because it is a
+/// [`TYPE_PRESERVING_METHODS`] entry instead — its return is the receiver, not a
+/// constant — and [`call_return_type`](ScopeTracker::call_return_type) reads that
+/// table first. Between the two, every receiver-only builtin's return type is
+/// now stated exactly once.
+const RECEIVER_ONLY_RETURNS: &[(&str, TypeClass)] = &[
+    ("count", TypeClass::Numeric),
+    ("isEmpty", TypeClass::Boolean),
+    ("isNotEmpty", TypeClass::Boolean),
+    ("size", TypeClass::Numeric),
+];
+
 /// `name`'s fixed return type if it is a [`TYPED_ACCESSORS`] entry.
 fn accessor_return_type(name: &str) -> Option<TypeClass> {
-    TYPED_ACCESSORS
+    fixed_return_type(TYPED_ACCESSORS, name)
+}
+
+/// `name`'s fixed return type if it is a [`RECEIVER_ONLY_RETURNS`] entry.
+fn receiver_only_return_type(name: &str) -> Option<TypeClass> {
+    fixed_return_type(RECEIVER_ONLY_RETURNS, name)
+}
+
+/// `name`'s entry in a `(method, return type)` table — the lookup both fixed
+/// return-type tables share (constitution §4).
+fn fixed_return_type(table: &[(&str, TypeClass)], name: &str) -> Option<TypeClass> {
+    table
         .iter()
         .find(|(method, _)| *method == name)
         .map(|(_, tc)| *tc)
@@ -803,8 +877,9 @@ pub(crate) struct ScopeTracker {
     /// legal only for that type.
     awaiting_reducer: Option<TypeClass>,
     /// The type class of the call that just closed, when the overlay can read it
-    /// off the method's own signature — a [`TYPED_ACCESSORS`] getter, or a
-    /// [`TYPE_PRESERVING_METHODS`] step over an already-typed receiver. This is
+    /// off the method's own signature — a [`TYPED_ACCESSORS`] getter, a
+    /// [`RECEIVER_ONLY_RETURNS`] builtin, or a [`TYPE_PRESERVING_METHODS`] step
+    /// over an already-typed receiver. This is
     /// what makes T4 reach *past* a call: [`last_nav`](Self::last_nav) is set by
     /// a property name and cleared by the very next token, so it is `None` by
     /// the time a `)` closes.
@@ -818,7 +893,8 @@ pub(crate) struct ScopeTracker {
     /// (`getInteger(…) == '2'`, 20; `getString(…) == 5`, 2;
     /// `getBoolean(…) == 1`, 3 — all of which T1 would mask). A SQL-derived
     /// model declares column types the engine then coerces; only the *method
-    /// signature* lever survives that, so only T4 reads this. It is also the
+    /// signature* lever survives that, so only
+    /// [`ScalarMethod`](L2Position::ScalarMethod) reads this. It is also the
     /// wrong shape for T6: a getter's declared multiplicity is not tracked here
     /// at all, so reporting one as a `NavResult` would assert a scalar-ness
     /// this field never establishes.
@@ -829,11 +905,11 @@ pub(crate) struct ScopeTracker {
     /// [`pending_arrow_receiver`](Self::pending_arrow_receiver), and consumed at
     /// the same place.
     pending_arrow_type: Option<TypeClass>,
-    /// T4 is armed: a `->` was just seen on a receiver whose type class the
-    /// overlay knows, so the next identifier is a method name whose legality
-    /// depends on that type. Consumed one token later, exactly like
-    /// [`awaiting_reducer`](Self::awaiting_reducer).
-    awaiting_string_method: Option<TypeClass>,
+    /// [`ScalarMethod`](L2Position::ScalarMethod) is armed: a `->` was just seen
+    /// on a receiver whose type class the overlay knows, so the next identifier
+    /// is a method name whose legality depends on that type. Consumed one token
+    /// later, exactly like [`awaiting_reducer`](Self::awaiting_reducer).
+    awaiting_scalar_method: Option<TypeClass>,
     /// Per-open-delimiter return type of the call that delimiter opened, pushed
     /// and popped in lockstep with [`paren_receiver`](Self::paren_receiver) so a
     /// nested call cannot hand its own type to the enclosing one.
@@ -1270,7 +1346,7 @@ impl ScopeTracker {
             self.awaiting_reducer = None;
             self.awaiting_store_method = false;
             self.awaiting_extent_method = false;
-            self.awaiting_string_method = None;
+            self.awaiting_scalar_method = None;
         }
         // T4's post-call type likewise lives exactly one non-whitespace token past
         // the close that set it — long enough for the `->` that reads it, never
@@ -1512,7 +1588,7 @@ impl ScopeTracker {
         // method-name position one token on, and by that method's own call if it
         // is type-preserving.
         self.pending_arrow_type = self.arrow_receiver_type();
-        self.awaiting_string_method = self.pending_arrow_type;
+        self.awaiting_scalar_method = self.pending_arrow_type;
         // The arrow ends the current navExpr; capture the receiver for a possible
         // following method lambda, then reset the nav cursor.
         let receiver = self
@@ -1525,19 +1601,25 @@ impl ScopeTracker {
         self.last_ident = None;
     }
 
-    /// The type class of the navExpr an arrow is being applied to, on the three
-    /// routes the corpus actually produces one (§6.6 T4):
+    /// The type class of the navExpr an arrow is being applied to, on the four
+    /// routes the overlay can read one from
+    /// ([`ScalarMethod`](L2Position::ScalarMethod)):
     ///
-    /// * a completed [`TYPED_ACCESSORS`] call — `$row.getString('name')->…`,
-    ///   read from [`last_call_type`](Self::last_call_type);
+    /// * a completed **string literal** — `'car_makers'->…`, read from
+    ///   [`awaiting_str_operator`](Self::awaiting_str_operator), the same arming
+    ///   N4c reads off the same literal;
+    /// * a completed [`TYPED_ACCESSORS`] or [`RECEIVER_ONLY_RETURNS`] call —
+    ///   `$row.getString('name')->…`, `Class.all()->isNotEmpty()->…`, read from
+    ///   [`last_call_type`](Self::last_call_type);
     /// * a bare primitive property navigation — `$x.name->…`, read from
     ///   [`last_nav`](Self::last_nav);
-    /// * a [`TYPE_PRESERVING_METHODS`] step over either — `$x.name->toOne()->…`,
-    ///   which reaches this through `last_call_type` again.
+    /// * a [`TYPE_PRESERVING_METHODS`] step over any of those —
+    ///   `$x.name->toOne()->…`, which reaches this through `last_call_type` again.
     ///
-    /// The call route takes precedence: where both are set the call is the more
-    /// recent navExpr, and `last_nav` is stale by construction (it survives
-    /// exactly one token, so any accessor call has already outlived it).
+    /// The literal route outranks both, and the call route outranks the
+    /// navigation: each is the more recent navExpr where two are set at once, and
+    /// the older arming is stale by construction (both survive exactly one token,
+    /// so a literal or an accessor call has already outlived what preceded it).
     ///
     /// [`NavResult::NonScalar`] yields nothing, on purpose. It covers two
     /// shapes — a class-typed step, which has no primitive type class at all,
@@ -1548,6 +1630,9 @@ impl ScopeTracker {
     /// on evidence T4 never gathered. T4 narrows only where the type class is
     /// the whole reason, and leaves the rest to the compiler oracle.
     fn arrow_receiver_type(&self) -> Option<TypeClass> {
+        if self.awaiting_str_operator {
+            return Some(TypeClass::Str);
+        }
         self.last_call_type.or(match self.last_nav {
             Some(NavResult::Scalar(tc)) => Some(tc),
             Some(NavResult::NonScalar) | None => None,
@@ -1561,7 +1646,7 @@ impl ScopeTracker {
         if TYPE_PRESERVING_METHODS.contains(&method) {
             return receiver;
         }
-        accessor_return_type(method)
+        accessor_return_type(method).or_else(|| receiver_only_return_type(method))
     }
 
     fn on_pipe(&mut self, pre_state: State) {
@@ -1958,9 +2043,9 @@ impl ScopeTracker {
             // stronger claim. The two are in fact disjoint — a reducer arrow
             // follows a refVar, never a completed navExpr — so the order only
             // fixes the reading, it does not decide any real position.
-            State::AfterArrow => match (self.awaiting_reducer, self.awaiting_string_method) {
+            State::AfterArrow => match (self.awaiting_reducer, self.awaiting_scalar_method) {
                 (Some(tc), _) => L2Position::Reducer(tc),
-                (None, Some(tc)) => L2Position::StringMethod(tc),
+                (None, Some(tc)) => L2Position::ScalarMethod(tc),
                 (None, None) => L2Position::None,
             },
             _ => L2Position::None,
