@@ -63,6 +63,17 @@ fn source_request(jobs: usize) -> SourceRequest {
     .with_jobs(jobs)
 }
 
+#[test]
+fn source_request_exposes_complete_input_sequence_in_request_order() {
+    let inputs = vec![
+        SourceInput::in_memory("first.pure", "first()"),
+        SourceInput::stdin("second()"),
+    ];
+    let request = SourceRequest::new(inputs.clone());
+
+    assert_eq!(request.sources(), inputs.as_slice());
+}
+
 fn lint_request(jobs: usize) -> LintRequest {
     LintRequest::new(
         SourceRequest::new([
