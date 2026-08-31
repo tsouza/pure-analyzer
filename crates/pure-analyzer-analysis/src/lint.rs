@@ -820,6 +820,37 @@ Class model::Source
     }
 
     #[test]
+    fn latest_fix_targets_the_specific_generated_navigation_in_a_chain() {
+        let model = chained_milestoning_graph();
+        let source = "model::Source.all()->filter(x| $x.first(%latest).zero().next())";
+        let findings = milestoning_diagnostics(source, Some(&model));
+
+        assert_eq!(findings.len(), 1);
+        let fix = findings[0]
+            .fix
+            .as_ref()
+            .expect("the final generated navigation needs a fix");
+        assert_eq!(fix.edits.len(), 1);
+
+        let insertion = source
+            .find(".next()")
+            .expect("fixture has the final generated navigation")
+            + ".next(".len();
+        let edit = &fix.edits[0];
+        assert_eq!(usize::from(edit.span.start()), insertion);
+        assert_eq!(edit.span.start(), edit.span.end());
+        assert_eq!(edit.new_text, LATEST_ARGUMENT);
+
+        let mut fixed = source.to_owned();
+        fixed.insert_str(insertion, &edit.new_text);
+        assert_eq!(
+            fixed,
+            "model::Source.all()->filter(x| $x.first(%latest).zero().next(%latest))"
+        );
+        assert!(milestoning_diagnostics(&fixed, Some(&model)).is_empty());
+    }
+
+    #[test]
     fn navigation_lint_pass_name_is_stable() {
         assert_eq!(NavigationLintPass.name(), "navigation-lints");
     }
