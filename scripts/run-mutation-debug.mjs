@@ -12,6 +12,8 @@ import {
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { notice } from "./lib/ci.mjs";
+
 export const SNAPSHOT_INTERVAL_MS = 15_000;
 export const SNAPSHOT_TIMEOUT_MS = 10_000;
 export const DIAGNOSTIC_COMMAND_TIMEOUT_MS = 3_000;
@@ -558,10 +560,12 @@ export class MutationRunner {
     try {
       const result = await completion;
       if (result.aborted)
-        console.error(`snapshot ${reason} stopped before completion`);
+        notice(
+          `optional mutation diagnostic snapshot ${reason} stopped before completion`,
+        );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      console.error(`snapshot ${reason} failed: ${message}`);
+      notice(`optional mutation diagnostic snapshot ${reason} failed: ${message}`);
     }
     return true;
   }
@@ -950,10 +954,10 @@ export class MutationRunner {
       return true;
     } catch (error) {
       if (error instanceof DiagnosticAbortError) {
-        console.error(`${label} stopped before completion`);
+        notice(`optional mutation diagnostic ${label} stopped before completion`);
       } else {
         const message = error instanceof Error ? error.message : String(error);
-        console.error(`${label} failed: ${message}`);
+        notice(`optional mutation diagnostic ${label} failed: ${message}`);
       }
       return false;
     } finally {

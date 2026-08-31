@@ -112,6 +112,35 @@ test("bounds a snapshot that does not cooperate with its abort signal", async ()
   expect(coordinator.active).toBeFalse();
 });
 
+test("reports optional postmortem aborts and failures without failing the runner", async () => {
+  const runner = new MutationRunner(parseInvocation(["ffi"]));
+  const messages = [];
+  const originalError = console.error;
+  console.error = (message) => messages.push(message);
+
+  try {
+    await expect(
+      runner.runPostmortem("file inventory", async () => {
+        throw new Error("inventory unavailable");
+      }),
+    ).resolves.toBeFalse();
+
+    const aborted = runner.runPostmortem(
+      "telemetry",
+      async () => new Promise(() => {}),
+    );
+    runner.abortDiagnostics();
+    await expect(aborted).resolves.toBeFalse();
+  } finally {
+    console.error = originalError;
+  }
+
+  expect(messages).toEqual([
+    "optional mutation diagnostic file inventory failed: inventory unavailable",
+    "optional mutation diagnostic telemetry stopped before completion",
+  ]);
+});
+
 test("cleans the cgroup before awaiting optional postmortem work", async () => {
   const runner = new MutationRunner(parseInvocation(["ffi"]));
   const events = [];
