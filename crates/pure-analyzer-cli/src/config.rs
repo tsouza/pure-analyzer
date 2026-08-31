@@ -380,6 +380,14 @@ impl ResolvedConfig {
         self.policy(false)
     }
 
+    /// Compile the global diagnostic policy for formatter recovery diagnostics.
+    ///
+    /// Formatter diagnostics follow the configured select, ignore, deny, and
+    /// warn rules, but validation-only strictness does not apply to formatting.
+    pub(crate) fn format_policy(&self) -> Result<DiagnosticPolicy, ConfigError> {
+        self.lint_policy()
+    }
+
     fn policy(&self, warnings_as_errors: bool) -> Result<DiagnosticPolicy, ConfigError> {
         let selected = expand_patterns(&self.lint.select)?;
         let ignored = expand_patterns(&self.lint.ignore)?;

@@ -1137,10 +1137,9 @@ dependencies = [
 name = "pure-analyzer-cli"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "clap",
  "libpure",
- "pure-analyzer-diagnostics",
+ "pure-analyzer-render",
  "serde",
  "serde_json",
  "thiserror",

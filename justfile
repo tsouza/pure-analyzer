@@ -77,6 +77,14 @@ test-unit:
 test-parser:
     cargo nextest run -p pure-analyzer-parser
 
+# Run the CLI's focused process-boundary workflow suite.
+test-cli:
+    cargo nextest run -p pure-analyzer-cli
+
+# Run the libpure facade's focused driver contracts.
+test-libpure:
+    cargo nextest run -p libpure
+
 # Replay the frozen Legend parser corpus without a running engine.
 parser-differential-verify:
     cargo xtask parser-differential

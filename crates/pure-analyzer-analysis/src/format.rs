@@ -4,6 +4,8 @@ use pure_analyzer_diagnostics::{Diagnostic, FileId};
 use pure_analyzer_parser::parse_query;
 use pure_analyzer_syntax::{BuildError, GreenElement, GreenNode, SyntaxKind};
 
+const UNLIMITED_LINE_WIDTH: usize = usize::MAX;
+
 /// Result of formatting one query without consulting a model or filesystem.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FormatResult {
@@ -36,8 +38,20 @@ impl FormatResult {
 /// Parsing is deliberately recovery-tolerant: syntax diagnostics are returned
 /// alongside formatted text, and opaque islands are copied byte-for-byte.
 pub fn format_query(source: &str, file: FileId) -> Result<FormatResult, BuildError> {
+    format_query_with_width(source, file, UNLIMITED_LINE_WIDTH)
+}
+
+/// Format M3 query source with a preferred maximum line width.
+///
+/// Lines wrap only at whitespace boundaries introduced by canonical layout.
+/// Tokens and opaque islands that exceed `line_width` remain intact.
+pub fn format_query_with_width(
+    source: &str,
+    file: FileId,
+    line_width: usize,
+) -> Result<FormatResult, BuildError> {
     let parsed = parse_query(source, file)?;
-    let mut formatter = LayoutFormatter::new(source, island_ranges(&parsed.green));
+    let mut formatter = LayoutFormatter::new(source, island_ranges(&parsed.green), line_width);
     for token in parsed.green.tokens() {
         formatter.token(token.kind(), token.text(), token.text_range());
     }
@@ -73,10 +87,15 @@ struct LayoutFormatter<'source> {
     brackets: Vec<bool>,
     braces: usize,
     line_start: bool,
+    line_width: usize,
 }
 
 impl<'source> LayoutFormatter<'source> {
-    fn new(source: &'source str, mut islands: Vec<pure_analyzer_syntax::TextRange>) -> Self {
+    fn new(
+        source: &'source str,
+        mut islands: Vec<pure_analyzer_syntax::TextRange>,
+        line_width: usize,
+    ) -> Self {
         islands.sort_by_key(|range| range.start());
         Self {
             source,
@@ -88,6 +107,7 @@ impl<'source> LayoutFormatter<'source> {
             brackets: Vec::new(),
             braces: 0,
             line_start: true,
+            line_width,
         }
     }
 
@@ -102,21 +122,21 @@ impl<'source> LayoutFormatter<'source> {
             return;
         }
         if kind == SyntaxKind::LINE_COMMENT {
-            self.space_if_needed();
+            self.whitespace_before(text.chars().count());
             self.output.push_str(text);
             self.newline();
             self.previous = Some(kind);
             return;
         }
         if kind == SyntaxKind::BLOCK_COMMENT {
-            self.space_if_needed();
+            self.whitespace_before(text.chars().count());
             self.output.push_str(text);
             self.previous = Some(kind);
             return;
         }
         match kind {
             SyntaxKind::PAREN_OPEN => {
-                self.write_before(kind);
+                self.write_before(kind, text.chars().count());
                 self.output.push_str(text);
                 self.parens = self.parens.saturating_add(1);
             }
@@ -126,7 +146,7 @@ impl<'source> LayoutFormatter<'source> {
                 self.parens = self.parens.saturating_sub(1);
             }
             SyntaxKind::BRACKET_OPEN => {
-                self.write_before(kind);
+                self.write_before(kind, text.chars().count());
                 self.output.push_str(text);
                 self.brackets.push(self.previous == Some(SyntaxKind::TILDE));
             }
@@ -139,7 +159,7 @@ impl<'source> LayoutFormatter<'source> {
                 self.output.push_str(text);
             }
             SyntaxKind::BRACE_OPEN => {
-                self.write_before(kind);
+                self.write_before(kind, text.chars().count());
                 self.output.push_str(text);
                 self.braces = self.braces.saturating_add(1);
             }
@@ -154,8 +174,6 @@ impl<'source> LayoutFormatter<'source> {
                 if self.brackets.last() == Some(&true) {
                     self.newline();
                     self.indent();
-                } else {
-                    self.output.push(' ');
                 }
             }
             SyntaxKind::SEMICOLON => {
@@ -176,7 +194,7 @@ impl<'source> LayoutFormatter<'source> {
                 self.output.push_str(text);
             }
             _ => {
-                self.write_before(kind);
+                self.write_before(kind, text.chars().count());
                 self.output.push_str(text);
             }
         }
@@ -193,10 +211,18 @@ impl<'source> LayoutFormatter<'source> {
         if range.start() != island.start() {
             return false;
         }
-        self.write_before(SyntaxKind::HASH);
+        let island_start = usize::from(island.start());
+        let island_end = usize::from(island.end());
+        let island_width = self
+            .source
+            .get(island_start..island_end)
+            .unwrap_or_default()
+            .chars()
+            .count();
+        self.write_before(SyntaxKind::HASH, island_width);
         self.output.push_str(
             self.source
-                .get(usize::from(island.start())..usize::from(island.end()))
+                .get(island_start..island_end)
                 .unwrap_or_default(),
         );
         self.island_index = self.island_index.saturating_add(1);
@@ -211,15 +237,32 @@ impl<'source> LayoutFormatter<'source> {
             .and_then(|index| self.islands.get(index))
             .is_some_and(|island| range.start() >= island.start() && range.end() <= island.end())
     }
-    fn write_before(&mut self, kind: SyntaxKind) {
+    fn write_before(&mut self, kind: SyntaxKind, token_width: usize) {
         if needs_space(self.previous, kind) {
-            self.space_if_needed();
+            self.whitespace_before(token_width);
         }
     }
-    fn space_if_needed(&mut self) {
+    fn whitespace_before(&mut self, token_width: usize) {
         if !self.line_start && !self.output.ends_with(char::is_whitespace) {
-            self.output.push(' ');
+            if self
+                .current_column()
+                .saturating_add(1)
+                .saturating_add(token_width)
+                > self.line_width
+            {
+                self.newline();
+                self.indent();
+            } else {
+                self.output.push(' ');
+            }
         }
+    }
+    fn current_column(&self) -> usize {
+        self.output
+            .rsplit_once('\n')
+            .map_or(self.output.as_str(), |(_, line)| line)
+            .chars()
+            .count()
     }
     fn trim_space(&mut self) {
         while self.output.ends_with(' ') {
@@ -349,9 +392,49 @@ mod tests {
         );
     }
     #[test]
+    fn line_width_wraps_at_layout_whitespace_without_splitting_tokens() {
+        let source = "function(firstArgument,secondArgument,thirdArgument)";
+        let wide = format_query_with_width(source, FileId::new(3), 80)
+            .expect("fixture must remain representable");
+        let narrow = format_query_with_width(source, FileId::new(3), 30)
+            .expect("fixture must remain representable");
+
+        assert_eq!(
+            wide.text(),
+            "function(firstArgument, secondArgument, thirdArgument)\n"
+        );
+        assert_eq!(
+            narrow.text(),
+            "function(firstArgument,\n        secondArgument,\n        thirdArgument)\n"
+        );
+        assert_eq!(
+            non_whitespace_tokens(source),
+            non_whitespace_tokens(narrow.text())
+        );
+        assert_eq!(
+            format_query_with_width(narrow.text(), FileId::new(3), 30)
+                .expect("formatted fixture must remain representable")
+                .text(),
+            narrow.text()
+        );
+    }
+    #[test]
+    fn line_width_keeps_opaque_islands_indivisible() {
+        let island = "#{  opaque content that is intentionally wide  }#";
+        let source = format!("function(firstArgument,{island},last)");
+        let formatted = format_query_with_width(&source, FileId::new(3), 24)
+            .expect("fixture must remain representable");
+
+        assert!(formatted.text().contains(island));
+        assert_eq!(
+            non_whitespace_tokens(&source),
+            non_whitespace_tokens(formatted.text())
+        );
+    }
+    #[test]
     fn formatter_control_tokens_preserve_delimiters_whitespace_and_final_newline() {
         let range = pure_analyzer_syntax::TextRange::new(0.into(), 1.into());
-        let mut formatter = LayoutFormatter::new("", Vec::new());
+        let mut formatter = LayoutFormatter::new("", Vec::new(), UNLIMITED_LINE_WIDTH);
         formatter.token(SyntaxKind::BRACE_OPEN, "{", range);
         assert_eq!(formatter.braces, 1);
         formatter.token(SyntaxKind::IDENT, "x", range);
@@ -364,7 +447,7 @@ mod tests {
     }
     #[test]
     fn formatter_indentation_uses_all_nesting_levels() {
-        let mut formatter = LayoutFormatter::new("", Vec::new());
+        let mut formatter = LayoutFormatter::new("", Vec::new(), UNLIMITED_LINE_WIDTH);
         formatter.parens = 1;
         formatter.braces = 2;
         formatter.indent();
@@ -372,7 +455,10 @@ mod tests {
     }
     #[test]
     fn formatter_keeps_empty_input_empty() {
-        assert_eq!(LayoutFormatter::new("", Vec::new()).finish(), "");
+        assert_eq!(
+            LayoutFormatter::new("", Vec::new(), UNLIMITED_LINE_WIDTH).finish(),
+            ""
+        );
     }
 
     #[test]

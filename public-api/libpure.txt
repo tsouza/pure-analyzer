@@ -15,6 +15,7 @@ pub use libpure::Severity
 pub use libpure::TextRange
 pub use libpure::TextSize
 pub use libpure::format_query
+pub use libpure::format_query_with_width
 pub enum libpure::DriverError
 pub libpure::DriverError::MissingSource
 pub libpure::DriverError::MissingSource::file: pure_analyzer_diagnostics::file::FileId
@@ -126,6 +127,7 @@ impl<T> either::into_either::IntoEither for libpure::ModelInput
 pub enum libpure::RequestError
 pub libpure::RequestError::NoSources
 pub libpure::RequestError::ZeroJobs
+pub libpure::RequestError::ZeroLineWidth
 impl core::clone::Clone for libpure::RequestError
 pub fn libpure::RequestError::clone(&self) -> libpure::RequestError
 impl core::cmp::Eq for libpure::RequestError
@@ -491,6 +493,7 @@ pub struct libpure::FormatOutput
 impl libpure::FormatOutput
 pub fn libpure::FormatOutput::diagnostics(&self) -> &[pure_analyzer_diagnostics::diagnostic::Diagnostic]
 pub fn libpure::FormatOutput::formatted(&self) -> &[libpure::FormattedSource]
+pub const fn libpure::FormatOutput::has_recovery_diagnostics(&self) -> bool
 pub fn libpure::FormatOutput::into_parts(self) -> (libpure::SourceStore, alloc::vec::Vec<libpure::FormattedSource>, alloc::vec::Vec<pure_analyzer_diagnostics::diagnostic::Diagnostic>)
 pub const fn libpure::FormatOutput::sources(&self) -> &libpure::SourceStore
 impl core::clone::Clone for libpure::FormatOutput
@@ -843,10 +846,12 @@ pub struct libpure::SourceRequest
 impl libpure::SourceRequest
 pub const fn libpure::SourceRequest::diagnostic_policy(&self) -> &libpure::DiagnosticPolicy
 pub const fn libpure::SourceRequest::jobs(&self) -> usize
+pub const fn libpure::SourceRequest::line_width(&self) -> core::option::Option<usize>
 pub fn libpure::SourceRequest::new(impl core::iter::traits::collect::IntoIterator<Item = libpure::SourceInput>) -> Self
 pub fn libpure::SourceRequest::sources(&self) -> &[libpure::SourceInput]
 pub fn libpure::SourceRequest::with_diagnostic_policy(self, libpure::DiagnosticPolicy) -> Self
 pub const fn libpure::SourceRequest::with_jobs(self, usize) -> Self
+pub const fn libpure::SourceRequest::with_line_width(self, usize) -> Self
 impl core::clone::Clone for libpure::SourceRequest
 pub fn libpure::SourceRequest::clone(&self) -> libpure::SourceRequest
 impl core::cmp::Eq for libpure::SourceRequest

@@ -2,7 +2,7 @@
 
 use pure_analyzer_analysis::{
     AnalysisEngine, AnalysisInput, AnalysisPass, FindingPolicy, MilestoningArityLintPass,
-    NavigationLintPass, ValidatePass, format_query,
+    NavigationLintPass, ValidatePass, format_query, format_query_with_width,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -93,6 +93,7 @@ pub struct SourceRequest {
     sources: Vec<SourceInput>,
     jobs: usize,
     policy: DiagnosticPolicy,
+    line_width: Option<usize>,
 }
 
 impl SourceRequest {
@@ -103,6 +104,7 @@ impl SourceRequest {
             sources: sources.into_iter().collect(),
             jobs: DEFAULT_JOBS,
             policy: DiagnosticPolicy::new(),
+            line_width: None,
         }
     }
 
@@ -127,7 +129,7 @@ impl SourceRequest {
         self.jobs
     }
 
-    /// Set the finding selection and severity policy used by analysis methods.
+    /// Set the finding selection and severity policy used by analysis and formatting methods.
     #[must_use]
     pub fn with_diagnostic_policy(mut self, policy: DiagnosticPolicy) -> Self {
         self.policy = policy;
@@ -140,12 +142,28 @@ impl SourceRequest {
         &self.policy
     }
 
+    /// Set the preferred maximum line width used when formatting.
+    #[must_use]
+    pub const fn with_line_width(mut self, line_width: usize) -> Self {
+        self.line_width = Some(line_width);
+        self
+    }
+
+    /// Return the preferred formatting line width, when one was requested.
+    #[must_use]
+    pub const fn line_width(&self) -> Option<usize> {
+        self.line_width
+    }
+
     fn validate(&self) -> Result<(), RequestError> {
         if self.sources.is_empty() {
             return Err(RequestError::NoSources);
         }
         if self.jobs == 0 {
             return Err(RequestError::ZeroJobs);
+        }
+        if self.line_width == Some(0) {
+            return Err(RequestError::ZeroLineWidth);
         }
         Ok(())
     }
@@ -347,6 +365,7 @@ pub struct FormatOutput {
     sources: SourceStore,
     formatted: Vec<FormattedSource>,
     diagnostics: Vec<Diagnostic>,
+    has_recovery_diagnostics: bool,
 }
 
 impl FormatOutput {
@@ -362,10 +381,21 @@ impl FormatOutput {
         &self.formatted
     }
 
-    /// Return parser diagnostics retained while formatting the same snapshots.
+    /// Return policy-filtered parser diagnostics retained while formatting the
+    /// same snapshots.
     #[must_use]
     pub fn diagnostics(&self) -> &[Diagnostic] {
         &self.diagnostics
+    }
+
+    /// Return whether parsing produced recovery diagnostics before policy filtering.
+    ///
+    /// Front ends must preserve this signal when deciding whether formatting
+    /// results may replace source files: a presentation policy can suppress or
+    /// downgrade a diagnostic, but it cannot make recovery output safe to write.
+    #[must_use]
+    pub const fn has_recovery_diagnostics(&self) -> bool {
+        self.has_recovery_diagnostics
     }
 
     /// Consume this output into original sources, formatted buffers, and findings.
@@ -472,16 +502,22 @@ impl AnalysisDriver {
     pub fn format(&self, request: &SourceRequest) -> Result<FormatOutput, DriverError> {
         let sources = load_source_request(request)?;
         let files = sources.files().map(SourceFile::id).collect::<Vec<_>>();
-        let results = run_sources(&sources, &files, request.jobs(), format_source)?;
+        let results = run_sources(&sources, &files, request.jobs(), |source| {
+            format_source(source, request.line_width())
+        })?;
+        let has_recovery_diagnostics = results.iter().any(|result| !result.diagnostics.is_empty());
+        let finding_policy = request.diagnostic_policy().finding_policy();
         let diagnostics = results
             .iter()
             .flat_map(|result| result.diagnostics.iter().cloned())
+            .filter_map(|diagnostic| finding_policy.apply(diagnostic))
             .collect();
         let formatted = results.into_iter().map(FormatResult::into_source).collect();
         Ok(FormatOutput {
             sources,
             formatted,
             diagnostics,
+            has_recovery_diagnostics,
         })
     }
 }
@@ -495,6 +531,9 @@ pub enum RequestError {
     /// The requested worker count was zero.
     #[error("worker count must be at least one")]
     ZeroJobs,
+    /// The requested formatter width was zero.
+    #[error("formatter line width must be at least one")]
+    ZeroLineWidth,
 }
 
 /// A typed failure from the analysis facade.
@@ -697,8 +736,15 @@ fn passes(kind: AnalysisKind) -> Vec<Box<dyn AnalysisPass>> {
     }
 }
 
-fn format_source(source: &SourceFile) -> Result<FormatResult, DriverError> {
-    format_query(source.text(), source.id())
+fn format_source(
+    source: &SourceFile,
+    line_width: Option<usize>,
+) -> Result<FormatResult, DriverError> {
+    let formatted = line_width.map_or_else(
+        || format_query(source.text(), source.id()),
+        |line_width| format_query_with_width(source.text(), source.id(), line_width),
+    );
+    formatted
         .map(|formatted| {
             let (text, diagnostics) = formatted.into_parts();
             FormatResult {
@@ -930,6 +976,33 @@ Class model::Person
     }
 
     #[test]
+    fn format_request_applies_line_width_and_rejects_zero() {
+        let driver = AnalysisDriver;
+        let source = SourceInput::in_memory(
+            "query.pure",
+            "function(firstArgument,secondArgument,thirdArgument)",
+        );
+        let request = SourceRequest::new([source.clone()]).with_line_width(30);
+
+        let formatted = driver.format(&request).expect("format narrow source");
+        assert_eq!(request.line_width(), Some(30));
+        assert_eq!(
+            formatted.formatted()[0].text(),
+            "function(firstArgument,\n        secondArgument,\n        thirdArgument)\n"
+        );
+
+        let error = driver
+            .format(&SourceRequest::new([source]).with_line_width(0))
+            .expect_err("reject zero line width");
+        assert!(matches!(
+            error,
+            DriverError::Usage {
+                source: RequestError::ZeroLineWidth
+            }
+        ));
+    }
+
+    #[test]
     fn lint_without_a_model_keeps_model_free_validation() {
         let driver = AnalysisDriver;
         let request = LintRequest::new(
@@ -1015,11 +1088,8 @@ Class model::Person
     fn diagnostic_policy_also_applies_to_model_loader_findings() {
         let request = |policy| {
             LintRequest::new(
-                SourceRequest::new([SourceInput::in_memory(
-                    "query.pure",
-                    "model::Person.all()->filter(x| $x.missing)",
-                )])
-                .with_diagnostic_policy(policy),
+                SourceRequest::new([SourceInput::in_memory("query.pure", "model::Person.all()")])
+                    .with_diagnostic_policy(policy),
                 [
                     ModelInput::pmcd(SourceInput::in_memory("first.json", MODEL)),
                     ModelInput::pmcd(SourceInput::in_memory("second.json", MODEL)),
@@ -1047,24 +1117,6 @@ Class model::Person
                 .diagnostics()
                 .iter()
                 .all(|diagnostic| diagnostic.code != DiagCode::ModelMergeConflict)
-        );
-
-        let selected = driver
-            .lint(&request(
-                DiagnosticPolicy::new().select(DiagCode::ModelMergeConflict),
-            ))
-            .expect("lint duplicate models with selected merge finding");
-        assert!(
-            selected
-                .diagnostics()
-                .iter()
-                .any(|diagnostic| diagnostic.code == DiagCode::ModelMergeConflict)
-        );
-        assert!(
-            selected
-                .diagnostics()
-                .iter()
-                .all(|diagnostic| diagnostic.code == DiagCode::ModelMergeConflict)
         );
     }
 

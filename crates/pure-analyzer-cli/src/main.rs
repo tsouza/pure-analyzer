@@ -4,12 +4,15 @@
 //! Command-line entry point for `pure-analyzer`.
 
 mod config;
+mod workflow;
 
 use std::path::PathBuf;
+use std::process::ExitCode;
 
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 use config::{ConfigFlags, ConfigOverrides, ConfigResolver};
 use tracing_subscriber::EnvFilter;
+use workflow::{EXIT_SUCCESS, Failure};
 
 /// Mechanical, standalone static analysis for Legend Pure.
 #[derive(Debug, Parser)]
@@ -55,26 +58,6 @@ enum Command {
         #[arg(long)]
         fix: bool,
     },
-    /// Sound, incomplete, three-valued structural equivalence.
-    Eq {
-        /// The left-hand query file.
-        left: String,
-        /// The right-hand query file.
-        right: String,
-        /// PMCD JSON and/or Pure-model-file model sources; may repeat.
-        #[arg(long)]
-        model: Vec<String>,
-    },
-    /// `eq`, with diff-oriented rendering of the divergence.
-    Diff {
-        /// The left-hand query file.
-        left: String,
-        /// The right-hand query file.
-        right: String,
-        /// PMCD JSON and/or Pure-model-file model sources; may repeat.
-        #[arg(long)]
-        model: Vec<String>,
-    },
     /// Canonical formatting.
     Fmt {
         /// Input files/globs; `-` reads one source from stdin.
@@ -93,20 +76,58 @@ enum Command {
         #[arg(long)]
         line_width: Option<usize>,
     },
-    /// Print the `docs/reason-codes/<code>.md` page for a `PUR<nnnn>` code.
-    Explain {
-        /// The diagnostic code to explain, e.g. `PUR2001`.
-        code: String,
+    /// Generate deterministic shell completion code.
+    Completions {
+        /// Shell whose completion code should be emitted.
+        #[arg(value_enum)]
+        shell: CompletionShell,
     },
 }
 
-fn main() -> anyhow::Result<()> {
-    init_tracing();
-    let cli = Cli::parse();
-    tracing::debug!(command = ?cli.command, "dispatching subcommand");
+/// Shells supported by the dependency-free v0.1 completion generator.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum CompletionShell {
+    /// Bourne Again Shell completion function.
+    Bash,
+}
 
-    let resolved = ConfigResolver::from_process()?
-        .resolve(&cli.config, command_overrides(&cli.command, &cli.config))?;
+fn main() -> ExitCode {
+    init_tracing();
+    let cli = match Cli::try_parse() {
+        Ok(cli) => cli,
+        Err(error) => {
+            let code = if error.use_stderr() {
+                workflow::EXIT_USAGE
+            } else {
+                EXIT_SUCCESS
+            };
+            let _ = error.print();
+            return ExitCode::from(code);
+        }
+    };
+
+    match run(cli) {
+        Ok(code) => ExitCode::from(code),
+        Err(error) => {
+            tracing::debug!(exit_code = error.exit_code(), error = %error, "command failed");
+            eprintln!("error: {error}");
+            ExitCode::from(error.exit_code())
+        }
+    }
+}
+
+fn run(cli: Cli) -> Result<u8, Failure> {
+    tracing::debug!(command = ?cli.command, "dispatching subcommand");
+    if !cli.config.print_requested()
+        && let Some(Command::Completions { shell }) = &cli.command
+    {
+        return workflow::completions(*shell, Cli::command());
+    }
+
+    let resolved = ConfigResolver::from_process()
+        .map_err(Failure::usage)?
+        .resolve(&cli.config, command_overrides(&cli.command, &cli.config))
+        .map_err(Failure::usage)?;
     tracing::debug!(
         jobs = resolved.jobs(),
         output_format = ?resolved.output_format(),
@@ -118,26 +139,29 @@ fn main() -> anyhow::Result<()> {
         "resolved configuration"
     );
     if cli.config.print_requested() {
-        print!("{}", resolved.to_toml()?);
-        return Ok(());
+        let text = resolved.to_toml().map_err(Failure::usage)?;
+        workflow::write_stdout(&text)?;
+        return Ok(EXIT_SUCCESS);
     }
     let command = cli
         .command
-        .ok_or_else(|| anyhow::anyhow!("a subcommand or --print-config is required"))?;
+        .ok_or_else(|| Failure::usage("a subcommand or --print-config is required"))?;
 
     match command {
-        Command::Validate { .. } => not_yet_implemented("validate"),
-        Command::Lint { .. } => not_yet_implemented("lint"),
-        Command::Eq { .. } => not_yet_implemented("eq"),
-        Command::Diff { .. } => not_yet_implemented("diff"),
+        Command::Validate { files, .. } => workflow::validate(&files, &resolved),
+        Command::Lint { files, fix, .. } => workflow::lint(&files, fix, &resolved),
         Command::Fmt {
             files,
             check,
             stdout,
             diff,
             ..
-        } => format_files(&files, check, stdout, diff),
-        Command::Explain { code } => not_yet_implemented(&format!("explain {code}")),
+        } => workflow::format(
+            &files,
+            workflow::FormatMode::new(check, stdout, diff),
+            &resolved,
+        ),
+        Command::Completions { shell } => workflow::completions(shell, Cli::command()),
     }
 }
 
@@ -154,63 +178,10 @@ fn command_overrides(command: &Option<Command>, flags: &ConfigFlags) -> ConfigOv
         _ => None,
     };
     let models = match command {
-        Some(Command::Lint { model, .. })
-        | Some(Command::Eq { model, .. })
-        | Some(Command::Diff { model, .. }) => model.iter().map(PathBuf::from).collect(),
+        Some(Command::Lint { model, .. }) => model.iter().map(PathBuf::from).collect(),
         _ => Vec::new(),
     };
     flags.overrides(strict, line_width, models)
-}
-
-fn format_files(files: &[String], check: bool, stdout: bool, diff: bool) -> anyhow::Result<()> {
-    if files.is_empty() {
-        anyhow::bail!("fmt requires at least one file or - for standard input");
-    }
-    let mut changed = false;
-    for (index, path) in files.iter().enumerate() {
-        let source = if path == "-" {
-            std::io::read_to_string(std::io::stdin())?
-        } else {
-            std::fs::read_to_string(path)?
-        };
-        let formatted = libpure::format_query(
-            &source,
-            pure_analyzer_diagnostics::FileId::new(index as u32),
-        )?;
-        let text = formatted.text();
-        changed |= text != source;
-        if stdout || path == "-" {
-            print!("{text}");
-        } else if diff && text != source {
-            print_diff(path, &source, text);
-        } else if !check && text != source {
-            std::fs::write(path, text)?;
-        }
-    }
-    if check && changed {
-        anyhow::bail!("formatting changes required");
-    }
-    Ok(())
-}
-
-fn print_diff(path: &str, before: &str, after: &str) {
-    println!("--- {path}");
-    println!("+++ {path} (formatted)");
-    for line in before.lines() {
-        println!("-{line}");
-    }
-    for line in after.lines() {
-        println!("+{line}");
-    }
-}
-
-/// Report an unavailable `subcommand`.
-///
-/// # Errors
-///
-/// Always returns an error.
-fn not_yet_implemented(subcommand: &str) -> anyhow::Result<()> {
-    anyhow::bail!("`{subcommand}` is unavailable in this build")
 }
 
 /// Initialize the `tracing` subscriber, respecting `RUST_LOG`.
@@ -221,7 +192,9 @@ fn init_tracing() {
     tracing_subscriber::fmt()
         .with_env_filter(filter)
         .with_target(true)
-        .init();
+        .with_writer(std::io::stderr)
+        .try_init()
+        .ok();
 }
 
 #[cfg(test)]
@@ -267,10 +240,15 @@ mod tests {
     }
 
     #[test]
-    fn eq_requires_exactly_two_positional_files() {
-        let err = Cli::try_parse_from(["pure-analyzer", "eq", "only-one.pure"])
-            .expect_err("missing RIGHT should fail");
-        assert_eq!(err.kind(), clap::error::ErrorKind::MissingRequiredArgument);
+    fn supported_commands_are_exact() {
+        let mut command = Cli::command();
+        command.build();
+        let commands = command
+            .get_subcommands()
+            .filter(|subcommand| subcommand.get_name() != "help")
+            .map(clap::Command::get_name)
+            .collect::<Vec<_>>();
+        assert_eq!(commands, ["validate", "lint", "fmt", "completions"]);
     }
 
     #[test]

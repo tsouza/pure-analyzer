@@ -1,0 +1,24 @@
+# bash completion for pure-analyzer
+_pure_analyzer() {
+    local current command word words
+    current="${COMP_WORDS[COMP_CWORD]}"
+    command=""
+    for word in "${COMP_WORDS[@]:1}"; do
+        case "$word" in
+            validate|lint|fmt|completions) command="$word"; break ;;
+        esac
+    done
+    case "$command" in
+        validate) words="--color --config --deny --format --help --ignore --jobs --no-config --no-quiet --no-strict --print-config --quiet --select --strict --version --warn" ;;
+        lint) words="--color --config --deny --fix --format --help --ignore --jobs --model --no-config --no-quiet --print-config --quiet --select --version --warn" ;;
+        fmt) words="--check --color --config --deny --diff --format --help --ignore --jobs --line-width --no-config --no-quiet --print-config --quiet --select --stdout --version --warn" ;;
+        completions) words="--color --config --deny --format --help --ignore --jobs --no-config --no-quiet --print-config --quiet --select --version --warn" ;;
+        *) words="--color --config --deny --format --help --ignore --jobs --no-config --no-quiet --print-config --quiet --select --version --warn completions fmt lint validate" ;;
+    esac
+    if [[ "$current" == -* ]]; then
+        COMPREPLY=( $(compgen -W "$words" -- "$current") )
+    else
+        COMPREPLY=( $(compgen -W "$words" -- "$current") $(compgen -f -- "$current") )
+    fi
+}
+complete -F _pure_analyzer pure-analyzer
