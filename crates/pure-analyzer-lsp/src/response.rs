@@ -169,6 +169,13 @@ pub(crate) fn initialization_result() -> Value {
                 ("hoverProvider", Value::Bool(true)),
                 ("textDocumentSync", text_document_sync),
                 ("definitionProvider", Value::Bool(true)),
+                (
+                    "codeActionProvider",
+                    object([(
+                        "codeActionKinds",
+                        Value::Array(vec![Value::String("quickfix".to_owned())]),
+                    )]),
+                ),
             ]),
         ),
         ("serverInfo", server_info),

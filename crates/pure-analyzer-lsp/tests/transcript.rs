@@ -27,6 +27,47 @@ const PMCD_WINNER_MODEL: &str = r#"{
         "qualifiedProperties": []
     }]
 }"#;
+const MILESTONING_MODEL: &str = r#"{
+    "_type": "data",
+    "elements": [
+        {
+            "_type": "class",
+            "package": "model",
+            "name": "TemporalTarget",
+            "stereotypes": [{
+                "profile": "meta::pure::profiles::temporal",
+                "value": "processingtemporal"
+            }],
+            "superTypes": [],
+            "properties": [],
+            "qualifiedProperties": []
+        },
+        {
+            "_type": "class",
+            "package": "model",
+            "name": "Source",
+            "stereotypes": [],
+            "superTypes": [],
+            "properties": [],
+            "qualifiedProperties": [{
+                "name": "point",
+                "returnGenericType": {
+                    "rawType": "model::TemporalTarget",
+                    "typeArguments": []
+                },
+                "returnMultiplicity": {
+                    "lowerBound": 0,
+                    "upperBound": 1
+                },
+                "stereotypes": [{
+                    "profile": "meta::pure::profiles::milestoning",
+                    "value": "generatedmilestoningproperty"
+                }],
+                "parameters": []
+            }]
+        }
+    ]
+}"#;
 
 #[test]
 fn startup_shutdown_and_exit_follow_one_deterministic_transcript() {
@@ -60,6 +101,10 @@ fn startup_shutdown_and_exit_follow_one_deterministic_transcript() {
     assert_eq!(
         frames[0]["result"]["capabilities"]["definitionProvider"],
         true
+    );
+    assert_eq!(
+        frames[0]["result"]["capabilities"]["codeActionProvider"],
+        value(r#"{"codeActionKinds":["quickfix"]}"#)
     );
     assert_eq!(
         frames[0]["result"]["serverInfo"]["name"],
@@ -463,6 +508,111 @@ fn malformed_hover_params_receive_a_json_rpc_invalid_params_error() {
 }
 
 #[test]
+fn code_action_transcript_emits_versioned_utf16_workspace_edits_for_every_planned_file() {
+    let model_uri = "untitled:milestoning-model";
+    let first_uri = "untitled:alpha-query";
+    let second_uri = "untitled:beta-query";
+    let first = "/* 😀 */ model::Source.all()->filter(x| $x.point(/* keep é */))";
+    let second = "/* β */ model::Source.all()->filter(x| $x.point(/* keep é */))";
+    let mut server = Server::new();
+    let mut output = Vec::new();
+    let mut input = Cursor::new(transcript(&[
+        value(r#"{"jsonrpc":"2.0","id":1,"method":"initialize"}"#),
+        configure_pmcd_model(model_uri),
+        did_open(model_uri, 3, MILESTONING_MODEL),
+        did_open(first_uri, 7, first),
+        did_open(second_uri, 11, second),
+        code_action_request(2, first_uri),
+        value(r#"{"jsonrpc":"2.0","id":3,"method":"shutdown"}"#),
+        value(r#"{"jsonrpc":"2.0","method":"exit"}"#),
+    ]));
+
+    assert_eq!(
+        server
+            .serve(&mut input, &mut output)
+            .expect("valid multi-file code action transcript"),
+        ServerExit::Clean
+    );
+    assert_eq!(
+        response_for(&responses(&output), 2)["result"],
+        machine_fix_action(vec![
+            machine_fix_document_edit(first_uri, 7, first),
+            machine_fix_document_edit(second_uri, 11, second),
+        ])
+    );
+}
+
+#[test]
+fn stale_code_actions_are_guarded_by_their_document_versions() {
+    let model_uri = "untitled:stale-model";
+    let query_uri = "untitled:stale-query";
+    let unversioned_uri = "untitled:unversioned-query";
+    let source = "model::Source.all()->filter(x| $x.point())";
+    let fixed = fixed_machine_query(source);
+    let mut server = Server::new();
+    let mut output = Vec::new();
+    let mut input = Cursor::new(transcript(&[
+        value(r#"{"jsonrpc":"2.0","id":1,"method":"initialize"}"#),
+        configure_pmcd_model(model_uri),
+        did_open(model_uri, 1, MILESTONING_MODEL),
+        did_open(query_uri, 4, source),
+        code_action_request(2, query_uri),
+        did_change_full(query_uri, 4, &fixed),
+        code_action_request(3, query_uri),
+        did_change_full(query_uri, 5, &fixed),
+        code_action_request(4, query_uri),
+        did_open_without_version(unversioned_uri, source),
+        code_action_request(5, unversioned_uri),
+        value(r#"{"jsonrpc":"2.0","id":6,"method":"shutdown"}"#),
+        value(r#"{"jsonrpc":"2.0","method":"exit"}"#),
+    ]));
+
+    assert_eq!(
+        server
+            .serve(&mut input, &mut output)
+            .expect("valid stale code action transcript"),
+        ServerExit::Clean
+    );
+    let frames = responses(&output);
+    assert_eq!(
+        response_for(&frames, 2)["result"],
+        machine_fix_action(vec![machine_fix_document_edit(query_uri, 4, source)])
+    );
+    assert_eq!(
+        response_for(&frames, 3)["result"],
+        machine_fix_action(vec![machine_fix_document_edit(query_uri, 4, source)])
+    );
+    assert_eq!(response_for(&frames, 4)["result"], value("[]"));
+    assert_eq!(response_for(&frames, 5)["result"], value("[]"));
+}
+
+#[test]
+fn code_action_transcript_omits_diagnostics_without_selected_machine_fixes() {
+    let model_uri = "untitled:no-action-model";
+    let query_uri = "untitled:no-action-query";
+    let source = "model::Source.all()->filter(x| $x.point)";
+    let mut server = Server::new();
+    let mut output = Vec::new();
+    let mut input = Cursor::new(transcript(&[
+        value(r#"{"jsonrpc":"2.0","id":1,"method":"initialize"}"#),
+        configure_pmcd_model(model_uri),
+        did_open(model_uri, 1, MILESTONING_MODEL),
+        did_open(query_uri, 2, source),
+        code_action_request(2, query_uri),
+        value(r#"{"jsonrpc":"2.0","id":3,"method":"shutdown"}"#),
+        value(r#"{"jsonrpc":"2.0","method":"exit"}"#),
+    ]));
+
+    assert_eq!(
+        server
+            .serve(&mut input, &mut output)
+            .expect("valid no-action transcript"),
+        ServerExit::Clean
+    );
+    assert_eq!(response_for(&responses(&output), 2)["result"], value("[]"));
+}
+
+#[test]
 fn configured_multi_file_models_publish_findings_to_their_explicit_routes() {
     let mut server = Server::new();
     let mut output = Vec::new();
@@ -765,6 +915,152 @@ fn did_open(uri: &str, version: i64, text: &str) -> Value {
             )]),
         ),
     ])
+}
+
+fn did_open_without_version(uri: &str, text: &str) -> Value {
+    object([
+        ("jsonrpc", Value::String("2.0".to_owned())),
+        ("method", Value::String("textDocument/didOpen".to_owned())),
+        (
+            "params",
+            object([(
+                "textDocument",
+                object([
+                    ("uri", Value::String(uri.to_owned())),
+                    ("text", Value::String(text.to_owned())),
+                ]),
+            )]),
+        ),
+    ])
+}
+
+fn did_change_full(uri: &str, version: i64, text: &str) -> Value {
+    object([
+        ("jsonrpc", Value::String("2.0".to_owned())),
+        ("method", Value::String("textDocument/didChange".to_owned())),
+        (
+            "params",
+            object([
+                (
+                    "textDocument",
+                    object([
+                        ("uri", Value::String(uri.to_owned())),
+                        ("version", Value::Number(version.into())),
+                    ]),
+                ),
+                (
+                    "contentChanges",
+                    Value::Array(vec![object([("text", Value::String(text.to_owned()))])]),
+                ),
+            ]),
+        ),
+    ])
+}
+
+fn configure_pmcd_model(uri: &str) -> Value {
+    object([
+        ("jsonrpc", Value::String("2.0".to_owned())),
+        (
+            "method",
+            Value::String("workspace/didChangeConfiguration".to_owned()),
+        ),
+        (
+            "params",
+            object([(
+                "settings",
+                object([(
+                    "modelDocuments",
+                    Value::Array(vec![object([
+                        ("uri", Value::String(uri.to_owned())),
+                        ("kind", Value::String("pmcd".to_owned())),
+                    ])]),
+                )]),
+            )]),
+        ),
+    ])
+}
+
+fn code_action_request(id: i64, uri: &str) -> Value {
+    object([
+        ("jsonrpc", Value::String("2.0".to_owned())),
+        ("id", Value::Number(id.into())),
+        (
+            "method",
+            Value::String("textDocument/codeAction".to_owned()),
+        ),
+        (
+            "params",
+            object([
+                (
+                    "textDocument",
+                    object([("uri", Value::String(uri.to_owned()))]),
+                ),
+                (
+                    "range",
+                    object([
+                        ("start", definition_position(0, 0)),
+                        ("end", definition_position(0, 0)),
+                    ]),
+                ),
+                (
+                    "context",
+                    object([("diagnostics", Value::Array(Vec::new()))]),
+                ),
+            ]),
+        ),
+    ])
+}
+
+fn machine_fix_action(document_changes: Vec<Value>) -> Value {
+    Value::Array(vec![object([
+        (
+            "title",
+            Value::String("Apply all machine-applicable fixes".to_owned()),
+        ),
+        ("kind", Value::String("quickfix".to_owned())),
+        (
+            "edit",
+            object([("documentChanges", Value::Array(document_changes))]),
+        ),
+    ])])
+}
+
+fn machine_fix_document_edit(uri: &str, version: i64, source: &str) -> Value {
+    let insertion = source
+        .rfind("))")
+        .expect("machine-fix fixture has the generated call closure");
+    let character = utf16_character(source, insertion);
+    object([
+        (
+            "textDocument",
+            object([
+                ("uri", Value::String(uri.to_owned())),
+                ("version", Value::Number(version.into())),
+            ]),
+        ),
+        (
+            "edits",
+            Value::Array(vec![object([
+                (
+                    "range",
+                    object([
+                        ("start", definition_position(0, character)),
+                        ("end", definition_position(0, character)),
+                    ]),
+                ),
+                ("newText", Value::String("%latest".to_owned())),
+            ])]),
+        ),
+    ])
+}
+
+fn fixed_machine_query(source: &str) -> String {
+    let insertion = source
+        .rfind("))")
+        .expect("machine-fix fixture has the generated call closure");
+    let mut fixed = source.to_owned();
+    fixed.insert_str(insertion, "%latest");
+    fixed
 }
 
 fn value(source: &str) -> Value {

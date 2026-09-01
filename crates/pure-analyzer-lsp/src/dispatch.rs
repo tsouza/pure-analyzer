@@ -60,6 +60,12 @@ pub(crate) fn handle<W: Write>(
             }
             Ok(None)
         }
+        Some("textDocument/codeAction") => {
+            if let Some(id) = id {
+                send_result(writer, id, state::code_actions(server, params))?;
+            }
+            Ok(None)
+        }
         Some(_) if let Some(id) = id => {
             send_error(writer, id, METHOD_NOT_FOUND_CODE, "method not found")?;
             Ok(None)

@@ -17,6 +17,9 @@ use crate::{
     workspace::ModelDocumentKind,
 };
 
+const APPLY_MACHINE_FIXES_TITLE: &str = "Apply all machine-applicable fixes";
+const QUICK_FIX_KIND: &str = "quickfix";
+
 pub(crate) fn cancel(server: &mut Server, params: Option<&Value>) {
     if let Some(request) = params
         .and_then(|value| value.get("id"))
@@ -162,11 +165,32 @@ pub(crate) fn definition(server: &Server, params: Option<&Value>) -> Value {
     }
 }
 
+pub(crate) fn code_actions(server: &Server, params: Option<&Value>) -> Value {
+    let Some(uri) = code_action_uri(params) else {
+        return Value::Array(Vec::new());
+    };
+    let snapshot = AnalysisSnapshot::capture(server);
+    let actions = snapshot.code_actions(uri).unwrap_or_default();
+    if snapshot.is_current(server) {
+        Value::Array(actions)
+    } else {
+        Value::Array(Vec::new())
+    }
+}
+
 fn definition_params(params: Option<&Value>) -> Option<(&str, ProtocolPosition)> {
     let params = params?;
     let uri = params.get("textDocument")?.get("uri")?.as_str()?;
     let position = protocol_position(params.get("position")?)?;
     Some((uri, position))
+}
+
+fn code_action_uri(params: Option<&Value>) -> Option<&str> {
+    let params = params?;
+    let uri = params.get("textDocument")?.get("uri")?.as_str()?;
+    let _ = protocol_range(params.get("range")?)?;
+    let _ = params.get("context")?.get("diagnostics")?.as_array()?;
+    Some(uri)
 }
 
 fn definition_location(
@@ -180,15 +204,15 @@ fn definition_location(
     let start = utf16_position(document.text(), usize::from(span.start()))?;
     let end = utf16_position(document.text(), usize::from(span.end()))?;
     let mut range = Map::new();
-    range.insert("start".to_owned(), definition_position(start));
-    range.insert("end".to_owned(), definition_position(end));
+    range.insert("start".to_owned(), protocol_position_value(start));
+    range.insert("end".to_owned(), protocol_position_value(end));
     let mut location = Map::new();
     location.insert("uri".to_owned(), Value::String(uri.clone()));
     location.insert("range".to_owned(), Value::Object(range));
     Some(Value::Object(location))
 }
 
-fn definition_position(position: ProtocolPosition) -> Value {
+fn protocol_position_value(position: ProtocolPosition) -> Value {
     let mut value = Map::new();
     value.insert("line".to_owned(), Value::Number(position.line().into()));
     value.insert(
@@ -196,6 +220,22 @@ fn definition_position(position: ProtocolPosition) -> Value {
         Value::Number(position.character().into()),
     );
     Value::Object(value)
+}
+
+fn protocol_range_value(start: ProtocolPosition, end: ProtocolPosition) -> Value {
+    object([
+        ("start", protocol_position_value(start)),
+        ("end", protocol_position_value(end)),
+    ])
+}
+
+fn object(fields: impl IntoIterator<Item = (&'static str, Value)>) -> Value {
+    Value::Object(
+        fields
+            .into_iter()
+            .map(|(name, value)| (name.to_owned(), value))
+            .collect(),
+    )
 }
 
 fn content_changes(params: Option<&Value>) -> Option<Vec<ContentChange>> {
@@ -345,6 +385,34 @@ impl AnalysisSnapshot {
             .filter(|diagnostic| diagnostic_contains(diagnostic.primary.span, offset))
             .min_by(|left, right| hover_sort_key(left).cmp(&hover_sort_key(right)))?;
         diagnostic_hover(document, diagnostic)
+    }
+
+    fn code_actions(&self, uri: &str) -> Option<Vec<Value>> {
+        let (request, files) = self.request()?;
+        let requested_file = files
+            .iter()
+            .find_map(|(file, candidate)| (candidate == uri).then_some(*file))?;
+        let output = AnalysisDriver.lint(&request).ok()?;
+        let sources = output
+            .sources()
+            .files()
+            .map(|source| (source.id(), source.text().to_owned()))
+            .collect::<BTreeMap<_, _>>();
+        let plan = output.plan_fixes().ok()?;
+        let changes = plan.preview(&sources).ok()?;
+        if changes.is_empty() || !changes.iter().any(|change| change.file == requested_file) {
+            return Some(Vec::new());
+        }
+
+        let document_changes = changes
+            .iter()
+            .map(|change| {
+                let uri = files.get(&change.file)?;
+                let document = self.documents.get(uri)?;
+                versioned_document_edit(document, &change.before, &change.after)
+            })
+            .collect::<Option<Vec<_>>>()?;
+        Some(vec![code_action_value(document_changes)])
     }
 
     fn hover_findings(&self) -> Option<(Vec<Diagnostic>, BTreeMap<FileId, String>)> {
@@ -505,6 +573,81 @@ impl AnalysisSnapshot {
             })
             .collect()
     }
+}
+
+fn code_action_value(document_changes: Vec<Value>) -> Value {
+    object([
+        ("title", Value::String(APPLY_MACHINE_FIXES_TITLE.to_owned())),
+        ("kind", Value::String(QUICK_FIX_KIND.to_owned())),
+        (
+            "edit",
+            object([("documentChanges", Value::Array(document_changes))]),
+        ),
+    ])
+}
+
+fn versioned_document_edit(
+    document: &DocumentSnapshot,
+    before: &str,
+    after: &str,
+) -> Option<Value> {
+    let version = document.version()?;
+    let edit = workspace_text_edit(document, before, after)?;
+    Some(object([
+        (
+            "textDocument",
+            object([
+                ("uri", Value::String(document.uri().to_owned())),
+                ("version", Value::Number(version.into())),
+            ]),
+        ),
+        ("edits", Value::Array(vec![edit])),
+    ]))
+}
+
+fn workspace_text_edit(document: &DocumentSnapshot, before: &str, after: &str) -> Option<Value> {
+    if before == after || document.text() != before {
+        return None;
+    }
+    let (start_byte, before_end, after_end) = replacement_bounds(before, after);
+    let start = utf16_position(before, start_byte)?;
+    let end = utf16_position(before, before_end)?;
+    let new_text = after.get(start_byte..after_end)?.to_owned();
+    Some(object([
+        ("range", protocol_range_value(start, end)),
+        ("newText", Value::String(new_text)),
+    ]))
+}
+
+fn replacement_bounds(before: &str, after: &str) -> (usize, usize, usize) {
+    let prefix = shared_prefix_len(before, after);
+    let mut before_end = before.len();
+    let mut after_end = after.len();
+    while before_end > prefix && after_end > prefix {
+        let Some(before_character) = before[..before_end].chars().next_back() else {
+            break;
+        };
+        let Some(after_character) = after[..after_end].chars().next_back() else {
+            break;
+        };
+        if before_character != after_character {
+            break;
+        }
+        before_end = before_end.saturating_sub(before_character.len_utf8());
+        after_end = after_end.saturating_sub(after_character.len_utf8());
+    }
+    (prefix, before_end, after_end)
+}
+
+fn shared_prefix_len(before: &str, after: &str) -> usize {
+    let mut length = 0_usize;
+    for (before_character, after_character) in before.chars().zip(after.chars()) {
+        if before_character != after_character {
+            break;
+        }
+        length = length.saturating_add(before_character.len_utf8());
+    }
+    length
 }
 
 #[derive(Clone, Debug)]
