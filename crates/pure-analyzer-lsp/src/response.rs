@@ -1,5 +1,6 @@
 use std::io::{self, Write};
 
+use libpure::ExplainContent;
 use serde_json::{Map, Value};
 
 use crate::frame::write_frame;
@@ -130,6 +131,23 @@ pub(crate) fn publish_diagnostics<W: Write>(
     )
 }
 
+pub(crate) fn hover_value(
+    range: PublishedRange,
+    diagnostic: &ExplainContent,
+    reason: Option<&ExplainContent>,
+) -> Value {
+    object([
+        (
+            "contents",
+            object([
+                ("kind", Value::String("markdown".to_owned())),
+                ("value", Value::String(hover_markup(diagnostic, reason))),
+            ]),
+        ),
+        ("range", range_value(range)),
+    ])
+}
+
 pub(crate) fn initialization_result() -> Value {
     let server_info = object([
         ("name", Value::String("pure-analyzer-lsp".to_owned())),
@@ -148,6 +166,7 @@ pub(crate) fn initialization_result() -> Value {
             "capabilities",
             object([
                 ("positionEncoding", Value::String("utf-16".to_owned())),
+                ("hoverProvider", Value::Bool(true)),
                 ("textDocumentSync", text_document_sync),
                 ("definitionProvider", Value::Bool(true)),
             ]),
@@ -168,6 +187,28 @@ fn position_value(position: PublishedPosition) -> Value {
         ("line", Value::Number(position.line.into())),
         ("character", Value::Number(position.character.into())),
     ])
+}
+
+fn hover_markup(diagnostic: &ExplainContent, reason: Option<&ExplainContent>) -> String {
+    let diagnostic = explanation_markup(diagnostic);
+    if let Some(reason) = reason {
+        format!("{diagnostic}\n\n---\n\n{}", explanation_markup(reason))
+    } else {
+        diagnostic
+    }
+}
+
+fn explanation_markup(explanation: &ExplainContent) -> String {
+    format!(
+        "**`{}`** · {} / {}\n\n{}\n\n**Limit:** {}\n\n**Remedy:** {}\n\n[Documentation]({})",
+        explanation.identifier,
+        explanation.kind.as_str(),
+        explanation.classification.as_str(),
+        explanation.meaning,
+        explanation.limit,
+        explanation.remedy,
+        explanation.documentation_url,
+    )
 }
 
 fn object(fields: impl IntoIterator<Item = (&'static str, Value)>) -> Value {
