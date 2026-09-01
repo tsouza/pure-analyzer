@@ -323,6 +323,16 @@ check-core-deplight:
 check-doc-facts:
     cargo xtask check-doc-facts
 
+# Generate the user-facing diagnostic/reason reference from the shared explain
+# catalog. Commit the resulting product documentation with catalog changes.
+generate-explain-docs:
+    cargo xtask generate-explain-docs
+
+# Fail when a registered explain identifier lacks its reference page, content
+# changes without its page, or an orphan page remains tracked.
+check-explain-docs:
+    cargo xtask check-explain-docs
+
 # Check every tracked Markdown relative file and GitHub-style heading anchor.
 check-doc-links:
     cargo xtask check-doc-links
