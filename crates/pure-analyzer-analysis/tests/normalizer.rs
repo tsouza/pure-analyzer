@@ -2,11 +2,11 @@
 
 use proptest::prelude::*;
 use pure_analyzer_analysis::{
-    Column, ColumnId, EquivalenceKey, IrOrigin, Knowledge, ModelOrigin, NormalizationBudget,
-    NormalizationOutcome, Nullability, Projection, RelationExpression, RelationFacts,
-    RelationOperator, RelationSchema, RelationSource, RelationalQuery, ScalarExpression,
-    ScalarLiteral, ScalarOperator, SortDirection, SortKey, SourceSpan, normalize_relational_query,
-    normalize_relational_query_with_budget,
+    CandidateKey, Column, ColumnId, EquivalenceKey, IrOrigin, Knowledge, ModelOrigin,
+    NormalizationBudget, NormalizationOutcome, Nullability, Projection, RelationExpression,
+    RelationFacts, RelationOperator, RelationSchema, RelationSource, RelationalQuery, RowSemantics,
+    ScalarExpression, ScalarLiteral, ScalarOperator, SortDirection, SortKey, SourceSpan, Totality,
+    normalize_relational_query, normalize_relational_query_with_budget,
 };
 use pure_analyzer_diagnostics::{FileId, ReasonCode, TextRange, TextSize};
 use pure_analyzer_model::{Multiplicity, PmcdDocument, QName, TypeRef, load_pmcd_documents};
@@ -115,11 +115,37 @@ fn scalar_column(column: &Column, source: IrOrigin) -> ScalarExpression {
 }
 
 fn identity_project(input: RelationExpression, source: IrOrigin) -> RelationExpression {
+    identity_project_with_metadata(
+        input,
+        source,
+        RelationFacts::unknown(),
+        Knowledge::unknown(),
+    )
+}
+
+fn identity_project_with_metadata(
+    input: RelationExpression,
+    source: IrOrigin,
+    facts: RelationFacts,
+    totality: Knowledge<Totality>,
+) -> RelationExpression {
     let schema = input.schema().clone();
     let projections = schema
         .columns()
         .iter()
-        .map(|column| Projection::new(column.id(), scalar_column(column, source.clone())))
+        .map(|column| {
+            Projection::new(
+                column.id(),
+                ScalarExpression::new(
+                    ScalarOperator::Column(column.id()),
+                    column.type_ref().clone(),
+                    column.multiplicity(),
+                    column.nullability(),
+                    totality.clone(),
+                    source.clone(),
+                ),
+            )
+        })
         .collect();
     RelationExpression::new(
         RelationOperator::Project {
@@ -127,7 +153,7 @@ fn identity_project(input: RelationExpression, source: IrOrigin) -> RelationExpr
             projections,
         },
         schema,
-        RelationFacts::unknown(),
+        facts,
         source,
     )
     .expect("identity project is valid")
@@ -257,6 +283,58 @@ fn exact_identity_project_is_eliminated_and_normalization_is_idempotent() {
     let twice = normalized(&RelationalQuery::new(once.root().clone()));
     assert_eq!(once.equivalence_key(), twice.equivalence_key());
     assert_eq!(once.root(), twice.root());
+}
+
+#[test]
+fn identity_shaped_projects_retain_distinct_relation_facts() {
+    let source = origin(FILE, 1, 20, Vec::new());
+    let base = query(&[3, 8], &["left", "right"], source.clone());
+    let fact_origin = origin(FILE, 21, 24, Vec::new());
+    let facts = RelationFacts::new(
+        Knowledge::proven(
+            vec![CandidateKey::new(vec![base.output().columns()[0].id()])],
+            fact_origin.clone(),
+        ),
+        Knowledge::proven(RowSemantics::Set, fact_origin),
+    );
+    let projected = RelationalQuery::new(identity_project_with_metadata(
+        base.root().clone(),
+        source,
+        facts.clone(),
+        Knowledge::unknown(),
+    ));
+
+    let normalized = normalized(&projected);
+    assert!(matches!(
+        normalized.root().operator(),
+        RelationOperator::Project { .. }
+    ));
+    assert_eq!(normalized.root().facts(), &facts);
+    assert_ne!(normalized.equivalence_key(), &key(&base));
+}
+
+#[test]
+fn identity_shaped_projects_retain_direct_read_totality_evidence() {
+    let source = origin(FILE, 1, 20, Vec::new());
+    let base = query(&[3, 8], &["left", "right"], source.clone());
+    let totality = Knowledge::proven(Totality::Total, origin(FILE, 21, 24, Vec::new()));
+    let projected = RelationalQuery::new(identity_project_with_metadata(
+        base.root().clone(),
+        source,
+        RelationFacts::unknown(),
+        totality.clone(),
+    ));
+
+    let normalized = normalized(&projected);
+    let RelationOperator::Project { projections, .. } = normalized.root().operator() else {
+        panic!("direct-read totality evidence must retain the project");
+    };
+    assert!(
+        projections
+            .iter()
+            .all(|projection| projection.expression().totality() == &totality)
+    );
+    assert_ne!(normalized.equivalence_key(), &key(&base));
 }
 
 #[test]
