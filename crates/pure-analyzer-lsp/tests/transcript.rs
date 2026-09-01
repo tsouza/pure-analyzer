@@ -268,7 +268,7 @@ fn spanless_pmcd_definition_transcript_returns_null_consistently() {
 }
 
 #[test]
-fn cancellation_document_store_and_configuration_stay_at_the_front_end() {
+fn unknown_cancellation_does_not_poison_front_end_state() {
     let mut server = Server::new();
     let mut output = Vec::new();
     let mut input = Cursor::new(transcript(&[
@@ -290,10 +290,11 @@ fn cancellation_document_store_and_configuration_stay_at_the_front_end() {
         ServerExit::Unclean
     );
     assert!(
-        server
+        !server
             .cancellation()
             .is_cancelled(&RequestId::String("work-7".into()))
     );
+    assert!(server.cancellation().is_empty());
     let document = server
         .documents()
         .get("file:///model.pure")
@@ -307,7 +308,7 @@ fn cancellation_document_store_and_configuration_stay_at_the_front_end() {
 }
 
 #[test]
-fn numeric_cancellation_and_document_close_stay_at_the_front_end() {
+fn unknown_numeric_cancellation_does_not_poison_identifier_reuse() {
     let mut server = Server::new();
     let mut output = Vec::new();
     let mut input = Cursor::new(transcript(&[
@@ -328,7 +329,8 @@ fn numeric_cancellation_and_document_close_stay_at_the_front_end() {
             .expect("valid transcript"),
         ServerExit::Unclean
     );
-    assert!(server.cancellation().is_cancelled(&RequestId::Number(7)));
+    assert!(!server.cancellation().is_cancelled(&RequestId::Number(7)));
+    assert!(server.cancellation().is_empty());
     assert!(server.documents().is_empty());
 }
 
@@ -549,41 +551,61 @@ fn stale_code_actions_are_guarded_by_their_document_versions() {
     let unversioned_uri = "untitled:unversioned-query";
     let source = "model::Source.all()->filter(x| $x.point())";
     let fixed = fixed_machine_query(source);
-    let mut server = Server::new();
-    let mut output = Vec::new();
-    let mut input = Cursor::new(transcript(&[
+    let first = run_transcript(&[
         value(r#"{"jsonrpc":"2.0","id":1,"method":"initialize"}"#),
         configure_pmcd_model(model_uri),
         did_open(model_uri, 1, MILESTONING_MODEL),
         did_open(query_uri, 4, source),
         code_action_request(2, query_uri),
+        value(r#"{"jsonrpc":"2.0","id":6,"method":"shutdown"}"#),
+        value(r#"{"jsonrpc":"2.0","method":"exit"}"#),
+    ]);
+    assert_eq!(
+        response_for(&first, 2)["result"],
+        machine_fix_action(vec![machine_fix_document_edit(query_uri, 4, source)])
+    );
+
+    // The duplicate version is ignored, so the version-4 source remains
+    // eligible for the same machine fix. Keep this successful request in an
+    // independent session: it is a positive document-version regression test,
+    // not an intentional in-flight overlap.
+    let duplicate_version = run_transcript(&[
+        value(r#"{"jsonrpc":"2.0","id":1,"method":"initialize"}"#),
+        configure_pmcd_model(model_uri),
+        did_open(model_uri, 1, MILESTONING_MODEL),
+        did_open(query_uri, 4, source),
         did_change_full(query_uri, 4, &fixed),
         code_action_request(3, query_uri),
+        value(r#"{"jsonrpc":"2.0","id":6,"method":"shutdown"}"#),
+        value(r#"{"jsonrpc":"2.0","method":"exit"}"#),
+    ]);
+    assert_eq!(
+        response_for(&duplicate_version, 3)["result"],
+        machine_fix_action(vec![machine_fix_document_edit(query_uri, 4, source)])
+    );
+
+    let changed = run_transcript(&[
+        value(r#"{"jsonrpc":"2.0","id":1,"method":"initialize"}"#),
+        configure_pmcd_model(model_uri),
+        did_open(model_uri, 1, MILESTONING_MODEL),
+        did_open(query_uri, 4, source),
         did_change_full(query_uri, 5, &fixed),
         code_action_request(4, query_uri),
+        value(r#"{"jsonrpc":"2.0","id":6,"method":"shutdown"}"#),
+        value(r#"{"jsonrpc":"2.0","method":"exit"}"#),
+    ]);
+    assert_eq!(response_for(&changed, 4)["result"], value("[]"));
+
+    let unversioned = run_transcript(&[
+        value(r#"{"jsonrpc":"2.0","id":1,"method":"initialize"}"#),
+        configure_pmcd_model(model_uri),
+        did_open(model_uri, 1, MILESTONING_MODEL),
         did_open_without_version(unversioned_uri, source),
         code_action_request(5, unversioned_uri),
         value(r#"{"jsonrpc":"2.0","id":6,"method":"shutdown"}"#),
         value(r#"{"jsonrpc":"2.0","method":"exit"}"#),
-    ]));
-
-    assert_eq!(
-        server
-            .serve(&mut input, &mut output)
-            .expect("valid stale code action transcript"),
-        ServerExit::Clean
-    );
-    let frames = responses(&output);
-    assert_eq!(
-        response_for(&frames, 2)["result"],
-        machine_fix_action(vec![machine_fix_document_edit(query_uri, 4, source)])
-    );
-    assert_eq!(
-        response_for(&frames, 3)["result"],
-        machine_fix_action(vec![machine_fix_document_edit(query_uri, 4, source)])
-    );
-    assert_eq!(response_for(&frames, 4)["result"], value("[]"));
-    assert_eq!(response_for(&frames, 5)["result"], value("[]"));
+    ]);
+    assert_eq!(response_for(&unversioned, 5)["result"], value("[]"));
 }
 
 #[test]
@@ -790,17 +812,17 @@ fn process_exits_unsuccessfully_without_shutdown() {
 }
 
 #[test]
-fn cancellation_registry_distinguishes_present_and_absent_requests() {
+fn cancellation_registry_ignores_unknown_identifiers() {
     let first = RequestId::Number(1);
     let other = RequestId::String("other".to_owned());
-    let mut cancellations = CancellationRegistry::default();
+    let cancellations = CancellationRegistry::default();
     assert!(cancellations.is_empty());
     assert_eq!(cancellations.len(), 0);
     assert!(!cancellations.is_cancelled(&first));
     cancellations.cancel(first.clone());
-    assert!(!cancellations.is_empty());
-    assert_eq!(cancellations.len(), 1);
-    assert!(cancellations.is_cancelled(&first));
+    assert!(cancellations.is_empty());
+    assert_eq!(cancellations.len(), 0);
+    assert!(!cancellations.is_cancelled(&first));
     assert!(!cancellations.is_cancelled(&other));
 }
 
@@ -1143,6 +1165,19 @@ fn transcript(messages: &[Value]) -> Vec<u8> {
         output.extend_from_slice(&body);
     }
     output
+}
+
+fn run_transcript(messages: &[Value]) -> Vec<Value> {
+    let mut server = Server::new();
+    let mut output = Vec::new();
+    let mut input = Cursor::new(transcript(messages));
+    assert_eq!(
+        server
+            .serve(&mut input, &mut output)
+            .expect("valid transcript"),
+        ServerExit::Clean
+    );
+    responses(&output)
 }
 
 fn responses(mut input: &[u8]) -> Vec<Value> {
