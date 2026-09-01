@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
-//! Process-boundary coverage for v0.1 validation, linting, formatting, and completion workflows.
+//! Process-boundary coverage for v0.1 validation, linting, formatting, explain, and completion workflows.
 
 use std::fs;
 use std::io::Write;
@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use libpure::ExplainContent;
 use serde_json::Value;
 
 const EXIT_ACTIONABLE: i32 = 1;
@@ -25,14 +26,14 @@ fn command_surface_completion_and_config_independence_are_stable() {
     assert!(help.status.success());
     assert!(help.stderr.is_empty());
     let help = utf8(&help.stdout);
-    for command in ["validate", "lint", "fmt", "completions"] {
+    for command in ["validate", "lint", "fmt", "explain", "completions"] {
         assert!(help.contains(command), "help omitted {command}: {help}");
     }
     assert!(
         help.contains("transactional in-place file updates"),
         "fmt help omitted its write contract: {help}"
     );
-    for unavailable in ["eq", "diff", "explain"] {
+    for unavailable in ["eq", "diff"] {
         let output = run(&fixture.root, &[unavailable]);
         assert_eq!(output.status.code(), Some(EXIT_USAGE));
         assert!(output.stdout.is_empty());
@@ -52,6 +53,65 @@ fn command_surface_completion_and_config_independence_are_stable() {
     assert_eq!(
         completion.stdout,
         include_bytes!("golden/completions.bash.golden")
+    );
+}
+
+#[test]
+fn explain_returns_shared_content_in_human_and_json_without_mixing_streams() {
+    let fixture = Fixture::new("explain");
+
+    for identifier in ["PUR2001", "IND_WINDOW"] {
+        let content = libpure::explain(identifier).expect("registered explain content");
+        let human = run(
+            &fixture.root,
+            &["explain", content.identifier, "--no-config"],
+        );
+        assert!(human.status.success());
+        assert!(human.stderr.is_empty());
+        assert_eq!(utf8(&human.stdout), human_explanation(content));
+
+        let json = run(
+            &fixture.root,
+            &[
+                "explain",
+                content.identifier,
+                "--format",
+                "json",
+                "--no-config",
+            ],
+        );
+        assert!(json.status.success());
+        assert!(json.stderr.is_empty());
+        let expected = format!(
+            "{}\n",
+            serde_json::to_string_pretty(content).expect("serialize shared explain content")
+        );
+        assert_eq!(json.stdout, expected.as_bytes());
+        let document: Value =
+            serde_json::from_slice(&json.stdout).expect("valid JSON explain output");
+        assert_eq!(document["identifier"], content.identifier);
+        assert_eq!(document["kind"], content.kind.as_str());
+    }
+}
+
+#[test]
+fn explain_rejects_unknown_identifiers_and_sarif_as_usage_errors() {
+    let fixture = Fixture::new("explain-errors");
+    let unknown = run(&fixture.root, &["explain", "pur2001", "--no-config"]);
+    assert_eq!(unknown.status.code(), Some(EXIT_USAGE));
+    assert!(unknown.stdout.is_empty());
+    let error = libpure::explain("pur2001").expect_err("unknown explain identifier");
+    assert_eq!(utf8(&unknown.stderr), format!("error: {error}\n"));
+
+    let sarif = run(
+        &fixture.root,
+        &["explain", "PUR2001", "--format", "sarif", "--no-config"],
+    );
+    assert_eq!(sarif.status.code(), Some(EXIT_USAGE));
+    assert!(sarif.stdout.is_empty());
+    assert_eq!(
+        utf8(&sarif.stderr),
+        "error: explain supports only --format human or --format json\n"
     );
 }
 
@@ -1102,6 +1162,19 @@ fn milestoning_model() -> String {
 
 fn utf8(bytes: &[u8]) -> &str {
     std::str::from_utf8(bytes).expect("UTF-8 process output")
+}
+
+fn human_explanation(content: &ExplainContent) -> String {
+    format!(
+        "{} ({}, {})\n\nMeaning\n{}\n\nLimit\n{}\n\nRemedy\n{}\n\nDocumentation\n{}\n",
+        content.identifier,
+        content.kind.as_str(),
+        content.classification.as_str(),
+        content.meaning,
+        content.limit,
+        content.remedy,
+        content.documentation_url,
+    )
 }
 
 struct Fixture {
