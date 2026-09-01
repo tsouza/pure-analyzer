@@ -102,10 +102,12 @@ pub unsafe fn pure_analyzer_lsp::ServerExit::init(<T as crossbeam_epoch::atomic:
 impl<T> either::into_either::IntoEither for pure_analyzer_lsp::ServerExit
 pub struct pure_analyzer_lsp::CancellationRegistry
 impl pure_analyzer_lsp::CancellationRegistry
-pub fn pure_analyzer_lsp::CancellationRegistry::cancel(&mut self, pure_analyzer_lsp::RequestId)
+pub fn pure_analyzer_lsp::CancellationRegistry::cancel(&self, pure_analyzer_lsp::RequestId)
 pub fn pure_analyzer_lsp::CancellationRegistry::is_cancelled(&self, &pure_analyzer_lsp::RequestId) -> bool
 pub fn pure_analyzer_lsp::CancellationRegistry::is_empty(&self) -> bool
 pub fn pure_analyzer_lsp::CancellationRegistry::len(&self) -> usize
+impl core::clone::Clone for pure_analyzer_lsp::CancellationRegistry
+pub fn pure_analyzer_lsp::CancellationRegistry::clone(&self) -> pure_analyzer_lsp::CancellationRegistry
 impl core::default::Default for pure_analyzer_lsp::CancellationRegistry
 pub fn pure_analyzer_lsp::CancellationRegistry::default() -> pure_analyzer_lsp::CancellationRegistry
 impl core::fmt::Debug for pure_analyzer_lsp::CancellationRegistry
@@ -125,12 +127,18 @@ pub fn pure_analyzer_lsp::CancellationRegistry::try_from(U) -> core::result::Res
 impl<T, U> core::convert::TryInto<U> for pure_analyzer_lsp::CancellationRegistry where U: core::convert::TryFrom<T>
 pub type pure_analyzer_lsp::CancellationRegistry::Error = <U as core::convert::TryFrom<T>>::Error
 pub fn pure_analyzer_lsp::CancellationRegistry::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_lsp::CancellationRegistry where T: core::clone::Clone
+pub type pure_analyzer_lsp::CancellationRegistry::Owned = T
+pub fn pure_analyzer_lsp::CancellationRegistry::clone_into(&self, &mut T)
+pub fn pure_analyzer_lsp::CancellationRegistry::to_owned(&self) -> T
 impl<T> core::any::Any for pure_analyzer_lsp::CancellationRegistry where T: 'static + ?core::marker::Sized
 pub fn pure_analyzer_lsp::CancellationRegistry::type_id(&self) -> core::any::TypeId
 impl<T> core::borrow::Borrow<T> for pure_analyzer_lsp::CancellationRegistry where T: ?core::marker::Sized
 pub fn pure_analyzer_lsp::CancellationRegistry::borrow(&self) -> &T
 impl<T> core::borrow::BorrowMut<T> for pure_analyzer_lsp::CancellationRegistry where T: ?core::marker::Sized
 pub fn pure_analyzer_lsp::CancellationRegistry::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_lsp::CancellationRegistry where T: core::clone::Clone
+pub unsafe fn pure_analyzer_lsp::CancellationRegistry::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for pure_analyzer_lsp::CancellationRegistry
 pub fn pure_analyzer_lsp::CancellationRegistry::from(T) -> T
 impl<T> crossbeam_epoch::atomic::Pointable for pure_analyzer_lsp::CancellationRegistry
@@ -240,7 +248,7 @@ pub const fn pure_analyzer_lsp::Server::cancellation(&self) -> &pure_analyzer_ls
 pub const fn pure_analyzer_lsp::Server::configuration(&self) -> &pure_analyzer_lsp::WorkspaceConfiguration
 pub const fn pure_analyzer_lsp::Server::documents(&self) -> &pure_analyzer_lsp::DocumentStore
 pub fn pure_analyzer_lsp::Server::new() -> Self
-pub fn pure_analyzer_lsp::Server::serve<R: alloc::io::buf_read::BufRead, W: core::io::write::Write>(&mut self, &mut R, &mut W) -> core::io::error::Result<pure_analyzer_lsp::ServerExit>
+pub fn pure_analyzer_lsp::Server::serve<R: alloc::io::buf_read::BufRead + core::marker::Send, W: core::io::write::Write>(&mut self, &mut R, &mut W) -> core::io::error::Result<pure_analyzer_lsp::ServerExit>
 impl core::default::Default for pure_analyzer_lsp::Server
 pub fn pure_analyzer_lsp::Server::default() -> Self
 impl core::fmt::Debug for pure_analyzer_lsp::Server
