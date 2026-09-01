@@ -369,8 +369,6 @@ fn is_identity_project(
 
 struct KeyEncoder {
     include_provenance: bool,
-    columns: BTreeMap<ColumnId, usize>,
-    next_column: usize,
     output: String,
 }
 
@@ -378,8 +376,6 @@ impl KeyEncoder {
     fn semantic() -> Self {
         Self {
             include_provenance: false,
-            columns: BTreeMap::new(),
-            next_column: 0,
             output: String::new(),
         }
     }
@@ -387,8 +383,6 @@ impl KeyEncoder {
     fn full_provenance() -> Self {
         Self {
             include_provenance: true,
-            columns: BTreeMap::new(),
-            next_column: 0,
             output: String::new(),
         }
     }
@@ -404,8 +398,9 @@ impl KeyEncoder {
 
     fn relation(&mut self, expression: &RelationExpression) {
         write_fragment(&mut self.output, "relation");
-        self.schema(expression.schema());
-        self.facts(expression.facts());
+        let output = ColumnScope::from_schema(expression.schema());
+        self.schema(expression.schema(), &output);
+        self.facts(expression.facts(), &output);
         if self.include_provenance {
             self.origin(expression.origin());
         }
@@ -417,15 +412,16 @@ impl KeyEncoder {
             RelationOperator::Filter { input, predicate } => {
                 write_fragment(&mut self.output, "filter");
                 self.relation(input);
-                self.scalar(predicate);
+                self.scalar(predicate, &ColumnScope::from_schema(input.schema()));
             }
             RelationOperator::Project { input, projections } => {
                 write_fragment(&mut self.output, "project");
                 self.relation(input);
+                let input_scope = ColumnScope::from_schema(input.schema());
                 write_usize(&mut self.output, projections.len());
                 for projection in projections {
-                    self.column_id(projection.column());
-                    self.scalar(projection.expression());
+                    self.column_id(&output, projection.column());
+                    self.scalar(projection.expression(), &input_scope);
                 }
             }
             RelationOperator::Join {
@@ -443,7 +439,10 @@ impl KeyEncoder {
                 );
                 self.relation(left);
                 self.relation(right);
-                self.scalar(condition);
+                self.scalar(
+                    condition,
+                    &ColumnScope::from_join(left.schema(), right.schema()),
+                );
             }
             RelationOperator::Distinct { input } => {
                 write_fragment(&mut self.output, "distinct");
@@ -452,33 +451,35 @@ impl KeyEncoder {
             RelationOperator::DistinctOn { input, columns } => {
                 write_fragment(&mut self.output, "distinct-on");
                 self.relation(input);
+                let input_scope = ColumnScope::from_schema(input.schema());
                 write_usize(&mut self.output, columns.len());
                 for column in columns {
-                    self.column_id(*column);
+                    self.column_id(&input_scope, *column);
                 }
             }
             RelationOperator::Sort { input, keys } => {
                 write_fragment(&mut self.output, "sort");
                 self.relation(input);
+                let input_scope = ColumnScope::from_schema(input.schema());
                 write_usize(&mut self.output, keys.len());
                 for key in keys {
-                    self.sort_key(key);
+                    self.sort_key(key, &input_scope);
                 }
             }
         }
     }
 
-    fn schema(&mut self, schema: &RelationSchema) {
+    fn schema(&mut self, schema: &RelationSchema, scope: &ColumnScope) {
         write_fragment(&mut self.output, "schema");
         write_usize(&mut self.output, schema.columns().len());
         for column in schema.columns() {
-            self.column(column);
+            self.column(column, scope);
         }
     }
 
-    fn column(&mut self, column: &Column) {
+    fn column(&mut self, column: &Column, scope: &ColumnScope) {
         write_fragment(&mut self.output, "column");
-        self.column_id(column.id());
+        self.column_id(scope, column.id());
         write_fragment(&mut self.output, column.name().as_str());
         self.type_ref(column.type_ref());
         self.multiplicity(column.multiplicity());
@@ -488,13 +489,13 @@ impl KeyEncoder {
         }
     }
 
-    fn facts(&mut self, facts: &RelationFacts) {
+    fn facts(&mut self, facts: &RelationFacts, scope: &ColumnScope) {
         write_fragment(&mut self.output, "facts");
-        self.keys(facts.candidate_keys());
+        self.keys(facts.candidate_keys(), scope);
         self.row_semantics(facts.row_semantics());
     }
 
-    fn keys(&mut self, knowledge: &Knowledge<Vec<CandidateKey>>) {
+    fn keys(&mut self, knowledge: &Knowledge<Vec<CandidateKey>>, scope: &ColumnScope) {
         write_fragment(&mut self.output, "keys");
         match knowledge {
             Knowledge::Unknown => write_fragment(&mut self.output, "unknown"),
@@ -506,7 +507,7 @@ impl KeyEncoder {
                         let mut columns = key
                             .columns()
                             .iter()
-                            .map(|column| self.canonical_column(*column))
+                            .filter_map(|column| scope.position(*column))
                             .collect::<Vec<_>>();
                         columns.sort_unstable();
                         columns
@@ -561,9 +562,9 @@ impl KeyEncoder {
         }
     }
 
-    fn sort_key(&mut self, key: &SortKey) {
+    fn sort_key(&mut self, key: &SortKey, scope: &ColumnScope) {
         write_fragment(&mut self.output, "sort-key");
-        self.column_id(key.column());
+        self.column_id(scope, key.column());
         write_fragment(
             &mut self.output,
             match key.direction() {
@@ -576,7 +577,7 @@ impl KeyEncoder {
         }
     }
 
-    fn scalar(&mut self, expression: &ScalarExpression) {
+    fn scalar(&mut self, expression: &ScalarExpression, scope: &ColumnScope) {
         write_fragment(&mut self.output, "scalar");
         self.type_ref(expression.type_ref());
         self.multiplicity(expression.multiplicity());
@@ -588,32 +589,32 @@ impl KeyEncoder {
         match expression.operator() {
             ScalarOperator::Column(column) => {
                 write_fragment(&mut self.output, "column");
-                self.column_id(*column);
+                self.column_id(scope, *column);
             }
             ScalarOperator::Literal(literal) => self.literal(literal),
             ScalarOperator::Navigation { input, navigation } => {
                 write_fragment(&mut self.output, "navigation");
-                self.scalar(input);
+                self.scalar(input, scope);
                 self.member(navigation.member());
             }
             ScalarOperator::Equal { left, right } => {
                 write_fragment(&mut self.output, "equal");
-                self.scalar(left);
-                self.scalar(right);
+                self.scalar(left, scope);
+                self.scalar(right, scope);
             }
             ScalarOperator::And { left, right } => {
                 write_fragment(&mut self.output, "and");
-                self.scalar(left);
-                self.scalar(right);
+                self.scalar(left, scope);
+                self.scalar(right, scope);
             }
             ScalarOperator::Or { left, right } => {
                 write_fragment(&mut self.output, "or");
-                self.scalar(left);
-                self.scalar(right);
+                self.scalar(left, scope);
+                self.scalar(right, scope);
             }
             ScalarOperator::Not { input } => {
                 write_fragment(&mut self.output, "not");
-                self.scalar(input);
+                self.scalar(input, scope);
             }
         }
     }
@@ -795,20 +796,44 @@ impl KeyEncoder {
         write_fragment(&mut self.output, &u32::from(range.end()).to_string());
     }
 
-    fn canonical_column(&mut self, column: ColumnId) -> usize {
-        if let Some(value) = self.columns.get(&column) {
-            return *value;
+    fn column_id(&mut self, scope: &ColumnScope, column: ColumnId) {
+        write_fragment(&mut self.output, "column-id");
+        match scope.position(column) {
+            Some(position) => write_usize(&mut self.output, position),
+            None => write_fragment(&mut self.output, "missing"),
         }
-        let value = self.next_column;
-        self.next_column = self.next_column.saturating_add(1);
-        self.columns.insert(column, value);
-        value
+    }
+}
+
+/// Canonical column identities for one explicit relation-schema scope.
+///
+/// Raw ColumnId values can be reused by a caller in a nested projection. The
+/// normal-form key must alpha-normalize each input/output schema independently
+/// rather than leaking an outer raw allocation into that inner scope.
+struct ColumnScope {
+    positions: BTreeMap<ColumnId, usize>,
+}
+
+impl ColumnScope {
+    fn from_schema(schema: &RelationSchema) -> Self {
+        Self::from_columns(schema.columns().iter())
     }
 
-    fn column_id(&mut self, column: ColumnId) {
-        write_fragment(&mut self.output, "column-id");
-        let canonical = self.canonical_column(column);
-        write_usize(&mut self.output, canonical);
+    fn from_join(left: &RelationSchema, right: &RelationSchema) -> Self {
+        Self::from_columns(left.columns().iter().chain(right.columns()))
+    }
+
+    fn from_columns<'column>(columns: impl Iterator<Item = &'column Column>) -> Self {
+        Self {
+            positions: columns
+                .enumerate()
+                .map(|(position, column)| (column.id(), position))
+                .collect(),
+        }
+    }
+
+    fn position(&self, column: ColumnId) -> Option<usize> {
+        self.positions.get(&column).copied()
     }
 }
 

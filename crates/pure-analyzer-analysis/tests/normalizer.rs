@@ -175,6 +175,46 @@ fn allocation_and_source_span_do_not_change_the_semantic_key() {
 }
 
 #[test]
+fn nested_projection_scopes_alpha_normalize_reused_column_ids() {
+    let project = |input_id: u32, output_id: u32| {
+        let source = origin(FILE, 1, 9, Vec::new());
+        let base = query(&[input_id], &["input"], source.clone());
+        let input = base.root().clone();
+        let input_column = input.schema().columns()[0].clone();
+        let output = Column::new(
+            ColumnId::new(output_id),
+            "alias".parse().expect("fixture name is valid"),
+            input_column.type_ref().clone(),
+            input_column.multiplicity(),
+            input_column.nullability(),
+            source.clone(),
+        );
+        RelationalQuery::new(
+            RelationExpression::new(
+                RelationOperator::Project {
+                    input: Box::new(input),
+                    projections: vec![Projection::new(
+                        output.id(),
+                        scalar_column(&input_column, source.clone()),
+                    )],
+                },
+                RelationSchema::new(vec![output]).expect("fixture schema is valid"),
+                RelationFacts::unknown(),
+                source,
+            )
+            .expect("rebinding project is valid"),
+        )
+    };
+
+    let reused = project(4, 4);
+    let fresh = project(50, 900);
+    let reused = normalized(&reused);
+    let fresh = normalized(&fresh);
+    assert_eq!(reused.equivalence_key(), fresh.equivalence_key());
+    assert_eq!(reused.structural_key(), fresh.structural_key());
+}
+
+#[test]
 fn structural_key_canonicalizes_model_origin_collection_order() {
     let (left, right) = classes();
     let first_origins = vec![
