@@ -150,7 +150,7 @@ impl NormalizationFailure {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NormalizationOutcome {
     /// The input reached a conservative normal form.
-    Normalized(NormalizedQuery),
+    Normalized(Box<NormalizedQuery>),
     /// The finite normalization budget was exhausted or rebuilding failed.
     Indecisive(NormalizationFailure),
 }
@@ -209,11 +209,11 @@ pub fn normalize_relational_query_with_budget(
     write_fragment(&mut structural, "input-provenance-v1");
     write_fragment(&mut structural, &provenance);
 
-    NormalizationOutcome::Normalized(NormalizedQuery {
+    NormalizationOutcome::Normalized(Box::new(NormalizedQuery {
         root,
         equivalence_key: EquivalenceKey(semantic),
         structural_key: StructuralKey(structural),
-    })
+    }))
 }
 
 struct Normalizer {

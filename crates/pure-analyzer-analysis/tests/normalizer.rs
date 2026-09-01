@@ -146,7 +146,7 @@ fn true_predicate(source: IrOrigin) -> ScalarExpression {
 
 fn normalized(query: &RelationalQuery) -> pure_analyzer_analysis::NormalizedQuery {
     match normalize_relational_query(query) {
-        NormalizationOutcome::Normalized(value) => value,
+        NormalizationOutcome::Normalized(value) => *value,
         NormalizationOutcome::Indecisive(value) => {
             panic!("normalization unexpectedly stopped: {value:?}")
         }
