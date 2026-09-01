@@ -2,8 +2,6 @@
 
 #![allow(clippy::disallowed_methods)]
 
-use std::collections::BTreeMap;
-
 use pure_analyzer_diagnostics::{DiagCode, ReasonCode, TextRange};
 use pure_analyzer_model::{
     ModelDocument, ModelGraph, Multiplicity, Name, PmcdDocument, PureDocument, QName, QpKind,
@@ -11,8 +9,9 @@ use pure_analyzer_model::{
 };
 use pure_analyzer_resolve::{
     LocalValue, LocalValueKind, NavigationResolution, NavigationResolver, NavigationStep,
-    NavigationTarget, NavigationUnderResolution, NavigationUnderResolutionReason, RelationRow,
-    Resolution, ResolvedMemberKind, Resolver, TypeEnvironment, UnknownValue,
+    NavigationTarget, NavigationUnderResolution, NavigationUnderResolutionReason, RelationColumn,
+    RelationColumnId, RelationRow, RelationRowError, Resolution, ResolvedMemberKind, Resolver,
+    TypeEnvironment, UnknownValue,
 };
 use serde_json::{Value, json};
 
@@ -463,18 +462,30 @@ fn generated_milestoning_arity_is_fresh_for_each_navigation_hop() {
 fn relation_rows_bind_columns_and_require_zero_context_arguments() {
     let graph = graph(Vec::new());
     let resolver = NavigationResolver::new(&graph);
-    let rank = LocalValue::scalar(type_ref("Integer"), single());
+    let span = exact_span("rank:Integer[1]", "rank:Integer[1]");
+    let column = RelationColumn::new(
+        RelationColumnId::new(ZERO),
+        name("rank"),
+        type_ref("Integer"),
+        single(),
+        span,
+    );
     let row = LocalValue::relation_row(
-        RelationRow::new(BTreeMap::from([(name("rank"), rank.clone())])),
+        RelationRow::new(vec![column.clone()]).expect("single column must be valid"),
         single(),
     );
 
     let chain = found(resolver.resolve(&row, &[NavigationStep::property(name("rank"))]));
     assert!(matches!(
         chain.hops()[0].target(),
-        NavigationTarget::RelationColumn
+        NavigationTarget::RelationColumn(target)
+            if target == &column
     ));
-    assert_eq!(chain.value(), &rank);
+    assert!(matches!(
+        chain.value().kind(),
+        LocalValueKind::Scalar(value) if value == &type_ref("Integer")
+    ));
+    assert_eq!(chain.value().multiplicity(), single());
 
     let mismatch = resolver.resolve(&row, &[NavigationStep::call(name("rank"), ONE_ARGUMENT)]);
     let NavigationResolution::WrongArity(mismatch) = mismatch else {
@@ -483,6 +494,63 @@ fn relation_rows_bind_columns_and_require_zero_context_arguments() {
     assert_eq!(mismatch.expected(), NO_ARGUMENTS);
     assert_eq!(mismatch.actual(), ONE_ARGUMENT);
     assert_eq!(mismatch.definition(), None);
+}
+
+#[test]
+fn relation_rows_preserve_declaration_order_and_reject_duplicate_facts() {
+    let source = "zeta:String[1], alpha:Integer[0..1]";
+    let zeta = RelationColumn::new(
+        RelationColumnId::new(ZERO),
+        name("zeta"),
+        type_ref("String"),
+        single(),
+        exact_span(source, "zeta:String[1]"),
+    );
+    let alpha = RelationColumn::new(
+        RelationColumnId::new(ONE),
+        name("alpha"),
+        type_ref("Integer"),
+        Multiplicity::new(ZERO, Some(ONE)).expect("optional multiplicity must be valid"),
+        exact_span(source, "alpha:Integer[0..1]"),
+    );
+    let row = RelationRow::new(vec![zeta.clone(), alpha.clone()])
+        .expect("distinct declarations must build a row");
+
+    assert_eq!(row.columns(), &[zeta.clone(), alpha.clone()]);
+    assert_eq!(row.column(&name("alpha")), Some(&alpha));
+    assert_eq!(row.column(&name("missing")), None);
+
+    let duplicate_id = RelationRow::new(vec![
+        zeta.clone(),
+        RelationColumn::new(
+            RelationColumnId::new(ZERO),
+            name("other"),
+            type_ref("String"),
+            single(),
+            zeta.span(),
+        ),
+    ]);
+    assert_eq!(
+        duplicate_id,
+        Err(RelationRowError::DuplicateColumnId(RelationColumnId::new(
+            ZERO
+        )))
+    );
+
+    let duplicate_name = RelationRow::new(vec![
+        zeta.clone(),
+        RelationColumn::new(
+            RelationColumnId::new(ONE),
+            name("zeta"),
+            type_ref("String"),
+            single(),
+            zeta.span(),
+        ),
+    ]);
+    assert_eq!(
+        duplicate_name,
+        Err(RelationRowError::DuplicateColumnName(name("zeta")))
+    );
 }
 
 #[test]

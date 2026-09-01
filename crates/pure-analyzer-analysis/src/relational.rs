@@ -281,8 +281,8 @@ pub enum SchemaError {
 
 /// Explicit, ordered output schema for one relational expression.
 ///
-/// A `Vec` deliberately retains declaration/output order; it is not a name-keyed
-/// local type environment such as resolver [`RelationRow`](pure_analyzer_resolve::RelationRow).
+/// A `Vec` deliberately retains declaration/output order; it is not a scoped
+/// local binding such as resolver [`RelationRow`](pure_analyzer_resolve::RelationRow).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RelationSchema {
     columns: Vec<Column>,

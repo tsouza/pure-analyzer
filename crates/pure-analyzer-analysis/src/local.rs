@@ -1,11 +1,12 @@
 //! Local navigation analysis over the supported M3 concrete syntax tree.
 
-use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 use pure_analyzer_model::{ModelGraph, Multiplicity, Name, QName, TypeRef};
 use pure_analyzer_resolve::{
     LocalValue, NavigationResolution, NavigationResolver, NavigationStep,
-    NavigationUnderResolution, RelationRow, Resolution, TypeEnvironment, TypeScope, UnknownValue,
+    NavigationUnderResolution, RelationColumn, RelationColumnId, RelationRow, Resolution,
+    TypeEnvironment, TypeScope, UnknownValue,
 };
 use pure_analyzer_syntax::{GreenElement, GreenNode, SyntaxKind, TextRange};
 
@@ -90,6 +91,13 @@ pub fn analyze_m3_locals(tree: &GreenNode, graph: &ModelGraph) -> LocalNavigatio
 struct LocalAnalyzer<'model> {
     resolver: NavigationResolver<'model>,
     sites: Vec<LocalResolutionSite>,
+}
+
+#[derive(Debug, Clone)]
+enum RelationParameterBinding {
+    NotRelation,
+    Row(LocalValue),
+    Invalid,
 }
 
 trait LocalBindings {
@@ -315,12 +323,27 @@ impl LocalAnalyzer<'_> {
             .into_iter()
             .find(|child| child.kind() == SyntaxKind::LAMBDA_PARAMS)
         {
-            let relation_row = relation_row_value(&parameters, incoming.multiplicity());
-            for (index, name) in lambda_parameter_names(&parameters).into_iter().enumerate() {
-                let value = if index == 0 {
-                    relation_row.clone().unwrap_or_else(|| incoming.clone())
-                } else {
+            let relation_rows = typed_relation_rows(&parameters, incoming.multiplicity());
+            let parameter_names = lambda_parameter_names(&parameters);
+            let mut seen_names = BTreeSet::new();
+            let mut duplicate_names = BTreeSet::new();
+            for name in &parameter_names {
+                if !seen_names.insert(name.clone()) {
+                    let _ = duplicate_names.insert(name.clone());
+                }
+            }
+            for (index, name) in parameter_names.into_iter().enumerate() {
+                let value = if duplicate_names.contains(&name) {
                     Self::unknown_value()
+                } else {
+                    match relation_rows.get(index) {
+                        Some(RelationParameterBinding::Row(row)) => row.clone(),
+                        Some(RelationParameterBinding::Invalid) => Self::unknown_value(),
+                        Some(RelationParameterBinding::NotRelation) | None if index == 0 => {
+                            incoming.clone()
+                        }
+                        Some(RelationParameterBinding::NotRelation) | None => Self::unknown_value(),
+                    }
                 };
                 scope.bind(name, value);
             }
@@ -372,7 +395,7 @@ fn direct_nodes(node: &GreenNode) -> Vec<GreenNode> {
 }
 
 fn qualified_name(node: GreenNode) -> Option<QName> {
-    QName::new(node.text()).ok()
+    QName::new(compact_text(&node)).ok()
 }
 
 fn variable_name(node: &GreenNode) -> Option<Name> {
@@ -450,43 +473,254 @@ fn lambda_parameter_names(node: &GreenNode) -> Vec<Name> {
         .collect()
 }
 
+fn typed_relation_rows(
+    node: &GreenNode,
+    multiplicity: Multiplicity,
+) -> Vec<RelationParameterBinding> {
+    let mut has_parameter = false;
+    let mut binding = RelationParameterBinding::NotRelation;
+    let mut rows = Vec::new();
+    for element in node.children() {
+        match element {
+            GreenElement::Token(token) if token.kind() == SyntaxKind::COMMA => {
+                if has_parameter {
+                    rows.push(binding);
+                    has_parameter = false;
+                    binding = RelationParameterBinding::NotRelation;
+                }
+            }
+            GreenElement::Token(token) if NAME_KINDS.contains(&token.kind()) => {
+                has_parameter = Name::new(token.text()).is_ok();
+            }
+            GreenElement::Node(type_reference) if type_reference.kind() == SyntaxKind::TYPE_REF => {
+                binding = match (has_parameter, is_named_relation_type(type_reference)) {
+                    (true, true) => is_relation_type(type_reference)
+                        .then(|| relation_row_value(type_reference, multiplicity))
+                        .flatten()
+                        .map_or(
+                            RelationParameterBinding::Invalid,
+                            RelationParameterBinding::Row,
+                        ),
+                    _ => binding,
+                };
+            }
+            _ => {}
+        }
+    }
+    if has_parameter {
+        rows.push(binding);
+    }
+    rows
+}
+
+fn is_named_relation_type(node: &GreenNode) -> bool {
+    let paths = direct_nodes(node)
+        .into_iter()
+        .filter(|child| child.kind() == SyntaxKind::QUALIFIED_NAME)
+        .filter_map(qualified_name)
+        .collect::<Vec<_>>();
+    let [path] = paths.as_slice() else {
+        return false;
+    };
+    path.as_str() == "Relation"
+}
+
+fn is_relation_type(node: &GreenNode) -> bool {
+    !contains_error_node(node)
+        && is_named_relation_type(node)
+        && direct_nodes(node)
+            .iter()
+            .filter(|child| child.kind() == SyntaxKind::RELATION_TYPE)
+            .count()
+            == 1
+}
+
 fn relation_row_value(node: &GreenNode, multiplicity: Multiplicity) -> Option<LocalValue> {
-    let relation = find_descendant(node, SyntaxKind::RELATION_TYPE)?;
-    let columns = direct_nodes(&relation)
+    let relations = direct_nodes(node)
+        .into_iter()
+        .filter(|child| child.kind() == SyntaxKind::RELATION_TYPE)
+        .collect::<Vec<_>>();
+    let [relation] = relations.as_slice() else {
+        return None;
+    };
+    if contains_error_node(relation) {
+        return None;
+    }
+    let columns = direct_nodes(relation)
         .into_iter()
         .filter(|column| column.kind() == SyntaxKind::COLUMN_INFO)
-        .filter_map(relation_column)
-        .collect::<BTreeMap<_, _>>();
+        .enumerate()
+        .map(|(index, column)| {
+            relation_column(column, RelationColumnId::new(u32::try_from(index).ok()?))
+        })
+        .collect::<Option<Vec<_>>>()?;
     Some(LocalValue::relation_row(
-        RelationRow::new(columns),
+        RelationRow::new(columns).ok()?,
         multiplicity,
     ))
 }
 
-fn relation_column(node: GreenNode) -> Option<(Name, LocalValue)> {
-    let name = direct_name(&node)?;
-    let type_reference = find_descendant(&node, SyntaxKind::TYPE_REF)?;
-    let path =
-        find_descendant(&type_reference, SyntaxKind::QUALIFIED_NAME).and_then(qualified_name)?;
-    let value = LocalValue::unknown(
-        UnknownValue::UnmodeledType(TypeRef::new(path, Vec::new())),
-        Multiplicity::zero_or_more(),
-    );
-    Some((name, value))
-}
-
-fn direct_name(node: &GreenNode) -> Option<Name> {
-    node.children()
+fn relation_column(node: GreenNode, id: RelationColumnId) -> Option<RelationColumn> {
+    if contains_error_node(&node) {
+        return None;
+    }
+    let names = node
+        .children()
         .iter()
         .filter_map(GreenElement::as_token)
-        .find(|token| NAME_KINDS.contains(&token.kind()))
-        .and_then(|token| Name::new(token.text()).ok())
+        .filter(|token| NAME_KINDS.contains(&token.kind()))
+        .filter_map(|token| Name::new(token.text()).ok())
+        .collect::<Vec<_>>();
+    let [name] = names.as_slice() else {
+        return None;
+    };
+    let type_references = direct_nodes(&node)
+        .into_iter()
+        .filter(|child| child.kind() == SyntaxKind::TYPE_REF)
+        .collect::<Vec<_>>();
+    let [type_reference] = type_references.as_slice() else {
+        return None;
+    };
+    let multiplicities = direct_nodes(&node)
+        .into_iter()
+        .filter(|child| child.kind() == SyntaxKind::MULTIPLICITY)
+        .collect::<Vec<_>>();
+    let [multiplicity] = multiplicities.as_slice() else {
+        return None;
+    };
+    Some(RelationColumn::new(
+        id,
+        name.clone(),
+        type_ref(type_reference)?,
+        multiplicity_from_node(multiplicity)?,
+        declaration_span(&node)?,
+    ))
 }
 
-fn find_descendant(node: &GreenNode, kind: SyntaxKind) -> Option<GreenNode> {
-    direct_nodes(node).into_iter().find_map(|child| {
-        (child.kind() == kind)
-            .then_some(child.clone())
-            .or_else(|| find_descendant(&child, kind))
-    })
+fn type_ref(node: &GreenNode) -> Option<TypeRef> {
+    if node.kind() != SyntaxKind::TYPE_REF || contains_error_node(node) {
+        return None;
+    }
+    let paths = direct_nodes(node)
+        .into_iter()
+        .filter(|child| child.kind() == SyntaxKind::QUALIFIED_NAME)
+        .filter_map(qualified_name)
+        .collect::<Vec<_>>();
+    let [path] = paths.as_slice() else {
+        return None;
+    };
+    let arguments = direct_nodes(node)
+        .into_iter()
+        .filter(|child| child.kind() == SyntaxKind::TYPE_REF)
+        .map(|argument| type_ref(&argument))
+        .collect::<Option<Vec<_>>>()?;
+    Some(TypeRef::new(path.clone(), arguments))
+}
+
+fn multiplicity_from_node(node: &GreenNode) -> Option<Multiplicity> {
+    if node.kind() != SyntaxKind::MULTIPLICITY || contains_error_node(node) {
+        return None;
+    }
+    let text = compact_text(node);
+    let body = text.strip_prefix('[')?.strip_suffix(']')?;
+    if body == "*" {
+        return Multiplicity::new(0, None).ok();
+    }
+    if let Some((lower, upper)) = body.split_once("..") {
+        if upper.contains("..") {
+            return None;
+        }
+        let lower = parse_multiplicity_bound(lower)?;
+        let upper = if upper == "*" {
+            None
+        } else {
+            Some(parse_multiplicity_bound(upper)?)
+        };
+        return Multiplicity::new(lower, upper).ok();
+    }
+    let bound = parse_multiplicity_bound(body)?;
+    Multiplicity::new(bound, Some(bound)).ok()
+}
+
+fn parse_multiplicity_bound(text: &str) -> Option<u32> {
+    text.bytes()
+        .all(|byte| byte.is_ascii_digit())
+        .then(|| text.parse().ok())
+        .flatten()
+}
+
+fn contains_error_node(node: &GreenNode) -> bool {
+    node.kind() == SyntaxKind::ERROR_NODE
+        || node.tokens().any(|token| token.kind() == SyntaxKind::ERROR)
+        || direct_nodes(node).iter().any(contains_error_node)
+}
+
+fn compact_text(node: &GreenNode) -> String {
+    node.tokens()
+        .filter(|token| !is_trivia(token.kind()))
+        .map(|token| token.text())
+        .collect()
+}
+
+fn declaration_span(node: &GreenNode) -> Option<TextRange> {
+    let mut tokens = node.tokens().filter(|token| !is_trivia(token.kind()));
+    let first = tokens.next()?;
+    let start = first.text_range().start();
+    let end = tokens.last().map_or_else(
+        || first.text_range().end(),
+        |token| token.text_range().end(),
+    );
+    Some(TextRange::new(start, end))
+}
+
+fn is_trivia(kind: SyntaxKind) -> bool {
+    matches!(
+        kind,
+        SyntaxKind::WHITESPACE | SyntaxKind::LINE_COMMENT | SyntaxKind::BLOCK_COMMENT
+    )
+}
+
+#[cfg(test)]
+#[allow(clippy::disallowed_methods)]
+mod tests {
+    use pure_analyzer_lexer::lex;
+    use pure_analyzer_syntax::GreenNodeBuilder;
+
+    use super::*;
+
+    #[test]
+    fn relation_column_rejects_a_hidden_recovery_node() {
+        let source = "name:String[1]";
+        let tokens = lex(source);
+        let mut builder = GreenNodeBuilder::new(source, &tokens);
+        builder.open(SyntaxKind::ROOT);
+        builder.open(SyntaxKind::COLUMN_INFO);
+        builder.advance();
+        builder.advance();
+        builder.open(SyntaxKind::TYPE_REF);
+        builder.open(SyntaxKind::QUALIFIED_NAME);
+        builder.advance();
+        builder.close();
+        builder.close();
+        builder.open(SyntaxKind::MULTIPLICITY);
+        builder.advance();
+        builder.advance();
+        builder.advance();
+        builder.close();
+        builder.open(SyntaxKind::ERROR_NODE);
+        builder.close();
+        builder.close();
+        builder.close();
+        let root = builder.finish().expect("fixture tree must build");
+        let column = direct_nodes(&root)
+            .into_iter()
+            .next()
+            .expect("fixture must contain a column");
+
+        assert_eq!(
+            relation_column(column, RelationColumnId::new(0)),
+            None,
+            "a recovered column must not become a partial relation binding"
+        );
+    }
 }
