@@ -179,6 +179,12 @@ impl ReasonCode {
             Self::RelationRowTypeUnknown => "the relation row's column types are unavailable",
         }
     }
+
+    /// Structured, renderer-neutral explain content for this reason.
+    #[must_use]
+    pub fn explanation(self) -> &'static crate::ExplainContent {
+        crate::explain::reason_explanation(self)
+    }
 }
 
 impl fmt::Display for ReasonCode {

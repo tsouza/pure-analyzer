@@ -3,6 +3,10 @@ pub use libpure::ALL_DIAG_CODES
 pub use libpure::BuildError
 pub use libpure::DiagCode
 pub use libpure::Diagnostic
+pub use libpure::EXPLAIN_INDEX_URL
+pub use libpure::ExplainClassification
+pub use libpure::ExplainContent
+pub use libpure::ExplainKind
 pub use libpure::FileId
 pub use libpure::FixPlan
 pub use libpure::FixPlanError
@@ -14,6 +18,7 @@ pub use libpure::PlannedFile
 pub use libpure::Severity
 pub use libpure::TextRange
 pub use libpure::TextSize
+pub use libpure::UnknownExplainIdentifier
 pub use libpure::format_query
 pub use libpure::format_query_with_width
 pub enum libpure::DefinitionResult
@@ -1172,4 +1177,5 @@ pub unsafe fn libpure::SourceStore::drop(usize)
 pub unsafe fn libpure::SourceStore::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
 impl<T> either::into_either::IntoEither for libpure::SourceStore
 pub fn libpure::engine_crate_versions() -> alloc::vec::Vec<libpure::CrateVersion>
+pub fn libpure::explain(&str) -> core::result::Result<&'static pure_analyzer_diagnostics::explain::ExplainContent, pure_analyzer_diagnostics::explain::UnknownExplainIdentifier>
 pub type libpure::CrateVersion = (&'static str, &'static str)

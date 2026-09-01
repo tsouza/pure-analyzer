@@ -132,6 +132,12 @@ impl DiagCode {
             | Self::UnresolvedModelAssociation => DiagFamily::Tool,
         }
     }
+
+    /// Structured, renderer-neutral explain content for this code.
+    #[must_use]
+    pub fn explanation(self) -> &'static crate::ExplainContent {
+        crate::explain::diagnostic_explanation(self)
+    }
 }
 
 impl fmt::Display for DiagCode {

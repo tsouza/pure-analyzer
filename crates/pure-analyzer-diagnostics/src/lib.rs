@@ -11,6 +11,7 @@
 
 mod code;
 mod diagnostic;
+mod explain;
 mod file;
 mod fix;
 mod fix_plan;
@@ -18,6 +19,10 @@ mod verdict;
 
 pub use code::{ALL_DIAG_CODES, DiagCode, DiagFamily, UnknownDiagCode};
 pub use diagnostic::{Diagnostic, DiagnosticBuilder, Label, Severity};
+pub use explain::{
+    EXPLAIN_INDEX_URL, ExplainClassification, ExplainContent, ExplainKind,
+    UnknownExplainIdentifier, lookup_explanation,
+};
 pub use file::FileId;
 pub use fix::{Applicability, Fix, FixProvenance, TextEdit};
 pub use fix_plan::{FixPlan, FixPlanError, PlannedChange, PlannedFile};
