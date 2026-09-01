@@ -8,8 +8,9 @@ use std::fmt::Display;
 use std::io::{IsTerminal, Write};
 
 use libpure::{
-    AnalysisDriver, AnalysisOutput, Diagnostic, DriverError, FormatOutput, LintRequest, ModelInput,
-    PlannedChange, Severity, SourceFile, SourceInput, SourceOrigin, SourceRequest, SourceStore,
+    AnalysisDriver, AnalysisOutput, Diagnostic, DriverError, ExplainContent, FormatOutput,
+    LintRequest, ModelInput, PlannedChange, Severity, SourceFile, SourceInput, SourceOrigin,
+    SourceRequest, SourceStore,
 };
 use pure_analyzer_render::{ColorPolicy, RenderInput, render_human, render_json, render_sarif};
 use thiserror::Error;
@@ -35,6 +36,7 @@ const FMT_MIXED_INPUT_WRITE_UNAVAILABLE: &str =
     "fmt cannot combine standard input with in-place file writes; use --check, --stdout, or --diff";
 const FIX_STDIN_WRITE_UNAVAILABLE: &str =
     "lint --fix cannot update standard input; use --fix --check, --fix --stdout, or --fix --diff";
+const EXPLAIN_SARIF_UNSUPPORTED: &str = "explain supports only --format human or --format json";
 
 /// A classified CLI boundary failure with a stable process exit code.
 #[derive(Debug, Error)]
@@ -238,6 +240,34 @@ pub(crate) fn write_stdout(text: &str) -> Result<(), Failure> {
         .write_all(text.as_bytes())
         .and_then(|()| stdout.flush())
         .map_err(|error| Failure::internal(format!("could not write standard output: {error}")))
+}
+
+/// Explain an exact registered diagnostic or reason identifier.
+pub(crate) fn explain(identifier: &str, format: OutputFormat) -> Result<u8, Failure> {
+    let content = libpure::explain(identifier).map_err(Failure::usage)?;
+    let mut rendered = match format {
+        OutputFormat::Human => render_explanation_human(content),
+        OutputFormat::Json => serde_json::to_string_pretty(content).map_err(|error| {
+            Failure::internal(format!("could not serialize explain content: {error}"))
+        })?,
+        OutputFormat::Sarif => return Err(Failure::usage(EXPLAIN_SARIF_UNSUPPORTED)),
+    };
+    rendered.push('\n');
+    write_stdout(&rendered)?;
+    Ok(EXIT_SUCCESS)
+}
+
+fn render_explanation_human(content: &ExplainContent) -> String {
+    format!(
+        "{} ({}, {})\n\nMeaning\n{}\n\nLimit\n{}\n\nRemedy\n{}\n\nDocumentation\n{}",
+        content.identifier,
+        content.kind.as_str(),
+        content.classification.as_str(),
+        content.meaning,
+        content.limit,
+        content.remedy,
+        content.documentation_url,
+    )
 }
 
 /// Generate one deterministic shell-completion program without reading config.

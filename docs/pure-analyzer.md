@@ -1,8 +1,8 @@
 # Pure Analyzer user guide
 
 `pure-analyzer` is a deterministic command-line static analyzer for Legend
-Pure. It validates source syntax, lints model-aware queries, and formats
-supported source files.
+Pure. It validates source syntax, lints model-aware queries, formats supported
+source files, and explains registered diagnostic and reason identifiers.
 
 ## Commands
 
@@ -11,6 +11,7 @@ supported source files.
 | `pure-analyzer validate <input>...`                  | Check grammar and shallow well-formedness. No model is required.                                            |
 | `pure-analyzer lint <input>... [--model <model>]...` | Check model-aware milestoning arity, unknown properties, and cardinality misuse when models are supplied.   |
 | `pure-analyzer fmt <input>...`                       | Canonically format input. File input is updated by default; standard input is formatted to standard output. |
+| `pure-analyzer explain <identifier>`                 | Explain one exact registered diagnostic or reason identifier.                                               |
 | `pure-analyzer completions bash`                     | Print Bash completion code to standard output.                                                              |
 
 Use `pure-analyzer <command> --help` for the complete flag syntax.
@@ -94,6 +95,23 @@ or automating changes:
 `--line-width <positive-integer>` overrides the configured layout width for
 one invocation.
 
+## Explain
+
+`explain` resolves one exact, case-sensitive registered diagnostic identifier
+such as `PUR2001` or reason identifier such as `IND_WINDOW` through the shared
+catalog:
+
+```text
+pure-analyzer explain PUR2001
+pure-analyzer explain IND_WINDOW --format json
+```
+
+The default human rendering and `--format json` both write the complete
+explanation to standard output. JSON is one pretty-printed object containing
+the identifier, kind, classification, meaning, limit, remedy, and documentation
+URL. `--format sarif` is not available for explanations. An unknown identifier
+or unsupported output format is a usage error written to standard error.
+
 ## Configuration and diagnostic policy
 
 Configuration is resolved from lowest to highest precedence:
@@ -168,10 +186,11 @@ An unknown `PURE_ANALYZER_*` variable is rejected rather than ignored.
 destination is a terminal; `always` and `never` force the choice.
 
 Normal `validate` and `lint` diagnostics go to standard output. Formatter
-diagnostics and every `lint --fix` diagnostic go to standard error. This leaves
-standard output clean for fixed source or diffs. `--quiet` suppresses normal
-diagnostic rendering without changing exit status or requested source/diff
-output.
+diagnostics and every `lint --fix` diagnostic go to standard error. `explain`
+writes one requested explanation to standard output. This leaves standard
+output clean for fixed source, diffs, or script-consumable explain JSON.
+`--quiet` suppresses normal diagnostic rendering without changing exit status
+or requested source/diff output.
 
 This makes it safe to route data and diagnostics independently:
 

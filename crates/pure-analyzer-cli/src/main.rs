@@ -87,6 +87,11 @@ enum Command {
         #[arg(long)]
         line_width: Option<usize>,
     },
+    /// Explain one exact registered diagnostic or reason identifier.
+    Explain {
+        /// Exact registered diagnostic (`PUR<nnnn>`) or reason identifier.
+        identifier: String,
+    },
     /// Generate deterministic shell completion code.
     Completions {
         /// Shell whose completion code should be emitted.
@@ -183,6 +188,7 @@ fn run(cli: Cli) -> Result<u8, Failure> {
             workflow::FormatMode::new(check, stdout, diff),
             &resolved,
         ),
+        Command::Explain { identifier } => workflow::explain(&identifier, resolved.output_format()),
         Command::Completions { shell } => workflow::completions(shell, Cli::command()),
     }
 }
@@ -304,7 +310,10 @@ mod tests {
             .filter(|subcommand| subcommand.get_name() != "help")
             .map(clap::Command::get_name)
             .collect::<Vec<_>>();
-        assert_eq!(commands, ["validate", "lint", "fmt", "completions"]);
+        assert_eq!(
+            commands,
+            ["validate", "lint", "fmt", "explain", "completions"]
+        );
     }
 
     #[test]
