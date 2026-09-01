@@ -790,6 +790,27 @@ mod tests {
     }
 
     #[test]
+    fn bare_relation_type_is_not_a_relation_row_type() {
+        let source = "Relation";
+        let tokens = lex(source);
+        let mut builder = GreenNodeBuilder::new(source, &tokens);
+        builder.open(SyntaxKind::ROOT);
+        builder.open(SyntaxKind::TYPE_REF);
+        builder.open(SyntaxKind::QUALIFIED_NAME);
+        builder.advance();
+        builder.close();
+        builder.close();
+        builder.close();
+        let root = builder.finish().expect("fixture tree must build");
+        let type_reference = direct_nodes(&root)
+            .into_iter()
+            .next()
+            .expect("fixture must contain a type reference");
+
+        assert!(!is_relation_type(&type_reference));
+    }
+
+    #[test]
     fn relation_shaped_non_type_parameter_is_not_bound() {
         let parameters = relation_parameters_fixture(SyntaxKind::PAREN_EXPR, false, true);
 
