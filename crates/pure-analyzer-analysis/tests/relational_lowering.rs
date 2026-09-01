@@ -3,7 +3,7 @@
 
 use proptest::prelude::*;
 use pure_analyzer_analysis::{
-    AnalysisInput, ColumnId, ModelOrigin, Nullability, RelationOperator, RelationSource,
+    AnalysisInput, ColumnId, JoinKind, ModelOrigin, Nullability, RelationOperator, RelationSource,
     RelationalOutcome, RowSemantics, ScalarLiteral, ScalarOperator, SourceSpan, lower_m3_query,
 };
 use pure_analyzer_diagnostics::{FileId, ReasonCode};
@@ -121,10 +121,44 @@ fn distinct_input(
     }
 }
 
+fn join_parts(
+    expression: &pure_analyzer_analysis::RelationExpression,
+) -> (
+    &pure_analyzer_analysis::RelationExpression,
+    &pure_analyzer_analysis::RelationExpression,
+    &pure_analyzer_analysis::ScalarExpression,
+) {
+    match expression.operator() {
+        RelationOperator::Join {
+            kind: JoinKind::Inner,
+            left,
+            right,
+            condition,
+        } => (left, right, condition),
+        other => panic!("expected an inner join, got {other:#?}"),
+    }
+}
+
 fn class_scan(expression: &pure_analyzer_analysis::RelationExpression) -> &ResolvedClass {
     match expression.operator() {
         RelationOperator::Scan(RelationSource::Class(class)) => class,
         other => panic!("expected class scan, got {other:#?}"),
+    }
+}
+
+fn resolved_class(model: &ModelGraph, path: &str) -> ResolvedClass {
+    let path = QName::new(path).expect("fixture path must be valid");
+    match Resolver::new(model).resolve_class(&path) {
+        Resolution::Found(class) => class,
+        other => panic!("fixture class must resolve, got {other:#?}"),
+    }
+}
+
+fn resolved_member(model: &ModelGraph, owner: &ResolvedClass, name: &str) -> ResolvedMember {
+    let name = Name::new(name).expect("fixture name must be valid");
+    match Resolver::new(model).resolve_member(owner.path(), &name) {
+        Resolution::Found(member) => member,
+        other => panic!("fixture member must resolve, got {other:#?}"),
     }
 }
 
@@ -346,6 +380,177 @@ fn distinct_rejects_unproven_overloads_and_preserves_model_requirements() {
     assert_reason(
         lower("model::Person.all()->distinct()", None),
         ReasonCode::ModelIncomplete,
+    );
+}
+
+const INNER_JOIN_SOURCE: &str = "model::Person.all()->join(model::Membership.all(), JoinKind.INNER, {person, membership | $person.personId == $membership.personId})";
+
+fn inner_join_model() -> ModelGraph {
+    graph(vec![
+        class(
+            "Person",
+            vec![property("personId", "String", ONE, Some(ONE))],
+        ),
+        class(
+            "Membership",
+            vec![property("personId", "String", ONE, Some(ONE))],
+        ),
+    ])
+}
+
+fn assert_inner_join_schema_and_facts(query: &pure_analyzer_analysis::RelationalQuery) {
+    assert_eq!(
+        query
+            .output()
+            .columns()
+            .iter()
+            .map(|column| (column.id(), column.name().as_str()))
+            .collect::<Vec<_>>(),
+        vec![
+            (ColumnId::new(ZERO), "Person"),
+            (ColumnId::new(ONE), "Membership"),
+        ]
+    );
+    assert!(query.facts().candidate_keys().is_unknown());
+    assert!(query.facts().row_semantics().is_unknown());
+}
+
+fn assert_inner_join_binder_columns(condition: &pure_analyzer_analysis::ScalarExpression) {
+    let (left_predicate, right_predicate) = equality_parts(condition);
+    let (left_input, left_member) = navigation_parts(left_predicate);
+    let (right_input, right_member) = navigation_parts(right_predicate);
+    assert_eq!(left_member.owner().path().as_str(), "model::Person");
+    assert_eq!(right_member.owner().path().as_str(), "model::Membership");
+    assert!(matches!(
+        left_input.operator(),
+        ScalarOperator::Column(id) if *id == ColumnId::new(ZERO)
+    ));
+    assert!(matches!(
+        right_input.operator(),
+        ScalarOperator::Column(id) if *id == ColumnId::new(ONE)
+    ));
+}
+
+fn assert_inner_join_provenance(
+    query: &pure_analyzer_analysis::RelationalQuery,
+    model: &ModelGraph,
+) {
+    let person = resolved_class(model, "model::Person");
+    let membership = resolved_class(model, "model::Membership");
+    let person_id = resolved_member(model, &person, "personId");
+    let membership_person_id = resolved_member(model, &membership, "personId");
+    assert_eq!(
+        query.root().origin().model_origins(),
+        &[
+            ModelOrigin::from_class(&person),
+            ModelOrigin::from_class(&membership),
+            ModelOrigin::from_member(&person_id),
+            ModelOrigin::from_member(&membership_person_id),
+        ]
+    );
+}
+
+#[test]
+fn lowers_pinned_inner_join_with_ordered_schema_and_resolved_binders() {
+    let model = inner_join_model();
+    let first = lower(INNER_JOIN_SOURCE, Some(&model));
+    let second = lower(INNER_JOIN_SOURCE, Some(&model));
+    assert_eq!(first, second);
+
+    let query = supported(first);
+    let (left, right, condition) = join_parts(query.root());
+    assert_eq!(class_scan(left).path().as_str(), "model::Person");
+    assert_eq!(class_scan(right).path().as_str(), "model::Membership");
+    assert_inner_join_schema_and_facts(&query);
+    assert_eq!(
+        span_text(INNER_JOIN_SOURCE, query.root().origin().source()),
+        "->join(model::Membership.all(), JoinKind.INNER, {person, membership | $person.personId == $membership.personId})"
+    );
+    assert_eq!(
+        span_text(INNER_JOIN_SOURCE, condition.origin().source()),
+        " $person.personId == $membership.personId"
+    );
+    assert_inner_join_binder_columns(condition);
+    assert_inner_join_provenance(&query, &model);
+}
+
+#[test]
+fn inner_join_retains_input_evidence_without_inferring_join_facts() {
+    let model = inner_join_model();
+    let source = "model::Person.all()->distinct()->join(model::Membership.all(), JoinKind.INNER, {person, membership | $person.personId == $membership.personId})";
+    let query = supported(lower(source, Some(&model)));
+    let (left, right, _) = join_parts(query.root());
+    let (semantics, fact_origin) = left
+        .facts()
+        .row_semantics()
+        .as_proven()
+        .expect("left distinct evidence must remain nested under the join");
+    assert_eq!(*semantics, RowSemantics::Set);
+    assert_eq!(span_text(source, fact_origin.source()), "->distinct()");
+    assert_eq!(
+        class_scan(distinct_input(left)).path().as_str(),
+        "model::Person"
+    );
+    let person = resolved_class(&model, "model::Person");
+    let membership = resolved_class(&model, "model::Membership");
+    assert_eq!(
+        left.origin().model_origins(),
+        &[ModelOrigin::from_class(&person)]
+    );
+    assert_eq!(class_scan(right).path().as_str(), "model::Membership");
+    assert_eq!(
+        right.origin().model_origins(),
+        &[ModelOrigin::from_class(&membership)]
+    );
+    assert!(query.facts().candidate_keys().is_unknown());
+    assert!(query.facts().row_semantics().is_unknown());
+}
+
+#[test]
+fn inner_join_declines_unproven_forms_without_rebinding_rows() {
+    let model = inner_join_model();
+    for source in [
+        "model::Person.all()->join(model::Membership.all(), JoinKind.INNER, {person, person | $person.personId == $person.personId})",
+        "model::Person.all()->join(model::Membership.all(), JoinKind.INNER, {person, membership | true})",
+        "model::Person.all()->join(model::Membership.all(), JoinKind.INNER, {person, membership | $person.personId == $person.personId})",
+        "model::Person.all()->join(model::Membership.all(), JoinKind.INNER, {person, membership | $person.personId})",
+    ] {
+        assert_reason(lower(source, Some(&model)), ReasonCode::IndOpaquePredicate);
+    }
+    assert_reason(
+        lower(
+            "model::Person.all()->join(model::Membership.all(), JoinKind.LEFT, {person, membership | $person.personId == $membership.personId})",
+            Some(&model),
+        ),
+        ReasonCode::IndUnmodeledOp,
+    );
+    assert_reason(
+        lower(
+            "model::Person.all()->join(model::Membership.all(), JoinKind.INNER, {person, membership | $person.personId == $membership.personId})->map(x| $x.personId)",
+            Some(&model),
+        ),
+        ReasonCode::IndUnmodeledOp,
+    );
+    assert_reason(
+        lower(
+            "model::Missing.all()->join(model::Membership.all(), JoinKind.INNER, {person, membership | $person.personId == $membership.personId})",
+            Some(&model),
+        ),
+        ReasonCode::IndUnresolvedSchema,
+    );
+    assert_reason(
+        lower(
+            "model::Person.all()->join(model::Missing.all(), JoinKind.INNER, {person, membership | $person.personId == $membership.personId})",
+            Some(&model),
+        ),
+        ReasonCode::IndUnresolvedSchema,
+    );
+    assert_reason(
+        lower(
+            "model::Person.all()->join(model::Membership.all(), JoinKind.INNER, {person, membership | $person.personId == $unbound.personId})",
+            Some(&model),
+        ),
+        ReasonCode::IndUnresolvedSchema,
     );
 }
 
