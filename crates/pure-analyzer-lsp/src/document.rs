@@ -246,7 +246,7 @@ pub(crate) fn utf16_position(text: &str, offset: usize) -> Option<ProtocolPositi
     Some(ProtocolPosition::new(line, character))
 }
 
-fn byte_offset(text: &str, position: ProtocolPosition) -> Option<usize> {
+pub(crate) fn byte_offset(text: &str, position: ProtocolPosition) -> Option<usize> {
     let (start, end) = line_bounds(text, position.line)?;
     let mut units = 0_u32;
     for (offset, character) in text[start..end].char_indices() {

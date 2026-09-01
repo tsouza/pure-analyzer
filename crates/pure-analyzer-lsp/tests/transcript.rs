@@ -56,6 +56,10 @@ fn startup_shutdown_and_exit_follow_one_deterministic_transcript() {
         value(r#"{"openClose":true,"change":2,"save":{"includeText":false}}"#)
     );
     assert_eq!(
+        frames[0]["result"]["capabilities"]["definitionProvider"],
+        true
+    );
+    assert_eq!(
         frames[0]["result"]["serverInfo"]["name"],
         "pure-analyzer-lsp"
     );
@@ -67,6 +71,153 @@ fn startup_shutdown_and_exit_follow_one_deterministic_transcript() {
         frames[1],
         value(r#"{"jsonrpc":"2.0","id":2,"result":null}"#)
     );
+}
+
+#[test]
+fn local_definition_transcript_returns_the_same_document_declaration() {
+    let uri = "untitled:local-definition";
+    let source = "{row: Relation<(zeta:String[1], alpha:Integer[0..1])>| $row.alpha}";
+    let mut server = Server::new();
+    let mut output = Vec::new();
+    let mut input = Cursor::new(transcript(&[
+        value(r#"{"jsonrpc":"2.0","id":1,"method":"initialize"}"#),
+        did_open(uri, 1, source),
+        definition_request(2, uri, 0, 60),
+        value(r#"{"jsonrpc":"2.0","id":3,"method":"shutdown"}"#),
+        value(r#"{"jsonrpc":"2.0","method":"exit"}"#),
+    ]));
+
+    assert_eq!(
+        server
+            .serve(&mut input, &mut output)
+            .expect("valid local definition transcript"),
+        ServerExit::Clean
+    );
+    let expected = definition_response(2, definition_location(uri, 0, 32, 0, 51));
+    assert_eq!(response_for(&responses(&output), 2), &expected);
+}
+
+#[test]
+fn model_definition_transcript_returns_a_deterministic_cross_workspace_location() {
+    let person_uri = "file:///workspace/person.pure";
+    let manager_uri = "file:///workspace/manager.pure";
+    let query_uri = "file:///workspace/query.pure";
+    let person = "Class model::Person\n{\n  manager: model::Manager[0..1];\n}";
+    let manager = "Class model::Manager\n{\n  name: String[1];\n}";
+    let query = "model::Person.all()->filter(x| $x.manager.name)";
+    let reference = query.find(".name").expect("name reference") + 1;
+    let character = utf16_character(query, reference);
+    let mut server = Server::new();
+    let mut output = Vec::new();
+    let mut input = Cursor::new(transcript(&[
+        value(r#"{"jsonrpc":"2.0","id":1,"method":"initialize"}"#),
+        value(
+            r#"{"jsonrpc":"2.0","method":"workspace/didChangeConfiguration","params":{"settings":{"modelDocuments":[{"uri":"file:///workspace/person.pure","kind":"pure"},{"uri":"file:///workspace/manager.pure","kind":"pure"}]}}}"#,
+        ),
+        did_open(person_uri, 1, person),
+        did_open(manager_uri, 1, manager),
+        did_open(query_uri, 1, query),
+        definition_request(2, query_uri, 0, character),
+        definition_request(3, query_uri, 0, character),
+        value(r#"{"jsonrpc":"2.0","id":4,"method":"shutdown"}"#),
+        value(r#"{"jsonrpc":"2.0","method":"exit"}"#),
+    ]));
+
+    assert_eq!(
+        server
+            .serve(&mut input, &mut output)
+            .expect("valid model definition transcript"),
+        ServerExit::Clean
+    );
+    let expected = definition_location(manager_uri, 2, 2, 2, 18);
+    let frames = responses(&output);
+    assert_eq!(response_for(&frames, 2)["result"], expected);
+    assert_eq!(response_for(&frames, 3)["result"], expected);
+}
+
+#[test]
+fn non_ascii_definition_transcript_uses_utf16_positions_for_request_and_target() {
+    let uri = "untitled:unicode-definition";
+    let source = "/* 😀 */ {row: Relation<(name:String[1])>| $row.name}";
+    let reference = source.find("$row.name").expect("name reference") + "$row.".len();
+    let character = utf16_character(source, reference);
+    let mut server = Server::new();
+    let mut output = Vec::new();
+    let mut input = Cursor::new(transcript(&[
+        value(r#"{"jsonrpc":"2.0","id":1,"method":"initialize"}"#),
+        did_open(uri, 1, source),
+        definition_request(2, uri, 0, character),
+        value(r#"{"jsonrpc":"2.0","id":3,"method":"shutdown"}"#),
+        value(r#"{"jsonrpc":"2.0","method":"exit"}"#),
+    ]));
+
+    assert_eq!(
+        server
+            .serve(&mut input, &mut output)
+            .expect("valid non-ASCII definition transcript"),
+        ServerExit::Clean
+    );
+    let expected = definition_response(2, definition_location(uri, 0, 25, 0, 39));
+    assert_eq!(response_for(&responses(&output), 2), &expected);
+}
+
+#[test]
+fn unavailable_definition_transcript_returns_null_consistently() {
+    let uri = "untitled:unavailable-definition";
+    let source = "model::Unknown.all()";
+    let mut server = Server::new();
+    let mut output = Vec::new();
+    let mut input = Cursor::new(transcript(&[
+        value(r#"{"jsonrpc":"2.0","id":1,"method":"initialize"}"#),
+        did_open(uri, 1, source),
+        definition_request(2, uri, 0, 0),
+        definition_request(3, uri, 0, 0),
+        value(r#"{"jsonrpc":"2.0","id":4,"method":"shutdown"}"#),
+        value(r#"{"jsonrpc":"2.0","method":"exit"}"#),
+    ]));
+
+    assert_eq!(
+        server
+            .serve(&mut input, &mut output)
+            .expect("valid unavailable definition transcript"),
+        ServerExit::Clean
+    );
+    let frames = responses(&output);
+    assert_eq!(response_for(&frames, 2)["result"], Value::Null);
+    assert_eq!(response_for(&frames, 3)["result"], Value::Null);
+}
+
+#[test]
+fn spanless_pmcd_definition_transcript_returns_null_consistently() {
+    let model_uri = "untitled:spanless-model";
+    let query_uri = "untitled:spanless-query";
+    let query = "demo::Winner.all()->filter(x| $x.value)";
+    let reference = query.find(".value").expect("value reference") + 1;
+    let character = utf16_character(query, reference);
+    let mut server = Server::new();
+    let mut output = Vec::new();
+    let mut input = Cursor::new(transcript(&[
+        value(r#"{"jsonrpc":"2.0","id":1,"method":"initialize"}"#),
+        value(
+            r#"{"jsonrpc":"2.0","method":"workspace/didChangeConfiguration","params":{"settings":{"modelDocuments":[{"uri":"untitled:spanless-model","kind":"pmcd"}]}}}"#,
+        ),
+        did_open(model_uri, 1, PMCD_WINNER_MODEL),
+        did_open(query_uri, 1, query),
+        definition_request(2, query_uri, 0, character),
+        definition_request(3, query_uri, 0, character),
+        value(r#"{"jsonrpc":"2.0","id":4,"method":"shutdown"}"#),
+        value(r#"{"jsonrpc":"2.0","method":"exit"}"#),
+    ]));
+
+    assert_eq!(
+        server
+            .serve(&mut input, &mut output)
+            .expect("valid spanless definition transcript"),
+        ServerExit::Clean
+    );
+    let frames = responses(&output);
+    assert_eq!(response_for(&frames, 2)["result"], Value::Null);
+    assert_eq!(response_for(&frames, 3)["result"], Value::Null);
 }
 
 #[test]
@@ -507,6 +658,72 @@ fn object(fields: impl IntoIterator<Item = (&'static str, Value)>) -> Value {
             .map(|(name, value)| (name.to_owned(), value))
             .collect::<Map<_, _>>(),
     )
+}
+
+fn definition_request(id: i64, uri: &str, line: u32, character: u32) -> Value {
+    object([
+        ("jsonrpc", Value::String("2.0".to_owned())),
+        ("id", Value::Number(id.into())),
+        (
+            "method",
+            Value::String("textDocument/definition".to_owned()),
+        ),
+        (
+            "params",
+            object([
+                (
+                    "textDocument",
+                    object([("uri", Value::String(uri.to_owned()))]),
+                ),
+                ("position", definition_position(line, character)),
+            ]),
+        ),
+    ])
+}
+
+fn definition_response(id: i64, result: Value) -> Value {
+    object([
+        ("jsonrpc", Value::String("2.0".to_owned())),
+        ("id", Value::Number(id.into())),
+        ("result", result),
+    ])
+}
+
+fn definition_location(
+    uri: &str,
+    start_line: u32,
+    start_character: u32,
+    end_line: u32,
+    end_character: u32,
+) -> Value {
+    object([
+        ("uri", Value::String(uri.to_owned())),
+        (
+            "range",
+            object([
+                ("start", definition_position(start_line, start_character)),
+                ("end", definition_position(end_line, end_character)),
+            ]),
+        ),
+    ])
+}
+
+fn definition_position(line: u32, character: u32) -> Value {
+    object([
+        ("line", Value::Number(line.into())),
+        ("character", Value::Number(character.into())),
+    ])
+}
+
+fn response_for(frames: &[Value], id: i64) -> &Value {
+    frames
+        .iter()
+        .find(|frame| frame["id"] == id)
+        .expect("response with JSON-RPC identifier")
+}
+
+fn utf16_character(text: &str, offset: usize) -> u32 {
+    u32::try_from(text[..offset].encode_utf16().count()).expect("fixture position fits protocol")
 }
 
 fn transcript(messages: &[Value]) -> Vec<u8> {
