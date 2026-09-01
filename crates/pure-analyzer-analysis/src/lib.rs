@@ -4,6 +4,7 @@
 //! Conservative analysis passes over Pure syntax and model facts.
 
 mod column_selectors;
+mod comparison;
 mod format;
 mod lint;
 mod local;
@@ -16,6 +17,10 @@ pub use column_selectors::{
     ColumnSelector, ColumnSelectorName, ColumnSelectorOpaque, ColumnSelectorOpaqueReason,
     ColumnSelectorOutcome, ColumnSelectors, ResolvedColumnSelector, ResolvedColumnSelectors,
     extract_relation_column_selectors, resolve_relation_column_selectors,
+};
+pub use comparison::{
+    ComparisonIndecision, ComparisonOutcome, OutputSchemaField, StructuralDifference,
+    StructuralDifferenceKind, compare_relational_queries, compare_relational_queries_with_budget,
 };
 
 pub use format::{FormatResult, format_query, format_query_with_width};
