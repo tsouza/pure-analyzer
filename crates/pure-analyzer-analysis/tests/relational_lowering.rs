@@ -215,6 +215,36 @@ fn lowers_filter_to_an_equality_predicate() {
 }
 
 #[test]
+fn lowers_false_as_a_boolean_literal() {
+    let model = filter_map_model();
+    let query = supported(lower("model::Person.all()->map(x| false)", Some(&model)));
+    let (_, projection) = map_parts(&query);
+
+    assert!(matches!(
+        projection.expression().operator(),
+        ScalarOperator::Literal(ScalarLiteral::Boolean(false))
+    ));
+}
+
+#[test]
+fn lowers_parenthesized_and_integer_literals() {
+    let model = filter_map_model();
+    let parenthesized = supported(lower("model::Person.all()->map(x| (false))", Some(&model)));
+    let (_, parenthesized_projection) = map_parts(&parenthesized);
+    assert!(matches!(
+        parenthesized_projection.expression().operator(),
+        ScalarOperator::Literal(ScalarLiteral::Boolean(false))
+    ));
+
+    let integer = supported(lower("model::Person.all()->map(x| 7)", Some(&model)));
+    let (_, integer_projection) = map_parts(&integer);
+    assert!(matches!(
+        integer_projection.expression().operator(),
+        ScalarOperator::Literal(ScalarLiteral::Integer(7))
+    ));
+}
+
+#[test]
 fn preserves_scan_and_navigation_model_provenance() {
     let model = filter_map_model();
     let query = supported(lower(FILTER_MAP_SOURCE, Some(&model)));
@@ -411,6 +441,7 @@ fn preserves_conservative_outcomes_for_out_of_core_or_incomplete_inputs() {
         "Person",
         vec![
             property("name", "String", ONE, Some(ONE)),
+            property("maybeName", "String", ZERO, Some(ONE)),
             property("reports", "model::Person", ZERO, None),
         ],
     )]);
@@ -430,6 +461,17 @@ fn preserves_conservative_outcomes_for_out_of_core_or_incomplete_inputs() {
     assert_reason(
         lower("model::Person.all()->filter(x| $x.name ==)", Some(&model)),
         ReasonCode::IndUnparseable,
+    );
+    assert_reason(
+        lower("model::Person.allVersionsInRange()", Some(&model)),
+        ReasonCode::IndUnmodeledOp,
+    );
+    assert_reason(
+        lower(
+            "model::Person.all()->filter(x| $x.maybeName == 'Ada')",
+            Some(&model),
+        ),
+        ReasonCode::IndOpaquePredicate,
     );
     assert_reason(
         lower("model::Person.all(); model::Person.all()", Some(&model)),

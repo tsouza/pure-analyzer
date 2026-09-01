@@ -371,11 +371,7 @@ impl<'model> QueryLowerer<'model> {
         parameter: &Name,
     ) -> Result<LoweredScalar, ReasonCode> {
         self.mark_failure(node);
-        let children = direct_nodes(node);
-        let [query] = children.as_slice() else {
-            return Err(ReasonCode::IndOpaquePredicate);
-        };
-        self.lower_scalar_query(query, binding, parameter)
+        self.lower_scalar_nodes(&direct_nodes(node), binding, parameter)
     }
 
     fn lower_variable(
@@ -620,18 +616,26 @@ fn all_class_path(node: &GreenNode) -> Option<QName> {
     let [call] = calls.as_slice() else {
         return None;
     };
-    let has_all = node
-        .tokens()
-        .any(|token| token.kind() == SyntaxKind::ALL_KW);
-    let has_other_all = node.tokens().any(|token| {
-        matches!(
-            token.kind(),
-            SyntaxKind::ALL_VERSIONS_KW | SyntaxKind::ALL_VERSIONS_IN_RANGE_KW
-        )
-    });
-    (has_all && !has_other_all && empty_call_arguments(call))
-        .then(|| QName::new(compact_text(path)).ok())
-        .flatten()
+    let functions = node
+        .children()
+        .iter()
+        .filter_map(GreenElement::as_token)
+        .filter(|token| {
+            matches!(
+                token.kind(),
+                SyntaxKind::ALL_KW
+                    | SyntaxKind::ALL_VERSIONS_KW
+                    | SyntaxKind::ALL_VERSIONS_IN_RANGE_KW
+            )
+        })
+        .collect::<Vec<_>>();
+    let [function] = functions.as_slice() else {
+        return None;
+    };
+    if function.kind() != SyntaxKind::ALL_KW || !empty_call_arguments(call) {
+        return None;
+    }
+    QName::new(compact_text(path)).ok()
 }
 
 fn arrow_name(node: &GreenNode) -> Option<Name> {
@@ -907,4 +911,247 @@ fn is_trivia(kind: SyntaxKind) -> bool {
         kind,
         SyntaxKind::WHITESPACE | SyntaxKind::LINE_COMMENT | SyntaxKind::BLOCK_COMMENT
     )
+}
+
+#[cfg(test)]
+#[allow(clippy::disallowed_methods)]
+mod tests {
+    use pure_analyzer_lexer::lex;
+    use pure_analyzer_model::ModelGraph;
+    use pure_analyzer_syntax::GreenNodeBuilder;
+
+    use super::*;
+
+    #[test]
+    fn empty_call_arguments_rejects_an_invisible_child_node() {
+        let source = "()";
+        let tokens = lex(source);
+        let mut builder = GreenNodeBuilder::new(source, &tokens);
+        builder.open(SyntaxKind::ROOT);
+        builder.open(SyntaxKind::CALL_ARGS);
+        builder.advance();
+        builder.open(SyntaxKind::ERROR_NODE);
+        builder.close();
+        builder.advance();
+        builder.close();
+        builder.close();
+        let root = builder.finish().expect("fixture tree must build");
+        let call_arguments = direct_nodes(&root)
+            .into_iter()
+            .next()
+            .expect("fixture must contain call arguments");
+
+        assert_eq!(call_arguments.kind(), SyntaxKind::CALL_ARGS);
+        assert!(!empty_call_arguments(&call_arguments));
+    }
+
+    #[test]
+    fn lambda_parameter_rejects_an_invisible_child_node() {
+        let source = "x";
+        let tokens = lex(source);
+        let mut builder = GreenNodeBuilder::new(source, &tokens);
+        builder.open(SyntaxKind::ROOT);
+        builder.open(SyntaxKind::LAMBDA_PARAMS);
+        builder.advance();
+        builder.open(SyntaxKind::ERROR_NODE);
+        builder.close();
+        builder.close();
+        builder.close();
+        let root = builder.finish().expect("fixture tree must build");
+        let parameters = direct_nodes(&root)
+            .into_iter()
+            .next()
+            .expect("fixture must contain lambda parameters");
+
+        assert_eq!(parameters.kind(), SyntaxKind::LAMBDA_PARAMS);
+        assert_eq!(lambda_parameter(&parameters), None);
+    }
+
+    #[test]
+    fn binary_parts_rejects_a_missing_left_operand() {
+        let source = "==true";
+        let tokens = lex(source);
+        let mut builder = GreenNodeBuilder::new(source, &tokens);
+        builder.open(SyntaxKind::ROOT);
+        builder.open(SyntaxKind::BINARY_EXPR);
+        builder.advance();
+        builder.open(SyntaxKind::LITERAL_EXPR);
+        builder.advance();
+        builder.close();
+        builder.close();
+        builder.close();
+        let root = builder.finish().expect("fixture tree must build");
+        let binary = direct_nodes(&root)
+            .into_iter()
+            .next()
+            .expect("fixture must contain a binary expression");
+
+        assert_eq!(binary.kind(), SyntaxKind::BINARY_EXPR);
+        assert_eq!(binary_parts(&binary), Err(ReasonCode::IndOpaquePredicate));
+    }
+
+    #[test]
+    fn malformed_tree_is_rejected_even_without_parser_diagnostics() {
+        let source = "";
+        let tokens = lex(source);
+        let mut builder = GreenNodeBuilder::new(source, &tokens);
+        builder.open(SyntaxKind::ROOT);
+        builder.open(SyntaxKind::ERROR_NODE);
+        builder.close();
+        builder.close();
+        let root = builder.finish().expect("fixture tree must build");
+        let error = direct_nodes(&root)
+            .into_iter()
+            .next()
+            .expect("fixture must contain an error node");
+
+        assert!(contains_error_node(&error));
+        assert!(contains_error_node(&root));
+        assert!(matches!(
+            lower_m3_query(AnalysisInput::new(FileId::new(91), source, &root, &[], None)),
+            RelationalOutcome::Opaque(value) if value.reason() == ReasonCode::IndUnparseable
+        ));
+    }
+
+    #[test]
+    fn mark_failure_updates_the_failure_span() {
+        let source = "x";
+        let tokens = lex(source);
+        let mut builder = GreenNodeBuilder::new(source, &tokens);
+        builder.open(SyntaxKind::ROOT);
+        builder.open(SyntaxKind::LITERAL_EXPR);
+        builder.advance();
+        builder.close();
+        builder.close();
+        let root = builder.finish().expect("fixture tree must build");
+        let literal = direct_nodes(&root)
+            .into_iter()
+            .next()
+            .expect("fixture must contain a literal node");
+        let model = ModelGraph::default();
+        let mut lowerer = QueryLowerer::new(FileId::new(91), &model, TextRange::default());
+
+        lowerer.mark_failure(&literal);
+
+        assert_eq!(
+            lowerer.failure_origin().source().range(),
+            literal.text_range()
+        );
+    }
+
+    #[test]
+    fn property_name_requires_a_bare_property_navigation_node() {
+        let source = "x";
+        let tokens = lex(source);
+        let mut builder = GreenNodeBuilder::new(source, &tokens);
+        builder.open(SyntaxKind::ROOT);
+        builder.open(SyntaxKind::LITERAL_EXPR);
+        builder.advance();
+        builder.close();
+        builder.close();
+        let root = builder.finish().expect("fixture tree must build");
+        let literal = direct_nodes(&root)
+            .into_iter()
+            .next()
+            .expect("fixture must contain a literal node");
+
+        assert_eq!(property_name(&literal), None);
+    }
+
+    #[test]
+    fn all_class_path_requires_the_all_keyword() {
+        let source = "x()";
+        let tokens = lex(source);
+        let mut builder = GreenNodeBuilder::new(source, &tokens);
+        builder.open(SyntaxKind::ROOT);
+        builder.open(SyntaxKind::ALL_EXPR);
+        builder.open(SyntaxKind::QUALIFIED_NAME);
+        builder.advance();
+        builder.close();
+        builder.open(SyntaxKind::CALL_ARGS);
+        builder.advance();
+        builder.advance();
+        builder.close();
+        builder.close();
+        builder.close();
+        let root = builder.finish().expect("fixture tree must build");
+        let all = direct_nodes(&root)
+            .into_iter()
+            .next()
+            .expect("fixture must contain an all expression");
+
+        assert_eq!(all_class_path(&all), None);
+    }
+
+    #[test]
+    fn all_class_path_rejects_mixed_all_function_tokens() {
+        let source = "x all() allVersions";
+        let tokens = lex(source);
+        let mut builder = GreenNodeBuilder::new(source, &tokens);
+        builder.open(SyntaxKind::ROOT);
+        builder.open(SyntaxKind::ALL_EXPR);
+        builder.open(SyntaxKind::QUALIFIED_NAME);
+        builder.advance();
+        builder.close();
+        builder.advance();
+        builder.advance();
+        builder.open(SyntaxKind::CALL_ARGS);
+        builder.advance();
+        builder.advance();
+        builder.close();
+        builder.advance();
+        builder.advance();
+        builder.close();
+        builder.close();
+        let root = builder.finish().expect("fixture tree must build");
+        let all = direct_nodes(&root)
+            .into_iter()
+            .next()
+            .expect("fixture must contain an all expression");
+
+        assert_eq!(all_class_path(&all), None);
+    }
+
+    #[test]
+    fn all_class_path_rejects_non_empty_call_arguments() {
+        let source = "x all(1)";
+        let tokens = lex(source);
+        let mut builder = GreenNodeBuilder::new(source, &tokens);
+        builder.open(SyntaxKind::ROOT);
+        builder.open(SyntaxKind::ALL_EXPR);
+        builder.open(SyntaxKind::QUALIFIED_NAME);
+        builder.advance();
+        builder.close();
+        builder.advance();
+        builder.advance();
+        builder.open(SyntaxKind::CALL_ARGS);
+        builder.advance();
+        builder.open(SyntaxKind::LITERAL_EXPR);
+        builder.advance();
+        builder.close();
+        builder.advance();
+        builder.close();
+        builder.close();
+        builder.close();
+        let root = builder.finish().expect("fixture tree must build");
+        let all = direct_nodes(&root)
+            .into_iter()
+            .next()
+            .expect("fixture must contain an all expression");
+
+        assert_eq!(all_class_path(&all), None);
+    }
+
+    #[test]
+    fn exactly_one_rejects_an_unbounded_value() {
+        let one_or_more = Multiplicity::new(ONE, None).expect("fixture multiplicity must be valid");
+
+        assert!(!is_exactly_one(one_or_more));
+    }
+
+    #[test]
+    fn trivia_classification_retains_whitespace() {
+        assert!(is_trivia(SyntaxKind::WHITESPACE));
+        assert!(!is_trivia(SyntaxKind::IDENT));
+    }
 }

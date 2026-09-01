@@ -520,13 +520,13 @@ impl ResolvedNavigation {
         let NavigationTarget::Member(member) = hop.target() else {
             return None;
         };
-        if !matches!(chain.source().kind(), LocalValueKind::Class(_))
-            || hop.step().argument_count() != 0
-            || !matches!(
-                member.kind(),
-                ResolvedMemberKind::Property | ResolvedMemberKind::AssociationEnd { .. }
-            )
-            || !member.multiplicity().is_to_one()
+        // `NavigationChain` is only resolver-constructed. A member hop is
+        // therefore already class-rooted and argument-valid; retain the two
+        // restrictions that define this relational subset.
+        if !matches!(
+            member.kind(),
+            ResolvedMemberKind::Property | ResolvedMemberKind::AssociationEnd { .. }
+        ) || !member.multiplicity().is_to_one()
         {
             return None;
         }
@@ -1247,6 +1247,10 @@ mod tests {
                         "name": "manager",
                         "genericType": {"rawType": "model::Manager", "typeArguments": []},
                         "multiplicity": {"lowerBound": 1, "upperBound": 1}
+                    }, {
+                        "name": "reports",
+                        "genericType": {"rawType": "model::Manager", "typeArguments": []},
+                        "multiplicity": {"lowerBound": 0, "upperBound": null}
                     }],
                     "qualifiedProperties": [{
                         "name": "zero",
@@ -2018,6 +2022,7 @@ mod tests {
             .expect("plain to-one property must produce a navigation proof");
         let target = navigation.member().target().clone();
         let multiplicity = navigation.member().multiplicity();
+        let member_origin = ModelOrigin::from_member(navigation.member());
 
         let input_column = Column::new(
             ColumnId::new(FIRST_COLUMN),
@@ -2040,7 +2045,7 @@ mod tests {
             multiplicity,
             Nullability::Unknown,
             Knowledge::unknown(),
-            origin(),
+            IrOrigin::new(origin().source(), vec![member_origin]),
         );
         let output_column = Column::new(
             ColumnId::new(SECOND_COLUMN),
@@ -2062,12 +2067,14 @@ mod tests {
             origin(),
         );
         let qualified_chain = navigation_chain(&graph, &person, "zero");
+        let to_many_chain = navigation_chain(&graph, &person, "reports");
 
         assert_eq!(
             invalid_receiver,
             Err(RelationExpressionError::NavigationMetadataMismatch)
         );
         assert!(ResolvedNavigation::from_chain(&qualified_chain).is_none());
+        assert!(ResolvedNavigation::from_chain(&to_many_chain).is_none());
     }
 
     #[test]
@@ -2131,6 +2138,154 @@ mod tests {
 
         assert_eq!(
             result,
+            Err(RelationExpressionError::NavigationMetadataMismatch)
+        );
+    }
+
+    #[test]
+    fn navigation_requires_its_proven_output_multiplicity() {
+        let (graph, person) = navigation_fixture();
+        let chain = navigation_chain(&graph, &person, "manager");
+        let navigation = ResolvedNavigation::from_chain(&chain)
+            .expect("plain to-one property must produce a navigation proof");
+        let receiver_origin =
+            IrOrigin::new(origin().source(), vec![ModelOrigin::from_class(&person)]);
+        let input_column = Column::new(
+            ColumnId::new(FIRST_COLUMN),
+            Name::new("person").expect("fixture name must be valid"),
+            TypeRef::new(person.path().clone(), Vec::new()),
+            multiplicity(EXACTLY_ONE, Some(EXACTLY_ONE)),
+            Nullability::Unknown,
+            receiver_origin.clone(),
+        );
+        let input_schema =
+            RelationSchema::new(vec![input_column.clone()]).expect("fixture schema must be valid");
+        let input = scan(input_schema);
+        let input_scalar = ScalarExpression::new(
+            ScalarOperator::Column(input_column.id()),
+            input_column.type_ref().clone(),
+            input_column.multiplicity(),
+            input_column.nullability(),
+            Knowledge::unknown(),
+            receiver_origin,
+        );
+        let output_multiplicity = multiplicity(0, Some(EXACTLY_ONE));
+        let scalar = ScalarExpression::new(
+            ScalarOperator::Navigation {
+                input: Box::new(input_scalar),
+                navigation: Box::new(navigation.clone()),
+            },
+            navigation.member().target().clone(),
+            output_multiplicity,
+            Nullability::Unknown,
+            Knowledge::unknown(),
+            IrOrigin::new(
+                origin().source(),
+                vec![ModelOrigin::from_member(navigation.member())],
+            ),
+        );
+        let output_column = Column::new(
+            ColumnId::new(SECOND_COLUMN),
+            Name::new("manager").expect("fixture name must be valid"),
+            scalar.type_ref().clone(),
+            scalar.multiplicity(),
+            scalar.nullability(),
+            scalar.origin().clone(),
+        );
+        let result = RelationExpression::new(
+            RelationOperator::Project {
+                input: Box::new(input),
+                projections: vec![Projection::new(output_column.id(), scalar)],
+            },
+            RelationSchema::new(vec![output_column]).expect("fixture schema must be valid"),
+            RelationFacts::unknown(),
+            origin(),
+        );
+
+        assert_eq!(
+            result,
+            Err(RelationExpressionError::NavigationMetadataMismatch)
+        );
+    }
+
+    #[test]
+    fn navigation_receiver_requires_exact_type_and_multiplicity() {
+        let (graph, person) = navigation_fixture();
+        let chain = navigation_chain(&graph, &person, "manager");
+        let navigation = ResolvedNavigation::from_chain(&chain)
+            .expect("plain to-one property must produce a navigation proof");
+        let receiver_origin =
+            IrOrigin::new(origin().source(), vec![ModelOrigin::from_class(&person)]);
+        let member_origin = ModelOrigin::from_member(navigation.member());
+
+        let wrong_type_column = Column::new(
+            ColumnId::new(FIRST_COLUMN),
+            Name::new("person").expect("fixture name must be valid"),
+            string_type(),
+            multiplicity(EXACTLY_ONE, Some(EXACTLY_ONE)),
+            Nullability::Unknown,
+            receiver_origin.clone(),
+        );
+        let wrong_type_schema = RelationSchema::new(vec![wrong_type_column.clone()])
+            .expect("fixture schema must be valid");
+        let wrong_type_input = ScalarExpression::new(
+            ScalarOperator::Column(wrong_type_column.id()),
+            wrong_type_column.type_ref().clone(),
+            wrong_type_column.multiplicity(),
+            wrong_type_column.nullability(),
+            Knowledge::unknown(),
+            receiver_origin.clone(),
+        );
+        let wrong_type = ScalarExpression::new(
+            ScalarOperator::Navigation {
+                input: Box::new(wrong_type_input),
+                navigation: Box::new(navigation.clone()),
+            },
+            navigation.member().target().clone(),
+            navigation.member().multiplicity(),
+            Nullability::Unknown,
+            Knowledge::unknown(),
+            IrOrigin::new(origin().source(), vec![member_origin.clone()]),
+        );
+
+        let wrong_multiplicity = multiplicity(0, Some(EXACTLY_ONE));
+        let wrong_multiplicity_column = Column::new(
+            ColumnId::new(FIRST_COLUMN),
+            Name::new("person").expect("fixture name must be valid"),
+            TypeRef::new(person.path().clone(), Vec::new()),
+            wrong_multiplicity,
+            Nullability::Unknown,
+            receiver_origin.clone(),
+        );
+        let wrong_multiplicity_schema =
+            RelationSchema::new(vec![wrong_multiplicity_column.clone()])
+                .expect("fixture schema must be valid");
+        let wrong_multiplicity_input = ScalarExpression::new(
+            ScalarOperator::Column(wrong_multiplicity_column.id()),
+            wrong_multiplicity_column.type_ref().clone(),
+            wrong_multiplicity_column.multiplicity(),
+            wrong_multiplicity_column.nullability(),
+            Knowledge::unknown(),
+            receiver_origin,
+        );
+        let wrong_multiplicity_scalar = ScalarExpression::new(
+            ScalarOperator::Navigation {
+                input: Box::new(wrong_multiplicity_input),
+                navigation: Box::new(navigation.clone()),
+            },
+            navigation.member().target().clone(),
+            wrong_multiplicity,
+            Nullability::Unknown,
+            Knowledge::unknown(),
+            IrOrigin::new(origin().source(), vec![member_origin]),
+        );
+
+        assert_eq!(
+            validate_scalar(&wrong_type, &[&wrong_type_schema]),
+            Err(RelationExpressionError::NavigationMetadataMismatch)
+        );
+        assert_eq!(
+            validate_scalar(&wrong_multiplicity_scalar, &[&wrong_multiplicity_schema]),
             Err(RelationExpressionError::NavigationMetadataMismatch)
         );
     }
