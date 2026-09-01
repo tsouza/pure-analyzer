@@ -723,4 +723,126 @@ mod tests {
             "a recovered column must not become a partial relation binding"
         );
     }
+
+    #[test]
+    fn multiplicity_rejects_a_hidden_recovery_node() {
+        let source = "[1]";
+        let tokens = lex(source);
+        let mut builder = GreenNodeBuilder::new(source, &tokens);
+        builder.open(SyntaxKind::ROOT);
+        builder.open(SyntaxKind::MULTIPLICITY);
+        builder.advance();
+        builder.advance();
+        builder.advance();
+        builder.open(SyntaxKind::ERROR_NODE);
+        builder.close();
+        builder.close();
+        builder.close();
+        let root = builder.finish().expect("fixture tree must build");
+        let multiplicity = direct_nodes(&root)
+            .into_iter()
+            .next()
+            .expect("fixture must contain a multiplicity");
+
+        assert_eq!(
+            multiplicity_from_node(&multiplicity),
+            None,
+            "a recovered multiplicity must not become a partial relation binding"
+        );
+    }
+
+    #[test]
+    fn malformed_relation_type_is_an_invalid_parameter_binding() {
+        let parameters = relation_parameters_fixture(SyntaxKind::TYPE_REF, true);
+
+        assert!(matches!(
+            typed_relation_rows(&parameters, Multiplicity::zero_or_more()).as_slice(),
+            [RelationParameterBinding::Invalid]
+        ));
+    }
+
+    #[test]
+    fn generic_relation_type_is_not_a_relation_row_type() {
+        let source = "Relation<String>";
+        let tokens = lex(source);
+        let mut builder = GreenNodeBuilder::new(source, &tokens);
+        builder.open(SyntaxKind::ROOT);
+        builder.open(SyntaxKind::TYPE_REF);
+        builder.open(SyntaxKind::QUALIFIED_NAME);
+        builder.advance();
+        builder.close();
+        builder.advance();
+        builder.open(SyntaxKind::TYPE_REF);
+        builder.open(SyntaxKind::QUALIFIED_NAME);
+        builder.advance();
+        builder.close();
+        builder.close();
+        builder.advance();
+        builder.close();
+        builder.close();
+        let root = builder.finish().expect("fixture tree must build");
+        let type_reference = direct_nodes(&root)
+            .into_iter()
+            .next()
+            .expect("fixture must contain a type reference");
+
+        assert!(!is_relation_type(&type_reference));
+    }
+
+    #[test]
+    fn relation_shaped_non_type_parameter_is_not_bound() {
+        let parameters = relation_parameters_fixture(SyntaxKind::PAREN_EXPR, false);
+
+        assert!(matches!(
+            typed_relation_rows(&parameters, Multiplicity::zero_or_more()).as_slice(),
+            [RelationParameterBinding::NotRelation]
+        ));
+    }
+
+    fn relation_parameters_fixture(outer_kind: SyntaxKind, outer_error: bool) -> GreenNode {
+        let source = "row:Relation<(name:String[1])>";
+        let tokens = lex(source);
+        let mut builder = GreenNodeBuilder::new(source, &tokens);
+        builder.open(SyntaxKind::ROOT);
+        builder.open(SyntaxKind::LAMBDA_PARAMS);
+        builder.advance();
+        builder.advance();
+        builder.open(outer_kind);
+        builder.open(SyntaxKind::QUALIFIED_NAME);
+        builder.advance();
+        builder.close();
+        builder.advance();
+        builder.open(SyntaxKind::RELATION_TYPE);
+        builder.advance();
+        builder.open(SyntaxKind::COLUMN_INFO);
+        builder.advance();
+        builder.advance();
+        builder.open(SyntaxKind::TYPE_REF);
+        builder.open(SyntaxKind::QUALIFIED_NAME);
+        builder.advance();
+        builder.close();
+        builder.close();
+        builder.open(SyntaxKind::MULTIPLICITY);
+        builder.advance();
+        builder.advance();
+        builder.advance();
+        builder.close();
+        builder.close();
+        builder.advance();
+        builder.close();
+        builder.advance();
+        if outer_error {
+            builder.open(SyntaxKind::ERROR_NODE);
+            builder.close();
+        }
+        builder.close();
+        builder.close();
+        builder.close();
+        let root = builder.finish().expect("fixture tree must build");
+
+        direct_nodes(&root)
+            .into_iter()
+            .next()
+            .expect("fixture must contain lambda parameters")
+    }
 }

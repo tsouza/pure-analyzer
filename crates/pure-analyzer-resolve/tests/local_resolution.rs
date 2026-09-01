@@ -497,6 +497,13 @@ fn relation_rows_bind_columns_and_require_zero_context_arguments() {
 }
 
 #[test]
+fn relation_column_ids_round_trip_their_declaration_index() {
+    let expected = std::hint::black_box(7);
+
+    assert_eq!(RelationColumnId::new(expected).index(), expected);
+}
+
+#[test]
 fn relation_rows_preserve_declaration_order_and_reject_duplicate_facts() {
     let source = "zeta:String[1], alpha:Integer[0..1]";
     let zeta = RelationColumn::new(

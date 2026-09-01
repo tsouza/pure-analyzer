@@ -430,6 +430,23 @@ fn typed_relation_lambda_binder_resolves_known_column() {
 }
 
 #[test]
+fn typed_relation_binder_accepts_trivia_after_the_type_separator() {
+    let graph = graph(Vec::new());
+    let source = "row:\n Relation<(name:String[1])>| $row.name";
+    let analysis = analyze(source, &graph);
+    let navigation = analysis
+        .sites()
+        .iter()
+        .find(|site| range_text(source, site.span()) == ".name")
+        .expect("relation-column navigation site must be recorded");
+
+    assert!(matches!(
+        found_chain(navigation).hops()[0].target(),
+        NavigationTarget::RelationColumn(column) if column.name().as_str() == "name"
+    ));
+}
+
+#[test]
 fn typed_class_column_preserves_multiplicity_for_follow_on_navigation() {
     let graph = graph(vec![class("Person", vec![property("name", "String")])]);
     let source = "row: Relation<(person:model::Person[1..*])>| $row.person.name";
