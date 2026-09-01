@@ -43,6 +43,14 @@ impl<T> core::clone::CloneToUninit for pure_analyzer_lsp::RequestId where T: cor
 pub unsafe fn pure_analyzer_lsp::RequestId::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for pure_analyzer_lsp::RequestId
 pub fn pure_analyzer_lsp::RequestId::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for pure_analyzer_lsp::RequestId
+pub type pure_analyzer_lsp::RequestId::Init = T
+pub const pure_analyzer_lsp::RequestId::ALIGN: usize
+pub unsafe fn pure_analyzer_lsp::RequestId::deref<'a>(usize) -> &'a T
+pub unsafe fn pure_analyzer_lsp::RequestId::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn pure_analyzer_lsp::RequestId::drop(usize)
+pub unsafe fn pure_analyzer_lsp::RequestId::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for pure_analyzer_lsp::RequestId
 pub enum pure_analyzer_lsp::ServerExit
 pub pure_analyzer_lsp::ServerExit::Clean
 pub pure_analyzer_lsp::ServerExit::Unclean
@@ -84,6 +92,14 @@ impl<T> core::clone::CloneToUninit for pure_analyzer_lsp::ServerExit where T: co
 pub unsafe fn pure_analyzer_lsp::ServerExit::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for pure_analyzer_lsp::ServerExit
 pub fn pure_analyzer_lsp::ServerExit::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for pure_analyzer_lsp::ServerExit
+pub type pure_analyzer_lsp::ServerExit::Init = T
+pub const pure_analyzer_lsp::ServerExit::ALIGN: usize
+pub unsafe fn pure_analyzer_lsp::ServerExit::deref<'a>(usize) -> &'a T
+pub unsafe fn pure_analyzer_lsp::ServerExit::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn pure_analyzer_lsp::ServerExit::drop(usize)
+pub unsafe fn pure_analyzer_lsp::ServerExit::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for pure_analyzer_lsp::ServerExit
 pub struct pure_analyzer_lsp::CancellationRegistry
 impl pure_analyzer_lsp::CancellationRegistry
 pub fn pure_analyzer_lsp::CancellationRegistry::cancel(&mut self, pure_analyzer_lsp::RequestId)
@@ -117,6 +133,14 @@ impl<T> core::borrow::BorrowMut<T> for pure_analyzer_lsp::CancellationRegistry w
 pub fn pure_analyzer_lsp::CancellationRegistry::borrow_mut(&mut self) -> &mut T
 impl<T> core::convert::From<T> for pure_analyzer_lsp::CancellationRegistry
 pub fn pure_analyzer_lsp::CancellationRegistry::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for pure_analyzer_lsp::CancellationRegistry
+pub type pure_analyzer_lsp::CancellationRegistry::Init = T
+pub const pure_analyzer_lsp::CancellationRegistry::ALIGN: usize
+pub unsafe fn pure_analyzer_lsp::CancellationRegistry::deref<'a>(usize) -> &'a T
+pub unsafe fn pure_analyzer_lsp::CancellationRegistry::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn pure_analyzer_lsp::CancellationRegistry::drop(usize)
+pub unsafe fn pure_analyzer_lsp::CancellationRegistry::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for pure_analyzer_lsp::CancellationRegistry
 pub struct pure_analyzer_lsp::DocumentSnapshot
 impl pure_analyzer_lsp::DocumentSnapshot
 pub fn pure_analyzer_lsp::DocumentSnapshot::new(alloc::string::String, alloc::string::String, core::option::Option<i64>) -> Self
@@ -160,6 +184,14 @@ impl<T> core::clone::CloneToUninit for pure_analyzer_lsp::DocumentSnapshot where
 pub unsafe fn pure_analyzer_lsp::DocumentSnapshot::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for pure_analyzer_lsp::DocumentSnapshot
 pub fn pure_analyzer_lsp::DocumentSnapshot::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for pure_analyzer_lsp::DocumentSnapshot
+pub type pure_analyzer_lsp::DocumentSnapshot::Init = T
+pub const pure_analyzer_lsp::DocumentSnapshot::ALIGN: usize
+pub unsafe fn pure_analyzer_lsp::DocumentSnapshot::deref<'a>(usize) -> &'a T
+pub unsafe fn pure_analyzer_lsp::DocumentSnapshot::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn pure_analyzer_lsp::DocumentSnapshot::drop(usize)
+pub unsafe fn pure_analyzer_lsp::DocumentSnapshot::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for pure_analyzer_lsp::DocumentSnapshot
 pub struct pure_analyzer_lsp::DocumentStore
 impl pure_analyzer_lsp::DocumentStore
 pub fn pure_analyzer_lsp::DocumentStore::get(&self, &str) -> core::option::Option<&pure_analyzer_lsp::DocumentSnapshot>
@@ -194,6 +226,14 @@ impl<T> core::borrow::BorrowMut<T> for pure_analyzer_lsp::DocumentStore where T:
 pub fn pure_analyzer_lsp::DocumentStore::borrow_mut(&mut self) -> &mut T
 impl<T> core::convert::From<T> for pure_analyzer_lsp::DocumentStore
 pub fn pure_analyzer_lsp::DocumentStore::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for pure_analyzer_lsp::DocumentStore
+pub type pure_analyzer_lsp::DocumentStore::Init = T
+pub const pure_analyzer_lsp::DocumentStore::ALIGN: usize
+pub unsafe fn pure_analyzer_lsp::DocumentStore::deref<'a>(usize) -> &'a T
+pub unsafe fn pure_analyzer_lsp::DocumentStore::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn pure_analyzer_lsp::DocumentStore::drop(usize)
+pub unsafe fn pure_analyzer_lsp::DocumentStore::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for pure_analyzer_lsp::DocumentStore
 pub struct pure_analyzer_lsp::Server
 impl pure_analyzer_lsp::Server
 pub const fn pure_analyzer_lsp::Server::cancellation(&self) -> &pure_analyzer_lsp::CancellationRegistry
@@ -228,6 +268,14 @@ impl<T> core::borrow::BorrowMut<T> for pure_analyzer_lsp::Server where T: ?core:
 pub fn pure_analyzer_lsp::Server::borrow_mut(&mut self) -> &mut T
 impl<T> core::convert::From<T> for pure_analyzer_lsp::Server
 pub fn pure_analyzer_lsp::Server::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for pure_analyzer_lsp::Server
+pub type pure_analyzer_lsp::Server::Init = T
+pub const pure_analyzer_lsp::Server::ALIGN: usize
+pub unsafe fn pure_analyzer_lsp::Server::deref<'a>(usize) -> &'a T
+pub unsafe fn pure_analyzer_lsp::Server::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn pure_analyzer_lsp::Server::drop(usize)
+pub unsafe fn pure_analyzer_lsp::Server::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for pure_analyzer_lsp::Server
 pub struct pure_analyzer_lsp::WorkspaceConfiguration
 impl pure_analyzer_lsp::WorkspaceConfiguration
 pub fn pure_analyzer_lsp::WorkspaceConfiguration::replace(&mut self, serde_json::value::Value)
@@ -259,4 +307,12 @@ impl<T> core::borrow::BorrowMut<T> for pure_analyzer_lsp::WorkspaceConfiguration
 pub fn pure_analyzer_lsp::WorkspaceConfiguration::borrow_mut(&mut self) -> &mut T
 impl<T> core::convert::From<T> for pure_analyzer_lsp::WorkspaceConfiguration
 pub fn pure_analyzer_lsp::WorkspaceConfiguration::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for pure_analyzer_lsp::WorkspaceConfiguration
+pub type pure_analyzer_lsp::WorkspaceConfiguration::Init = T
+pub const pure_analyzer_lsp::WorkspaceConfiguration::ALIGN: usize
+pub unsafe fn pure_analyzer_lsp::WorkspaceConfiguration::deref<'a>(usize) -> &'a T
+pub unsafe fn pure_analyzer_lsp::WorkspaceConfiguration::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn pure_analyzer_lsp::WorkspaceConfiguration::drop(usize)
+pub unsafe fn pure_analyzer_lsp::WorkspaceConfiguration::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for pure_analyzer_lsp::WorkspaceConfiguration
 pub fn pure_analyzer_lsp::serve_stdio() -> core::io::error::Result<pure_analyzer_lsp::ServerExit>

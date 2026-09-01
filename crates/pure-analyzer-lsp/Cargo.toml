@@ -17,4 +17,5 @@ name = "pure-analyzer-lsp"
 path = "src/main.rs"
 
 [dependencies]
+libpure.workspace = true
 serde_json.workspace = true

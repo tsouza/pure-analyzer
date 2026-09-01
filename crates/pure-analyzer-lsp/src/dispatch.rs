@@ -33,15 +33,23 @@ pub(crate) fn handle<W: Write>(
             Ok(None)
         }
         Some("textDocument/didOpen") => {
-            state::open_document(server, params);
+            state::open_document(server, params, writer)?;
+            Ok(None)
+        }
+        Some("textDocument/didChange") => {
+            state::change_document(server, params, writer)?;
+            Ok(None)
+        }
+        Some("textDocument/didSave") => {
+            state::save_document(server, params, writer)?;
             Ok(None)
         }
         Some("textDocument/didClose") => {
-            state::close_document(server, params);
+            state::close_document(server, params, writer)?;
             Ok(None)
         }
         Some("workspace/didChangeConfiguration") => {
-            state::update_configuration(server, params);
+            state::update_configuration(server, params, writer)?;
             Ok(None)
         }
         Some(_) if let Some(id) = id => {
