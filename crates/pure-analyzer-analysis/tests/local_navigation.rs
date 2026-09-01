@@ -3,10 +3,13 @@
 
 use pure_analyzer_analysis::{LocalResolution, analyze_m3_locals};
 use pure_analyzer_diagnostics::FileId;
-use pure_analyzer_model::{ModelGraph, PmcdDocument, load_pmcd_documents};
+use pure_analyzer_model::{
+    ModelGraph, Multiplicity, PmcdDocument, QName, TypeRef, load_pmcd_documents,
+};
 use pure_analyzer_parser::parse_query;
 use pure_analyzer_resolve::{
-    LocalValueKind, NavigationResolution, NavigationTarget, NavigationUnderResolution, Resolution,
+    LocalValueKind, NavigationChain, NavigationResolution, NavigationTarget,
+    NavigationUnderResolution, RelationColumnId, RelationRow, Resolution, UnknownValue,
 };
 use pure_analyzer_syntax::{GreenElement, GreenNode, SyntaxKind, TextRange};
 use serde_json::{Value, json};
@@ -80,6 +83,64 @@ fn range_text(source: &str, range: TextRange) -> &str {
     &source[usize::from(range.start())..usize::from(range.end())]
 }
 
+fn found_chain(navigation: &pure_analyzer_analysis::LocalResolutionSite) -> &NavigationChain {
+    match navigation.outcome() {
+        LocalResolution::Navigation(NavigationResolution::Found(chain)) => chain,
+        outcome => panic!("typed relation-column navigation must resolve: {outcome:#?}"),
+    }
+}
+
+fn relation_row_source(chain: &NavigationChain) -> &RelationRow {
+    match chain.source().kind() {
+        LocalValueKind::RelationRow(row) => row,
+        source => panic!("typed lambda binder must retain its relation row: {source:#?}"),
+    }
+}
+
+fn assert_typed_relation_columns(row: &RelationRow, source: &str) {
+    let [zeta, alpha] = row.columns() else {
+        panic!(
+            "expected the two declared columns, got {:#?}",
+            row.columns()
+        );
+    };
+    assert_eq!(zeta.id(), RelationColumnId::new(ZERO));
+    assert_eq!(zeta.id().index(), ZERO);
+    assert_eq!(zeta.name().as_str(), "zeta");
+    assert_eq!(zeta.type_ref().raw_type().as_str(), "String");
+    assert_eq!(
+        zeta.multiplicity(),
+        Multiplicity::new(ONE, Some(ONE)).expect("exact multiplicity must be valid")
+    );
+    assert_eq!(range_text(source, zeta.span()), "zeta:String[1]");
+
+    assert_eq!(alpha.id(), RelationColumnId::new(ONE));
+    assert_eq!(alpha.id().index(), ONE);
+    assert_eq!(alpha.name().as_str(), "alpha");
+    assert_eq!(alpha.type_ref().raw_type().as_str(), "Map");
+    assert_eq!(
+        alpha.type_ref().type_arguments(),
+        &[
+            TypeRef::new(
+                QName::new("String").expect("fixture type must be valid"),
+                Vec::new()
+            ),
+            TypeRef::new(
+                QName::new("Integer").expect("fixture type must be valid"),
+                Vec::new()
+            ),
+        ]
+    );
+    assert_eq!(
+        alpha.multiplicity(),
+        Multiplicity::new(ZERO, None).expect("unbounded multiplicity must be valid")
+    );
+    assert_eq!(
+        range_text(source, alpha.span()),
+        "alpha:Map<String,Integer>[0..*]"
+    );
+}
+
 fn first_node_of_kind(node: &GreenNode, kind: SyntaxKind) -> Option<GreenNode> {
     (node.kind() == kind).then(|| node.clone()).or_else(|| {
         node.children()
@@ -145,7 +206,7 @@ fn restores_outer_lambda_binding_after_nested_shadowing() {
                     NavigationTarget::Member(member) => {
                         Some(member.owner().path().as_str().to_owned())
                     }
-                    NavigationTarget::RelationColumn => None,
+                    NavigationTarget::RelationColumn(_) => None,
                 }
             }
             LocalResolution::ClassAll(_) | LocalResolution::Navigation(_) => None,
@@ -350,7 +411,28 @@ fn reports_unbound_variables_as_under_resolution_not_missing_members() {
 #[test]
 fn typed_relation_lambda_binder_resolves_known_column() {
     let graph = graph(Vec::new());
-    let source = "row: Relation<(name:String[1])>| $row.name";
+    let source = "{prefix:String[1], row: Relation<(zeta:String[1], alpha:Map<String,Integer>[0..*])>| $row.alpha}";
+    let analysis = analyze(source, &graph);
+    let navigation = analysis
+        .sites()
+        .iter()
+        .find(|site| range_text(source, site.span()) == ".alpha")
+        .expect("relation-column navigation site must be recorded");
+
+    let chain = found_chain(navigation);
+    let row = relation_row_source(chain);
+    assert_typed_relation_columns(row, source);
+    assert!(matches!(
+        chain.hops()[0].target(),
+        NavigationTarget::RelationColumn(target) if target == &row.columns()[1]
+    ));
+    assert_eq!(analysis, analyze(source, &graph));
+}
+
+#[test]
+fn typed_relation_binder_accepts_trivia_after_the_type_separator() {
+    let graph = graph(Vec::new());
+    let source = "row:\n Relation<(name:String[1])>| $row.name";
     let analysis = analyze(source, &graph);
     let navigation = analysis
         .sites()
@@ -359,10 +441,202 @@ fn typed_relation_lambda_binder_resolves_known_column() {
         .expect("relation-column navigation site must be recorded");
 
     assert!(matches!(
-        navigation.outcome(),
-        LocalResolution::Navigation(NavigationResolution::Found(chain))
-            if matches!(chain.hops()[0].target(), NavigationTarget::RelationColumn)
+        found_chain(navigation).hops()[0].target(),
+        NavigationTarget::RelationColumn(column) if column.name().as_str() == "name"
     ));
+}
+
+#[test]
+fn typed_class_column_preserves_multiplicity_for_follow_on_navigation() {
+    let graph = graph(vec![class("Person", vec![property("name", "String")])]);
+    let source = "row: Relation<(person:model::Person[1..*])>| $row.person.name";
+    let analysis = analyze(source, &graph);
+
+    let person = analysis
+        .sites()
+        .iter()
+        .find(|site| range_text(source, site.span()) == ".person")
+        .expect("relation-column navigation site must be recorded");
+    let person_chain = found_chain(person);
+    assert!(matches!(
+        person_chain.hops()[0].target(),
+        NavigationTarget::RelationColumn(column)
+            if column.name().as_str() == "person"
+                && column.type_ref().raw_type().as_str() == "model::Person"
+    ));
+    assert!(matches!(
+        person_chain.value().kind(),
+        LocalValueKind::Class(class) if class.path().as_str() == "model::Person"
+    ));
+    let expected_multiplicity =
+        Multiplicity::new(ONE, None).expect("unbounded multiplicity must be valid");
+    assert_eq!(person_chain.value().multiplicity(), expected_multiplicity);
+
+    let name = analysis
+        .sites()
+        .iter()
+        .find(|site| range_text(source, site.span()) == ".name")
+        .expect("follow-on member navigation site must be recorded");
+    let name_chain = found_chain(name);
+    assert_eq!(name_chain.source().multiplicity(), expected_multiplicity);
+    assert!(matches!(
+        name_chain.hops()[0].target(),
+        NavigationTarget::Member(member) if member.owner().path().as_str() == "model::Person"
+    ));
+}
+
+#[test]
+fn relation_binder_keeps_its_position_when_a_later_binder_is_not_a_relation() {
+    let graph = graph(vec![class("Person", vec![property("name", "String")])]);
+    let source = "model::Person.all()->filter({row: Relation<(name:String[1])>, plain:String[1]| $row.name; $plain.name})";
+    let analysis = analyze(source, &graph);
+    let navigations = analysis
+        .sites()
+        .iter()
+        .filter(|site| range_text(source, site.span()) == ".name")
+        .collect::<Vec<_>>();
+
+    assert_eq!(navigations.len(), 2);
+    assert!(matches!(
+        navigations[0].outcome(),
+        LocalResolution::Navigation(NavigationResolution::Found(chain))
+            if matches!(chain.hops()[0].target(), NavigationTarget::RelationColumn(column)
+                if column.name().as_str() == "name")
+    ));
+    assert!(matches!(
+        navigations[1].outcome(),
+        LocalResolution::Navigation(NavigationResolution::UnderResolved(_))
+    ));
+}
+
+#[test]
+fn typed_relation_generic_column_navigation_retains_type_and_multiplicity() {
+    let graph = graph(Vec::new());
+    let source = r#"
+        row: Relation<(
+            lookup: Map<
+                String /* key */,
+                Integer /* value */
+            > [0 .. *]
+        )> | $row.lookup
+    "#;
+    let analysis = analyze(source, &graph);
+    let navigation = analysis
+        .sites()
+        .iter()
+        .find(|site| range_text(source, site.span()) == ".lookup")
+        .expect("relation-column navigation site must be recorded");
+    let chain = found_chain(navigation);
+    let expected_type = TypeRef::new(
+        QName::new("Map").expect("fixture type must be valid"),
+        vec![
+            TypeRef::new(
+                QName::new("String").expect("fixture type must be valid"),
+                Vec::new(),
+            ),
+            TypeRef::new(
+                QName::new("Integer").expect("fixture type must be valid"),
+                Vec::new(),
+            ),
+        ],
+    );
+
+    assert!(matches!(
+        chain.hops()[0].target(),
+        NavigationTarget::RelationColumn(column) if column.type_ref() == &expected_type
+    ));
+    assert!(matches!(
+        chain.value().kind(),
+        LocalValueKind::Unknown(UnknownValue::UnmodeledType(actual)) if actual == &expected_type
+    ));
+    assert_eq!(
+        chain.value().multiplicity(),
+        Multiplicity::new(ZERO, None).expect("unbounded multiplicity must be valid")
+    );
+}
+
+#[test]
+fn generic_relation_type_without_a_row_schema_stays_under_resolved() {
+    let graph = graph(Vec::new());
+    let source = "row: Relation<String>| $row.name";
+    let analysis = analyze(source, &graph);
+    let navigation = analysis
+        .sites()
+        .iter()
+        .find(|site| range_text(source, site.span()) == ".name")
+        .expect("navigation site must be recorded");
+
+    assert!(matches!(
+        navigation.outcome(),
+        LocalResolution::Navigation(NavigationResolution::UnderResolved(_))
+    ));
+}
+
+#[test]
+fn malformed_or_duplicate_typed_relation_columns_stay_under_resolved() {
+    let graph = graph(Vec::new());
+    for source in [
+        "row: Relation<(name:String)>| $row.name",
+        "row: Relation<(name:String[1], name:Integer[1])>| $row.name",
+    ] {
+        let analysis = analyze(source, &graph);
+        let navigation = analysis
+            .sites()
+            .iter()
+            .find(|site| range_text(source, site.span()) == ".name")
+            .expect("relation-column navigation site must be recorded");
+        assert!(
+            matches!(
+                navigation.outcome(),
+                LocalResolution::Navigation(NavigationResolution::UnderResolved(_))
+            ),
+            "malformed relation row must not choose a column: {source} => {:#?}",
+            navigation.outcome()
+        );
+    }
+}
+
+#[test]
+fn invalid_typed_relation_binder_never_falls_back_to_the_incoming_class() {
+    let graph = graph(vec![class("Person", vec![property("name", "String")])]);
+    let source = "model::Person.all()->filter(row: Relation<(name:String)>| $row.name)";
+    let analysis = analyze(source, &graph);
+    let navigation = analysis
+        .sites()
+        .iter()
+        .find(|site| range_text(source, site.span()) == ".name")
+        .expect("relation-column navigation site must be recorded");
+
+    assert!(
+        matches!(
+            navigation.outcome(),
+            LocalResolution::Navigation(NavigationResolution::UnderResolved(_))
+        ),
+        "invalid typed binder must not use the incoming Person value: {:#?}",
+        navigation.outcome()
+    );
+}
+
+#[test]
+fn duplicate_lambda_binders_never_select_one_relation_schema() {
+    let graph = graph(vec![class("Person", vec![property("name", "String")])]);
+    let source =
+        "model::Person.all()->filter({row: Relation<(name:String[1])>, row:String[1]| $row.name})";
+    let analysis = analyze(source, &graph);
+    let navigation = analysis
+        .sites()
+        .iter()
+        .find(|site| range_text(source, site.span()) == ".name")
+        .expect("duplicate-binder navigation site must be recorded");
+
+    assert!(
+        matches!(
+            navigation.outcome(),
+            LocalResolution::Navigation(NavigationResolution::UnderResolved(_))
+        ),
+        "duplicate binders must not select a relation row: {:#?}",
+        navigation.outcome()
+    );
 }
 
 #[test]
@@ -383,7 +657,7 @@ fn preserves_typed_lambda_values_for_parenthesized_and_subtree_analysis() {
         matches!(
             site.outcome(),
             LocalResolution::Navigation(NavigationResolution::Found(chain))
-                if matches!(chain.hops()[0].target(), NavigationTarget::RelationColumn)
+                if matches!(chain.hops()[0].target(), NavigationTarget::RelationColumn(_))
         )
     }));
 
@@ -394,7 +668,7 @@ fn preserves_typed_lambda_values_for_parenthesized_and_subtree_analysis() {
     assert!(matches!(
         subtree_analysis.sites()[0].outcome(),
         LocalResolution::Navigation(NavigationResolution::Found(chain))
-            if matches!(chain.hops()[0].target(), NavigationTarget::RelationColumn)
+            if matches!(chain.hops()[0].target(), NavigationTarget::RelationColumn(_))
     ));
 }
 

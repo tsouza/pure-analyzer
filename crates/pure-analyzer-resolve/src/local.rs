@@ -1,8 +1,8 @@
 //! Scoped local values and conservative navigation-chain resolution.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
-use pure_analyzer_diagnostics::{DiagCode, ReasonCode};
+use pure_analyzer_diagnostics::{DiagCode, ReasonCode, TextRange};
 use pure_analyzer_model::{ModelGraph, Multiplicity, Name, QName, QpKind, TypeRef};
 
 use crate::{
@@ -94,29 +94,139 @@ pub enum UnknownValue {
     Model(UnderResolution),
 }
 
-/// A relation row with columns keyed by their exact Pure names.
+/// Stable identity for one typed relation-row column.
+///
+/// The identity follows declaration order and remains distinct from the
+/// column's display name, which lets later relational lowering retain both
+/// source order and name-based selection evidence.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct RelationColumnId(u32);
+
+impl RelationColumnId {
+    /// Construct a stable column identity chosen from declaration order.
+    #[must_use]
+    pub const fn new(index: u32) -> Self {
+        Self(index)
+    }
+
+    /// Return the raw zero-based declaration index.
+    #[must_use]
+    pub const fn index(self) -> u32 {
+        self.0
+    }
+}
+
+/// One typed relation-row column in its declared order.
+///
+/// Typed syntax supplies no nullability proof. A downstream relational
+/// consumer must therefore record nullability as unknown unless it has
+/// independent evidence.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RelationColumn {
+    id: RelationColumnId,
+    name: Name,
+    type_ref: TypeRef,
+    multiplicity: Multiplicity,
+    span: TextRange,
+}
+
+impl RelationColumn {
+    /// Construct one column from exact syntax-level declaration facts.
+    #[must_use]
+    pub fn new(
+        id: RelationColumnId,
+        name: Name,
+        type_ref: TypeRef,
+        multiplicity: Multiplicity,
+        span: TextRange,
+    ) -> Self {
+        Self {
+            id,
+            name,
+            type_ref,
+            multiplicity,
+            span,
+        }
+    }
+
+    /// Return the stable declaration identity.
+    #[must_use]
+    pub const fn id(&self) -> RelationColumnId {
+        self.id
+    }
+
+    /// Return the exact Pure column name.
+    #[must_use]
+    pub const fn name(&self) -> &Name {
+        &self.name
+    }
+
+    /// Return the declared Pure type, including generic arguments.
+    #[must_use]
+    pub const fn type_ref(&self) -> &TypeRef {
+        &self.type_ref
+    }
+
+    /// Return the declared value multiplicity.
+    #[must_use]
+    pub const fn multiplicity(&self) -> Multiplicity {
+        self.multiplicity
+    }
+
+    /// Return the precise query span of this column declaration.
+    #[must_use]
+    pub const fn span(&self) -> TextRange {
+        self.span
+    }
+}
+
+/// Why a [`RelationRow`] cannot faithfully represent its declarations.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RelationRowError {
+    /// Two columns were assigned the same stable identity.
+    DuplicateColumnId(RelationColumnId),
+    /// Two columns were declared with the same exact Pure name.
+    DuplicateColumnName(Name),
+}
+
+/// A typed relation row with columns retained in declared order.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct RelationRow {
-    columns: BTreeMap<Name, LocalValue>,
+    columns: Vec<RelationColumn>,
 }
 
 impl RelationRow {
-    /// Construct a row from its known columns.
-    #[must_use]
-    pub fn new(columns: BTreeMap<Name, LocalValue>) -> Self {
-        Self { columns }
+    /// Construct a row from its ordered declarations.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RelationRowError`] when identities or exact names repeat.
+    /// A caller must keep such a row unresolved rather than silently select
+    /// one duplicate column.
+    pub fn new(columns: Vec<RelationColumn>) -> Result<Self, RelationRowError> {
+        let mut ids = BTreeSet::new();
+        let mut names = BTreeSet::new();
+        for column in &columns {
+            if !ids.insert(column.id()) {
+                return Err(RelationRowError::DuplicateColumnId(column.id()));
+            }
+            if !names.insert(column.name().clone()) {
+                return Err(RelationRowError::DuplicateColumnName(column.name().clone()));
+            }
+        }
+        Ok(Self { columns })
     }
 
-    /// Return all known columns in lexical name order.
+    /// Return all declarations in their source order.
     #[must_use]
-    pub const fn columns(&self) -> &BTreeMap<Name, LocalValue> {
+    pub fn columns(&self) -> &[RelationColumn] {
         &self.columns
     }
 
-    /// Look up a column by its exact name.
+    /// Look up a unique column by its exact name.
     #[must_use]
-    pub fn column(&self, name: &Name) -> Option<&LocalValue> {
-        self.columns.get(name)
+    pub fn column(&self, name: &Name) -> Option<&RelationColumn> {
+        self.columns.iter().find(|column| column.name() == name)
     }
 }
 
@@ -281,8 +391,8 @@ impl NavigationHop {
 pub enum NavigationTarget {
     /// A model property, qualified property, or association end.
     Member(ResolvedMember),
-    /// A relation-row column bound by the current local scope.
-    RelationColumn,
+    /// A typed relation-row column bound by the current local scope.
+    RelationColumn(RelationColumn),
 }
 
 impl NavigationTarget {
@@ -291,7 +401,7 @@ impl NavigationTarget {
     pub const fn definition(&self) -> Option<DefinitionAnchor> {
         match self {
             Self::Member(member) => Some(member.definition()),
-            Self::RelationColumn => None,
+            Self::RelationColumn(_) => None,
         }
     }
 }
@@ -689,9 +799,9 @@ impl<'model> NavigationResolver<'model> {
             };
         }
         match row.column(step.name()) {
-            Some(value) => StepResolution::Found {
-                target: NavigationTarget::RelationColumn,
-                value: value.clone(),
+            Some(column) => StepResolution::Found {
+                target: NavigationTarget::RelationColumn(column.clone()),
+                value: self.infer_target(column.type_ref(), column.multiplicity()),
             },
             None => StepResolution::Missing,
         }

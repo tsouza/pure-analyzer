@@ -87,7 +87,7 @@ impl<T> core::convert::From<T> for pure_analyzer_resolve::NavigationResolution
 pub fn pure_analyzer_resolve::NavigationResolution::from(T) -> T
 pub enum pure_analyzer_resolve::NavigationTarget
 pub pure_analyzer_resolve::NavigationTarget::Member(pure_analyzer_resolve::ResolvedMember)
-pub pure_analyzer_resolve::NavigationTarget::RelationColumn
+pub pure_analyzer_resolve::NavigationTarget::RelationColumn(pure_analyzer_resolve::RelationColumn)
 impl pure_analyzer_resolve::NavigationTarget
 pub const fn pure_analyzer_resolve::NavigationTarget::definition(&self) -> core::option::Option<pure_analyzer_resolve::DefinitionAnchor>
 impl core::clone::Clone for pure_analyzer_resolve::NavigationTarget
@@ -216,6 +216,46 @@ impl<T> core::clone::CloneToUninit for pure_analyzer_resolve::NavigationUnderRes
 pub unsafe fn pure_analyzer_resolve::NavigationUnderResolutionReason::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for pure_analyzer_resolve::NavigationUnderResolutionReason
 pub fn pure_analyzer_resolve::NavigationUnderResolutionReason::from(T) -> T
+pub enum pure_analyzer_resolve::RelationRowError
+pub pure_analyzer_resolve::RelationRowError::DuplicateColumnId(pure_analyzer_resolve::RelationColumnId)
+pub pure_analyzer_resolve::RelationRowError::DuplicateColumnName(pure_analyzer_model::types::Name)
+impl core::clone::Clone for pure_analyzer_resolve::RelationRowError
+pub fn pure_analyzer_resolve::RelationRowError::clone(&self) -> pure_analyzer_resolve::RelationRowError
+impl core::cmp::Eq for pure_analyzer_resolve::RelationRowError
+impl core::cmp::PartialEq for pure_analyzer_resolve::RelationRowError
+pub fn pure_analyzer_resolve::RelationRowError::eq(&self, &pure_analyzer_resolve::RelationRowError) -> bool
+impl core::fmt::Debug for pure_analyzer_resolve::RelationRowError
+pub fn pure_analyzer_resolve::RelationRowError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_resolve::RelationRowError
+impl core::marker::Freeze for pure_analyzer_resolve::RelationRowError
+impl core::marker::Send for pure_analyzer_resolve::RelationRowError
+impl core::marker::Sync for pure_analyzer_resolve::RelationRowError
+impl core::marker::Unpin for pure_analyzer_resolve::RelationRowError
+impl core::marker::UnsafeUnpin for pure_analyzer_resolve::RelationRowError
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_resolve::RelationRowError
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_resolve::RelationRowError
+impl<T, U> core::convert::Into<U> for pure_analyzer_resolve::RelationRowError where U: core::convert::From<T>
+pub fn pure_analyzer_resolve::RelationRowError::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_resolve::RelationRowError where U: core::convert::Into<T>
+pub type pure_analyzer_resolve::RelationRowError::Error = never
+pub fn pure_analyzer_resolve::RelationRowError::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_resolve::RelationRowError where U: core::convert::TryFrom<T>
+pub type pure_analyzer_resolve::RelationRowError::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_resolve::RelationRowError::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_resolve::RelationRowError where T: core::clone::Clone
+pub type pure_analyzer_resolve::RelationRowError::Owned = T
+pub fn pure_analyzer_resolve::RelationRowError::clone_into(&self, &mut T)
+pub fn pure_analyzer_resolve::RelationRowError::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_resolve::RelationRowError where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_resolve::RelationRowError::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_resolve::RelationRowError where T: ?core::marker::Sized
+pub fn pure_analyzer_resolve::RelationRowError::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_resolve::RelationRowError where T: ?core::marker::Sized
+pub fn pure_analyzer_resolve::RelationRowError::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_resolve::RelationRowError where T: core::clone::Clone
+pub unsafe fn pure_analyzer_resolve::RelationRowError::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_resolve::RelationRowError
+pub fn pure_analyzer_resolve::RelationRowError::from(T) -> T
 pub enum pure_analyzer_resolve::Resolution<T>
 pub pure_analyzer_resolve::Resolution::Ambiguous(alloc::vec::Vec<T>)
 pub pure_analyzer_resolve::Resolution::Cycle(alloc::vec::Vec<pure_analyzer_model::types::QName>)
@@ -851,11 +891,104 @@ impl<T> core::clone::CloneToUninit for pure_analyzer_resolve::NavigationStep whe
 pub unsafe fn pure_analyzer_resolve::NavigationStep::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for pure_analyzer_resolve::NavigationStep
 pub fn pure_analyzer_resolve::NavigationStep::from(T) -> T
+pub struct pure_analyzer_resolve::RelationColumn
+impl pure_analyzer_resolve::RelationColumn
+pub const fn pure_analyzer_resolve::RelationColumn::id(&self) -> pure_analyzer_resolve::RelationColumnId
+pub const fn pure_analyzer_resolve::RelationColumn::multiplicity(&self) -> pure_analyzer_model::types::Multiplicity
+pub const fn pure_analyzer_resolve::RelationColumn::name(&self) -> &pure_analyzer_model::types::Name
+pub fn pure_analyzer_resolve::RelationColumn::new(pure_analyzer_resolve::RelationColumnId, pure_analyzer_model::types::Name, pure_analyzer_model::types::TypeRef, pure_analyzer_model::types::Multiplicity, text_size::range::TextRange) -> Self
+pub const fn pure_analyzer_resolve::RelationColumn::span(&self) -> text_size::range::TextRange
+pub const fn pure_analyzer_resolve::RelationColumn::type_ref(&self) -> &pure_analyzer_model::types::TypeRef
+impl core::clone::Clone for pure_analyzer_resolve::RelationColumn
+pub fn pure_analyzer_resolve::RelationColumn::clone(&self) -> pure_analyzer_resolve::RelationColumn
+impl core::cmp::Eq for pure_analyzer_resolve::RelationColumn
+impl core::cmp::PartialEq for pure_analyzer_resolve::RelationColumn
+pub fn pure_analyzer_resolve::RelationColumn::eq(&self, &pure_analyzer_resolve::RelationColumn) -> bool
+impl core::fmt::Debug for pure_analyzer_resolve::RelationColumn
+pub fn pure_analyzer_resolve::RelationColumn::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_resolve::RelationColumn
+impl core::marker::Freeze for pure_analyzer_resolve::RelationColumn
+impl core::marker::Send for pure_analyzer_resolve::RelationColumn
+impl core::marker::Sync for pure_analyzer_resolve::RelationColumn
+impl core::marker::Unpin for pure_analyzer_resolve::RelationColumn
+impl core::marker::UnsafeUnpin for pure_analyzer_resolve::RelationColumn
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_resolve::RelationColumn
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_resolve::RelationColumn
+impl<T, U> core::convert::Into<U> for pure_analyzer_resolve::RelationColumn where U: core::convert::From<T>
+pub fn pure_analyzer_resolve::RelationColumn::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_resolve::RelationColumn where U: core::convert::Into<T>
+pub type pure_analyzer_resolve::RelationColumn::Error = never
+pub fn pure_analyzer_resolve::RelationColumn::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_resolve::RelationColumn where U: core::convert::TryFrom<T>
+pub type pure_analyzer_resolve::RelationColumn::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_resolve::RelationColumn::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_resolve::RelationColumn where T: core::clone::Clone
+pub type pure_analyzer_resolve::RelationColumn::Owned = T
+pub fn pure_analyzer_resolve::RelationColumn::clone_into(&self, &mut T)
+pub fn pure_analyzer_resolve::RelationColumn::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_resolve::RelationColumn where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_resolve::RelationColumn::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_resolve::RelationColumn where T: ?core::marker::Sized
+pub fn pure_analyzer_resolve::RelationColumn::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_resolve::RelationColumn where T: ?core::marker::Sized
+pub fn pure_analyzer_resolve::RelationColumn::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_resolve::RelationColumn where T: core::clone::Clone
+pub unsafe fn pure_analyzer_resolve::RelationColumn::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_resolve::RelationColumn
+pub fn pure_analyzer_resolve::RelationColumn::from(T) -> T
+pub struct pure_analyzer_resolve::RelationColumnId(_)
+impl pure_analyzer_resolve::RelationColumnId
+pub const fn pure_analyzer_resolve::RelationColumnId::index(self) -> u32
+pub const fn pure_analyzer_resolve::RelationColumnId::new(u32) -> Self
+impl core::clone::Clone for pure_analyzer_resolve::RelationColumnId
+pub fn pure_analyzer_resolve::RelationColumnId::clone(&self) -> pure_analyzer_resolve::RelationColumnId
+impl core::cmp::Eq for pure_analyzer_resolve::RelationColumnId
+impl core::cmp::Ord for pure_analyzer_resolve::RelationColumnId
+pub fn pure_analyzer_resolve::RelationColumnId::cmp(&self, &pure_analyzer_resolve::RelationColumnId) -> core::cmp::Ordering
+impl core::cmp::PartialEq for pure_analyzer_resolve::RelationColumnId
+pub fn pure_analyzer_resolve::RelationColumnId::eq(&self, &pure_analyzer_resolve::RelationColumnId) -> bool
+impl core::cmp::PartialOrd for pure_analyzer_resolve::RelationColumnId
+pub fn pure_analyzer_resolve::RelationColumnId::partial_cmp(&self, &pure_analyzer_resolve::RelationColumnId) -> core::option::Option<core::cmp::Ordering>
+impl core::fmt::Debug for pure_analyzer_resolve::RelationColumnId
+pub fn pure_analyzer_resolve::RelationColumnId::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for pure_analyzer_resolve::RelationColumnId
+pub fn pure_analyzer_resolve::RelationColumnId::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::Copy for pure_analyzer_resolve::RelationColumnId
+impl core::marker::StructuralPartialEq for pure_analyzer_resolve::RelationColumnId
+impl core::marker::Freeze for pure_analyzer_resolve::RelationColumnId
+impl core::marker::Send for pure_analyzer_resolve::RelationColumnId
+impl core::marker::Sync for pure_analyzer_resolve::RelationColumnId
+impl core::marker::Unpin for pure_analyzer_resolve::RelationColumnId
+impl core::marker::UnsafeUnpin for pure_analyzer_resolve::RelationColumnId
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_resolve::RelationColumnId
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_resolve::RelationColumnId
+impl<T, U> core::convert::Into<U> for pure_analyzer_resolve::RelationColumnId where U: core::convert::From<T>
+pub fn pure_analyzer_resolve::RelationColumnId::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_resolve::RelationColumnId where U: core::convert::Into<T>
+pub type pure_analyzer_resolve::RelationColumnId::Error = never
+pub fn pure_analyzer_resolve::RelationColumnId::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_resolve::RelationColumnId where U: core::convert::TryFrom<T>
+pub type pure_analyzer_resolve::RelationColumnId::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_resolve::RelationColumnId::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_resolve::RelationColumnId where T: core::clone::Clone
+pub type pure_analyzer_resolve::RelationColumnId::Owned = T
+pub fn pure_analyzer_resolve::RelationColumnId::clone_into(&self, &mut T)
+pub fn pure_analyzer_resolve::RelationColumnId::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_resolve::RelationColumnId where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_resolve::RelationColumnId::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_resolve::RelationColumnId where T: ?core::marker::Sized
+pub fn pure_analyzer_resolve::RelationColumnId::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_resolve::RelationColumnId where T: ?core::marker::Sized
+pub fn pure_analyzer_resolve::RelationColumnId::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_resolve::RelationColumnId where T: core::clone::Clone
+pub unsafe fn pure_analyzer_resolve::RelationColumnId::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_resolve::RelationColumnId
+pub fn pure_analyzer_resolve::RelationColumnId::from(T) -> T
 pub struct pure_analyzer_resolve::RelationRow
 impl pure_analyzer_resolve::RelationRow
-pub fn pure_analyzer_resolve::RelationRow::column(&self, &pure_analyzer_model::types::Name) -> core::option::Option<&pure_analyzer_resolve::LocalValue>
-pub const fn pure_analyzer_resolve::RelationRow::columns(&self) -> &alloc::collections::btree::map::BTreeMap<pure_analyzer_model::types::Name, pure_analyzer_resolve::LocalValue>
-pub fn pure_analyzer_resolve::RelationRow::new(alloc::collections::btree::map::BTreeMap<pure_analyzer_model::types::Name, pure_analyzer_resolve::LocalValue>) -> Self
+pub fn pure_analyzer_resolve::RelationRow::column(&self, &pure_analyzer_model::types::Name) -> core::option::Option<&pure_analyzer_resolve::RelationColumn>
+pub fn pure_analyzer_resolve::RelationRow::columns(&self) -> &[pure_analyzer_resolve::RelationColumn]
+pub fn pure_analyzer_resolve::RelationRow::new(alloc::vec::Vec<pure_analyzer_resolve::RelationColumn>) -> core::result::Result<Self, pure_analyzer_resolve::RelationRowError>
 impl core::clone::Clone for pure_analyzer_resolve::RelationRow
 pub fn pure_analyzer_resolve::RelationRow::clone(&self) -> pure_analyzer_resolve::RelationRow
 impl core::cmp::Eq for pure_analyzer_resolve::RelationRow
