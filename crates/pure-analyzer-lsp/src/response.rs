@@ -149,6 +149,7 @@ pub(crate) fn initialization_result() -> Value {
             object([
                 ("positionEncoding", Value::String("utf-16".to_owned())),
                 ("textDocumentSync", text_document_sync),
+                ("definitionProvider", Value::Bool(true)),
             ]),
         ),
         ("serverInfo", server_info),

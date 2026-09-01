@@ -52,6 +52,12 @@ pub(crate) fn handle<W: Write>(
             state::update_configuration(server, params, writer)?;
             Ok(None)
         }
+        Some("textDocument/definition") => {
+            if let Some(id) = id {
+                send_result(writer, id, state::definition(server, params))?;
+            }
+            Ok(None)
+        }
         Some(_) if let Some(id) = id => {
             send_error(writer, id, METHOD_NOT_FOUND_CODE, "method not found")?;
             Ok(None)

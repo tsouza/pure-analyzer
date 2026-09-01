@@ -2,14 +2,14 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::io::{self, Write};
 
 use libpure::{
-    AnalysisDriver, Diagnostic, DriverError, FileId, LintRequest, ModelError, ModelInput, Severity,
-    SourceInput, SourceRequest,
+    AnalysisDriver, DefinitionPosition, DefinitionResult, DefinitionTarget, Diagnostic,
+    DriverError, FileId, LintRequest, ModelError, ModelInput, Severity, SourceInput, SourceRequest,
 };
-use serde_json::Value;
+use serde_json::{Map, Value};
 
 use crate::{
     DocumentSnapshot, RequestId, Server,
-    document::{ContentChange, ProtocolPosition, ProtocolRange, utf16_position},
+    document::{ContentChange, ProtocolPosition, ProtocolRange, byte_offset, utf16_position},
     response::{PublishedDiagnostic, PublishedPosition, PublishedRange, publish_diagnostics},
     workspace::ModelDocumentKind,
 };
@@ -117,6 +117,74 @@ pub(crate) fn update_configuration<W: Write>(
     };
     server.configuration.replace(settings);
     publish_current_diagnostics(server, writer)
+}
+
+pub(crate) fn definition(server: &Server, params: Option<&Value>) -> Value {
+    let Some((uri, position)) = definition_params(params) else {
+        return Value::Null;
+    };
+    let snapshot = AnalysisSnapshot::capture(server);
+    let Some(document) = snapshot.documents.get(uri) else {
+        return Value::Null;
+    };
+    let Some(offset) = byte_offset(document.text(), position) else {
+        return Value::Null;
+    };
+    let Some((request, files)) = snapshot.request() else {
+        return Value::Null;
+    };
+    let Some(file) = files
+        .iter()
+        .find_map(|(file, candidate)| (candidate == uri).then_some(*file))
+    else {
+        return Value::Null;
+    };
+    let Ok(offset) = u32::try_from(offset) else {
+        return Value::Null;
+    };
+
+    match AnalysisDriver.definition(&request, DefinitionPosition::new(file, offset.into())) {
+        Ok(DefinitionResult::Found(target)) => {
+            definition_location(&snapshot, &files, target).unwrap_or(Value::Null)
+        }
+        Ok(DefinitionResult::Unavailable(_)) | Err(_) => Value::Null,
+    }
+}
+
+fn definition_params(params: Option<&Value>) -> Option<(&str, ProtocolPosition)> {
+    let params = params?;
+    let uri = params.get("textDocument")?.get("uri")?.as_str()?;
+    let position = protocol_position(params.get("position")?)?;
+    Some((uri, position))
+}
+
+fn definition_location(
+    snapshot: &AnalysisSnapshot,
+    files: &BTreeMap<FileId, String>,
+    target: DefinitionTarget,
+) -> Option<Value> {
+    let span = target.span()?;
+    let uri = files.get(&target.file())?;
+    let document = snapshot.documents.get(uri)?;
+    let start = utf16_position(document.text(), usize::from(span.start()))?;
+    let end = utf16_position(document.text(), usize::from(span.end()))?;
+    let mut range = Map::new();
+    range.insert("start".to_owned(), definition_position(start));
+    range.insert("end".to_owned(), definition_position(end));
+    let mut location = Map::new();
+    location.insert("uri".to_owned(), Value::String(uri.clone()));
+    location.insert("range".to_owned(), Value::Object(range));
+    Some(Value::Object(location))
+}
+
+fn definition_position(position: ProtocolPosition) -> Value {
+    let mut value = Map::new();
+    value.insert("line".to_owned(), Value::Number(position.line().into()));
+    value.insert(
+        "character".to_owned(),
+        Value::Number(position.character().into()),
+    );
+    Value::Object(value)
 }
 
 fn content_changes(params: Option<&Value>) -> Option<Vec<ContentChange>> {
