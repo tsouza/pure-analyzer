@@ -8,7 +8,7 @@
 use std::collections::BTreeSet;
 
 use pure_analyzer_diagnostics::{FileId, ReasonCode, TextRange};
-use pure_analyzer_model::{Multiplicity, Name, Provenance, QName, TypeRef};
+use pure_analyzer_model::{Multiplicity, Name, Provenance, QName, QpKind, TypeRef};
 use pure_analyzer_resolve::{
     DefinitionAnchor, LocalValue, LocalValueKind, NavigationChain, NavigationTarget, ResolvedClass,
     ResolvedMember, ResolvedMemberKind,
@@ -140,6 +140,44 @@ impl ModelOrigin {
     #[must_use]
     pub const fn definition(&self) -> DefinitionAnchor {
         self.definition
+    }
+
+    /// Return a deterministic graph-identity fragment for internal structural
+    /// normalization.
+    ///
+    /// The definition anchor alone is not injective for PMCD input, where
+    /// several definitions may share a document-level anchor. This fragment
+    /// retains the class/member identity that distinguishes those facts while
+    /// keeping the representation private to the analysis crate.
+    #[must_use]
+    pub(crate) fn structural_identity_key(&self) -> String {
+        match &self.identity {
+            ModelOriginIdentity::Unspecified => "unspecified".to_owned(),
+            ModelOriginIdentity::Class(path) => format!("class:{}", path.as_str()),
+            ModelOriginIdentity::Member { owner, name, kind } => {
+                let kind = match kind {
+                    ResolvedMemberKind::Qualified(QpKind::UserQualified) => "qualified:user",
+                    ResolvedMemberKind::Qualified(QpKind::MilestonedPoint) => {
+                        "qualified:milestoned-point"
+                    }
+                    ResolvedMemberKind::Qualified(QpKind::AllVersions) => "qualified:all-versions",
+                    ResolvedMemberKind::Qualified(QpKind::AllVersionsInRange) => {
+                        "qualified:all-versions-in-range"
+                    }
+                    ResolvedMemberKind::Qualified(QpKind::EdgePoint) => "qualified:edge-point",
+                    ResolvedMemberKind::Property => "property",
+                    ResolvedMemberKind::AssociationEnd { association } => {
+                        return format!(
+                            "member:{}:{}:association-end:{}",
+                            owner.as_str(),
+                            name.as_str(),
+                            association.as_str()
+                        );
+                    }
+                };
+                format!("member:{}:{}:{kind}", owner.as_str(), name.as_str())
+            }
+        }
     }
 }
 
