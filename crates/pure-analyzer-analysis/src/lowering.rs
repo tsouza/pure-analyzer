@@ -1,10 +1,12 @@
 //! Conservative lowering of the minimal resolved M3 query subset.
 
+use std::collections::BTreeSet;
+
 use pure_analyzer_diagnostics::{FileId, ReasonCode};
 use pure_analyzer_model::{Multiplicity, Name, QName, TypeRef};
 use pure_analyzer_resolve::{
     LocalValue, LocalValueKind, NavigationResolution, NavigationResolver, NavigationStep,
-    NavigationTarget, Resolution,
+    NavigationTarget, RelationColumn, RelationColumnId, RelationRow, Resolution,
 };
 use pure_analyzer_syntax::{GreenElement, GreenNode, SyntaxKind, TextRange};
 
@@ -26,9 +28,10 @@ const STRING_TYPE: &str = "String";
 ///
 /// The input must contain exactly one top-level query expression and a model graph. The
 /// supported subset is deliberately limited to `Class.all()`, to-one resolved navigation,
-/// `->filter` with an equality predicate, one-lambda `->map`, bare `->distinct()`, and one
-/// terminal inner join with two resolved row bindings. Other valid syntax stays explicit as an
-/// opaque outcome rather than being approximated.
+/// `->filter` with an equality predicate, one-lambda `->map`, constrained schema-aware
+/// `->project(~[alias: row | expression, ...])`, bare `->distinct()`, and one terminal inner
+/// join with two resolved row bindings. Other valid syntax stays explicit as an opaque outcome
+/// rather than being approximated.
 #[must_use]
 pub fn lower_m3_query(input: AnalysisInput<'_, '_>) -> RelationalOutcome {
     let fallback_origin = origin(input.file(), input.tree().text_range(), Vec::new());
@@ -61,9 +64,49 @@ struct BoundColumn {
 }
 
 #[derive(Debug, Clone)]
+struct BoundRelationRow {
+    local: LocalValue,
+    columns: Vec<BoundColumn>,
+}
+
+#[derive(Debug, Clone)]
+enum BoundElement {
+    Column(BoundColumn),
+    RelationRow(BoundRelationRow),
+}
+
+impl BoundElement {
+    fn as_column(&self) -> Option<&BoundColumn> {
+        match self {
+            Self::Column(column) => Some(column),
+            Self::RelationRow(_) => None,
+        }
+    }
+
+    fn scalar_binding(&self) -> ScalarBinding {
+        match self {
+            Self::Column(column) => ScalarBinding::Column(column.clone()),
+            Self::RelationRow(row) => ScalarBinding::RelationRow(row.clone()),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+enum ScalarBinding {
+    Column(BoundColumn),
+    RelationRow(BoundRelationRow),
+}
+
+#[derive(Debug, Clone)]
+enum LoweredValue {
+    Scalar(LoweredScalar),
+    RelationRow(BoundRelationRow),
+}
+
+#[derive(Debug, Clone)]
 struct RelationState {
     expression: RelationExpression,
-    element: Option<BoundColumn>,
+    element: Option<BoundElement>,
 }
 
 #[derive(Debug, Clone)]
@@ -196,10 +239,10 @@ impl<'model> QueryLowerer<'model> {
         .map_err(|_| ReasonCode::IndUnmodeledOp)?;
         Ok(RelationState {
             expression,
-            element: Some(BoundColumn {
+            element: Some(BoundElement::Column(BoundColumn {
                 column,
                 local: LocalValue::class(class, multiplicity),
-            }),
+            })),
         })
     }
 
@@ -224,6 +267,7 @@ impl<'model> QueryLowerer<'model> {
                 node,
                 arrow_lambda(node).ok_or(ReasonCode::IndUnmodeledOp)?,
             ),
+            "project" => self.lower_relation_project(state, node),
             "distinct" => self.lower_distinct(state, node),
             "join" => self.lower_join(state, node),
             _ => Err(ReasonCode::IndUnmodeledOp),
@@ -268,19 +312,30 @@ impl<'model> QueryLowerer<'model> {
         node: &GreenNode,
     ) -> Result<RelationState, ReasonCode> {
         self.mark_failure_with_origins(node, &[state.expression.origin()], &[]);
-        let left_element = state.element.as_ref().ok_or(ReasonCode::IndUnmodeledOp)?;
+        let left_element = state
+            .element
+            .as_ref()
+            .and_then(BoundElement::as_column)
+            .ok_or(ReasonCode::IndUnmodeledOp)?;
         let arguments = join_arguments(node)?;
         let right_state = self.lower_relation_nodes(std::slice::from_ref(&arguments.right))?;
         let right_element = right_state
             .element
             .as_ref()
+            .and_then(BoundElement::as_column)
             .ok_or(ReasonCode::IndUnmodeledOp)?;
         let predicate = self
             .lower_scalar_query(
                 &arguments.predicate,
                 &[
-                    (&arguments.left_parameter, left_element),
-                    (&arguments.right_parameter, right_element),
+                    (
+                        &arguments.left_parameter,
+                        ScalarBinding::Column(left_element.clone()),
+                    ),
+                    (
+                        &arguments.right_parameter,
+                        ScalarBinding::Column(right_element.clone()),
+                    ),
                 ],
             )
             .map_err(predicate_reason)?;
@@ -343,7 +398,11 @@ impl<'model> QueryLowerer<'model> {
         lambda: LambdaBody,
     ) -> Result<RelationState, ReasonCode> {
         self.mark_failure_with_origins(node, &[state.expression.origin()], &[]);
-        let element = state.element.as_ref().ok_or(ReasonCode::IndUnmodeledOp)?;
+        let element = state
+            .element
+            .as_ref()
+            .ok_or(ReasonCode::IndUnmodeledOp)?
+            .scalar_binding();
         let predicate = self
             .lower_scalar_query(&lambda.body, &[(&lambda.parameter, element)])
             .map_err(predicate_reason)?;
@@ -377,12 +436,87 @@ impl<'model> QueryLowerer<'model> {
         lambda: LambdaBody,
     ) -> Result<RelationState, ReasonCode> {
         self.mark_failure_with_origins(node, &[state.expression.origin()], &[]);
-        let element = state.element.as_ref().ok_or(ReasonCode::IndUnmodeledOp)?;
+        let element = state
+            .element
+            .as_ref()
+            .ok_or(ReasonCode::IndUnmodeledOp)?
+            .scalar_binding();
         let scalar = self
             .lower_scalar_query(&lambda.body, &[(&lambda.parameter, element)])
             .map_err(operator_reason)?;
         let name = Name::new(MAP_VALUE_NAME).map_err(|_| ReasonCode::IndUnmodeledOp)?;
         self.project(state, node, name, scalar)
+    }
+
+    fn lower_relation_project(
+        &mut self,
+        state: RelationState,
+        node: &GreenNode,
+    ) -> Result<RelationState, ReasonCode> {
+        self.mark_failure_with_origins(node, &[state.expression.origin()], &[]);
+        let element = state
+            .element
+            .as_ref()
+            .and_then(BoundElement::as_column)
+            .ok_or(ReasonCode::IndUnmodeledOp)?
+            .clone();
+        let specs = project_column_specs(node)?;
+        let input_origin = state.expression.origin().clone();
+        let mut columns = Vec::with_capacity(specs.len());
+        let mut projections = Vec::with_capacity(specs.len());
+        let mut projection_origins = Vec::with_capacity(specs.len());
+        let mut row_columns = Vec::with_capacity(specs.len());
+
+        for spec in specs {
+            let scalar = self
+                .lower_scalar_query(
+                    &spec.lambda.body,
+                    &[(
+                        &spec.lambda.parameter,
+                        ScalarBinding::Column(element.clone()),
+                    )],
+                )
+                .map_err(operator_reason)?;
+            let source_range = significant_range(&spec.source).ok_or(ReasonCode::IndUnmodeledOp)?;
+            let column_origin =
+                merged_origin(self.file, source_range, &[scalar.expression.origin()]);
+            let column = Column::new(
+                self.next_column()?,
+                spec.alias,
+                scalar.expression.type_ref().clone(),
+                scalar.expression.multiplicity(),
+                scalar.expression.nullability(),
+                column_origin,
+            );
+            projection_origins.push(scalar.expression.origin().clone());
+            projections.push(Projection::new(column.id(), scalar.expression));
+            row_columns.push(BoundColumn {
+                column: column.clone(),
+                local: scalar.local,
+            });
+            columns.push(column);
+        }
+
+        let schema = RelationSchema::new(columns).map_err(|_| ReasonCode::IndUnmodeledOp)?;
+        let relation_row = bound_relation_row(row_columns)?;
+        let mut origins = Vec::with_capacity(projection_origins.len() + 1);
+        origins.push(&input_origin);
+        origins.extend(projection_origins.iter());
+        let operator_origin = merged_origin(self.file, node.text_range(), &origins);
+        let expression = RelationExpression::new(
+            RelationOperator::Project {
+                input: Box::new(state.expression),
+                projections,
+            },
+            schema,
+            RelationFacts::unknown(),
+            operator_origin,
+        )
+        .map_err(|_| ReasonCode::IndUnmodeledOp)?;
+        Ok(RelationState {
+            expression,
+            element: Some(BoundElement::RelationRow(relation_row)),
+        })
     }
 
     fn project_navigation(
@@ -391,7 +525,11 @@ impl<'model> QueryLowerer<'model> {
         node: &GreenNode,
     ) -> Result<RelationState, ReasonCode> {
         self.mark_failure_with_origins(node, &[state.expression.origin()], &[]);
-        let element = state.element.as_ref().ok_or(ReasonCode::IndUnmodeledOp)?;
+        let element = state
+            .element
+            .as_ref()
+            .and_then(BoundElement::as_column)
+            .ok_or(ReasonCode::IndUnmodeledOp)?;
         let input = column_scalar(element);
         let navigation = self.lower_navigation(node, input)?;
         self.project(state, node, navigation.name, navigation.scalar)
@@ -436,17 +574,17 @@ impl<'model> QueryLowerer<'model> {
         .map_err(|_| ReasonCode::IndUnmodeledOp)?;
         Ok(RelationState {
             expression,
-            element: Some(BoundColumn {
+            element: Some(BoundElement::Column(BoundColumn {
                 column,
                 local: scalar.local,
-            }),
+            })),
         })
     }
 
     fn lower_scalar_query(
         &mut self,
         query: &GreenNode,
-        bindings: &[(&Name, &BoundColumn)],
+        bindings: &[(&Name, ScalarBinding)],
     ) -> Result<LoweredScalar, ReasonCode> {
         self.mark_failure(query);
         if query.kind() != SyntaxKind::QUERY_EXPR {
@@ -458,15 +596,30 @@ impl<'model> QueryLowerer<'model> {
     fn lower_scalar_nodes(
         &mut self,
         nodes: &[GreenNode],
-        bindings: &[(&Name, &BoundColumn)],
+        bindings: &[(&Name, ScalarBinding)],
     ) -> Result<LoweredScalar, ReasonCode> {
+        match self.lower_value_nodes(nodes, bindings)? {
+            LoweredValue::Scalar(scalar) => Ok(scalar),
+            LoweredValue::RelationRow(_) => Err(ReasonCode::IndOpaquePredicate),
+        }
+    }
+
+    fn lower_value_nodes(
+        &mut self,
+        nodes: &[GreenNode],
+        bindings: &[(&Name, ScalarBinding)],
+    ) -> Result<LoweredValue, ReasonCode> {
         let mut value = None;
         for node in nodes {
             self.mark_failure(node);
             match node.kind() {
                 SyntaxKind::PROPERTY_NAV => {
                     let input = value.take().ok_or(ReasonCode::IndOpaquePredicate)?;
-                    value = Some(self.lower_navigation(node, input)?.scalar);
+                    let scalar = match input {
+                        LoweredValue::Scalar(scalar) => self.lower_navigation(node, scalar)?.scalar,
+                        LoweredValue::RelationRow(row) => self.lower_relation_column(node, &row)?,
+                    };
+                    value = Some(LoweredValue::Scalar(scalar));
                 }
                 SyntaxKind::VARIABLE_EXPR => {
                     if value.is_some() {
@@ -478,19 +631,21 @@ impl<'model> QueryLowerer<'model> {
                     if value.is_some() {
                         return Err(ReasonCode::IndOpaquePredicate);
                     }
-                    value = Some(self.lower_literal(node)?);
+                    value = Some(LoweredValue::Scalar(self.lower_literal(node)?));
                 }
                 SyntaxKind::BINARY_EXPR => {
                     if value.is_some() {
                         return Err(ReasonCode::IndOpaquePredicate);
                     }
-                    value = Some(self.lower_binary(node, bindings)?);
+                    value = Some(LoweredValue::Scalar(self.lower_binary(node, bindings)?));
                 }
                 SyntaxKind::PAREN_EXPR => {
                     if value.is_some() {
                         return Err(ReasonCode::IndOpaquePredicate);
                     }
-                    value = Some(self.lower_parenthesized(node, bindings)?);
+                    value = Some(LoweredValue::Scalar(
+                        self.lower_parenthesized(node, bindings)?,
+                    ));
                 }
                 _ => return Err(ReasonCode::IndOpaquePredicate),
             }
@@ -501,7 +656,7 @@ impl<'model> QueryLowerer<'model> {
     fn lower_parenthesized(
         &mut self,
         node: &GreenNode,
-        bindings: &[(&Name, &BoundColumn)],
+        bindings: &[(&Name, ScalarBinding)],
     ) -> Result<LoweredScalar, ReasonCode> {
         self.mark_failure(node);
         self.lower_scalar_nodes(&direct_nodes(node), bindings)
@@ -510,12 +665,57 @@ impl<'model> QueryLowerer<'model> {
     fn lower_variable(
         &mut self,
         node: &GreenNode,
-        bindings: &[(&Name, &BoundColumn)],
-    ) -> Result<LoweredScalar, ReasonCode> {
+        bindings: &[(&Name, ScalarBinding)],
+    ) -> Result<LoweredValue, ReasonCode> {
         let name = variable_name(node).ok_or(ReasonCode::IndOpaquePredicate)?;
         let binding = bindings
             .iter()
-            .find_map(|(parameter, binding)| (*parameter == &name).then_some(*binding))
+            .find_map(|(parameter, binding)| (*parameter == &name).then_some(binding))
+            .ok_or(ReasonCode::IndUnresolvedSchema)?;
+        match binding {
+            ScalarBinding::Column(binding) => {
+                self.mark_failure_with_origins(node, &[binding.column.origin()], &[]);
+                let expression = ScalarExpression::new(
+                    ScalarOperator::Column(binding.column.id()),
+                    binding.column.type_ref().clone(),
+                    binding.column.multiplicity(),
+                    binding.column.nullability(),
+                    Knowledge::<Totality>::unknown(),
+                    merged_origin(self.file, node.text_range(), &[binding.column.origin()]),
+                );
+                Ok(LoweredValue::Scalar(LoweredScalar {
+                    expression,
+                    local: binding.local.clone(),
+                }))
+            }
+            ScalarBinding::RelationRow(row) => Ok(LoweredValue::RelationRow(row.clone())),
+        }
+    }
+
+    fn lower_relation_column(
+        &mut self,
+        node: &GreenNode,
+        row: &BoundRelationRow,
+    ) -> Result<LoweredScalar, ReasonCode> {
+        let name = property_name(node).ok_or(ReasonCode::IndOpaquePredicate)?;
+        let step = NavigationStep::property(name.clone());
+        let outcome = self
+            .navigation
+            .resolve(&row.local, std::slice::from_ref(&step));
+        let NavigationResolution::Found(chain) = outcome else {
+            return Err(navigation_reason(outcome));
+        };
+        let Some(NavigationTarget::RelationColumn(resolved)) =
+            chain.hops().first().map(|hop| hop.target())
+        else {
+            return Err(ReasonCode::IndUnresolvedSchema);
+        };
+        let index =
+            usize::try_from(resolved.id().index()).map_err(|_| ReasonCode::IndUnresolvedSchema)?;
+        let binding = row
+            .columns
+            .get(index)
+            .filter(|candidate| candidate.column.name() == &name)
             .ok_or(ReasonCode::IndUnresolvedSchema)?;
         self.mark_failure_with_origins(node, &[binding.column.origin()], &[]);
         let expression = ScalarExpression::new(
@@ -596,7 +796,7 @@ impl<'model> QueryLowerer<'model> {
     fn lower_binary(
         &mut self,
         node: &GreenNode,
-        bindings: &[(&Name, &BoundColumn)],
+        bindings: &[(&Name, ScalarBinding)],
     ) -> Result<LoweredScalar, ReasonCode> {
         self.mark_failure(node);
         let (operator, left_nodes, right_nodes) = binary_parts(node)?;
@@ -710,6 +910,157 @@ impl<'model> QueryLowerer<'model> {
 struct LambdaBody {
     parameter: Name,
     body: GreenNode,
+}
+
+#[derive(Debug, Clone)]
+struct ProjectColumnSpec {
+    alias: Name,
+    source: GreenNode,
+    lambda: LambdaBody,
+}
+
+fn bound_relation_row(columns: Vec<BoundColumn>) -> Result<BoundRelationRow, ReasonCode> {
+    if columns.is_empty() {
+        return Err(ReasonCode::IndUnmodeledOp);
+    }
+    let relation_columns = columns
+        .iter()
+        .enumerate()
+        .map(|(index, column)| {
+            let index = u32::try_from(index).map_err(|_| ReasonCode::IndUnmodeledOp)?;
+            Ok(RelationColumn::new(
+                RelationColumnId::new(index),
+                column.column.name().clone(),
+                column.column.type_ref().clone(),
+                column.column.multiplicity(),
+                column.column.origin().source().range(),
+            ))
+        })
+        .collect::<Result<Vec<_>, ReasonCode>>()?;
+    let row = RelationRow::new(relation_columns).map_err(|_| ReasonCode::IndUnresolvedSchema)?;
+    Ok(BoundRelationRow {
+        local: LocalValue::relation_row(row, exactly_one()?),
+        columns,
+    })
+}
+
+fn project_column_specs(node: &GreenNode) -> Result<Vec<ProjectColumnSpec>, ReasonCode> {
+    let call = arrow_call_arguments(node).ok_or(ReasonCode::IndUnmodeledOp)?;
+    let arguments = direct_nodes(&call);
+    let [array] = arguments.as_slice() else {
+        return Err(ReasonCode::IndUnmodeledOp);
+    };
+    let specs = project_column_spec_array(array)?;
+    let mut aliases = BTreeSet::new();
+    if specs.iter().any(|spec| !aliases.insert(spec.alias.clone())) {
+        return Err(ReasonCode::IndUnmodeledOp);
+    }
+    Ok(specs)
+}
+
+fn project_column_spec_array(node: &GreenNode) -> Result<Vec<ProjectColumnSpec>, ReasonCode> {
+    if node.kind() != SyntaxKind::COLUMN_SPEC_ARRAY || contains_error_node(node) {
+        return Err(ReasonCode::IndUnmodeledOp);
+    }
+    let elements = node
+        .children()
+        .iter()
+        .filter(|element| !element_is_trivia(element))
+        .collect::<Vec<_>>();
+    let mut index = 0;
+    if !takes_token(elements.get(index), SyntaxKind::TILDE) {
+        return Err(ReasonCode::IndUnmodeledOp);
+    }
+    index += 1;
+    if !takes_token(elements.get(index), SyntaxKind::BRACKET_OPEN) {
+        return Err(ReasonCode::IndUnmodeledOp);
+    }
+    index += 1;
+
+    let mut specs = Vec::new();
+    loop {
+        let Some(element) = elements.get(index) else {
+            return Err(ReasonCode::IndUnmodeledOp);
+        };
+        if takes_token(Some(element), SyntaxKind::BRACKET_CLOSE) {
+            return if specs.is_empty() {
+                Err(ReasonCode::IndUnmodeledOp)
+            } else {
+                Ok(specs)
+            };
+        }
+        let Some(spec) = element.as_node() else {
+            return Err(ReasonCode::IndUnmodeledOp);
+        };
+        specs.push(project_column_spec(spec)?);
+        index += 1;
+
+        if takes_token(elements.get(index), SyntaxKind::BRACKET_CLOSE) {
+            return Ok(specs);
+        }
+        if !takes_token(elements.get(index), SyntaxKind::COMMA) {
+            return Err(ReasonCode::IndUnmodeledOp);
+        }
+        index += 1;
+    }
+}
+
+fn project_column_spec(node: &GreenNode) -> Result<ProjectColumnSpec, ReasonCode> {
+    if node.kind() != SyntaxKind::COLUMN_SPEC || contains_error_node(node) {
+        return Err(ReasonCode::IndUnmodeledOp);
+    }
+    let elements = node
+        .children()
+        .iter()
+        .filter(|element| !element_is_trivia(element))
+        .collect::<Vec<_>>();
+    let [
+        GreenElement::Node(alias),
+        GreenElement::Token(colon),
+        GreenElement::Node(lambda),
+    ] = elements.as_slice()
+    else {
+        return Err(ReasonCode::IndUnmodeledOp);
+    };
+    if colon.kind() != SyntaxKind::COLON {
+        return Err(ReasonCode::IndUnmodeledOp);
+    }
+    let alias = project_alias(alias).ok_or(ReasonCode::IndUnmodeledOp)?;
+    let lambda = project_lambda_body(lambda).ok_or(ReasonCode::IndUnmodeledOp)?;
+    Ok(ProjectColumnSpec {
+        alias,
+        source: node.clone(),
+        lambda,
+    })
+}
+
+fn project_alias(node: &GreenNode) -> Option<Name> {
+    if node.kind() != SyntaxKind::COLUMN_NAME || contains_error_node(node) {
+        return None;
+    }
+    let tokens = significant_tokens(node);
+    let [token] = tokens.as_slice() else {
+        return None;
+    };
+    match token.kind() {
+        SyntaxKind::IDENT => Name::new(token.text()).ok(),
+        SyntaxKind::STRING => pure_string(token.text()).and_then(|name| Name::new(name).ok()),
+        _ => None,
+    }
+}
+
+fn project_lambda_body(node: &GreenNode) -> Option<LambdaBody> {
+    if node.kind() != SyntaxKind::LAMBDA_EXPR
+        || significant_tokens(node).iter().any(|token| {
+            matches!(
+                token.kind(),
+                SyntaxKind::BRACE_OPEN | SyntaxKind::BRACE_CLOSE
+            )
+        })
+    {
+        return None;
+    }
+    lambda_body(node)
 }
 
 #[derive(Debug, Clone)]
@@ -1131,10 +1482,30 @@ fn direct_nodes(node: &GreenNode) -> Vec<GreenNode> {
         .collect()
 }
 
+fn takes_token(element: Option<&&GreenElement>, kind: SyntaxKind) -> bool {
+    matches!(element, Some(GreenElement::Token(token)) if token.kind() == kind)
+}
+
+fn element_is_trivia(element: &GreenElement) -> bool {
+    element
+        .as_token()
+        .is_some_and(|token| is_trivia(token.kind()))
+}
+
 fn significant_tokens(node: &GreenNode) -> Vec<&pure_analyzer_syntax::GreenToken> {
     node.tokens()
         .filter(|token| !is_trivia(token.kind()))
         .collect()
+}
+
+fn significant_range(node: &GreenNode) -> Option<TextRange> {
+    let tokens = significant_tokens(node);
+    let first = tokens.first()?;
+    let last = tokens.last()?;
+    Some(TextRange::new(
+        first.text_range().start(),
+        last.text_range().end(),
+    ))
 }
 
 fn compact_text(node: &GreenNode) -> String {
