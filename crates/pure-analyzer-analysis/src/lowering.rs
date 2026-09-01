@@ -955,6 +955,9 @@ impl<'model> QueryLowerer<'model> {
     ) -> Result<LoweredScalar, ReasonCode> {
         self.mark_failure(node);
         let (operator, left_nodes, right_nodes) = binary_parts(node)?;
+        if !matches!(operator, SyntaxKind::EQ | SyntaxKind::NEQ) {
+            return Err(ReasonCode::IndOpaquePredicate);
+        }
         let left = self.lower_scalar_nodes(&left_nodes, bindings)?;
         let right = self.lower_scalar_nodes(&right_nodes, bindings)?;
         if left.expression.type_ref() != right.expression.type_ref()
