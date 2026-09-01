@@ -121,6 +121,18 @@ fn distinct_input(
     }
 }
 
+fn selected_distinct_parts(
+    expression: &pure_analyzer_analysis::RelationExpression,
+) -> (
+    &pure_analyzer_analysis::RelationExpression,
+    &[pure_analyzer_analysis::ColumnId],
+) {
+    match expression.operator() {
+        RelationOperator::DistinctOn { input, columns } => (input, columns),
+        other => panic!("expected selected distinct, got {other:#?}"),
+    }
+}
+
 fn join_parts(
     expression: &pure_analyzer_analysis::RelationExpression,
 ) -> (
@@ -557,6 +569,34 @@ fn relation_project_binds_its_output_as_a_resolved_row_for_following_lambdas() {
 }
 
 #[test]
+fn selected_distinct_rebinds_selected_relation_project_columns_in_source_order() {
+    let model = relation_project_model();
+    let source = "model::Person.all()->project(~[legal: person | $person.name, manager: person | $person.manager])->distinct(~[manager, legal])->map(row| $row.legal)";
+    let query = supported(lower(source, Some(&model)));
+
+    let (selected, map_projection) = map_parts(&query);
+    let (project, columns) = selected_distinct_parts(selected);
+    assert_eq!(columns, &[ColumnId::new(2), ColumnId::new(ONE)]);
+    assert_eq!(
+        selected.schema().columns(),
+        &[
+            project.schema().columns()[1].clone(),
+            project.schema().columns()[0].clone(),
+        ]
+    );
+    assert!(selected.facts().candidate_keys().is_unknown());
+    assert!(selected.facts().row_semantics().is_unknown());
+    assert!(matches!(
+        map_projection.expression().operator(),
+        ScalarOperator::Column(id) if *id == ColumnId::new(ONE)
+    ));
+    assert_eq!(
+        span_text(source, selected.origin().source()),
+        "->distinct(~[manager, legal])"
+    );
+}
+
+#[test]
 fn relation_project_preserves_pure_model_members_and_quoted_aliases() {
     let model = pure_graph(
         r#"
@@ -596,7 +636,6 @@ fn relation_project_declines_unverified_forms_without_partial_output() {
         "model::Person.all()->project(~[legal: {person| $person.name}])",
         "model::Person.all()->project(~[legal: person | $person.name, legal: person | $person.name])",
         "model::Person.all()->project(~[legal: person | $person.missing])",
-        "model::Person.all()->project(~[legal: person | $person.name])->distinct(~[legal])",
     ] {
         let expected = if source.contains("missing") {
             ReasonCode::IndUnresolvedSchema
@@ -622,6 +661,7 @@ fn relation_project_declines_unverified_forms_without_partial_output() {
 }
 
 const INNER_JOIN_SOURCE: &str = "model::Person.all()->join(model::Membership.all(), JoinKind.INNER, {person, membership | $person.personId == $membership.personId})";
+const SELECTED_DISTINCT_SOURCE: &str = "model::Person.all()->join(model::Membership.all(), JoinKind.INNER, {person, membership | $person.personId == $membership.personId})->distinct(~[Membership, Person])";
 
 fn inner_join_model() -> ModelGraph {
     graph(vec![
@@ -636,6 +676,19 @@ fn inner_join_model() -> ModelGraph {
     ])
 }
 
+fn pure_inner_join_model() -> ModelGraph {
+    pure_graph(
+        r#"
+            Class model::Person {
+                personId: String[1];
+            }
+            Class model::Membership {
+                personId: String[1];
+            }
+        "#,
+    )
+}
+
 fn assert_inner_join_schema_and_facts(query: &pure_analyzer_analysis::RelationalQuery) {
     assert_eq!(
         query
@@ -647,6 +700,27 @@ fn assert_inner_join_schema_and_facts(query: &pure_analyzer_analysis::Relational
         vec![
             (ColumnId::new(ZERO), "Person"),
             (ColumnId::new(ONE), "Membership"),
+        ]
+    );
+    assert!(query.facts().candidate_keys().is_unknown());
+    assert!(query.facts().row_semantics().is_unknown());
+}
+
+fn assert_selected_distinct_contract(
+    source: &str,
+    query: &pure_analyzer_analysis::RelationalQuery,
+) {
+    let (input, columns) = selected_distinct_parts(query.root());
+    assert_eq!(columns, &[ColumnId::new(ONE), ColumnId::new(ZERO)]);
+    assert_eq!(
+        span_text(source, query.root().origin().source()),
+        "->distinct(~[Membership, Person])"
+    );
+    assert_eq!(
+        query.output().columns(),
+        &[
+            input.schema().columns()[1].clone(),
+            input.schema().columns()[0].clone()
         ]
     );
     assert!(query.facts().candidate_keys().is_unknown());
@@ -713,6 +787,75 @@ fn lowers_pinned_inner_join_with_ordered_schema_and_resolved_binders() {
 }
 
 #[test]
+fn lowers_selected_distinct_from_pmcd_with_ordered_cloned_columns() {
+    let model = inner_join_model();
+    let first = lower(SELECTED_DISTINCT_SOURCE, Some(&model));
+    let second = lower(SELECTED_DISTINCT_SOURCE, Some(&model));
+    assert_eq!(first, second);
+
+    let query = supported(first);
+    assert_selected_distinct_contract(SELECTED_DISTINCT_SOURCE, &query);
+    let (input, _) = selected_distinct_parts(query.root());
+    let (left, right, _) = join_parts(input);
+    assert_eq!(class_scan(left).path().as_str(), "model::Person");
+    assert_eq!(class_scan(right).path().as_str(), "model::Membership");
+}
+
+#[test]
+fn lowers_selected_distinct_from_pure_with_ordered_cloned_columns() {
+    let model = pure_inner_join_model();
+    let query = supported(lower(SELECTED_DISTINCT_SOURCE, Some(&model)));
+
+    assert_selected_distinct_contract(SELECTED_DISTINCT_SOURCE, &query);
+}
+
+#[test]
+fn selected_distinct_retains_a_selected_element_binding() {
+    let model = filter_map_model();
+    let source = "model::Person.all()->distinct(~[Person])->map(x| $x.manager)";
+    let query = supported(lower(source, Some(&model)));
+
+    let (selected, projection) = map_parts(&query);
+    let (input, columns) = selected_distinct_parts(selected);
+    assert_eq!(columns, &[ColumnId::new(ZERO)]);
+    assert_eq!(class_scan(input).path().as_str(), "model::Person");
+    assert!(matches!(
+        projection.expression().operator(),
+        ScalarOperator::Navigation { input, .. }
+            if matches!(input.operator(), ScalarOperator::Column(id) if *id == ColumnId::new(ZERO))
+    ));
+}
+
+#[test]
+fn selected_distinct_requires_the_exact_resolved_array_form() {
+    let model = filter_map_model();
+    for source in [
+        "model::Person.all()->distinct(~Person)",
+        "model::Person.all()->distinct(~[])",
+        "model::Person.all()->distinct(~[Person: String])",
+        "model::Person.all()->distinct(~[Person, Person])",
+        "model::Person.all()->distinct(~[Person], ~[Person])",
+        "model::Person.all()->distinct((~[Person]))",
+    ] {
+        assert_reason(lower(source, Some(&model)), ReasonCode::IndUnmodeledOp);
+    }
+
+    let missing_source = "model::Person.all()->distinct(~[Missing])";
+    let missing = opaque(lower(missing_source, Some(&model)));
+    assert_eq!(missing.reason(), ReasonCode::IndUnresolvedSchema);
+    assert_eq!(
+        span_text(missing_source, missing.origin().source()),
+        "Missing"
+    );
+
+    let duplicate_schema_source = "model::Person.all()->join(model::Person.all(), JoinKind.INNER, {left, right | $left.personId == $right.personId})->distinct(~[Person])";
+    assert_reason(
+        lower(duplicate_schema_source, Some(&inner_join_model())),
+        ReasonCode::IndUnresolvedSchema,
+    );
+}
+
+#[test]
 fn inner_join_retains_input_evidence_without_inferring_join_facts() {
     let model = inner_join_model();
     let source = "model::Person.all()->distinct()->join(model::Membership.all(), JoinKind.INNER, {person, membership | $person.personId == $membership.personId})";
@@ -765,6 +908,13 @@ fn inner_join_declines_unproven_forms_without_rebinding_rows() {
     assert_reason(
         lower(
             "model::Person.all()->join(model::Membership.all(), JoinKind.INNER, {person, membership | $person.personId == $membership.personId})->map(x| $x.personId)",
+            Some(&model),
+        ),
+        ReasonCode::IndUnmodeledOp,
+    );
+    assert_reason(
+        lower(
+            "model::Person.all()->join(model::Membership.all(), JoinKind.INNER, {person, membership | $person.personId == $membership.personId})->distinct()",
             Some(&model),
         ),
         ReasonCode::IndUnmodeledOp,
@@ -1127,7 +1277,9 @@ fn supported_pipeline(steps: &[bool]) -> String {
 fn project_ids(expression: &pure_analyzer_analysis::RelationExpression, ids: &mut Vec<ColumnId>) {
     match expression.operator() {
         RelationOperator::Scan(_) => {}
-        RelationOperator::Filter { input, .. } | RelationOperator::Distinct { input } => {
+        RelationOperator::Filter { input, .. }
+        | RelationOperator::Distinct { input }
+        | RelationOperator::DistinctOn { input, .. } => {
             project_ids(input, ids);
         }
         RelationOperator::Project { input, projections } => {

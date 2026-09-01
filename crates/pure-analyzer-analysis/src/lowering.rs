@@ -11,11 +11,12 @@ use pure_analyzer_resolve::{
 use pure_analyzer_syntax::{GreenElement, GreenNode, SyntaxKind, TextRange};
 
 use crate::{
-    AnalysisInput, Column, ColumnId, IrOrigin, JoinKind, Knowledge, ModelOrigin, Nullability,
-    OpaqueOutcome, Projection, RelationExpression, RelationFacts, RelationOperator, RelationSchema,
-    RelationSource, RelationalOutcome, RelationalQuery, ResolvedNavigation, RowSemantics,
-    ScalarExpression, ScalarLiteral, ScalarOperator, SourceSpan, Totality,
-    relational::compose_navigation_multiplicity,
+    AnalysisInput, Column, ColumnId, ColumnSelectorOpaqueReason, ColumnSelectorOutcome, IrOrigin,
+    JoinKind, Knowledge, ModelOrigin, Nullability, OpaqueOutcome, Projection, RelationExpression,
+    RelationFacts, RelationOperator, RelationSchema, RelationSource, RelationalOutcome,
+    RelationalQuery, ResolvedNavigation, RowSemantics, ScalarExpression, ScalarLiteral,
+    ScalarOperator, SourceSpan, Totality, relational::compose_navigation_multiplicity,
+    resolve_relation_column_selectors,
 };
 
 const BOOLEAN_TYPE: &str = "Boolean";
@@ -29,9 +30,9 @@ const STRING_TYPE: &str = "String";
 /// The input must contain exactly one top-level query expression and a model graph. The
 /// supported subset is deliberately limited to `Class.all()`, to-one resolved navigation,
 /// `->filter` with an equality predicate, one-lambda `->map`, constrained schema-aware
-/// `->project(~[alias: row | expression, ...])`, bare `->distinct()`, and one terminal inner
-/// join with two resolved row bindings. Other valid syntax stays explicit as an opaque outcome
-/// rather than being approximated.
+/// `->project(~[alias: row | expression, ...])`, bare `->distinct()`, selected
+/// `->distinct(~[column, ...])`, and one supported inner join with two resolved row bindings.
+/// Other valid syntax stays explicit as an opaque outcome rather than being approximated.
 #[must_use]
 pub fn lower_m3_query(input: AnalysisInput<'_, '_>) -> RelationalOutcome {
     let fallback_origin = origin(input.file(), input.tree().text_range(), Vec::new());
@@ -252,10 +253,10 @@ impl<'model> QueryLowerer<'model> {
         node: &GreenNode,
     ) -> Result<RelationState, ReasonCode> {
         self.mark_failure_with_origins(node, &[state.expression.origin()], &[]);
-        if state.element.is_none() {
+        let name = arrow_name(node).ok_or(ReasonCode::IndUnmodeledOp)?;
+        if name.as_str() != "distinct" && state.element.is_none() {
             return Err(ReasonCode::IndUnmodeledOp);
         }
-        let name = arrow_name(node).ok_or(ReasonCode::IndUnmodeledOp)?;
         match name.as_str() {
             "filter" => self.lower_filter(
                 state,
@@ -281,9 +282,20 @@ impl<'model> QueryLowerer<'model> {
     ) -> Result<RelationState, ReasonCode> {
         self.mark_failure_with_origins(node, &[state.expression.origin()], &[]);
         let call = arrow_call_arguments(node).ok_or(ReasonCode::IndUnmodeledOp)?;
-        if !empty_call_arguments(&call) {
-            return Err(ReasonCode::IndUnmodeledOp);
+        if empty_call_arguments(&call) {
+            if state.element.is_none() {
+                return Err(ReasonCode::IndUnmodeledOp);
+            }
+            return self.lower_bare_distinct(state, node);
         }
+        self.lower_selected_distinct(state, node, &call)
+    }
+
+    fn lower_bare_distinct(
+        &mut self,
+        state: RelationState,
+        node: &GreenNode,
+    ) -> Result<RelationState, ReasonCode> {
         let schema = state.expression.schema().clone();
         let operator_origin =
             merged_origin(self.file, node.text_range(), &[state.expression.origin()]);
@@ -303,6 +315,69 @@ impl<'model> QueryLowerer<'model> {
         Ok(RelationState {
             expression,
             element: state.element,
+        })
+    }
+
+    fn lower_selected_distinct(
+        &mut self,
+        state: RelationState,
+        node: &GreenNode,
+        call: &GreenNode,
+    ) -> Result<RelationState, ReasonCode> {
+        let selectors = strict_distinct_selectors(call).ok_or(ReasonCode::IndUnmodeledOp)?;
+        let resolved = match resolve_relation_column_selectors(
+            self.file,
+            &selectors,
+            state.expression.schema(),
+        ) {
+            ColumnSelectorOutcome::Resolved(resolved) => resolved,
+            ColumnSelectorOutcome::Opaque(opaque) => {
+                self.failure_origin = merged_origin(
+                    self.file,
+                    opaque.source().range(),
+                    &[state.expression.origin()],
+                );
+                return Err(selector_reason(opaque.reason()));
+            }
+        };
+        let columns = resolved
+            .selectors()
+            .iter()
+            .map(|selector| selector.column())
+            .collect::<Vec<_>>();
+        let schema = RelationSchema::new(
+            columns
+                .iter()
+                .map(|column| {
+                    state
+                        .expression
+                        .schema()
+                        .column(*column)
+                        .cloned()
+                        .ok_or(ReasonCode::IndUnmodeledOp)
+                })
+                .collect::<Result<Vec<_>, _>>()?,
+        )
+        .map_err(|_| ReasonCode::IndUnmodeledOp)?;
+        let RelationState {
+            expression: input,
+            element,
+        } = state;
+        let element = selected_bound_element(element, &columns)?;
+        let operator_origin = merged_origin(self.file, node.text_range(), &[input.origin()]);
+        let expression = RelationExpression::new(
+            RelationOperator::DistinctOn {
+                input: Box::new(input),
+                columns,
+            },
+            schema,
+            RelationFacts::unknown(),
+            operator_origin,
+        )
+        .map_err(|_| ReasonCode::IndUnmodeledOp)?;
+        Ok(RelationState {
+            expression,
+            element,
         })
     }
 
@@ -944,6 +1019,33 @@ fn bound_relation_row(columns: Vec<BoundColumn>) -> Result<BoundRelationRow, Rea
     })
 }
 
+fn selected_bound_element(
+    element: Option<BoundElement>,
+    columns: &[ColumnId],
+) -> Result<Option<BoundElement>, ReasonCode> {
+    match element {
+        None => Ok(None),
+        Some(BoundElement::Column(binding)) => Ok(columns
+            .contains(&binding.column.id())
+            .then_some(BoundElement::Column(binding))),
+        Some(BoundElement::RelationRow(row)) => {
+            let selected = columns
+                .iter()
+                .map(|id| {
+                    row.columns
+                        .iter()
+                        .find(|column| column.column.id() == *id)
+                        .cloned()
+                        .ok_or(ReasonCode::IndUnmodeledOp)
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            bound_relation_row(selected)
+                .map(BoundElement::RelationRow)
+                .map(Some)
+        }
+    }
+}
+
 fn project_column_specs(node: &GreenNode) -> Result<Vec<ProjectColumnSpec>, ReasonCode> {
     let call = arrow_call_arguments(node).ok_or(ReasonCode::IndUnmodeledOp)?;
     let arguments = direct_nodes(&call);
@@ -1155,6 +1257,37 @@ fn arrow_call_arguments(node: &GreenNode) -> Option<GreenNode> {
         return None;
     };
     Some((*call).clone())
+}
+
+fn strict_distinct_selectors(call: &GreenNode) -> Option<GreenNode> {
+    let elements = call
+        .children()
+        .iter()
+        .filter(|element| !element_is_trivia(element))
+        .collect::<Vec<_>>();
+    let [
+        GreenElement::Token(open),
+        GreenElement::Node(selectors),
+        GreenElement::Token(close),
+    ] = elements.as_slice()
+    else {
+        return None;
+    };
+    (open.kind() == SyntaxKind::PAREN_OPEN
+        && selectors.kind() == SyntaxKind::COLUMN_SPEC_ARRAY
+        && close.kind() == SyntaxKind::PAREN_CLOSE)
+        .then(|| (*selectors).clone())
+}
+
+fn selector_reason(reason: &ColumnSelectorOpaqueReason) -> ReasonCode {
+    match reason {
+        ColumnSelectorOpaqueReason::Missing(_)
+        | ColumnSelectorOpaqueReason::DuplicateSchemaName(_) => ReasonCode::IndUnresolvedSchema,
+        ColumnSelectorOpaqueReason::UnsupportedForm
+        | ColumnSelectorOpaqueReason::Malformed
+        | ColumnSelectorOpaqueReason::UnsupportedBody
+        | ColumnSelectorOpaqueReason::DuplicateSelector(_) => ReasonCode::IndUnmodeledOp,
+    }
 }
 
 fn arrow_lambda(node: &GreenNode) -> Option<LambdaBody> {
