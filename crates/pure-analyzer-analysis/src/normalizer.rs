@@ -2,10 +2,11 @@
 //!
 //! The current public IR accepts caller-constructed facts. Its constructors
 //! validate shape, but those facts are not an analyzer-issued proof boundary.
-//! This module therefore applies just one intrinsic rewrite: an identity
-//! projection made solely of direct input-column reads. All rewrites that
-//! could alter bag, order, null, partiality, or output-schema behavior remain
-//! frozen until their required proof producer is private and trustworthy.
+//! This module therefore applies only intrinsic rewrites: an identity
+//! projection made solely of direct input-column reads and a filter with an
+//! exact Boolean `true` literal. All rewrites that could alter bag, order,
+//! null, partiality, or output-schema behavior remain frozen until their
+//! required proof producer is private and trustworthy.
 
 use std::collections::BTreeMap;
 use std::fmt::Write;
@@ -237,15 +238,27 @@ impl Normalizer {
         let origin = expression.origin().clone();
         match expression.operator() {
             RelationOperator::Scan(_) => Ok(expression.clone()),
-            RelationOperator::Filter { input, predicate } => Self::rebuild(
-                RelationOperator::Filter {
-                    input: Box::new(self.relation(input)?),
-                    predicate: self.scalar(predicate)?,
-                },
-                expression.schema().clone(),
-                expression.facts().clone(),
-                origin,
-            ),
+            RelationOperator::Filter { input, predicate } => {
+                let input = self.relation(input)?;
+                let predicate = self.scalar(predicate)?;
+                if is_literal_true_filter(
+                    &input,
+                    expression.schema(),
+                    expression.facts(),
+                    &predicate,
+                ) {
+                    return Ok(input);
+                }
+                Self::rebuild(
+                    RelationOperator::Filter {
+                        input: Box::new(input),
+                        predicate,
+                    },
+                    expression.schema().clone(),
+                    expression.facts().clone(),
+                    origin,
+                )
+            }
             RelationOperator::Project { input, projections } => {
                 let input = self.relation(input)?;
                 let projections = projections
@@ -378,6 +391,21 @@ fn is_identity_read(projection: &Projection, column: &Column) -> bool {
         && matches!(
             expression.operator(),
             ScalarOperator::Column(id) if *id == column.id()
+        )
+}
+
+fn is_literal_true_filter(
+    input: &RelationExpression,
+    schema: &RelationSchema,
+    facts: &RelationFacts,
+    predicate: &ScalarExpression,
+) -> bool {
+    schema == input.schema()
+        && facts == input.facts()
+        && predicate.totality().is_unknown()
+        && matches!(
+            predicate.operator(),
+            ScalarOperator::Literal(ScalarLiteral::Boolean(true))
         )
 }
 

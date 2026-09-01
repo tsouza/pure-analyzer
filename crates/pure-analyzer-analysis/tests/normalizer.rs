@@ -160,14 +160,41 @@ fn identity_project_with_metadata(
 }
 
 fn true_predicate(source: IrOrigin) -> ScalarExpression {
+    boolean_predicate(true, source, Knowledge::unknown())
+}
+
+fn boolean_predicate(
+    value: bool,
+    source: IrOrigin,
+    totality: Knowledge<Totality>,
+) -> ScalarExpression {
     ScalarExpression::new(
-        ScalarOperator::Literal(ScalarLiteral::Boolean(true)),
+        ScalarOperator::Literal(ScalarLiteral::Boolean(value)),
         type_ref("Boolean"),
         one(),
         Nullability::NonNullable,
-        Knowledge::unknown(),
+        totality,
         source,
     )
+}
+
+fn filter(
+    input: RelationExpression,
+    predicate: ScalarExpression,
+    facts: RelationFacts,
+    source: IrOrigin,
+) -> RelationExpression {
+    let schema = input.schema().clone();
+    RelationExpression::new(
+        RelationOperator::Filter {
+            input: Box::new(input),
+            predicate,
+        },
+        schema,
+        facts,
+        source,
+    )
+    .expect("filter fixture is valid")
 }
 
 fn normalized(query: &RelationalQuery) -> pure_analyzer_analysis::NormalizedQuery {
@@ -338,6 +365,133 @@ fn identity_shaped_projects_retain_direct_read_totality_evidence() {
 }
 
 #[test]
+fn literal_true_filters_are_eliminated_and_keep_audit_provenance() {
+    let source = origin(FILE, 1, 20, Vec::new());
+    let base = query(&[3, 8], &["left", "right"], source.clone());
+    let inner = filter(
+        base.root().clone(),
+        true_predicate(origin(FILE, 21, 25, Vec::new())),
+        RelationFacts::unknown(),
+        origin(FILE, 20, 26, Vec::new()),
+    );
+    let filtered = RelationalQuery::new(filter(
+        inner,
+        true_predicate(origin(FILE, 27, 31, Vec::new())),
+        RelationFacts::unknown(),
+        origin(FILE, 26, 32, Vec::new()),
+    ));
+
+    let once = normalized(&filtered);
+    assert!(matches!(once.root().operator(), RelationOperator::Scan(_)));
+    assert_eq!(once.equivalence_key(), &key(&base));
+    assert_ne!(once.structural_key(), normalized(&base).structural_key());
+
+    let twice = normalized(&RelationalQuery::new(once.root().clone()));
+    assert_eq!(once.equivalence_key(), twice.equivalence_key());
+    assert_eq!(once.root(), twice.root());
+}
+
+#[test]
+fn literal_true_filter_eliminates_with_matching_proven_relation_facts() {
+    let source = origin(FILE, 1, 20, Vec::new());
+    let (class, _) = classes();
+    let output = RelationSchema::new(vec![column(3, "value", source.clone())])
+        .expect("fixture schema is valid");
+    let facts = RelationFacts::new(
+        Knowledge::proven(
+            vec![CandidateKey::new(vec![output.columns()[0].id()])],
+            origin(FILE, 21, 24, Vec::new()),
+        ),
+        Knowledge::proven(RowSemantics::Bag, origin(FILE, 21, 24, Vec::new())),
+    );
+    let input = RelationExpression::new(
+        RelationOperator::Scan(RelationSource::Class(class)),
+        output,
+        facts.clone(),
+        source.clone(),
+    )
+    .expect("fixture scan is valid");
+    let filtered = RelationalQuery::new(filter(
+        input.clone(),
+        true_predicate(origin(FILE, 25, 29, Vec::new())),
+        facts.clone(),
+        origin(FILE, 24, 30, Vec::new()),
+    ));
+
+    let normalized = normalized(&filtered);
+    assert!(matches!(
+        normalized.root().operator(),
+        RelationOperator::Scan(_)
+    ));
+    assert_eq!(normalized.root().facts(), &facts);
+    assert_eq!(
+        normalized.equivalence_key(),
+        &key(&RelationalQuery::new(input))
+    );
+}
+
+#[test]
+fn literal_true_filter_guards_retain_forged_facts_and_totality_evidence() {
+    let source = origin(FILE, 1, 20, Vec::new());
+    let base = query(&[3, 8], &["left", "right"], source.clone());
+    let facts = RelationFacts::new(
+        Knowledge::proven(
+            vec![CandidateKey::new(vec![base.output().columns()[0].id()])],
+            origin(FILE, 21, 24, Vec::new()),
+        ),
+        Knowledge::proven(RowSemantics::Set, origin(FILE, 21, 24, Vec::new())),
+    );
+    let facts_changed = RelationalQuery::new(filter(
+        base.root().clone(),
+        true_predicate(origin(FILE, 25, 29, Vec::new())),
+        facts.clone(),
+        origin(FILE, 24, 30, Vec::new()),
+    ));
+    let normalized_facts = normalized(&facts_changed);
+    assert!(matches!(
+        normalized_facts.root().operator(),
+        RelationOperator::Filter { .. }
+    ));
+    assert_eq!(normalized_facts.root().facts(), &facts);
+
+    let totality = Knowledge::proven(Totality::Total, origin(FILE, 31, 35, Vec::new()));
+    let totality_changed = RelationalQuery::new(filter(
+        base.root().clone(),
+        boolean_predicate(true, origin(FILE, 36, 40, Vec::new()), totality.clone()),
+        RelationFacts::unknown(),
+        origin(FILE, 35, 41, Vec::new()),
+    ));
+    let normalized_totality = normalized(&totality_changed);
+    let RelationOperator::Filter { predicate, .. } = normalized_totality.root().operator() else {
+        panic!("literal-true totality evidence must retain the filter");
+    };
+    assert_eq!(predicate.totality(), &totality);
+}
+
+#[test]
+fn literal_false_filters_remain_frozen() {
+    let source = origin(FILE, 1, 20, Vec::new());
+    let base = query(&[3, 8], &["left", "right"], source.clone());
+    let filtered = RelationalQuery::new(filter(
+        base.root().clone(),
+        boolean_predicate(
+            false,
+            origin(FILE, 21, 26, Vec::new()),
+            Knowledge::unknown(),
+        ),
+        RelationFacts::unknown(),
+        origin(FILE, 20, 27, Vec::new()),
+    ));
+
+    let normalized = normalized(&filtered);
+    assert!(matches!(
+        normalized.root().operator(),
+        RelationOperator::Filter { predicate, .. }
+            if matches!(predicate.operator(), ScalarOperator::Literal(ScalarLiteral::Boolean(false)))
+    ));
+}
+
+#[test]
 fn aliases_and_output_column_order_are_not_identity_projects() {
     let source = origin(FILE, 1, 20, Vec::new());
     let base = query(&[3, 8], &["left", "right"], source.clone());
@@ -397,24 +551,9 @@ fn aliases_and_output_column_order_are_not_identity_projects() {
 }
 
 #[test]
-fn unknown_totality_filters_and_order_sensitive_operators_remain_frozen() {
+fn sort_and_nested_distinct_remain_frozen() {
     let source = origin(FILE, 1, 20, Vec::new());
     let base = query(&[3, 8], &["left", "right"], source.clone());
-    let filter = RelationExpression::new(
-        RelationOperator::Filter {
-            input: Box::new(base.root().clone()),
-            predicate: true_predicate(source.clone()),
-        },
-        base.output().clone(),
-        RelationFacts::unknown(),
-        source.clone(),
-    )
-    .expect("filter is valid");
-    assert!(matches!(
-        normalized(&RelationalQuery::new(filter)).root().operator(),
-        RelationOperator::Filter { .. }
-    ));
-
     let sort = RelationExpression::new(
         RelationOperator::Sort {
             input: Box::new(base.root().clone()),
