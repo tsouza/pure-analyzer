@@ -29,7 +29,7 @@ pub use relational::{
     Nullability, OpaqueOutcome, Projection, RelationExpression, RelationExpressionError,
     RelationFacts, RelationOperator, RelationSchema, RelationSource, RelationalOutcome,
     RelationalQuery, ResolvedNavigation, RowSemantics, ScalarExpression, ScalarLiteral,
-    ScalarOperator, SchemaError, SourceSpan, Totality,
+    ScalarOperator, SchemaError, SortDirection, SortKey, SourceSpan, Totality,
 };
 pub use validate::ValidatePass;
 

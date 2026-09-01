@@ -15,8 +15,8 @@ use crate::{
     JoinKind, Knowledge, ModelOrigin, Nullability, OpaqueOutcome, Projection, RelationExpression,
     RelationFacts, RelationOperator, RelationSchema, RelationSource, RelationalOutcome,
     RelationalQuery, ResolvedNavigation, RowSemantics, ScalarExpression, ScalarLiteral,
-    ScalarOperator, SourceSpan, Totality, relational::compose_navigation_multiplicity,
-    resolve_relation_column_selectors,
+    ScalarOperator, SortDirection, SortKey, SourceSpan, Totality,
+    relational::compose_navigation_multiplicity, resolve_relation_column_selectors,
 };
 
 const BOOLEAN_TYPE: &str = "Boolean";
@@ -30,9 +30,10 @@ const STRING_TYPE: &str = "String";
 /// The input must contain exactly one top-level query expression and a model graph. The
 /// supported subset is deliberately limited to `Class.all()`, to-one resolved navigation,
 /// `->filter` with an equality predicate, one-lambda `->map`, constrained schema-aware
-/// `->project(~[alias: row | expression, ...])`, bare `->distinct()`, selected
-/// `->distinct(~[column, ...])`, and one supported inner join with two resolved row bindings.
-/// Other valid syntax stays explicit as an opaque outcome rather than being approximated.
+/// `->project(~[alias: row | expression, ...])`, bare and selected `->distinct()`, proven
+/// ascending/descending resolved keys in `->sort`, and one terminal inner join with two resolved
+/// row bindings. Other valid syntax stays explicit as an opaque outcome rather than being
+/// approximated.
 #[must_use]
 pub fn lower_m3_query(input: AnalysisInput<'_, '_>) -> RelationalOutcome {
     let fallback_origin = origin(input.file(), input.tree().text_range(), Vec::new());
@@ -254,7 +255,7 @@ impl<'model> QueryLowerer<'model> {
     ) -> Result<RelationState, ReasonCode> {
         self.mark_failure_with_origins(node, &[state.expression.origin()], &[]);
         let name = arrow_name(node).ok_or(ReasonCode::IndUnmodeledOp)?;
-        if name.as_str() != "distinct" && state.element.is_none() {
+        if !matches!(name.as_str(), "distinct" | "sort") && state.element.is_none() {
             return Err(ReasonCode::IndUnmodeledOp);
         }
         match name.as_str() {
@@ -271,7 +272,86 @@ impl<'model> QueryLowerer<'model> {
             "project" => self.lower_relation_project(state, node),
             "distinct" => self.lower_distinct(state, node),
             "join" => self.lower_join(state, node),
+            "sort" => self.lower_sort(state, node),
             _ => Err(ReasonCode::IndUnmodeledOp),
+        }
+    }
+
+    fn lower_sort(
+        &mut self,
+        state: RelationState,
+        node: &GreenNode,
+    ) -> Result<RelationState, ReasonCode> {
+        let input_origin = state.expression.origin().clone();
+        self.mark_failure_with_origins(node, &[&input_origin], &[]);
+        let call = arrow_call_arguments(node).ok_or(ReasonCode::IndUnmodeledOp)?;
+        let arguments = sort_arguments(&call).ok_or(ReasonCode::IndUnmodeledOp)?;
+        let schema = state.expression.schema().clone();
+        let facts = state.expression.facts().clone();
+        let mut keys = Vec::with_capacity(arguments.len());
+
+        for argument in arguments {
+            self.failure_origin = merged_origin(self.file, argument.range, &[&input_origin]);
+            let (direction, selector) =
+                sort_key_parts(&argument.nodes).ok_or(ReasonCode::IndUnmodeledOp)?;
+            let column = self.resolve_sort_column(&selector, &schema, &input_origin)?;
+            let column_origin = schema
+                .column(column)
+                .map(Column::origin)
+                .ok_or(ReasonCode::IndUnresolvedSchema)?;
+            let key_origin =
+                merged_origin(self.file, argument.range, &[&input_origin, column_origin]);
+            keys.push(SortKey::new(column, direction, key_origin));
+        }
+
+        let mut operator_origins = Vec::with_capacity(keys.len().saturating_add(1));
+        operator_origins.push(&input_origin);
+        operator_origins.extend(keys.iter().map(SortKey::origin));
+        let operator_origin = merged_origin(self.file, node.text_range(), &operator_origins);
+        let expression = RelationExpression::new(
+            RelationOperator::Sort {
+                input: Box::new(state.expression),
+                keys,
+            },
+            schema,
+            facts,
+            operator_origin,
+        )
+        .map_err(|_| ReasonCode::IndUnmodeledOp)?;
+        Ok(RelationState {
+            expression,
+            element: state.element,
+        })
+    }
+
+    fn resolve_sort_column(
+        &mut self,
+        selector: &GreenNode,
+        schema: &RelationSchema,
+        input_origin: &IrOrigin,
+    ) -> Result<ColumnId, ReasonCode> {
+        match resolve_relation_column_selectors(self.file, selector, schema) {
+            ColumnSelectorOutcome::Resolved(resolved) => {
+                let [resolved] = resolved.selectors() else {
+                    return Err(ReasonCode::IndUnmodeledOp);
+                };
+                Ok(resolved.column())
+            }
+            ColumnSelectorOutcome::Opaque(opaque) => {
+                self.failure_origin = merged_source_origin(opaque.source(), &[input_origin]);
+                match opaque.reason() {
+                    ColumnSelectorOpaqueReason::Missing(_)
+                    | ColumnSelectorOpaqueReason::DuplicateSchemaName(_) => {
+                        Err(ReasonCode::IndUnresolvedSchema)
+                    }
+                    ColumnSelectorOpaqueReason::UnsupportedForm
+                    | ColumnSelectorOpaqueReason::Malformed
+                    | ColumnSelectorOpaqueReason::UnsupportedBody
+                    | ColumnSelectorOpaqueReason::DuplicateSelector(_) => {
+                        Err(ReasonCode::IndUnmodeledOp)
+                    }
+                }
+            }
         }
     }
 
@@ -1290,6 +1370,178 @@ fn selector_reason(reason: &ColumnSelectorOpaqueReason) -> ReasonCode {
     }
 }
 
+#[derive(Debug, Clone)]
+struct SortArgument {
+    nodes: Vec<GreenNode>,
+    range: TextRange,
+}
+
+fn call_argument_groups(call: &GreenNode) -> Option<Vec<SortArgument>> {
+    if call.kind() != SyntaxKind::CALL_ARGS {
+        return None;
+    }
+
+    let mut elements = call
+        .children()
+        .iter()
+        .filter(|element| !element_is_trivia(element));
+    let Some(GreenElement::Token(open)) = elements.next() else {
+        return None;
+    };
+    if open.kind() != SyntaxKind::PAREN_OPEN {
+        return None;
+    }
+
+    let mut arguments = Vec::new();
+    let mut nodes = Vec::new();
+    while let Some(element) = elements.next() {
+        match element {
+            GreenElement::Token(close) if close.kind() == SyntaxKind::PAREN_CLOSE => {
+                if elements.next().is_some() {
+                    return None;
+                }
+                if nodes.is_empty() {
+                    return arguments.is_empty().then_some(arguments);
+                }
+                arguments.push(sort_argument(std::mem::take(&mut nodes))?);
+                return Some(arguments);
+            }
+            GreenElement::Token(comma) if comma.kind() == SyntaxKind::COMMA => {
+                arguments.push(sort_argument(std::mem::take(&mut nodes))?);
+            }
+            GreenElement::Node(node) => nodes.push(node.clone()),
+            GreenElement::Token(_) => return None,
+        }
+    }
+    None
+}
+
+fn sort_arguments(call: &GreenNode) -> Option<Vec<SortArgument>> {
+    let arguments = call_argument_groups(call)?;
+    let [argument] = arguments.as_slice() else {
+        return Some(arguments);
+    };
+    let [collection] = argument.nodes.as_slice() else {
+        return Some(arguments);
+    };
+    if collection.kind() != SyntaxKind::COLLECTION_LITERAL {
+        return Some(arguments);
+    }
+    collection_item_groups(collection)
+}
+
+fn collection_item_groups(collection: &GreenNode) -> Option<Vec<SortArgument>> {
+    if collection.kind() != SyntaxKind::COLLECTION_LITERAL || contains_error_node(collection) {
+        return None;
+    }
+    let mut elements = collection
+        .children()
+        .iter()
+        .filter(|element| !element_is_trivia(element));
+    let Some(GreenElement::Token(open)) = elements.next() else {
+        return None;
+    };
+    if open.kind() != SyntaxKind::BRACKET_OPEN {
+        return None;
+    }
+
+    let mut arguments = Vec::new();
+    let mut nodes = Vec::new();
+    while let Some(element) = elements.next() {
+        match element {
+            GreenElement::Token(close) if close.kind() == SyntaxKind::BRACKET_CLOSE => {
+                if elements.next().is_some() {
+                    return None;
+                }
+                if nodes.is_empty() {
+                    return arguments.is_empty().then_some(arguments);
+                }
+                arguments.push(sort_argument(std::mem::take(&mut nodes))?);
+                return Some(arguments);
+            }
+            GreenElement::Token(comma) if comma.kind() == SyntaxKind::COMMA => {
+                arguments.push(sort_argument(std::mem::take(&mut nodes))?);
+            }
+            GreenElement::Node(node) => nodes.push(node.clone()),
+            GreenElement::Token(_) => return None,
+        }
+    }
+    None
+}
+
+fn sort_argument(nodes: Vec<GreenNode>) -> Option<SortArgument> {
+    let first = nodes.first()?.text_range();
+    let last = nodes.last()?.text_range();
+    Some(SortArgument {
+        nodes,
+        range: TextRange::new(first.start(), last.end()),
+    })
+}
+
+fn sort_key_parts(nodes: &[GreenNode]) -> Option<(SortDirection, GreenNode)> {
+    match nodes {
+        [selector, direction]
+            if selector.kind() == SyntaxKind::COLUMN_SPEC
+                && named_empty_arrow(direction, "ascending") =>
+        {
+            Some((SortDirection::Ascending, selector.clone()))
+        }
+        [selector, direction]
+            if selector.kind() == SyntaxKind::COLUMN_SPEC
+                && named_empty_arrow(direction, "descending") =>
+        {
+            Some((SortDirection::Descending, selector.clone()))
+        }
+        [function] => function_sort_selector(function),
+        _ => None,
+    }
+}
+
+fn function_sort_selector(function: &GreenNode) -> Option<(SortDirection, GreenNode)> {
+    if function.kind() != SyntaxKind::FUNCTION_CALL {
+        return None;
+    }
+    let children = direct_nodes(function);
+    let [name, call] = children.as_slice() else {
+        return None;
+    };
+    let direction = match bare_qualified_name(name)?.as_str() {
+        "ascending" => SortDirection::Ascending,
+        "descending" => SortDirection::Descending,
+        _ => return None,
+    };
+    let arguments = call_argument_groups(call)?;
+    let [argument] = arguments.as_slice() else {
+        return None;
+    };
+    let [selector] = argument.nodes.as_slice() else {
+        return None;
+    };
+    (selector.kind() == SyntaxKind::COLUMN_SPEC).then(|| (direction, selector.clone()))
+}
+
+fn named_empty_arrow(node: &GreenNode, expected: &str) -> bool {
+    if node.kind() != SyntaxKind::ARROW_CALL {
+        return false;
+    }
+    let children = direct_nodes(node);
+    let [name, call] = children.as_slice() else {
+        return false;
+    };
+    bare_qualified_name(name).is_some_and(|name| name.as_str() == expected)
+        && empty_call_arguments(call)
+}
+
+fn bare_qualified_name(node: &GreenNode) -> Option<Name> {
+    if node.kind() != SyntaxKind::QUALIFIED_NAME || !direct_nodes(node).is_empty() {
+        return None;
+    }
+    let path = QName::new(compact_text(node)).ok()?;
+    path.package()
+        .is_none()
+        .then(|| Name::new(path.simple_name()).ok())
+        .flatten()
+}
 fn arrow_lambda(node: &GreenNode) -> Option<LambdaBody> {
     let call = arrow_call_arguments(node)?;
     let arguments = direct_nodes(&call);
@@ -1587,6 +1839,18 @@ fn merged_origin_with_models(
     origins: &[&IrOrigin],
     extra_model_origins: &[ModelOrigin],
 ) -> IrOrigin {
+    merged_source_origin_with_models(SourceSpan::new(file, range), origins, extra_model_origins)
+}
+
+fn merged_source_origin(source: SourceSpan, origins: &[&IrOrigin]) -> IrOrigin {
+    merged_source_origin_with_models(source, origins, &[])
+}
+
+fn merged_source_origin_with_models(
+    source: SourceSpan,
+    origins: &[&IrOrigin],
+    extra_model_origins: &[ModelOrigin],
+) -> IrOrigin {
     let mut model_origins = Vec::new();
     for source in origins {
         for model_origin in source.model_origins() {
@@ -1600,7 +1864,7 @@ fn merged_origin_with_models(
             model_origins.push(model_origin.clone());
         }
     }
-    origin(file, range, model_origins)
+    IrOrigin::new(source, model_origins)
 }
 
 fn opaque(reason: ReasonCode, origin: IrOrigin) -> RelationalOutcome {
@@ -1660,9 +1924,12 @@ fn is_trivia(kind: SyntaxKind) -> bool {
 mod tests {
     use pure_analyzer_lexer::lex;
     use pure_analyzer_model::ModelGraph;
+    use pure_analyzer_parser::parse_query;
     use pure_analyzer_syntax::GreenNodeBuilder;
 
     use super::*;
+
+    const ZERO: u32 = 0;
 
     #[test]
     fn empty_call_arguments_rejects_an_invisible_child_node() {
@@ -1714,6 +1981,97 @@ mod tests {
 
         assert_eq!(arrow.kind(), SyntaxKind::ARROW_CALL);
         assert_eq!(arrow_call_arguments(&arrow), None);
+    }
+
+    #[test]
+    fn sort_key_groups_preserve_verified_collection_order_and_direction_forms() {
+        let source = "model::Person.all()->sort([ascending(~first), ~second->descending()])";
+        let parsed = parse_query(source, FileId::new(91)).expect("fixture source must parse");
+        assert!(parsed.diagnostics.is_empty(), "{:#?}", parsed.diagnostics);
+        let query = top_level_queries(&parsed.green)
+            .into_iter()
+            .next()
+            .expect("fixture must contain one query");
+        let sort = direct_nodes(&query)
+            .into_iter()
+            .find(|node| {
+                node.kind() == SyntaxKind::ARROW_CALL
+                    && arrow_name(node).is_some_and(|name| name.as_str() == "sort")
+            })
+            .expect("fixture must contain a sort arrow call");
+        let call = arrow_call_arguments(&sort).expect("sort must have arguments");
+        let arguments = sort_arguments(&call).expect("sort arguments must group exactly");
+
+        assert_eq!(arguments.len(), 2);
+        let (first_direction, first_selector) =
+            sort_key_parts(&arguments[0].nodes).expect("first key must be proven");
+        let (second_direction, second_selector) =
+            sort_key_parts(&arguments[1].nodes).expect("second key must be proven");
+        assert_eq!(first_direction, SortDirection::Ascending);
+        assert_eq!(first_selector.text(), "~first");
+        assert_eq!(second_direction, SortDirection::Descending);
+        assert_eq!(second_selector.text(), "~second");
+        assert_eq!(
+            &source[usize::from(arguments[0].range.start())..usize::from(arguments[0].range.end())],
+            "ascending(~first)"
+        );
+        assert_eq!(
+            &source[usize::from(arguments[1].range.start())..usize::from(arguments[1].range.end())],
+            "~second->descending()"
+        );
+    }
+
+    #[test]
+    fn sort_column_resolution_treats_duplicate_schema_names_as_unresolved() {
+        let source = "~value->ascending()";
+        let file = FileId::new(91);
+        let parsed = parse_query(source, file).expect("fixture source must parse");
+        assert!(parsed.diagnostics.is_empty(), "{:#?}", parsed.diagnostics);
+        let query = top_level_queries(&parsed.green)
+            .into_iter()
+            .next()
+            .expect("fixture must contain one query");
+        let selector = direct_nodes(&query)
+            .into_iter()
+            .find(|node| node.kind() == SyntaxKind::COLUMN_SPEC)
+            .expect("fixture must contain a column selector");
+        let multiplicity = Multiplicity::new(ONE, Some(ONE)).expect("fixture multiplicity");
+        let type_ref = TypeRef::new(
+            QName::new(STRING_TYPE).expect("fixture type path must be valid"),
+            Vec::new(),
+        );
+        let schema = RelationSchema::new(vec![
+            Column::new(
+                ColumnId::new(ZERO),
+                Name::new("value").expect("fixture name must be valid"),
+                type_ref.clone(),
+                multiplicity,
+                Nullability::Unknown,
+                origin(file, selector.text_range(), Vec::new()),
+            ),
+            Column::new(
+                ColumnId::new(ONE),
+                Name::new("value").expect("fixture name must be valid"),
+                type_ref,
+                multiplicity,
+                Nullability::Unknown,
+                origin(file, selector.text_range(), Vec::new()),
+            ),
+        ])
+        .expect("fixture schema must be valid");
+        let model = ModelGraph::default();
+        let mut lowerer = QueryLowerer::new(file, &model, query.text_range());
+        let input_origin = origin(file, query.text_range(), Vec::new());
+
+        assert_eq!(
+            lowerer.resolve_sort_column(&selector, &schema, &input_origin),
+            Err(ReasonCode::IndUnresolvedSchema)
+        );
+        assert_eq!(
+            &source[usize::from(lowerer.failure_origin().source().range().start())
+                ..usize::from(lowerer.failure_origin().source().range().end())],
+            "value"
+        );
     }
 
     #[test]
