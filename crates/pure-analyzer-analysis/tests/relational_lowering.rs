@@ -383,6 +383,244 @@ fn distinct_rejects_unproven_overloads_and_preserves_model_requirements() {
     );
 }
 
+const RELATION_PROJECT_SOURCE: &str = "model::Person.all()->project(~[legal: person | $person.name, manager: person | $person.manager])";
+
+fn relation_project_model() -> ModelGraph {
+    graph(vec![
+        class(
+            "Person",
+            vec![
+                property("name", "String", ONE, Some(ONE)),
+                property("manager", "model::Manager", ZERO, Some(ONE)),
+            ],
+        ),
+        class("Manager", Vec::new()),
+    ])
+}
+
+fn relation_project_parts(
+    query: &pure_analyzer_analysis::RelationalQuery,
+) -> (
+    &pure_analyzer_analysis::RelationExpression,
+    &[pure_analyzer_analysis::Projection],
+) {
+    match query.root().operator() {
+        RelationOperator::Project { input, projections } => (input, projections),
+        other => panic!("expected relation project, got {other:#?}"),
+    }
+}
+
+struct ProjectColumnExpectation {
+    id: ColumnId,
+    name: &'static str,
+    type_name: &'static str,
+    lower: u32,
+    source_text: &'static str,
+}
+
+fn assert_relation_project_schema_and_spans(
+    query: &pure_analyzer_analysis::RelationalQuery,
+    source: &str,
+) {
+    let columns = query.output().columns();
+    assert_eq!(columns.len(), 2);
+    assert_relation_project_column(
+        &columns[0],
+        ProjectColumnExpectation {
+            id: ColumnId::new(ONE),
+            name: "legal",
+            type_name: "String",
+            lower: ONE,
+            source_text: "legal: person | $person.name",
+        },
+        source,
+    );
+    assert_relation_project_column(
+        &columns[1],
+        ProjectColumnExpectation {
+            id: ColumnId::new(2),
+            name: "manager",
+            type_name: "model::Manager",
+            lower: ZERO,
+            source_text: "manager: person | $person.manager",
+        },
+        source,
+    );
+    assert_eq!(
+        span_text(source, query.root().origin().source()),
+        "->project(~[legal: person | $person.name, manager: person | $person.manager])"
+    );
+}
+
+fn assert_relation_project_column(
+    column: &pure_analyzer_analysis::Column,
+    expected: ProjectColumnExpectation,
+    source: &str,
+) {
+    assert_eq!(column.id(), expected.id);
+    assert_eq!(column.name().as_str(), expected.name);
+    assert_eq!(column.type_ref().raw_type().as_str(), expected.type_name);
+    assert_eq!(column.multiplicity().lower(), expected.lower);
+    assert_eq!(column.multiplicity().upper(), Some(ONE));
+    assert_eq!(column.nullability(), Nullability::Unknown);
+    assert_eq!(
+        span_text(source, column.origin().source()),
+        expected.source_text
+    );
+}
+
+fn assert_relation_project_provenance(
+    query: &pure_analyzer_analysis::RelationalQuery,
+    model: &ModelGraph,
+) {
+    let person = resolved_class(model, "model::Person");
+    let manager = resolved_class(model, "model::Manager");
+    let name = resolved_member(model, &person, "name");
+    let manager_member = resolved_member(model, &person, "manager");
+    assert_eq!(
+        query.root().origin().model_origins(),
+        &[
+            ModelOrigin::from_class(&person),
+            ModelOrigin::from_member(&name),
+            ModelOrigin::from_member(&manager_member),
+            ModelOrigin::from_class(&manager),
+        ]
+    );
+}
+
+fn assert_relation_project_projection_inputs(projections: &[pure_analyzer_analysis::Projection]) {
+    for projection in projections {
+        assert!(matches!(
+            navigation_parts(projection.expression()).0.operator(),
+            ScalarOperator::Column(id) if *id == ColumnId::new(ZERO)
+        ));
+    }
+}
+
+#[test]
+fn lowers_schema_aware_relation_project_with_ordered_metadata_and_provenance() {
+    let model = relation_project_model();
+    let first = lower(RELATION_PROJECT_SOURCE, Some(&model));
+    let second = lower(RELATION_PROJECT_SOURCE, Some(&model));
+    assert_eq!(first, second);
+
+    let query = supported(first);
+    let (input, projections) = relation_project_parts(&query);
+    assert_eq!(class_scan(input).path().as_str(), "model::Person");
+    assert_eq!(projections.len(), 2);
+    assert_relation_project_schema_and_spans(&query, RELATION_PROJECT_SOURCE);
+    assert!(query.facts().candidate_keys().is_unknown());
+    assert!(query.facts().row_semantics().is_unknown());
+    assert!(
+        projections
+            .iter()
+            .all(|projection| projection.expression().totality().is_unknown())
+    );
+    assert_relation_project_provenance(&query, &model);
+    assert_relation_project_projection_inputs(projections);
+}
+
+#[test]
+fn relation_project_binds_its_output_as_a_resolved_row_for_following_lambdas() {
+    let model = relation_project_model();
+    let source = "model::Person.all()->project(~[legal: person | $person.name, manager: person | $person.manager])->map(row| $row.legal)";
+    let query = supported(lower(source, Some(&model)));
+    let (project, map_projection) = map_parts(&query);
+    let (_, projections) = match project.operator() {
+        RelationOperator::Project { input, projections } => (input, projections),
+        other => panic!("expected nested relation project, got {other:#?}"),
+    };
+    assert_eq!(projections.len(), 2);
+    assert_eq!(query.output().columns()[0].id(), ColumnId::new(3));
+    assert_eq!(query.output().columns()[0].name().as_str(), "value");
+    assert_eq!(
+        query.output().columns()[0].type_ref().raw_type().as_str(),
+        "String"
+    );
+    assert_eq!(query.output().columns()[0].multiplicity().lower(), ONE);
+    assert_eq!(
+        query.output().columns()[0].multiplicity().upper(),
+        Some(ONE)
+    );
+    assert_eq!(
+        query.output().columns()[0].nullability(),
+        Nullability::Unknown
+    );
+    assert!(matches!(
+        map_projection.expression().operator(),
+        ScalarOperator::Column(id) if *id == ColumnId::new(ONE)
+    ));
+    assert_eq!(
+        span_text(source, map_projection.expression().origin().source()),
+        ".legal"
+    );
+}
+
+#[test]
+fn relation_project_preserves_pure_model_members_and_quoted_aliases() {
+    let model = pure_graph(
+        r#"
+            Class model::Person {
+                legalName: String[1];
+            }
+        "#,
+    );
+    let source = "model::Person.all()->project(~['Legal Name': person | $person.legalName])";
+    let query = supported(lower(source, Some(&model)));
+    let (_, projections) = relation_project_parts(&query);
+    let person = resolved_class(&model, "model::Person");
+    let legal_name = resolved_member(&model, &person, "legalName");
+
+    assert_eq!(query.output().columns()[0].id(), ColumnId::new(ONE));
+    assert_eq!(query.output().columns()[0].name().as_str(), "Legal Name");
+    assert_eq!(
+        span_text(source, query.output().columns()[0].origin().source()),
+        "'Legal Name': person | $person.legalName"
+    );
+    assert_eq!(
+        projections[0].expression().origin().model_origins(),
+        &[
+            ModelOrigin::from_class(&person),
+            ModelOrigin::from_member(&legal_name),
+        ]
+    );
+}
+
+#[test]
+fn relation_project_declines_unverified_forms_without_partial_output() {
+    let model = relation_project_model();
+    for source in [
+        "model::Person.all()->project(~legal: person | $person.name)",
+        "model::Person.all()->project(~[legal])",
+        "model::Person.all()->project(~[legal: person: model::Person[1] | $person.name])",
+        "model::Person.all()->project(~[legal: {person| $person.name}])",
+        "model::Person.all()->project(~[legal: person | $person.name, legal: person | $person.name])",
+        "model::Person.all()->project(~[legal: person | $person.missing])",
+        "model::Person.all()->project(~[legal: person | $person.name])->distinct(~[legal])",
+    ] {
+        let expected = if source.contains("missing") {
+            ReasonCode::IndUnresolvedSchema
+        } else {
+            ReasonCode::IndUnmodeledOp
+        };
+        assert_reason(lower(source, Some(&model)), expected);
+    }
+    assert_reason(
+        lower(
+            "model::Person.all()->project(~[legal: person |])",
+            Some(&model),
+        ),
+        ReasonCode::IndUnmodeledOp,
+    );
+    assert_reason(
+        lower(
+            "model::Person.all()->project(~[legal: person | $person.name",
+            Some(&model),
+        ),
+        ReasonCode::IndUnparseable,
+    );
+}
+
 const INNER_JOIN_SOURCE: &str = "model::Person.all()->join(model::Membership.all(), JoinKind.INNER, {person, membership | $person.personId == $membership.personId})";
 
 fn inner_join_model() -> ModelGraph {
@@ -904,6 +1142,38 @@ fn project_ids(expression: &pure_analyzer_analysis::RelationExpression, ids: &mu
 }
 
 proptest! {
+    #[test]
+    fn relation_project_is_deterministic_and_retains_declared_alias_order(reverse in any::<bool>()) {
+        let model = relation_project_model();
+        let (source, expected_names) = if reverse {
+            (
+                "model::Person.all()->project(~[manager: person | $person.manager, legal: person | $person.name])",
+                ["manager", "legal"],
+            )
+        } else {
+            (RELATION_PROJECT_SOURCE, ["legal", "manager"])
+        };
+        let first = lower(source, Some(&model));
+        let second = lower(source, Some(&model));
+
+        prop_assert_eq!(&first, &second);
+        let RelationalOutcome::Supported(query) = first else {
+            prop_assert!(false, "supported relation project lowered opaque: {first:#?}");
+            return Ok(());
+        };
+        prop_assert_eq!(
+            query
+                .output()
+                .columns()
+                .iter()
+                .map(|column| column.name().as_str())
+                .collect::<Vec<_>>(),
+            expected_names.to_vec(),
+        );
+        prop_assert!(query.facts().candidate_keys().is_unknown());
+        prop_assert!(query.facts().row_semantics().is_unknown());
+    }
+
     #[test]
     fn lowering_is_deterministic_for_bounded_supported_pipelines(
         steps in proptest::collection::vec(any::<bool>(), 0..=8),
