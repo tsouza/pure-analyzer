@@ -283,6 +283,16 @@ fn lowers_filter_to_an_equality_predicate() {
 }
 
 #[test]
+fn declines_non_equality_binary_operators_without_reinterpreting_them() {
+    let model = filter_map_model();
+
+    for operator in ["<", "<=", ">", ">=", "+", "-", "*", "/"] {
+        let source = format!("model::Person.all()->filter(x| $x.name {operator} 'Ada')");
+        assert_reason(lower(&source, Some(&model)), ReasonCode::IndOpaquePredicate);
+    }
+}
+
+#[test]
 fn lowers_false_as_a_boolean_literal() {
     let model = filter_map_model();
     let query = supported(lower("model::Person.all()->map(x| false)", Some(&model)));
