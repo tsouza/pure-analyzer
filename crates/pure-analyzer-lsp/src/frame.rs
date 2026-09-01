@@ -64,3 +64,15 @@ fn invalid(message: impl Into<String>) -> io::Error {
 fn invalid_json(error: impl std::fmt::Display) -> io::Error {
     invalid(format!("invalid JSON-RPC payload: {error}"))
 }
+
+#[cfg(test)]
+mod tests {
+    use std::io::Cursor;
+
+    use super::read_frame;
+
+    #[test]
+    fn empty_input_has_no_frame() {
+        assert_eq!(read_frame(&mut Cursor::new([])).expect("empty input"), None);
+    }
+}

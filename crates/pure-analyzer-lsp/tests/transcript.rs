@@ -1,6 +1,7 @@
 //! End-to-end framed JSON-RPC transcripts for the LSP bootstrap server.
 
-use std::io::Cursor;
+use std::io::{Cursor, Write};
+use std::process::{Command, Output, Stdio};
 
 use pure_analyzer_lsp::{
     CancellationRegistry, DocumentSnapshot, DocumentStore, RequestId, Server, ServerExit,
@@ -126,6 +127,43 @@ fn unknown_requests_receive_a_json_rpc_method_error() {
 }
 
 #[test]
+fn non_object_requests_receive_a_json_rpc_invalid_request_error() {
+    let mut server = Server::new();
+    let mut output = Vec::new();
+    let mut input = Cursor::new(transcript(&[
+        value("null"),
+        value(r#"{"jsonrpc":"2.0","method":"exit"}"#),
+    ]));
+
+    assert_eq!(
+        server
+            .serve(&mut input, &mut output)
+            .expect("valid transcript"),
+        ServerExit::Unclean
+    );
+    assert_eq!(
+        responses(&output),
+        vec![value(
+            r#"{"jsonrpc":"2.0","id":null,"error":{"code":-32600,"message":"invalid request"}}"#
+        )]
+    );
+}
+
+#[test]
+fn process_exits_unsuccessfully_without_shutdown() {
+    let exit_before_shutdown = run_lsp(&transcript(&[value(
+        r#"{"jsonrpc":"2.0","method":"exit"}"#,
+    )]));
+    let end_of_file = lsp_command()
+        .stdin(Stdio::null())
+        .output()
+        .expect("run pure-analyzer-lsp through EOF");
+
+    assert_unsuccessful_exit(exit_before_shutdown);
+    assert_unsuccessful_exit(end_of_file);
+}
+
+#[test]
 fn cancellation_registry_distinguishes_present_and_absent_requests() {
     let first = RequestId::Number(1);
     let other = RequestId::String("other".to_owned());
@@ -207,4 +245,32 @@ fn responses(mut input: &[u8]) -> Vec<Value> {
         input = &input[body_end..];
     }
     values
+}
+
+fn run_lsp(input: &[u8]) -> Output {
+    let mut child = lsp_command()
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawn pure-analyzer-lsp");
+    let mut stdin = child.stdin.take().expect("piped stdin");
+    stdin
+        .write_all(input)
+        .expect("write pure-analyzer-lsp standard input");
+    drop(stdin);
+    child
+        .wait_with_output()
+        .expect("wait for pure-analyzer-lsp")
+}
+
+fn lsp_command() -> Command {
+    Command::new(env!("CARGO_BIN_EXE_pure-analyzer-lsp"))
+}
+
+fn assert_unsuccessful_exit(output: Output) {
+    assert!(
+        !output.status.success(),
+        "pure-analyzer-lsp must fail without shutdown: {output:?}"
+    );
 }
