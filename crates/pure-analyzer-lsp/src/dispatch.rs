@@ -11,6 +11,7 @@ use crate::{
 
 const INVALID_REQUEST_CODE: i64 = -32_600;
 const METHOD_NOT_FOUND_CODE: i64 = -32_601;
+const INVALID_PARAMS_CODE: i64 = -32_602;
 
 pub(crate) fn handle<W: Write>(
     server: &mut Server,
@@ -48,6 +49,7 @@ pub(crate) fn handle<W: Write>(
             state::close_document(server, params, writer)?;
             Ok(None)
         }
+        Some("textDocument/hover") => hover(server, id, params, writer),
         Some("workspace/didChangeConfiguration") => {
             state::update_configuration(server, params, writer)?;
             Ok(None)
@@ -112,6 +114,24 @@ fn shutdown<W: Write>(
     }
     server.lifecycle = Lifecycle::ShuttingDown;
     send_result(writer, id, Value::Null)?;
+    Ok(None)
+}
+
+fn hover<W: Write>(
+    server: &Server,
+    id: Option<Value>,
+    params: Option<&Value>,
+    writer: &mut W,
+) -> io::Result<Option<ServerExit>> {
+    let Some(id) = id else {
+        return Ok(None);
+    };
+    match state::hover(server, params) {
+        Ok(result) => send_result(writer, id, result.unwrap_or(Value::Null))?,
+        Err(state::HoverError::InvalidParams) => {
+            send_error(writer, id, INVALID_PARAMS_CODE, "invalid params")?;
+        }
+    }
     Ok(None)
 }
 

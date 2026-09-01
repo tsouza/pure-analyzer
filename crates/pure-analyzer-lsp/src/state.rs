@@ -4,13 +4,16 @@ use std::io::{self, Write};
 use libpure::{
     AnalysisDriver, DefinitionPosition, DefinitionResult, DefinitionTarget, Diagnostic,
     DriverError, FileId, LintRequest, ModelError, ModelInput, Severity, SourceInput, SourceRequest,
+    TextRange, explain,
 };
 use serde_json::{Map, Value};
 
 use crate::{
     DocumentSnapshot, RequestId, Server,
     document::{ContentChange, ProtocolPosition, ProtocolRange, byte_offset, utf16_position},
-    response::{PublishedDiagnostic, PublishedPosition, PublishedRange, publish_diagnostics},
+    response::{
+        PublishedDiagnostic, PublishedPosition, PublishedRange, hover_value, publish_diagnostics,
+    },
     workspace::ModelDocumentKind,
 };
 
@@ -21,6 +24,14 @@ pub(crate) fn cancel(server: &mut Server, params: Option<&Value>) {
     {
         server.cancellation.cancel(request);
     }
+}
+
+pub(crate) fn hover(server: &Server, params: Option<&Value>) -> Result<Option<Value>, HoverError> {
+    let request = hover_request(params).ok_or(HoverError::InvalidParams)?;
+    let snapshot = AnalysisSnapshot::capture(server);
+    Ok(snapshot
+        .hover(request.uri, request.position)
+        .filter(|_| snapshot.is_current(server)))
 }
 
 pub(crate) fn open_document<W: Write>(
@@ -222,6 +233,24 @@ fn protocol_position(position: &Value) -> Option<ProtocolPosition> {
     ))
 }
 
+struct HoverRequest<'a> {
+    uri: &'a str,
+    position: ProtocolPosition,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum HoverError {
+    InvalidParams,
+}
+
+fn hover_request(params: Option<&Value>) -> Option<HoverRequest<'_>> {
+    let text_document = params?.get("textDocument")?;
+    Some(HoverRequest {
+        uri: text_document.get("uri")?.as_str()?,
+        position: protocol_position(params?.get("position")?)?,
+    })
+}
+
 fn publish_current_diagnostics<W: Write>(server: &Server, writer: &mut W) -> io::Result<()> {
     let snapshot = AnalysisSnapshot::capture(server);
     let diagnostics = snapshot.diagnostics();
@@ -300,6 +329,36 @@ impl AnalysisSnapshot {
             findings.sort();
         }
         diagnostics
+    }
+
+    fn hover(&self, uri: &str, position: ProtocolPosition) -> Option<Value> {
+        let document = self.documents.get(uri)?;
+        let offset = byte_offset(document.text(), position)?;
+        let (findings, files) = self.hover_findings()?;
+        let diagnostic = findings
+            .iter()
+            .filter(|diagnostic| {
+                files
+                    .get(&diagnostic.primary.file)
+                    .is_some_and(|file| file == uri)
+            })
+            .filter(|diagnostic| diagnostic_contains(diagnostic.primary.span, offset))
+            .min_by(|left, right| hover_sort_key(left).cmp(&hover_sort_key(right)))?;
+        diagnostic_hover(document, diagnostic)
+    }
+
+    fn hover_findings(&self) -> Option<(Vec<Diagnostic>, BTreeMap<FileId, String>)> {
+        if let Some((request, files)) = self.request() {
+            return AnalysisDriver
+                .lint(&request)
+                .ok()
+                .map(|output| (output.diagnostics().to_vec(), files));
+        }
+        let models = self.model_inputs();
+        AnalysisDriver
+            .validate_models(&models)
+            .ok()
+            .map(|diagnostics| (diagnostics, self.model_files()))
     }
 
     fn report_driver_error(
@@ -458,20 +517,61 @@ fn render_diagnostic(
     document: &DocumentSnapshot,
     diagnostic: &Diagnostic,
 ) -> Option<PublishedDiagnostic> {
+    let range = diagnostic_range(document, diagnostic)?;
+    Some(PublishedDiagnostic::new(
+        range,
+        lsp_severity(diagnostic.severity),
+        diagnostic.code.as_str().to_owned(),
+        diagnostic.message.clone(),
+    ))
+}
+
+fn diagnostic_hover(document: &DocumentSnapshot, diagnostic: &Diagnostic) -> Option<Value> {
+    let diagnostic_content = explain(diagnostic.code.as_str()).ok()?;
+    let reason_content = diagnostic
+        .reason
+        .map(|reason| explain(reason.id()))
+        .transpose()
+        .ok()?;
+    Some(hover_value(
+        diagnostic_range(document, diagnostic)?,
+        diagnostic_content,
+        reason_content,
+    ))
+}
+
+fn diagnostic_range(
+    document: &DocumentSnapshot,
+    diagnostic: &Diagnostic,
+) -> Option<PublishedRange> {
     let start = utf16_position(
         document.text(),
         usize::from(diagnostic.primary.span.start()),
     )?;
     let end = utf16_position(document.text(), usize::from(diagnostic.primary.span.end()))?;
-    Some(PublishedDiagnostic::new(
-        PublishedRange::new(
-            PublishedPosition::new(start.line(), start.character()),
-            PublishedPosition::new(end.line(), end.character()),
-        ),
-        lsp_severity(diagnostic.severity),
-        diagnostic.code.as_str().to_owned(),
-        diagnostic.message.clone(),
+    Some(PublishedRange::new(
+        PublishedPosition::new(start.line(), start.character()),
+        PublishedPosition::new(end.line(), end.character()),
     ))
+}
+
+fn diagnostic_contains(span: TextRange, offset: usize) -> bool {
+    let start = usize::from(span.start());
+    let end = usize::from(span.end());
+    (start == end && offset == start) || (start <= offset && offset < end)
+}
+
+fn hover_sort_key(diagnostic: &Diagnostic) -> (usize, usize, usize, &str, &str, &str) {
+    let start = usize::from(diagnostic.primary.span.start());
+    let end = usize::from(diagnostic.primary.span.end());
+    (
+        end.saturating_sub(start),
+        start,
+        end,
+        diagnostic.code.as_str(),
+        diagnostic.reason.map_or("", |reason| reason.id()),
+        diagnostic.message.as_str(),
+    )
 }
 
 const fn lsp_severity(severity: Severity) -> u8 {
@@ -485,9 +585,11 @@ const fn lsp_severity(severity: Severity) -> u8 {
 
 #[cfg(test)]
 mod tests {
+    use libpure::{DiagCode, Diagnostic, FileId, Severity, TextRange, explain};
+    use pure_analyzer_diagnostics::{Label, ReasonCode};
     use serde_json::Value;
 
-    use super::AnalysisSnapshot;
+    use super::{AnalysisSnapshot, diagnostic_hover};
     use crate::{DocumentSnapshot, Server};
 
     #[test]
@@ -515,6 +617,48 @@ mod tests {
             .configuration
             .replace(value(r#"{"modelDocuments":[]}"#));
         assert!(!configuration_snapshot.is_current(&server));
+    }
+
+    #[test]
+    fn diagnostic_hover_appends_the_attached_reason_explanation() {
+        let document =
+            DocumentSnapshot::new("untitled:query".to_owned(), "query".to_owned(), Some(1));
+        let diagnostic = Diagnostic::builder(
+            DiagCode::EquivalenceVerdict,
+            Severity::Info,
+            "not used by hover markup",
+            Label::new(FileId::new(0), TextRange::new(0.into(), 5.into())),
+        )
+        .reason(ReasonCode::IndUnparseable)
+        .build();
+
+        let hover = diagnostic_hover(&document, &diagnostic).expect("registered explanations");
+        assert_eq!(
+            hover["range"],
+            value(r#"{"start":{"line":0,"character":0},"end":{"line":0,"character":5}}"#)
+        );
+        let diagnostic = explain("PUR3001").expect("registered diagnostic");
+        let reason = explain("IND_UNPARSEABLE").expect("registered reason");
+        assert_eq!(
+            hover["contents"]["value"],
+            format!(
+                "**`{}`** · {} / {}\n\n{}\n\n**Limit:** {}\n\n**Remedy:** {}\n\n[Documentation]({})\n\n---\n\n**`{}`** · {} / {}\n\n{}\n\n**Limit:** {}\n\n**Remedy:** {}\n\n[Documentation]({})",
+                diagnostic.identifier,
+                diagnostic.kind.as_str(),
+                diagnostic.classification.as_str(),
+                diagnostic.meaning,
+                diagnostic.limit,
+                diagnostic.remedy,
+                diagnostic.documentation_url,
+                reason.identifier,
+                reason.kind.as_str(),
+                reason.classification.as_str(),
+                reason.meaning,
+                reason.limit,
+                reason.remedy,
+                reason.documentation_url,
+            )
+        );
     }
 
     fn value(source: &str) -> Value {

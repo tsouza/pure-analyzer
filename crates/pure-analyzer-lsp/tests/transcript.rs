@@ -3,6 +3,7 @@
 use std::io::{Cursor, Write};
 use std::process::{Command, Output, Stdio};
 
+use libpure::explain;
 use pure_analyzer_lsp::{
     CancellationRegistry, DocumentSnapshot, DocumentStore, RequestId, Server, ServerExit,
     WorkspaceConfiguration,
@@ -51,6 +52,7 @@ fn startup_shutdown_and_exit_follow_one_deterministic_transcript() {
         frames[0]["result"]["capabilities"]["positionEncoding"],
         "utf-16"
     );
+    assert_eq!(frames[0]["result"]["capabilities"]["hoverProvider"], true);
     assert_eq!(
         frames[0]["result"]["capabilities"]["textDocumentSync"],
         value(r#"{"openClose":true,"change":2,"save":{"includeText":false}}"#)
@@ -366,6 +368,101 @@ fn incomplete_unconfigured_document_publishes_a_deterministic_diagnostic() {
 }
 
 #[test]
+fn incomplete_unicode_diagnostic_hover_uses_shared_explain_content() {
+    let mut server = Server::new();
+    let mut output = Vec::new();
+    let mut input = Cursor::new(transcript(&[
+        value(r#"{"jsonrpc":"2.0","id":1,"method":"initialize"}"#),
+        value(
+            r#"{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"untitled:unicode","version":1,"text":"/* 😀 */ [a,]"}}}"#,
+        ),
+        value(
+            r#"{"jsonrpc":"2.0","id":2,"method":"textDocument/hover","params":{"textDocument":{"uri":"untitled:unicode"},"position":{"line":0,"character":12}}}"#,
+        ),
+        value(r#"{"jsonrpc":"2.0","id":3,"method":"shutdown"}"#),
+        value(r#"{"jsonrpc":"2.0","method":"exit"}"#),
+    ]));
+
+    assert_eq!(
+        server
+            .serve(&mut input, &mut output)
+            .expect("valid transcript"),
+        ServerExit::Clean
+    );
+    let frames = responses(&output);
+    let hover = response_for(&frames, 2);
+    assert_eq!(hover["result"]["contents"]["kind"], "markdown");
+    assert_eq!(
+        hover["result"]["contents"]["value"],
+        expected_hover_markup("PUR1200")
+    );
+    assert_eq!(
+        hover["result"]["range"],
+        value(r#"{"start":{"line":0,"character":12},"end":{"line":0,"character":13}}"#)
+    );
+}
+
+#[test]
+fn unavailable_hover_requests_have_a_stable_null_result() {
+    let mut server = Server::new();
+    let mut output = Vec::new();
+    let mut input = Cursor::new(transcript(&[
+        value(r#"{"jsonrpc":"2.0","id":1,"method":"initialize"}"#),
+        value(
+            r#"{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"untitled:unicode","version":1,"text":"/* 😀 */ [a,]"}}}"#,
+        ),
+        value(
+            r#"{"jsonrpc":"2.0","id":2,"method":"textDocument/hover","params":{"textDocument":{"uri":"untitled:unicode"},"position":{"line":0,"character":0}}}"#,
+        ),
+        value(
+            r#"{"jsonrpc":"2.0","id":3,"method":"textDocument/hover","params":{"textDocument":{"uri":"untitled:unicode"},"position":{"line":0,"character":4}}}"#,
+        ),
+        value(
+            r#"{"jsonrpc":"2.0","id":4,"method":"textDocument/hover","params":{"textDocument":{"uri":"untitled:missing"},"position":{"line":0,"character":0}}}"#,
+        ),
+        value(r#"{"jsonrpc":"2.0","id":5,"method":"shutdown"}"#),
+        value(r#"{"jsonrpc":"2.0","method":"exit"}"#),
+    ]));
+
+    assert_eq!(
+        server
+            .serve(&mut input, &mut output)
+            .expect("valid transcript"),
+        ServerExit::Clean
+    );
+    let frames = responses(&output);
+    for id in [2, 3, 4] {
+        assert_eq!(response_for(&frames, id)["result"], Value::Null);
+    }
+}
+
+#[test]
+fn malformed_hover_params_receive_a_json_rpc_invalid_params_error() {
+    let mut server = Server::new();
+    let mut output = Vec::new();
+    let mut input = Cursor::new(transcript(&[
+        value(r#"{"jsonrpc":"2.0","id":1,"method":"initialize"}"#),
+        value(
+            r#"{"jsonrpc":"2.0","id":2,"method":"textDocument/hover","params":{"textDocument":{"uri":"untitled:query"}}}"#,
+        ),
+        value(r#"{"jsonrpc":"2.0","id":3,"method":"shutdown"}"#),
+        value(r#"{"jsonrpc":"2.0","method":"exit"}"#),
+    ]));
+
+    assert_eq!(
+        server
+            .serve(&mut input, &mut output)
+            .expect("valid transcript"),
+        ServerExit::Clean
+    );
+    let frames = responses(&output);
+    assert_eq!(
+        response_for(&frames, 2),
+        &value(r#"{"jsonrpc":"2.0","id":2,"error":{"code":-32602,"message":"invalid params"}}"#)
+    );
+}
+
+#[test]
 fn configured_multi_file_models_publish_findings_to_their_explicit_routes() {
     let mut server = Server::new();
     let mut output = Vec::new();
@@ -598,6 +695,29 @@ fn published_diagnostics(output: &[u8]) -> Vec<Value> {
         .collect()
 }
 
+fn response_for(frames: &[Value], id: i64) -> &Value {
+    let responses = frames
+        .iter()
+        .filter(|frame| frame["id"] == id)
+        .collect::<Vec<_>>();
+    assert_eq!(responses.len(), 1, "expected one response for id {id}");
+    responses[0]
+}
+
+fn expected_hover_markup(identifier: &str) -> String {
+    let explanation = explain(identifier).expect("registered explain content");
+    format!(
+        "**`{}`** · {} / {}\n\n{}\n\n**Limit:** {}\n\n**Remedy:** {}\n\n[Documentation]({})",
+        explanation.identifier,
+        explanation.kind.as_str(),
+        explanation.classification.as_str(),
+        explanation.meaning,
+        explanation.limit,
+        explanation.remedy,
+        explanation.documentation_url,
+    )
+}
+
 fn publication_for<'a>(publications: &'a [Value], uri: &str) -> &'a Value {
     let matches = publications_for(publications, uri);
     assert_eq!(matches.len(), 1, "expected one publication for {uri}");
@@ -713,13 +833,6 @@ fn definition_position(line: u32, character: u32) -> Value {
         ("line", Value::Number(line.into())),
         ("character", Value::Number(character.into())),
     ])
-}
-
-fn response_for(frames: &[Value], id: i64) -> &Value {
-    frames
-        .iter()
-        .find(|frame| frame["id"] == id)
-        .expect("response with JSON-RPC identifier")
 }
 
 fn utf16_character(text: &str, offset: usize) -> u32 {
