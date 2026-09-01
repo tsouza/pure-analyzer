@@ -8,6 +8,7 @@
 //!
 //! [cargo-xtask]: https://github.com/matklad/cargo-xtask
 
+mod explain_docs;
 mod markdown;
 mod process;
 mod tasks;
@@ -74,6 +75,10 @@ enum Command {
     CheckCoreDeplight,
     /// Assert PureCARD's documented facts match their authoritative sources.
     CheckDocFacts,
+    /// Generate the tracked diagnostic and reason explain reference from the shared catalog.
+    GenerateExplainDocs,
+    /// Assert the tracked diagnostic and reason explain reference matches the shared catalog.
+    CheckExplainDocs,
     /// Check tracked Markdown relative files and GitHub-style heading anchors.
     CheckDocLinks,
     /// Snapshot / verify the public API surface via cargo-public-api (nightly).
@@ -117,6 +122,8 @@ fn main() -> Result<()> {
         Command::ReleasePlzCheck => tasks::release_plz_check(),
         Command::CheckCoreDeplight => tasks::check_core_deplight(),
         Command::CheckDocFacts => tasks::check_doc_facts(),
+        Command::GenerateExplainDocs => explain_docs::generate(),
+        Command::CheckExplainDocs => explain_docs::check(),
         Command::CheckDocLinks => markdown::check_doc_links(),
         Command::PublicApi { bless } => tasks::public_api(bless),
         Command::NewFeature { name } => tasks::new_feature(&name),

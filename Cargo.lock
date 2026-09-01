@@ -2141,6 +2141,7 @@ dependencies = [
  "anyhow",
  "clap",
  "pulldown-cmark",
+ "pure-analyzer-diagnostics",
  "serde_json",
  "toml",
 ]
