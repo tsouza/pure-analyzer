@@ -8,6 +8,7 @@ mod format;
 mod lint;
 mod local;
 mod lowering;
+mod normalizer;
 mod pass;
 mod relational;
 mod validate;
@@ -21,6 +22,11 @@ pub use format::{FormatResult, format_query, format_query_with_width};
 pub use lint::{MilestoningArityLintPass, NavigationLintPass};
 pub use local::{LocalNavigationAnalysis, LocalResolution, LocalResolutionSite, analyze_m3_locals};
 pub use lowering::lower_m3_query;
+pub use normalizer::{
+    DEFAULT_NORMALIZATION_STEP_LIMIT, EquivalenceKey, NormalizationBudget, NormalizationFailure,
+    NormalizationOutcome, NormalizedQuery, StructuralKey, normalize_relational_query,
+    normalize_relational_query_with_budget,
+};
 pub use pass::{
     AnalysisEngine, AnalysisInput, AnalysisPass, AnalysisResult, FindingPolicy, ModelAvailability,
 };
