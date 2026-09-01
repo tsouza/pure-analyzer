@@ -9,7 +9,6 @@ on:
   push:
     branches: [main]
   pull_request:
-    # A fresh mutation plan is required whenever reviewability or the base ref changes.
     types:
       - opened
       - synchronize
@@ -20,9 +19,8 @@ on:
   merge_group:
 
 concurrency:
-  # A merge-group validation can use the PR merge ref on this repository. Keep
-  # it distinct from the pull-request run: otherwise enabling auto-merge
-  # cancels the in-flight mutation matrix that the PR's own gate requires.
+  # Keep merge-group validation distinct from the pull-request run, so an
+  # auto-merge enqueue cannot cancel its in-flight fast CI validation.
   group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
@@ -131,10 +129,11 @@ jobs:
       - name: Coverage + floor enforcement
         run: cargo xtask coverage
 
-  # --- Mutation testing (cargo-mutants) ------------------------------------
-  # Direct PRs can safely constrain the workspace pass to a verified production
-  # source diff. Every other event keeps the full twelve-shard proof; the
-  # planner itself falls back to that proof for every ambiguous change shape.
+  # --- Diff-scoped mutation testing (cargo-mutants) -----------------------
+  # The planner always emits a valid matrix sentinel. Only a direct PR with a
+  # verified production-source diff can run workers; full or ambiguous plans
+  # are deliberately deferred to nightly/manual full mutation. Its direct-PR
+  # budget is at most three shards of twelve mutants each.
   mutation-plan:
     name: mutation-plan
     runs-on: ubuntu-latest
@@ -147,9 +146,7 @@ jobs:
       scope: ${{ steps.plan.outputs.scope }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        # Direct PR runs deliberately avoid Actions' synthetic merge ref: the
-        # planner and every worker prove the event-pinned head against its
-        # resolved merge base instead.
+        # PR planning uses the event-pinned head, not Actions' synthetic merge ref.
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -157,19 +154,27 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
       - uses: taiki-e/install-action@b6ff580856c41316412a0b9b60540fbc6f8c82cc # v2.86.7
         with:
-          tool: cargo-mutants@27.1.0,just
+          tool: just
+      - uses: taiki-e/install-action@b6ff580856c41316412a0b9b60540fbc6f8c82cc # v2.86.7
+        if: github.event_name == 'pull_request'
+        with:
+          tool: cargo-mutants@27.1.0
       - id: plan
         name: Plan verified mutation scope
         env:
           MUTATION_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           MUTATION_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           MUTATION_PR_DRAFT: ${{ github.event.pull_request.draft }}
+          MUTATION_DEFER_FULL: "true"
         run: just plan-mutation
 
   mutation:
-    name: mutation (${{ matrix.scope }} ${{ matrix.index }}/${{ matrix.total }})
+    name: mutation (diff ${{ matrix.index }}/${{ matrix.total }})
     needs: mutation-plan
-    if: needs.mutation-plan.result == 'success'
+    if: >-
+      github.event_name == 'pull_request' &&
+      needs.mutation-plan.result == 'success' &&
+      needs.mutation-plan.outputs.scope == 'diff'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -180,117 +185,49 @@ jobs:
       SCCACHE_GHA_ENABLED: "true"
       RUSTC_WRAPPER: sccache
       CARGO_INCREMENTAL: "0"
-      MUTATION_DIAGNOSTICS: ${{ matrix.diagnostics }}
       MUTATION_SHARD_INDEX: ${{ matrix.index }}
       MUTATION_SHARD_TOTAL: ${{ matrix.total }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: matrix.scope != 'skip'
         with:
           fetch-depth: 0
           persist-credentials: false
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.event.pull_request.head.sha }}
       - uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba # v0.0.11
-        if: matrix.scope != 'skip'
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-        if: matrix.scope != 'skip'
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        if: matrix.scope != 'skip'
         with:
           python-version: "3.12"
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        if: matrix.scope != 'skip'
       - uses: taiki-e/install-action@b6ff580856c41316412a0b9b60540fbc6f8c82cc # v2.86.7
-        if: matrix.scope != 'skip'
         with:
           tool: cargo-mutants@27.1.0,cargo-nextest,just
       - name: Prepare verified mutation diff
-        if: matrix.scope == 'diff'
         env:
           MUTATION_DIFF_SHA256: ${{ needs.mutation-plan.outputs.diff_sha256 }}
           MUTATION_HEAD_SHA: ${{ needs.mutation-plan.outputs.head_sha }}
           MUTATION_MERGE_BASE: ${{ needs.mutation-plan.outputs.merge_base }}
         run: just prepare-mutation-diff
       - name: cargo mutants (diff shard ${{ matrix.index }}/${{ matrix.total }})
-        if: matrix.scope == 'diff'
         run: >-
           bun scripts/run-mutation-debug.mjs diff-shard
           "$MUTATION_SHARD_INDEX" "$MUTATION_SHARD_TOTAL" target/mutation-scope.diff
-      - name: cargo mutants (full shard ${{ matrix.index }}/${{ matrix.total }})
-        if: matrix.scope == 'full'
-        run: >-
-          bun scripts/run-mutation-debug.mjs shard
-          "$MUTATION_SHARD_INDEX" "$MUTATION_SHARD_TOTAL"
-      - name: No mutation required
-        if: matrix.scope == 'skip'
-        run: echo "mutation is skipped for this draft pull request"
-      - name: Collect mutation diagnostics
-        if: always() && matrix.scope != 'skip'
-        run: >-
-          bun scripts/run-mutation-debug.mjs
-          --collect "$MUTATION_DIAGNOSTICS" "$MUTATION_SHARD_INDEX"
-      - name: Upload mutation report
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: always() && matrix.scope != 'skip'
-        with:
-          name: mutants-out-${{ matrix.diagnostics }}-${{ matrix.index }}
-          path: target/mutants-${{ matrix.report }}-shard-${{ matrix.index }}
-          if-no-files-found: error
-      - name: Upload mutation diagnostics
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: always() && matrix.scope != 'skip'
-        with:
-          name: mutation-diagnostics-${{ matrix.diagnostics }}-${{ matrix.index }}
-          path: target/mutation-diagnostics-${{ matrix.diagnostics }}-${{ matrix.index }}
-          if-no-files-found: warn
-
-  # The feature-gated FFI-boundary pass is fast (~2 minutes) on its own, so it
-  # stays a single job rather than joining the workspace matrix above.
-  mutation-ffi:
-    name: mutation-ffi
-    needs: mutation-plan
-    if: >-
-      needs.mutation-plan.result == 'success' &&
-      needs.mutation-plan.outputs.scope != 'skip'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    env:
-      SCCACHE_GHA_ENABLED: "true"
-      RUSTC_WRAPPER: sccache
-      CARGO_INCREMENTAL: "0"
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-      - uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba # v0.0.11
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.12"
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-      - uses: taiki-e/install-action@b6ff580856c41316412a0b9b60540fbc6f8c82cc # v2.86.7
-        with:
-          tool: cargo-mutants@27.1.0,cargo-nextest,just
-      - name: cargo mutants (FFI boundary)
-        run: bun scripts/run-mutation-debug.mjs ffi
       - name: Collect mutation diagnostics
         if: always()
-        run: bun scripts/run-mutation-debug.mjs --collect ffi
+        run: bun scripts/run-mutation-debug.mjs --collect diff-shard "$MUTATION_SHARD_INDEX"
       - name: Upload mutation report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
-          name: mutants-out-ffi
-          path: target/mutants-ffi
+          name: mutants-out-diff-shard-${{ matrix.index }}
+          path: target/mutants-diff-shard-${{ matrix.index }}
           if-no-files-found: error
       - name: Upload mutation diagnostics
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
-          name: mutation-diagnostics-ffi
-          path: target/mutation-diagnostics-ffi
+          name: mutation-diagnostics-diff-shard-${{ matrix.index }}
+          path: target/mutation-diagnostics-diff-shard-${{ matrix.index }}
           if-no-files-found: warn
 
   # --- Supply chain: deny + audit + vet + unused deps ----------------------
@@ -461,7 +398,7 @@ jobs:
   # warnings in a job that failed.
   no-warnings:
     name: no-warnings (log sweep)
-    needs: [changes, check, coverage, mutation-plan, mutation, mutation-ffi, supply-chain, api-stability, structural, docs, fuzz]
+    needs: [changes, check, coverage, mutation-plan, mutation, supply-chain, api-stability, structural, docs, fuzz]
     if: always()
     permissions:
       actions: read
@@ -471,7 +408,7 @@ jobs:
   # --- Aggregate gate: the single required check ---------------------------
   ci-gate:
     name: ci-gate
-    needs: [changes, check, coverage, mutation-plan, mutation, mutation-ffi, supply-chain, api-stability, structural, docs, fuzz, no-warnings]
+    needs: [changes, check, coverage, mutation-plan, mutation, supply-chain, api-stability, structural, docs, fuzz, no-warnings]
     if: always()
     runs-on: ubuntu-latest
     steps:

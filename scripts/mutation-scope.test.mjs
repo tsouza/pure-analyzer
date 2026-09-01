@@ -9,9 +9,12 @@ import {
   MUTATION_COMMAND_TIMEOUT_SECONDS,
   PLANNER_COMMAND_MAX_BUFFER_BYTES,
   PLANNER_COMMAND_TIMEOUT_MS,
+  PR_DIFF_MAX_SHARDS,
+  PR_DIFF_MUTANTS_PER_SHARD,
   MUTANTS_PER_DIFF_SHARD,
   classifyCheckedOutChanges,
   classifyChanges,
+  deferFullPlan,
   diffShardCount,
   eventFallbackPlan,
   isDiffEligibleRustPath,
@@ -23,7 +26,9 @@ import {
   mutationListCommand,
   mutationListRunOptions,
   parseNameStatus,
+  planFromEnvironment,
   planFromClassification,
+  prDiffShardCount,
   run,
   writeDiff,
 } from "./mutation-scope.mjs";
@@ -333,6 +338,128 @@ test("keeps non-PR events on the full mutation floor", () => {
   expect(eventFallbackPlan("pull_request", "false")).toBeUndefined();
 });
 
+test("bounds deferred direct-PR mutation plans and preserves a valid sentinel", () => {
+  const full = eventFallbackPlan("merge_group", "false");
+  const deferred = deferFullPlan(full, true);
+  expect(deferred).toMatchObject({
+    reason: "deferred-non-pull-request-event",
+    scope: "skip",
+  });
+  expect(deferred.matrix).toEqual(mutationMatrix("skip", 1));
+
+  expect(prDiffShardCount(0)).toBe(0);
+  expect(prDiffShardCount(PR_DIFF_MUTANTS_PER_SHARD)).toBe(1);
+  expect(prDiffShardCount(PR_DIFF_MUTANTS_PER_SHARD + 1)).toBe(2);
+  expect(prDiffShardCount(PR_DIFF_MUTANTS_PER_SHARD * PR_DIFF_MAX_SHARDS)).toBe(
+    PR_DIFF_MAX_SHARDS,
+  );
+  expect(prDiffShardCount(PR_DIFF_MUTANTS_PER_SHARD * PR_DIFF_MAX_SHARDS + 1)).toBe(0);
+
+  const bounded = deferFullPlan(
+    planFromClassification(
+      { reason: "production-rust-only", scope: "diff" },
+      { diffSha256, headSha, mergeBase, mutantCount: PR_DIFF_MUTANTS_PER_SHARD + 1 },
+    ),
+    true,
+  );
+  expect(bounded.matrix).toEqual(mutationMatrix("diff", 2));
+
+  const oversized = deferFullPlan(
+    planFromClassification(
+      { reason: "production-rust-only", scope: "diff" },
+      {
+        diffSha256,
+        headSha,
+        mergeBase,
+        mutantCount: PR_DIFF_MUTANTS_PER_SHARD * PR_DIFF_MAX_SHARDS + 1,
+      },
+    ),
+    true,
+  );
+  expect(oversized).toMatchObject({
+    reason: "deferred-pr-diff-budget-exceeded",
+    scope: "skip",
+  });
+  expect(oversized.matrix).toEqual(mutationMatrix("skip", 1));
+  const zero = planFromClassification(
+    { reason: "production-rust-only", scope: "diff" },
+    { diffSha256, headSha, mergeBase, mutantCount: 0 },
+  );
+  expect(deferFullPlan(zero, true)).toMatchObject({
+    reason: "deferred-zero-diff-mutant-list",
+    scope: "skip",
+  });
+  const invalid = planFromClassification(
+    { reason: "production-rust-only", scope: "diff" },
+    { diffSha256, headSha, mergeBase, mutantCount: Number.NaN },
+  );
+  expect(() => deferFullPlan(invalid, true)).toThrow("not safely deferrable");
+  expect(() =>
+    deferFullPlan({ ...full, reason: "inline-test-inspection-failed" }, true),
+  ).toThrow("not safely deferrable");
+  expect(deferFullPlan(full)).toBe(full);
+});
+
+test("deferred CI planning emits sentinels but surfaces planner failures", async () => {
+  const environment = {
+    GITHUB_EVENT_NAME: "pull_request",
+    MUTATION_BASE_SHA: mergeBase,
+    MUTATION_DEFER_FULL: "true",
+    MUTATION_HEAD_SHA: headSha,
+    MUTATION_PR_DRAFT: "false",
+    RUNNER_TEMP: "/tmp",
+  };
+  const dependencies = {
+    checkedOutHead: async () => headSha,
+    changedPaths: async () => [changed("Cargo.toml")],
+    mergeBase: async () => mergeBase,
+    repoRoot: async () => "/workspace",
+  };
+
+  await expect(
+    planFromEnvironment(environment, {
+      ...dependencies,
+      classifyCheckedOutChanges: async () => ({
+        reason: "non-production-or-configuration-change",
+        scope: "full",
+      }),
+    }),
+  ).resolves.toMatchObject({
+    reason: "deferred-non-production-or-configuration-change",
+    scope: "skip",
+  });
+
+  await expect(
+    planFromEnvironment(environment, {
+      ...dependencies,
+      classifyCheckedOutChanges: async () => ({
+        reason: "production-rust-only",
+        scope: "diff",
+      }),
+      listedMutantCount: async () => PR_DIFF_MUTANTS_PER_SHARD * PR_DIFF_MAX_SHARDS + 1,
+      writeDiff: async () => diffSha256,
+    }),
+  ).resolves.toMatchObject({ reason: "deferred-pr-diff-budget-exceeded", scope: "skip" });
+
+  await expect(
+    planFromEnvironment(environment, {
+      repoRoot: async () => {
+        throw new Error("planner unavailable");
+      },
+    }),
+  ).rejects.toThrow("planner unavailable");
+
+  await expect(
+    planFromEnvironment({
+      GITHUB_EVENT_NAME: "merge_group",
+      MUTATION_DEFER_FULL: "true",
+    }),
+  ).resolves.toMatchObject({
+    reason: "deferred-non-pull-request-event",
+    scope: "skip",
+  });
+});
+
 test("never emits a changed path as an Actions output reason", () => {
   expect(
     classifyChanges([changed("crates/pure-analyzer-model/tests/new\noutput=value.rs")]),
@@ -438,7 +565,14 @@ test("writes the diff atomically and discards a capped stream", async () => {
 
 test("requires event-pinned head metadata and a nonempty incremental list", () => {
   const classification = { reason: "production-rust-only", scope: "diff" };
-  expect(planFromClassification(classification, { mutantCount: 0 }).scope).toBe("full");
+  expect(planFromClassification(classification, { mutantCount: 0 })).toMatchObject({
+    reason: "zero-diff-mutant-list",
+    scope: "full",
+  });
+  expect(planFromClassification(classification, { mutantCount: Number.NaN })).toMatchObject({
+    reason: "invalid-diff-mutant-list",
+    scope: "full",
+  });
   expect(
     planFromClassification(classification, {
       diffSha256,
