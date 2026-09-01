@@ -1791,6 +1791,10 @@ const ALLOWED_INTERNAL_DEPS: &[(&str, &[&str])] = &[
             "pure-analyzer-render",
         ],
     ),
+    (
+        "pure-analyzer-lsp",
+        &["libpure", "pure-analyzer-diagnostics"],
+    ),
 ];
 
 /// The internal crates `name` may depend on, or `None` if `name` is not part
@@ -3093,6 +3097,10 @@ missing_docs = \"warn\"
     fn workspace_member_classifier_covers_both_products_and_orchestration() {
         assert_eq!(
             workspace_member_class("pure-analyzer-parser"),
+            Some(WorkspaceMemberClass::Analyzer)
+        );
+        assert_eq!(
+            workspace_member_class("pure-analyzer-lsp"),
             Some(WorkspaceMemberClass::Analyzer)
         );
         assert_eq!(

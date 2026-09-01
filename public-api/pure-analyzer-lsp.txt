@@ -1,0 +1,262 @@
+pub mod pure_analyzer_lsp
+pub enum pure_analyzer_lsp::RequestId
+pub pure_analyzer_lsp::RequestId::Number(i64)
+pub pure_analyzer_lsp::RequestId::String(alloc::string::String)
+impl core::clone::Clone for pure_analyzer_lsp::RequestId
+pub fn pure_analyzer_lsp::RequestId::clone(&self) -> pure_analyzer_lsp::RequestId
+impl core::cmp::Eq for pure_analyzer_lsp::RequestId
+impl core::cmp::Ord for pure_analyzer_lsp::RequestId
+pub fn pure_analyzer_lsp::RequestId::cmp(&self, &pure_analyzer_lsp::RequestId) -> core::cmp::Ordering
+impl core::cmp::PartialEq for pure_analyzer_lsp::RequestId
+pub fn pure_analyzer_lsp::RequestId::eq(&self, &pure_analyzer_lsp::RequestId) -> bool
+impl core::cmp::PartialOrd for pure_analyzer_lsp::RequestId
+pub fn pure_analyzer_lsp::RequestId::partial_cmp(&self, &pure_analyzer_lsp::RequestId) -> core::option::Option<core::cmp::Ordering>
+impl core::fmt::Debug for pure_analyzer_lsp::RequestId
+pub fn pure_analyzer_lsp::RequestId::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_lsp::RequestId
+impl core::marker::Freeze for pure_analyzer_lsp::RequestId
+impl core::marker::Send for pure_analyzer_lsp::RequestId
+impl core::marker::Sync for pure_analyzer_lsp::RequestId
+impl core::marker::Unpin for pure_analyzer_lsp::RequestId
+impl core::marker::UnsafeUnpin for pure_analyzer_lsp::RequestId
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_lsp::RequestId
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_lsp::RequestId
+impl<T, U> core::convert::Into<U> for pure_analyzer_lsp::RequestId where U: core::convert::From<T>
+pub fn pure_analyzer_lsp::RequestId::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_lsp::RequestId where U: core::convert::Into<T>
+pub type pure_analyzer_lsp::RequestId::Error = never
+pub fn pure_analyzer_lsp::RequestId::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_lsp::RequestId where U: core::convert::TryFrom<T>
+pub type pure_analyzer_lsp::RequestId::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_lsp::RequestId::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_lsp::RequestId where T: core::clone::Clone
+pub type pure_analyzer_lsp::RequestId::Owned = T
+pub fn pure_analyzer_lsp::RequestId::clone_into(&self, &mut T)
+pub fn pure_analyzer_lsp::RequestId::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_lsp::RequestId where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_lsp::RequestId::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_lsp::RequestId where T: ?core::marker::Sized
+pub fn pure_analyzer_lsp::RequestId::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_lsp::RequestId where T: ?core::marker::Sized
+pub fn pure_analyzer_lsp::RequestId::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_lsp::RequestId where T: core::clone::Clone
+pub unsafe fn pure_analyzer_lsp::RequestId::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_lsp::RequestId
+pub fn pure_analyzer_lsp::RequestId::from(T) -> T
+pub enum pure_analyzer_lsp::ServerExit
+pub pure_analyzer_lsp::ServerExit::Clean
+pub pure_analyzer_lsp::ServerExit::Unclean
+impl core::clone::Clone for pure_analyzer_lsp::ServerExit
+pub fn pure_analyzer_lsp::ServerExit::clone(&self) -> pure_analyzer_lsp::ServerExit
+impl core::cmp::Eq for pure_analyzer_lsp::ServerExit
+impl core::cmp::PartialEq for pure_analyzer_lsp::ServerExit
+pub fn pure_analyzer_lsp::ServerExit::eq(&self, &pure_analyzer_lsp::ServerExit) -> bool
+impl core::fmt::Debug for pure_analyzer_lsp::ServerExit
+pub fn pure_analyzer_lsp::ServerExit::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for pure_analyzer_lsp::ServerExit
+impl core::marker::StructuralPartialEq for pure_analyzer_lsp::ServerExit
+impl core::marker::Freeze for pure_analyzer_lsp::ServerExit
+impl core::marker::Send for pure_analyzer_lsp::ServerExit
+impl core::marker::Sync for pure_analyzer_lsp::ServerExit
+impl core::marker::Unpin for pure_analyzer_lsp::ServerExit
+impl core::marker::UnsafeUnpin for pure_analyzer_lsp::ServerExit
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_lsp::ServerExit
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_lsp::ServerExit
+impl<T, U> core::convert::Into<U> for pure_analyzer_lsp::ServerExit where U: core::convert::From<T>
+pub fn pure_analyzer_lsp::ServerExit::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_lsp::ServerExit where U: core::convert::Into<T>
+pub type pure_analyzer_lsp::ServerExit::Error = never
+pub fn pure_analyzer_lsp::ServerExit::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_lsp::ServerExit where U: core::convert::TryFrom<T>
+pub type pure_analyzer_lsp::ServerExit::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_lsp::ServerExit::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_lsp::ServerExit where T: core::clone::Clone
+pub type pure_analyzer_lsp::ServerExit::Owned = T
+pub fn pure_analyzer_lsp::ServerExit::clone_into(&self, &mut T)
+pub fn pure_analyzer_lsp::ServerExit::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_lsp::ServerExit where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_lsp::ServerExit::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_lsp::ServerExit where T: ?core::marker::Sized
+pub fn pure_analyzer_lsp::ServerExit::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_lsp::ServerExit where T: ?core::marker::Sized
+pub fn pure_analyzer_lsp::ServerExit::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_lsp::ServerExit where T: core::clone::Clone
+pub unsafe fn pure_analyzer_lsp::ServerExit::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_lsp::ServerExit
+pub fn pure_analyzer_lsp::ServerExit::from(T) -> T
+pub struct pure_analyzer_lsp::CancellationRegistry
+impl pure_analyzer_lsp::CancellationRegistry
+pub fn pure_analyzer_lsp::CancellationRegistry::cancel(&mut self, pure_analyzer_lsp::RequestId)
+pub fn pure_analyzer_lsp::CancellationRegistry::is_cancelled(&self, &pure_analyzer_lsp::RequestId) -> bool
+pub fn pure_analyzer_lsp::CancellationRegistry::is_empty(&self) -> bool
+pub fn pure_analyzer_lsp::CancellationRegistry::len(&self) -> usize
+impl core::default::Default for pure_analyzer_lsp::CancellationRegistry
+pub fn pure_analyzer_lsp::CancellationRegistry::default() -> pure_analyzer_lsp::CancellationRegistry
+impl core::fmt::Debug for pure_analyzer_lsp::CancellationRegistry
+pub fn pure_analyzer_lsp::CancellationRegistry::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for pure_analyzer_lsp::CancellationRegistry
+impl core::marker::Send for pure_analyzer_lsp::CancellationRegistry
+impl core::marker::Sync for pure_analyzer_lsp::CancellationRegistry
+impl core::marker::Unpin for pure_analyzer_lsp::CancellationRegistry
+impl core::marker::UnsafeUnpin for pure_analyzer_lsp::CancellationRegistry
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_lsp::CancellationRegistry
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_lsp::CancellationRegistry
+impl<T, U> core::convert::Into<U> for pure_analyzer_lsp::CancellationRegistry where U: core::convert::From<T>
+pub fn pure_analyzer_lsp::CancellationRegistry::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_lsp::CancellationRegistry where U: core::convert::Into<T>
+pub type pure_analyzer_lsp::CancellationRegistry::Error = never
+pub fn pure_analyzer_lsp::CancellationRegistry::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_lsp::CancellationRegistry where U: core::convert::TryFrom<T>
+pub type pure_analyzer_lsp::CancellationRegistry::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_lsp::CancellationRegistry::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> core::any::Any for pure_analyzer_lsp::CancellationRegistry where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_lsp::CancellationRegistry::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_lsp::CancellationRegistry where T: ?core::marker::Sized
+pub fn pure_analyzer_lsp::CancellationRegistry::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_lsp::CancellationRegistry where T: ?core::marker::Sized
+pub fn pure_analyzer_lsp::CancellationRegistry::borrow_mut(&mut self) -> &mut T
+impl<T> core::convert::From<T> for pure_analyzer_lsp::CancellationRegistry
+pub fn pure_analyzer_lsp::CancellationRegistry::from(T) -> T
+pub struct pure_analyzer_lsp::DocumentSnapshot
+impl pure_analyzer_lsp::DocumentSnapshot
+pub fn pure_analyzer_lsp::DocumentSnapshot::new(alloc::string::String, alloc::string::String, core::option::Option<i64>) -> Self
+pub fn pure_analyzer_lsp::DocumentSnapshot::text(&self) -> &str
+pub fn pure_analyzer_lsp::DocumentSnapshot::uri(&self) -> &str
+pub const fn pure_analyzer_lsp::DocumentSnapshot::version(&self) -> core::option::Option<i64>
+impl core::clone::Clone for pure_analyzer_lsp::DocumentSnapshot
+pub fn pure_analyzer_lsp::DocumentSnapshot::clone(&self) -> pure_analyzer_lsp::DocumentSnapshot
+impl core::cmp::Eq for pure_analyzer_lsp::DocumentSnapshot
+impl core::cmp::PartialEq for pure_analyzer_lsp::DocumentSnapshot
+pub fn pure_analyzer_lsp::DocumentSnapshot::eq(&self, &pure_analyzer_lsp::DocumentSnapshot) -> bool
+impl core::fmt::Debug for pure_analyzer_lsp::DocumentSnapshot
+pub fn pure_analyzer_lsp::DocumentSnapshot::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_lsp::DocumentSnapshot
+impl core::marker::Freeze for pure_analyzer_lsp::DocumentSnapshot
+impl core::marker::Send for pure_analyzer_lsp::DocumentSnapshot
+impl core::marker::Sync for pure_analyzer_lsp::DocumentSnapshot
+impl core::marker::Unpin for pure_analyzer_lsp::DocumentSnapshot
+impl core::marker::UnsafeUnpin for pure_analyzer_lsp::DocumentSnapshot
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_lsp::DocumentSnapshot
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_lsp::DocumentSnapshot
+impl<T, U> core::convert::Into<U> for pure_analyzer_lsp::DocumentSnapshot where U: core::convert::From<T>
+pub fn pure_analyzer_lsp::DocumentSnapshot::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_lsp::DocumentSnapshot where U: core::convert::Into<T>
+pub type pure_analyzer_lsp::DocumentSnapshot::Error = never
+pub fn pure_analyzer_lsp::DocumentSnapshot::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_lsp::DocumentSnapshot where U: core::convert::TryFrom<T>
+pub type pure_analyzer_lsp::DocumentSnapshot::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_lsp::DocumentSnapshot::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_lsp::DocumentSnapshot where T: core::clone::Clone
+pub type pure_analyzer_lsp::DocumentSnapshot::Owned = T
+pub fn pure_analyzer_lsp::DocumentSnapshot::clone_into(&self, &mut T)
+pub fn pure_analyzer_lsp::DocumentSnapshot::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_lsp::DocumentSnapshot where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_lsp::DocumentSnapshot::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_lsp::DocumentSnapshot where T: ?core::marker::Sized
+pub fn pure_analyzer_lsp::DocumentSnapshot::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_lsp::DocumentSnapshot where T: ?core::marker::Sized
+pub fn pure_analyzer_lsp::DocumentSnapshot::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_lsp::DocumentSnapshot where T: core::clone::Clone
+pub unsafe fn pure_analyzer_lsp::DocumentSnapshot::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_lsp::DocumentSnapshot
+pub fn pure_analyzer_lsp::DocumentSnapshot::from(T) -> T
+pub struct pure_analyzer_lsp::DocumentStore
+impl pure_analyzer_lsp::DocumentStore
+pub fn pure_analyzer_lsp::DocumentStore::get(&self, &str) -> core::option::Option<&pure_analyzer_lsp::DocumentSnapshot>
+pub fn pure_analyzer_lsp::DocumentStore::insert(&mut self, pure_analyzer_lsp::DocumentSnapshot)
+pub fn pure_analyzer_lsp::DocumentStore::is_empty(&self) -> bool
+pub fn pure_analyzer_lsp::DocumentStore::len(&self) -> usize
+pub fn pure_analyzer_lsp::DocumentStore::remove(&mut self, &str) -> core::option::Option<pure_analyzer_lsp::DocumentSnapshot>
+impl core::default::Default for pure_analyzer_lsp::DocumentStore
+pub fn pure_analyzer_lsp::DocumentStore::default() -> pure_analyzer_lsp::DocumentStore
+impl core::fmt::Debug for pure_analyzer_lsp::DocumentStore
+pub fn pure_analyzer_lsp::DocumentStore::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for pure_analyzer_lsp::DocumentStore
+impl core::marker::Send for pure_analyzer_lsp::DocumentStore
+impl core::marker::Sync for pure_analyzer_lsp::DocumentStore
+impl core::marker::Unpin for pure_analyzer_lsp::DocumentStore
+impl core::marker::UnsafeUnpin for pure_analyzer_lsp::DocumentStore
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_lsp::DocumentStore
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_lsp::DocumentStore
+impl<T, U> core::convert::Into<U> for pure_analyzer_lsp::DocumentStore where U: core::convert::From<T>
+pub fn pure_analyzer_lsp::DocumentStore::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_lsp::DocumentStore where U: core::convert::Into<T>
+pub type pure_analyzer_lsp::DocumentStore::Error = never
+pub fn pure_analyzer_lsp::DocumentStore::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_lsp::DocumentStore where U: core::convert::TryFrom<T>
+pub type pure_analyzer_lsp::DocumentStore::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_lsp::DocumentStore::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> core::any::Any for pure_analyzer_lsp::DocumentStore where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_lsp::DocumentStore::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_lsp::DocumentStore where T: ?core::marker::Sized
+pub fn pure_analyzer_lsp::DocumentStore::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_lsp::DocumentStore where T: ?core::marker::Sized
+pub fn pure_analyzer_lsp::DocumentStore::borrow_mut(&mut self) -> &mut T
+impl<T> core::convert::From<T> for pure_analyzer_lsp::DocumentStore
+pub fn pure_analyzer_lsp::DocumentStore::from(T) -> T
+pub struct pure_analyzer_lsp::Server
+impl pure_analyzer_lsp::Server
+pub const fn pure_analyzer_lsp::Server::cancellation(&self) -> &pure_analyzer_lsp::CancellationRegistry
+pub const fn pure_analyzer_lsp::Server::configuration(&self) -> &pure_analyzer_lsp::WorkspaceConfiguration
+pub const fn pure_analyzer_lsp::Server::documents(&self) -> &pure_analyzer_lsp::DocumentStore
+pub fn pure_analyzer_lsp::Server::new() -> Self
+pub fn pure_analyzer_lsp::Server::serve<R: alloc::io::buf_read::BufRead, W: core::io::write::Write>(&mut self, &mut R, &mut W) -> core::io::error::Result<pure_analyzer_lsp::ServerExit>
+impl core::default::Default for pure_analyzer_lsp::Server
+pub fn pure_analyzer_lsp::Server::default() -> Self
+impl core::fmt::Debug for pure_analyzer_lsp::Server
+pub fn pure_analyzer_lsp::Server::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for pure_analyzer_lsp::Server
+impl core::marker::Send for pure_analyzer_lsp::Server
+impl core::marker::Sync for pure_analyzer_lsp::Server
+impl core::marker::Unpin for pure_analyzer_lsp::Server
+impl core::marker::UnsafeUnpin for pure_analyzer_lsp::Server
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_lsp::Server
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_lsp::Server
+impl<T, U> core::convert::Into<U> for pure_analyzer_lsp::Server where U: core::convert::From<T>
+pub fn pure_analyzer_lsp::Server::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_lsp::Server where U: core::convert::Into<T>
+pub type pure_analyzer_lsp::Server::Error = never
+pub fn pure_analyzer_lsp::Server::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_lsp::Server where U: core::convert::TryFrom<T>
+pub type pure_analyzer_lsp::Server::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_lsp::Server::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> core::any::Any for pure_analyzer_lsp::Server where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_lsp::Server::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_lsp::Server where T: ?core::marker::Sized
+pub fn pure_analyzer_lsp::Server::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_lsp::Server where T: ?core::marker::Sized
+pub fn pure_analyzer_lsp::Server::borrow_mut(&mut self) -> &mut T
+impl<T> core::convert::From<T> for pure_analyzer_lsp::Server
+pub fn pure_analyzer_lsp::Server::from(T) -> T
+pub struct pure_analyzer_lsp::WorkspaceConfiguration
+impl pure_analyzer_lsp::WorkspaceConfiguration
+pub fn pure_analyzer_lsp::WorkspaceConfiguration::replace(&mut self, serde_json::value::Value)
+pub const fn pure_analyzer_lsp::WorkspaceConfiguration::settings(&self) -> core::option::Option<&serde_json::value::Value>
+impl core::default::Default for pure_analyzer_lsp::WorkspaceConfiguration
+pub fn pure_analyzer_lsp::WorkspaceConfiguration::default() -> pure_analyzer_lsp::WorkspaceConfiguration
+impl core::fmt::Debug for pure_analyzer_lsp::WorkspaceConfiguration
+pub fn pure_analyzer_lsp::WorkspaceConfiguration::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for pure_analyzer_lsp::WorkspaceConfiguration
+impl core::marker::Send for pure_analyzer_lsp::WorkspaceConfiguration
+impl core::marker::Sync for pure_analyzer_lsp::WorkspaceConfiguration
+impl core::marker::Unpin for pure_analyzer_lsp::WorkspaceConfiguration
+impl core::marker::UnsafeUnpin for pure_analyzer_lsp::WorkspaceConfiguration
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_lsp::WorkspaceConfiguration
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_lsp::WorkspaceConfiguration
+impl<T, U> core::convert::Into<U> for pure_analyzer_lsp::WorkspaceConfiguration where U: core::convert::From<T>
+pub fn pure_analyzer_lsp::WorkspaceConfiguration::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_lsp::WorkspaceConfiguration where U: core::convert::Into<T>
+pub type pure_analyzer_lsp::WorkspaceConfiguration::Error = never
+pub fn pure_analyzer_lsp::WorkspaceConfiguration::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_lsp::WorkspaceConfiguration where U: core::convert::TryFrom<T>
+pub type pure_analyzer_lsp::WorkspaceConfiguration::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_lsp::WorkspaceConfiguration::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> core::any::Any for pure_analyzer_lsp::WorkspaceConfiguration where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_lsp::WorkspaceConfiguration::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_lsp::WorkspaceConfiguration where T: ?core::marker::Sized
+pub fn pure_analyzer_lsp::WorkspaceConfiguration::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_lsp::WorkspaceConfiguration where T: ?core::marker::Sized
+pub fn pure_analyzer_lsp::WorkspaceConfiguration::borrow_mut(&mut self) -> &mut T
+impl<T> core::convert::From<T> for pure_analyzer_lsp::WorkspaceConfiguration
+pub fn pure_analyzer_lsp::WorkspaceConfiguration::from(T) -> T
+pub fn pure_analyzer_lsp::serve_stdio() -> core::io::error::Result<pure_analyzer_lsp::ServerExit>
