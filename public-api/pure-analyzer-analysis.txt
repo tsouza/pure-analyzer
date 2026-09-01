@@ -167,6 +167,48 @@ impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::ModelAvailability
 pub unsafe fn pure_analyzer_analysis::ModelAvailability::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for pure_analyzer_analysis::ModelAvailability
 pub fn pure_analyzer_analysis::ModelAvailability::from(T) -> T
+pub enum pure_analyzer_analysis::ModelOriginKind
+pub pure_analyzer_analysis::ModelOriginKind::Class
+pub pure_analyzer_analysis::ModelOriginKind::Member
+pub pure_analyzer_analysis::ModelOriginKind::Unspecified
+impl core::clone::Clone for pure_analyzer_analysis::ModelOriginKind
+pub fn pure_analyzer_analysis::ModelOriginKind::clone(&self) -> pure_analyzer_analysis::ModelOriginKind
+impl core::cmp::Eq for pure_analyzer_analysis::ModelOriginKind
+impl core::cmp::PartialEq for pure_analyzer_analysis::ModelOriginKind
+pub fn pure_analyzer_analysis::ModelOriginKind::eq(&self, &pure_analyzer_analysis::ModelOriginKind) -> bool
+impl core::fmt::Debug for pure_analyzer_analysis::ModelOriginKind
+pub fn pure_analyzer_analysis::ModelOriginKind::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for pure_analyzer_analysis::ModelOriginKind
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::ModelOriginKind
+impl core::marker::Freeze for pure_analyzer_analysis::ModelOriginKind
+impl core::marker::Send for pure_analyzer_analysis::ModelOriginKind
+impl core::marker::Sync for pure_analyzer_analysis::ModelOriginKind
+impl core::marker::Unpin for pure_analyzer_analysis::ModelOriginKind
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::ModelOriginKind
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::ModelOriginKind
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::ModelOriginKind
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::ModelOriginKind where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::ModelOriginKind::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::ModelOriginKind where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::ModelOriginKind::Error = never
+pub fn pure_analyzer_analysis::ModelOriginKind::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::ModelOriginKind where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::ModelOriginKind::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::ModelOriginKind::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::ModelOriginKind where T: core::clone::Clone
+pub type pure_analyzer_analysis::ModelOriginKind::Owned = T
+pub fn pure_analyzer_analysis::ModelOriginKind::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::ModelOriginKind::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::ModelOriginKind where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::ModelOriginKind::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::ModelOriginKind where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::ModelOriginKind::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::ModelOriginKind where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::ModelOriginKind::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::ModelOriginKind where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::ModelOriginKind::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::ModelOriginKind
+pub fn pure_analyzer_analysis::ModelOriginKind::from(T) -> T
 pub enum pure_analyzer_analysis::Nullability
 pub pure_analyzer_analysis::Nullability::NonNullable
 pub pure_analyzer_analysis::Nullability::Nullable
@@ -216,6 +258,7 @@ pub pure_analyzer_analysis::RelationExpressionError::DistinctSchemaMismatch
 pub pure_analyzer_analysis::RelationExpressionError::FilterSchemaMismatch
 pub pure_analyzer_analysis::RelationExpressionError::InvalidLiteralType
 pub pure_analyzer_analysis::RelationExpressionError::JoinSchemaMismatch
+pub pure_analyzer_analysis::RelationExpressionError::NavigationMetadataMismatch
 pub pure_analyzer_analysis::RelationExpressionError::NonBooleanPredicate
 pub pure_analyzer_analysis::RelationExpressionError::ProjectionSchemaMismatch
 pub pure_analyzer_analysis::RelationExpressionError::UnknownColumnReference(pure_analyzer_analysis::ColumnId)
@@ -490,6 +533,9 @@ pub pure_analyzer_analysis::ScalarOperator::Equal
 pub pure_analyzer_analysis::ScalarOperator::Equal::left: alloc::boxed::Box<pure_analyzer_analysis::ScalarExpression>
 pub pure_analyzer_analysis::ScalarOperator::Equal::right: alloc::boxed::Box<pure_analyzer_analysis::ScalarExpression>
 pub pure_analyzer_analysis::ScalarOperator::Literal(pure_analyzer_analysis::ScalarLiteral)
+pub pure_analyzer_analysis::ScalarOperator::Navigation
+pub pure_analyzer_analysis::ScalarOperator::Navigation::input: alloc::boxed::Box<pure_analyzer_analysis::ScalarExpression>
+pub pure_analyzer_analysis::ScalarOperator::Navigation::navigation: alloc::boxed::Box<pure_analyzer_analysis::ResolvedNavigation>
 pub pure_analyzer_analysis::ScalarOperator::Not
 pub pure_analyzer_analysis::ScalarOperator::Not::input: alloc::boxed::Box<pure_analyzer_analysis::ScalarExpression>
 pub pure_analyzer_analysis::ScalarOperator::Or
@@ -1129,11 +1175,12 @@ impl<T> core::convert::From<T> for pure_analyzer_analysis::MilestoningArityLintP
 pub fn pure_analyzer_analysis::MilestoningArityLintPass::from(T) -> T
 pub struct pure_analyzer_analysis::ModelOrigin
 impl pure_analyzer_analysis::ModelOrigin
-pub const fn pure_analyzer_analysis::ModelOrigin::definition(self) -> pure_analyzer_resolve::DefinitionAnchor
-pub const fn pure_analyzer_analysis::ModelOrigin::from_class(&pure_analyzer_resolve::ResolvedClass) -> Self
-pub const fn pure_analyzer_analysis::ModelOrigin::from_member(&pure_analyzer_resolve::ResolvedMember) -> Self
+pub const fn pure_analyzer_analysis::ModelOrigin::definition(&self) -> pure_analyzer_resolve::DefinitionAnchor
+pub fn pure_analyzer_analysis::ModelOrigin::from_class(&pure_analyzer_resolve::ResolvedClass) -> Self
+pub fn pure_analyzer_analysis::ModelOrigin::from_member(&pure_analyzer_resolve::ResolvedMember) -> Self
+pub const fn pure_analyzer_analysis::ModelOrigin::kind(&self) -> pure_analyzer_analysis::ModelOriginKind
 pub const fn pure_analyzer_analysis::ModelOrigin::new(pure_analyzer_model::types::Provenance, pure_analyzer_resolve::DefinitionAnchor) -> Self
-pub const fn pure_analyzer_analysis::ModelOrigin::provenance(self) -> pure_analyzer_model::types::Provenance
+pub const fn pure_analyzer_analysis::ModelOrigin::provenance(&self) -> pure_analyzer_model::types::Provenance
 impl core::clone::Clone for pure_analyzer_analysis::ModelOrigin
 pub fn pure_analyzer_analysis::ModelOrigin::clone(&self) -> pure_analyzer_analysis::ModelOrigin
 impl core::cmp::Eq for pure_analyzer_analysis::ModelOrigin
@@ -1141,7 +1188,6 @@ impl core::cmp::PartialEq for pure_analyzer_analysis::ModelOrigin
 pub fn pure_analyzer_analysis::ModelOrigin::eq(&self, &pure_analyzer_analysis::ModelOrigin) -> bool
 impl core::fmt::Debug for pure_analyzer_analysis::ModelOrigin
 pub fn pure_analyzer_analysis::ModelOrigin::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-impl core::marker::Copy for pure_analyzer_analysis::ModelOrigin
 impl core::marker::StructuralPartialEq for pure_analyzer_analysis::ModelOrigin
 impl core::marker::Freeze for pure_analyzer_analysis::ModelOrigin
 impl core::marker::Send for pure_analyzer_analysis::ModelOrigin
@@ -1468,6 +1514,47 @@ impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::RelationalQuery w
 pub unsafe fn pure_analyzer_analysis::RelationalQuery::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for pure_analyzer_analysis::RelationalQuery
 pub fn pure_analyzer_analysis::RelationalQuery::from(T) -> T
+pub struct pure_analyzer_analysis::ResolvedNavigation
+impl pure_analyzer_analysis::ResolvedNavigation
+pub fn pure_analyzer_analysis::ResolvedNavigation::from_chain(&pure_analyzer_resolve::local::NavigationChain) -> core::option::Option<Self>
+pub const fn pure_analyzer_analysis::ResolvedNavigation::member(&self) -> &pure_analyzer_resolve::ResolvedMember
+impl core::clone::Clone for pure_analyzer_analysis::ResolvedNavigation
+pub fn pure_analyzer_analysis::ResolvedNavigation::clone(&self) -> pure_analyzer_analysis::ResolvedNavigation
+impl core::cmp::Eq for pure_analyzer_analysis::ResolvedNavigation
+impl core::cmp::PartialEq for pure_analyzer_analysis::ResolvedNavigation
+pub fn pure_analyzer_analysis::ResolvedNavigation::eq(&self, &pure_analyzer_analysis::ResolvedNavigation) -> bool
+impl core::fmt::Debug for pure_analyzer_analysis::ResolvedNavigation
+pub fn pure_analyzer_analysis::ResolvedNavigation::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::ResolvedNavigation
+impl core::marker::Freeze for pure_analyzer_analysis::ResolvedNavigation
+impl core::marker::Send for pure_analyzer_analysis::ResolvedNavigation
+impl core::marker::Sync for pure_analyzer_analysis::ResolvedNavigation
+impl core::marker::Unpin for pure_analyzer_analysis::ResolvedNavigation
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::ResolvedNavigation
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::ResolvedNavigation
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::ResolvedNavigation
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::ResolvedNavigation where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::ResolvedNavigation::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::ResolvedNavigation where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::ResolvedNavigation::Error = never
+pub fn pure_analyzer_analysis::ResolvedNavigation::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::ResolvedNavigation where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::ResolvedNavigation::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::ResolvedNavigation::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::ResolvedNavigation where T: core::clone::Clone
+pub type pure_analyzer_analysis::ResolvedNavigation::Owned = T
+pub fn pure_analyzer_analysis::ResolvedNavigation::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::ResolvedNavigation::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::ResolvedNavigation where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::ResolvedNavigation::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::ResolvedNavigation where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::ResolvedNavigation::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::ResolvedNavigation where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::ResolvedNavigation::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::ResolvedNavigation where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::ResolvedNavigation::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::ResolvedNavigation
+pub fn pure_analyzer_analysis::ResolvedNavigation::from(T) -> T
 pub struct pure_analyzer_analysis::ScalarExpression
 impl pure_analyzer_analysis::ScalarExpression
 pub const fn pure_analyzer_analysis::ScalarExpression::multiplicity(&self) -> pure_analyzer_model::types::Multiplicity
@@ -1614,4 +1701,5 @@ pub fn pure_analyzer_analysis::ValidatePass::name(&self) -> &'static str
 pub fn pure_analyzer_analysis::analyze_m3_locals(&pure_analyzer_syntax::green::GreenNode, &pure_analyzer_model::types::ModelGraph) -> pure_analyzer_analysis::LocalNavigationAnalysis
 pub fn pure_analyzer_analysis::format_query(&str, pure_analyzer_diagnostics::file::FileId) -> core::result::Result<pure_analyzer_analysis::FormatResult, pure_analyzer_syntax::builder::BuildError>
 pub fn pure_analyzer_analysis::format_query_with_width(&str, pure_analyzer_diagnostics::file::FileId, usize) -> core::result::Result<pure_analyzer_analysis::FormatResult, pure_analyzer_syntax::builder::BuildError>
+pub fn pure_analyzer_analysis::lower_m3_query(pure_analyzer_analysis::AnalysisInput<'_, '_>) -> pure_analyzer_analysis::RelationalOutcome
 pub fn pure_analyzer_analysis::version() -> &'static str

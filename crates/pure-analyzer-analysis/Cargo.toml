@@ -25,4 +25,5 @@ thiserror.workspace = true
 pure-analyzer-diagnostics.workspace = true
 pure-analyzer-lexer.workspace = true
 pure-analyzer-parser.workspace = true
+proptest.workspace = true
 serde_json.workspace = true

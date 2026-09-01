@@ -944,6 +944,7 @@ impl pure_analyzer_resolve::ResolvedMember
 pub const fn pure_analyzer_resolve::ResolvedMember::definition(&self) -> pure_analyzer_resolve::DefinitionAnchor
 pub const fn pure_analyzer_resolve::ResolvedMember::kind(&self) -> &pure_analyzer_resolve::ResolvedMemberKind
 pub const fn pure_analyzer_resolve::ResolvedMember::multiplicity(&self) -> pure_analyzer_model::types::Multiplicity
+pub const fn pure_analyzer_resolve::ResolvedMember::name(&self) -> &pure_analyzer_model::types::Name
 pub const fn pure_analyzer_resolve::ResolvedMember::owner(&self) -> &pure_analyzer_resolve::ResolvedClass
 pub const fn pure_analyzer_resolve::ResolvedMember::provenance(&self) -> pure_analyzer_model::types::Provenance
 pub fn pure_analyzer_resolve::ResolvedMember::signature(&self) -> core::option::Option<&[pure_analyzer_model::types::TypeRef]>
