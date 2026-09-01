@@ -1,4 +1,131 @@
 pub mod pure_analyzer_analysis
+pub enum pure_analyzer_analysis::ColumnSelectorName
+pub pure_analyzer_analysis::ColumnSelectorName::Bare(pure_analyzer_model::types::Name)
+pub pure_analyzer_analysis::ColumnSelectorName::Quoted(pure_analyzer_model::types::Name)
+impl pure_analyzer_analysis::ColumnSelectorName
+pub const fn pure_analyzer_analysis::ColumnSelectorName::is_quoted(&self) -> bool
+pub const fn pure_analyzer_analysis::ColumnSelectorName::name(&self) -> &pure_analyzer_model::types::Name
+impl core::clone::Clone for pure_analyzer_analysis::ColumnSelectorName
+pub fn pure_analyzer_analysis::ColumnSelectorName::clone(&self) -> pure_analyzer_analysis::ColumnSelectorName
+impl core::cmp::Eq for pure_analyzer_analysis::ColumnSelectorName
+impl core::cmp::PartialEq for pure_analyzer_analysis::ColumnSelectorName
+pub fn pure_analyzer_analysis::ColumnSelectorName::eq(&self, &pure_analyzer_analysis::ColumnSelectorName) -> bool
+impl core::fmt::Debug for pure_analyzer_analysis::ColumnSelectorName
+pub fn pure_analyzer_analysis::ColumnSelectorName::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::ColumnSelectorName
+impl core::marker::Freeze for pure_analyzer_analysis::ColumnSelectorName
+impl core::marker::Send for pure_analyzer_analysis::ColumnSelectorName
+impl core::marker::Sync for pure_analyzer_analysis::ColumnSelectorName
+impl core::marker::Unpin for pure_analyzer_analysis::ColumnSelectorName
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::ColumnSelectorName
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::ColumnSelectorName
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::ColumnSelectorName
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::ColumnSelectorName where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::ColumnSelectorName::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::ColumnSelectorName where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::ColumnSelectorName::Error = never
+pub fn pure_analyzer_analysis::ColumnSelectorName::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::ColumnSelectorName where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::ColumnSelectorName::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::ColumnSelectorName::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::ColumnSelectorName where T: core::clone::Clone
+pub type pure_analyzer_analysis::ColumnSelectorName::Owned = T
+pub fn pure_analyzer_analysis::ColumnSelectorName::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::ColumnSelectorName::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::ColumnSelectorName where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::ColumnSelectorName::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::ColumnSelectorName where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::ColumnSelectorName::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::ColumnSelectorName where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::ColumnSelectorName::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::ColumnSelectorName where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::ColumnSelectorName::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::ColumnSelectorName
+pub fn pure_analyzer_analysis::ColumnSelectorName::from(T) -> T
+pub enum pure_analyzer_analysis::ColumnSelectorOpaqueReason
+pub pure_analyzer_analysis::ColumnSelectorOpaqueReason::DuplicateSchemaName(pure_analyzer_model::types::Name)
+pub pure_analyzer_analysis::ColumnSelectorOpaqueReason::DuplicateSelector(pure_analyzer_model::types::Name)
+pub pure_analyzer_analysis::ColumnSelectorOpaqueReason::Malformed
+pub pure_analyzer_analysis::ColumnSelectorOpaqueReason::Missing(pure_analyzer_model::types::Name)
+pub pure_analyzer_analysis::ColumnSelectorOpaqueReason::UnsupportedBody
+pub pure_analyzer_analysis::ColumnSelectorOpaqueReason::UnsupportedForm
+impl core::clone::Clone for pure_analyzer_analysis::ColumnSelectorOpaqueReason
+pub fn pure_analyzer_analysis::ColumnSelectorOpaqueReason::clone(&self) -> pure_analyzer_analysis::ColumnSelectorOpaqueReason
+impl core::cmp::Eq for pure_analyzer_analysis::ColumnSelectorOpaqueReason
+impl core::cmp::PartialEq for pure_analyzer_analysis::ColumnSelectorOpaqueReason
+pub fn pure_analyzer_analysis::ColumnSelectorOpaqueReason::eq(&self, &pure_analyzer_analysis::ColumnSelectorOpaqueReason) -> bool
+impl core::fmt::Debug for pure_analyzer_analysis::ColumnSelectorOpaqueReason
+pub fn pure_analyzer_analysis::ColumnSelectorOpaqueReason::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::ColumnSelectorOpaqueReason
+impl core::marker::Freeze for pure_analyzer_analysis::ColumnSelectorOpaqueReason
+impl core::marker::Send for pure_analyzer_analysis::ColumnSelectorOpaqueReason
+impl core::marker::Sync for pure_analyzer_analysis::ColumnSelectorOpaqueReason
+impl core::marker::Unpin for pure_analyzer_analysis::ColumnSelectorOpaqueReason
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::ColumnSelectorOpaqueReason
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::ColumnSelectorOpaqueReason
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::ColumnSelectorOpaqueReason
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::ColumnSelectorOpaqueReason where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::ColumnSelectorOpaqueReason::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::ColumnSelectorOpaqueReason where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::ColumnSelectorOpaqueReason::Error = never
+pub fn pure_analyzer_analysis::ColumnSelectorOpaqueReason::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::ColumnSelectorOpaqueReason where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::ColumnSelectorOpaqueReason::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::ColumnSelectorOpaqueReason::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::ColumnSelectorOpaqueReason where T: core::clone::Clone
+pub type pure_analyzer_analysis::ColumnSelectorOpaqueReason::Owned = T
+pub fn pure_analyzer_analysis::ColumnSelectorOpaqueReason::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::ColumnSelectorOpaqueReason::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::ColumnSelectorOpaqueReason where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::ColumnSelectorOpaqueReason::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::ColumnSelectorOpaqueReason where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::ColumnSelectorOpaqueReason::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::ColumnSelectorOpaqueReason where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::ColumnSelectorOpaqueReason::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::ColumnSelectorOpaqueReason where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::ColumnSelectorOpaqueReason::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::ColumnSelectorOpaqueReason
+pub fn pure_analyzer_analysis::ColumnSelectorOpaqueReason::from(T) -> T
+pub enum pure_analyzer_analysis::ColumnSelectorOutcome
+pub pure_analyzer_analysis::ColumnSelectorOutcome::Opaque(pure_analyzer_analysis::ColumnSelectorOpaque)
+pub pure_analyzer_analysis::ColumnSelectorOutcome::Resolved(pure_analyzer_analysis::ResolvedColumnSelectors)
+impl core::clone::Clone for pure_analyzer_analysis::ColumnSelectorOutcome
+pub fn pure_analyzer_analysis::ColumnSelectorOutcome::clone(&self) -> pure_analyzer_analysis::ColumnSelectorOutcome
+impl core::cmp::Eq for pure_analyzer_analysis::ColumnSelectorOutcome
+impl core::cmp::PartialEq for pure_analyzer_analysis::ColumnSelectorOutcome
+pub fn pure_analyzer_analysis::ColumnSelectorOutcome::eq(&self, &pure_analyzer_analysis::ColumnSelectorOutcome) -> bool
+impl core::fmt::Debug for pure_analyzer_analysis::ColumnSelectorOutcome
+pub fn pure_analyzer_analysis::ColumnSelectorOutcome::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::ColumnSelectorOutcome
+impl core::marker::Freeze for pure_analyzer_analysis::ColumnSelectorOutcome
+impl core::marker::Send for pure_analyzer_analysis::ColumnSelectorOutcome
+impl core::marker::Sync for pure_analyzer_analysis::ColumnSelectorOutcome
+impl core::marker::Unpin for pure_analyzer_analysis::ColumnSelectorOutcome
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::ColumnSelectorOutcome
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::ColumnSelectorOutcome
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::ColumnSelectorOutcome
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::ColumnSelectorOutcome where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::ColumnSelectorOutcome::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::ColumnSelectorOutcome where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::ColumnSelectorOutcome::Error = never
+pub fn pure_analyzer_analysis::ColumnSelectorOutcome::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::ColumnSelectorOutcome where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::ColumnSelectorOutcome::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::ColumnSelectorOutcome::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::ColumnSelectorOutcome where T: core::clone::Clone
+pub type pure_analyzer_analysis::ColumnSelectorOutcome::Owned = T
+pub fn pure_analyzer_analysis::ColumnSelectorOutcome::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::ColumnSelectorOutcome::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::ColumnSelectorOutcome where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::ColumnSelectorOutcome::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::ColumnSelectorOutcome where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::ColumnSelectorOutcome::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::ColumnSelectorOutcome where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::ColumnSelectorOutcome::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::ColumnSelectorOutcome where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::ColumnSelectorOutcome::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::ColumnSelectorOutcome
+pub fn pure_analyzer_analysis::ColumnSelectorOutcome::from(T) -> T
 pub enum pure_analyzer_analysis::JoinKind
 pub pure_analyzer_analysis::JoinKind::Inner
 impl core::clone::Clone for pure_analyzer_analysis::JoinKind
@@ -919,6 +1046,130 @@ impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::ColumnId where T:
 pub unsafe fn pure_analyzer_analysis::ColumnId::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for pure_analyzer_analysis::ColumnId
 pub fn pure_analyzer_analysis::ColumnId::from(T) -> T
+pub struct pure_analyzer_analysis::ColumnSelector
+impl pure_analyzer_analysis::ColumnSelector
+pub const fn pure_analyzer_analysis::ColumnSelector::name(&self) -> &pure_analyzer_analysis::ColumnSelectorName
+pub const fn pure_analyzer_analysis::ColumnSelector::name_source(&self) -> pure_analyzer_analysis::SourceSpan
+pub const fn pure_analyzer_analysis::ColumnSelector::source(&self) -> pure_analyzer_analysis::SourceSpan
+impl core::clone::Clone for pure_analyzer_analysis::ColumnSelector
+pub fn pure_analyzer_analysis::ColumnSelector::clone(&self) -> pure_analyzer_analysis::ColumnSelector
+impl core::cmp::Eq for pure_analyzer_analysis::ColumnSelector
+impl core::cmp::PartialEq for pure_analyzer_analysis::ColumnSelector
+pub fn pure_analyzer_analysis::ColumnSelector::eq(&self, &pure_analyzer_analysis::ColumnSelector) -> bool
+impl core::fmt::Debug for pure_analyzer_analysis::ColumnSelector
+pub fn pure_analyzer_analysis::ColumnSelector::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::ColumnSelector
+impl core::marker::Freeze for pure_analyzer_analysis::ColumnSelector
+impl core::marker::Send for pure_analyzer_analysis::ColumnSelector
+impl core::marker::Sync for pure_analyzer_analysis::ColumnSelector
+impl core::marker::Unpin for pure_analyzer_analysis::ColumnSelector
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::ColumnSelector
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::ColumnSelector
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::ColumnSelector
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::ColumnSelector where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::ColumnSelector::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::ColumnSelector where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::ColumnSelector::Error = never
+pub fn pure_analyzer_analysis::ColumnSelector::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::ColumnSelector where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::ColumnSelector::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::ColumnSelector::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::ColumnSelector where T: core::clone::Clone
+pub type pure_analyzer_analysis::ColumnSelector::Owned = T
+pub fn pure_analyzer_analysis::ColumnSelector::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::ColumnSelector::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::ColumnSelector where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::ColumnSelector::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::ColumnSelector where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::ColumnSelector::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::ColumnSelector where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::ColumnSelector::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::ColumnSelector where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::ColumnSelector::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::ColumnSelector
+pub fn pure_analyzer_analysis::ColumnSelector::from(T) -> T
+pub struct pure_analyzer_analysis::ColumnSelectorOpaque
+impl pure_analyzer_analysis::ColumnSelectorOpaque
+pub const fn pure_analyzer_analysis::ColumnSelectorOpaque::reason(&self) -> &pure_analyzer_analysis::ColumnSelectorOpaqueReason
+pub const fn pure_analyzer_analysis::ColumnSelectorOpaque::source(&self) -> pure_analyzer_analysis::SourceSpan
+impl core::clone::Clone for pure_analyzer_analysis::ColumnSelectorOpaque
+pub fn pure_analyzer_analysis::ColumnSelectorOpaque::clone(&self) -> pure_analyzer_analysis::ColumnSelectorOpaque
+impl core::cmp::Eq for pure_analyzer_analysis::ColumnSelectorOpaque
+impl core::cmp::PartialEq for pure_analyzer_analysis::ColumnSelectorOpaque
+pub fn pure_analyzer_analysis::ColumnSelectorOpaque::eq(&self, &pure_analyzer_analysis::ColumnSelectorOpaque) -> bool
+impl core::fmt::Debug for pure_analyzer_analysis::ColumnSelectorOpaque
+pub fn pure_analyzer_analysis::ColumnSelectorOpaque::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::ColumnSelectorOpaque
+impl core::marker::Freeze for pure_analyzer_analysis::ColumnSelectorOpaque
+impl core::marker::Send for pure_analyzer_analysis::ColumnSelectorOpaque
+impl core::marker::Sync for pure_analyzer_analysis::ColumnSelectorOpaque
+impl core::marker::Unpin for pure_analyzer_analysis::ColumnSelectorOpaque
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::ColumnSelectorOpaque
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::ColumnSelectorOpaque
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::ColumnSelectorOpaque
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::ColumnSelectorOpaque where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::ColumnSelectorOpaque::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::ColumnSelectorOpaque where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::ColumnSelectorOpaque::Error = never
+pub fn pure_analyzer_analysis::ColumnSelectorOpaque::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::ColumnSelectorOpaque where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::ColumnSelectorOpaque::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::ColumnSelectorOpaque::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::ColumnSelectorOpaque where T: core::clone::Clone
+pub type pure_analyzer_analysis::ColumnSelectorOpaque::Owned = T
+pub fn pure_analyzer_analysis::ColumnSelectorOpaque::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::ColumnSelectorOpaque::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::ColumnSelectorOpaque where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::ColumnSelectorOpaque::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::ColumnSelectorOpaque where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::ColumnSelectorOpaque::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::ColumnSelectorOpaque where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::ColumnSelectorOpaque::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::ColumnSelectorOpaque where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::ColumnSelectorOpaque::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::ColumnSelectorOpaque
+pub fn pure_analyzer_analysis::ColumnSelectorOpaque::from(T) -> T
+pub struct pure_analyzer_analysis::ColumnSelectors
+impl pure_analyzer_analysis::ColumnSelectors
+pub fn pure_analyzer_analysis::ColumnSelectors::selectors(&self) -> &[pure_analyzer_analysis::ColumnSelector]
+pub const fn pure_analyzer_analysis::ColumnSelectors::source(&self) -> pure_analyzer_analysis::SourceSpan
+impl core::clone::Clone for pure_analyzer_analysis::ColumnSelectors
+pub fn pure_analyzer_analysis::ColumnSelectors::clone(&self) -> pure_analyzer_analysis::ColumnSelectors
+impl core::cmp::Eq for pure_analyzer_analysis::ColumnSelectors
+impl core::cmp::PartialEq for pure_analyzer_analysis::ColumnSelectors
+pub fn pure_analyzer_analysis::ColumnSelectors::eq(&self, &pure_analyzer_analysis::ColumnSelectors) -> bool
+impl core::fmt::Debug for pure_analyzer_analysis::ColumnSelectors
+pub fn pure_analyzer_analysis::ColumnSelectors::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::ColumnSelectors
+impl core::marker::Freeze for pure_analyzer_analysis::ColumnSelectors
+impl core::marker::Send for pure_analyzer_analysis::ColumnSelectors
+impl core::marker::Sync for pure_analyzer_analysis::ColumnSelectors
+impl core::marker::Unpin for pure_analyzer_analysis::ColumnSelectors
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::ColumnSelectors
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::ColumnSelectors
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::ColumnSelectors
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::ColumnSelectors where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::ColumnSelectors::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::ColumnSelectors where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::ColumnSelectors::Error = never
+pub fn pure_analyzer_analysis::ColumnSelectors::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::ColumnSelectors where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::ColumnSelectors::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::ColumnSelectors::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::ColumnSelectors where T: core::clone::Clone
+pub type pure_analyzer_analysis::ColumnSelectors::Owned = T
+pub fn pure_analyzer_analysis::ColumnSelectors::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::ColumnSelectors::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::ColumnSelectors where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::ColumnSelectors::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::ColumnSelectors where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::ColumnSelectors::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::ColumnSelectors where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::ColumnSelectors::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::ColumnSelectors where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::ColumnSelectors::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::ColumnSelectors
+pub fn pure_analyzer_analysis::ColumnSelectors::from(T) -> T
 pub struct pure_analyzer_analysis::FindingPolicy
 impl pure_analyzer_analysis::FindingPolicy
 pub fn pure_analyzer_analysis::FindingPolicy::apply(&self, pure_analyzer_diagnostics::diagnostic::Diagnostic) -> core::option::Option<pure_analyzer_diagnostics::diagnostic::Diagnostic>
@@ -1514,6 +1765,88 @@ impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::RelationalQuery w
 pub unsafe fn pure_analyzer_analysis::RelationalQuery::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for pure_analyzer_analysis::RelationalQuery
 pub fn pure_analyzer_analysis::RelationalQuery::from(T) -> T
+pub struct pure_analyzer_analysis::ResolvedColumnSelector
+impl pure_analyzer_analysis::ResolvedColumnSelector
+pub const fn pure_analyzer_analysis::ResolvedColumnSelector::column(&self) -> pure_analyzer_analysis::ColumnId
+pub const fn pure_analyzer_analysis::ResolvedColumnSelector::selector(&self) -> &pure_analyzer_analysis::ColumnSelector
+impl core::clone::Clone for pure_analyzer_analysis::ResolvedColumnSelector
+pub fn pure_analyzer_analysis::ResolvedColumnSelector::clone(&self) -> pure_analyzer_analysis::ResolvedColumnSelector
+impl core::cmp::Eq for pure_analyzer_analysis::ResolvedColumnSelector
+impl core::cmp::PartialEq for pure_analyzer_analysis::ResolvedColumnSelector
+pub fn pure_analyzer_analysis::ResolvedColumnSelector::eq(&self, &pure_analyzer_analysis::ResolvedColumnSelector) -> bool
+impl core::fmt::Debug for pure_analyzer_analysis::ResolvedColumnSelector
+pub fn pure_analyzer_analysis::ResolvedColumnSelector::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::ResolvedColumnSelector
+impl core::marker::Freeze for pure_analyzer_analysis::ResolvedColumnSelector
+impl core::marker::Send for pure_analyzer_analysis::ResolvedColumnSelector
+impl core::marker::Sync for pure_analyzer_analysis::ResolvedColumnSelector
+impl core::marker::Unpin for pure_analyzer_analysis::ResolvedColumnSelector
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::ResolvedColumnSelector
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::ResolvedColumnSelector
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::ResolvedColumnSelector
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::ResolvedColumnSelector where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::ResolvedColumnSelector::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::ResolvedColumnSelector where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::ResolvedColumnSelector::Error = never
+pub fn pure_analyzer_analysis::ResolvedColumnSelector::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::ResolvedColumnSelector where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::ResolvedColumnSelector::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::ResolvedColumnSelector::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::ResolvedColumnSelector where T: core::clone::Clone
+pub type pure_analyzer_analysis::ResolvedColumnSelector::Owned = T
+pub fn pure_analyzer_analysis::ResolvedColumnSelector::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::ResolvedColumnSelector::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::ResolvedColumnSelector where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::ResolvedColumnSelector::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::ResolvedColumnSelector where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::ResolvedColumnSelector::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::ResolvedColumnSelector where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::ResolvedColumnSelector::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::ResolvedColumnSelector where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::ResolvedColumnSelector::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::ResolvedColumnSelector
+pub fn pure_analyzer_analysis::ResolvedColumnSelector::from(T) -> T
+pub struct pure_analyzer_analysis::ResolvedColumnSelectors
+impl pure_analyzer_analysis::ResolvedColumnSelectors
+pub fn pure_analyzer_analysis::ResolvedColumnSelectors::selectors(&self) -> &[pure_analyzer_analysis::ResolvedColumnSelector]
+pub const fn pure_analyzer_analysis::ResolvedColumnSelectors::source(&self) -> pure_analyzer_analysis::SourceSpan
+impl core::clone::Clone for pure_analyzer_analysis::ResolvedColumnSelectors
+pub fn pure_analyzer_analysis::ResolvedColumnSelectors::clone(&self) -> pure_analyzer_analysis::ResolvedColumnSelectors
+impl core::cmp::Eq for pure_analyzer_analysis::ResolvedColumnSelectors
+impl core::cmp::PartialEq for pure_analyzer_analysis::ResolvedColumnSelectors
+pub fn pure_analyzer_analysis::ResolvedColumnSelectors::eq(&self, &pure_analyzer_analysis::ResolvedColumnSelectors) -> bool
+impl core::fmt::Debug for pure_analyzer_analysis::ResolvedColumnSelectors
+pub fn pure_analyzer_analysis::ResolvedColumnSelectors::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::ResolvedColumnSelectors
+impl core::marker::Freeze for pure_analyzer_analysis::ResolvedColumnSelectors
+impl core::marker::Send for pure_analyzer_analysis::ResolvedColumnSelectors
+impl core::marker::Sync for pure_analyzer_analysis::ResolvedColumnSelectors
+impl core::marker::Unpin for pure_analyzer_analysis::ResolvedColumnSelectors
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::ResolvedColumnSelectors
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::ResolvedColumnSelectors
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::ResolvedColumnSelectors
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::ResolvedColumnSelectors where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::ResolvedColumnSelectors::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::ResolvedColumnSelectors where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::ResolvedColumnSelectors::Error = never
+pub fn pure_analyzer_analysis::ResolvedColumnSelectors::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::ResolvedColumnSelectors where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::ResolvedColumnSelectors::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::ResolvedColumnSelectors::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::ResolvedColumnSelectors where T: core::clone::Clone
+pub type pure_analyzer_analysis::ResolvedColumnSelectors::Owned = T
+pub fn pure_analyzer_analysis::ResolvedColumnSelectors::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::ResolvedColumnSelectors::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::ResolvedColumnSelectors where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::ResolvedColumnSelectors::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::ResolvedColumnSelectors where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::ResolvedColumnSelectors::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::ResolvedColumnSelectors where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::ResolvedColumnSelectors::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::ResolvedColumnSelectors where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::ResolvedColumnSelectors::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::ResolvedColumnSelectors
+pub fn pure_analyzer_analysis::ResolvedColumnSelectors::from(T) -> T
 pub struct pure_analyzer_analysis::ResolvedNavigation
 impl pure_analyzer_analysis::ResolvedNavigation
 pub fn pure_analyzer_analysis::ResolvedNavigation::from_chain(&pure_analyzer_resolve::local::NavigationChain) -> core::option::Option<Self>
@@ -1699,7 +2032,9 @@ impl pure_analyzer_analysis::AnalysisPass for pure_analyzer_analysis::ValidatePa
 pub fn pure_analyzer_analysis::ValidatePass::analyze(&self, pure_analyzer_analysis::AnalysisInput<'_, '_>) -> alloc::vec::Vec<pure_analyzer_diagnostics::diagnostic::Diagnostic>
 pub fn pure_analyzer_analysis::ValidatePass::name(&self) -> &'static str
 pub fn pure_analyzer_analysis::analyze_m3_locals(&pure_analyzer_syntax::green::GreenNode, &pure_analyzer_model::types::ModelGraph) -> pure_analyzer_analysis::LocalNavigationAnalysis
+pub fn pure_analyzer_analysis::extract_relation_column_selectors(pure_analyzer_diagnostics::file::FileId, &pure_analyzer_syntax::green::GreenNode) -> core::result::Result<pure_analyzer_analysis::ColumnSelectors, pure_analyzer_analysis::ColumnSelectorOpaque>
 pub fn pure_analyzer_analysis::format_query(&str, pure_analyzer_diagnostics::file::FileId) -> core::result::Result<pure_analyzer_analysis::FormatResult, pure_analyzer_syntax::builder::BuildError>
 pub fn pure_analyzer_analysis::format_query_with_width(&str, pure_analyzer_diagnostics::file::FileId, usize) -> core::result::Result<pure_analyzer_analysis::FormatResult, pure_analyzer_syntax::builder::BuildError>
 pub fn pure_analyzer_analysis::lower_m3_query(pure_analyzer_analysis::AnalysisInput<'_, '_>) -> pure_analyzer_analysis::RelationalOutcome
+pub fn pure_analyzer_analysis::resolve_relation_column_selectors(pure_analyzer_diagnostics::file::FileId, &pure_analyzer_syntax::green::GreenNode, &pure_analyzer_analysis::RelationSchema) -> pure_analyzer_analysis::ColumnSelectorOutcome
 pub fn pure_analyzer_analysis::version() -> &'static str

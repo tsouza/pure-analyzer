@@ -3,6 +3,7 @@
 
 //! Conservative analysis passes over Pure syntax and model facts.
 
+mod column_selectors;
 mod format;
 mod lint;
 mod local;
@@ -10,6 +11,11 @@ mod lowering;
 mod pass;
 mod relational;
 mod validate;
+pub use column_selectors::{
+    ColumnSelector, ColumnSelectorName, ColumnSelectorOpaque, ColumnSelectorOpaqueReason,
+    ColumnSelectorOutcome, ColumnSelectors, ResolvedColumnSelector, ResolvedColumnSelectors,
+    extract_relation_column_selectors, resolve_relation_column_selectors,
+};
 
 pub use format::{FormatResult, format_query, format_query_with_width};
 pub use lint::{MilestoningArityLintPass, NavigationLintPass};
