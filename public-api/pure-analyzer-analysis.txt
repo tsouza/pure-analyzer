@@ -126,6 +126,50 @@ impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::ColumnSelectorOut
 pub unsafe fn pure_analyzer_analysis::ColumnSelectorOutcome::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for pure_analyzer_analysis::ColumnSelectorOutcome
 pub fn pure_analyzer_analysis::ColumnSelectorOutcome::from(T) -> T
+pub enum pure_analyzer_analysis::ComparisonOutcome
+pub pure_analyzer_analysis::ComparisonOutcome::Equivalent
+pub pure_analyzer_analysis::ComparisonOutcome::Indecisive(pure_analyzer_analysis::ComparisonIndecision)
+pub pure_analyzer_analysis::ComparisonOutcome::NotEquivalent(pure_analyzer_analysis::StructuralDifference)
+impl pure_analyzer_analysis::ComparisonOutcome
+pub const fn pure_analyzer_analysis::ComparisonOutcome::difference(&self) -> core::option::Option<&pure_analyzer_analysis::StructuralDifference>
+pub const fn pure_analyzer_analysis::ComparisonOutcome::indecision(&self) -> core::option::Option<&pure_analyzer_analysis::ComparisonIndecision>
+impl core::clone::Clone for pure_analyzer_analysis::ComparisonOutcome
+pub fn pure_analyzer_analysis::ComparisonOutcome::clone(&self) -> pure_analyzer_analysis::ComparisonOutcome
+impl core::cmp::Eq for pure_analyzer_analysis::ComparisonOutcome
+impl core::cmp::PartialEq for pure_analyzer_analysis::ComparisonOutcome
+pub fn pure_analyzer_analysis::ComparisonOutcome::eq(&self, &pure_analyzer_analysis::ComparisonOutcome) -> bool
+impl core::fmt::Debug for pure_analyzer_analysis::ComparisonOutcome
+pub fn pure_analyzer_analysis::ComparisonOutcome::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::ComparisonOutcome
+impl core::marker::Freeze for pure_analyzer_analysis::ComparisonOutcome
+impl core::marker::Send for pure_analyzer_analysis::ComparisonOutcome
+impl core::marker::Sync for pure_analyzer_analysis::ComparisonOutcome
+impl core::marker::Unpin for pure_analyzer_analysis::ComparisonOutcome
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::ComparisonOutcome
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::ComparisonOutcome
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::ComparisonOutcome
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::ComparisonOutcome where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::ComparisonOutcome::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::ComparisonOutcome where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::ComparisonOutcome::Error = never
+pub fn pure_analyzer_analysis::ComparisonOutcome::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::ComparisonOutcome where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::ComparisonOutcome::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::ComparisonOutcome::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::ComparisonOutcome where T: core::clone::Clone
+pub type pure_analyzer_analysis::ComparisonOutcome::Owned = T
+pub fn pure_analyzer_analysis::ComparisonOutcome::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::ComparisonOutcome::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::ComparisonOutcome where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::ComparisonOutcome::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::ComparisonOutcome where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::ComparisonOutcome::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::ComparisonOutcome where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::ComparisonOutcome::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::ComparisonOutcome where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::ComparisonOutcome::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::ComparisonOutcome
+pub fn pure_analyzer_analysis::ComparisonOutcome::from(T) -> T
 pub enum pure_analyzer_analysis::JoinKind
 pub pure_analyzer_analysis::JoinKind::Inner
 impl core::clone::Clone for pure_analyzer_analysis::JoinKind
@@ -421,6 +465,49 @@ impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::Nullability where
 pub unsafe fn pure_analyzer_analysis::Nullability::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for pure_analyzer_analysis::Nullability
 pub fn pure_analyzer_analysis::Nullability::from(T) -> T
+pub enum pure_analyzer_analysis::OutputSchemaField
+pub pure_analyzer_analysis::OutputSchemaField::Multiplicity
+pub pure_analyzer_analysis::OutputSchemaField::Name
+pub pure_analyzer_analysis::OutputSchemaField::Nullability
+pub pure_analyzer_analysis::OutputSchemaField::Type
+impl core::clone::Clone for pure_analyzer_analysis::OutputSchemaField
+pub fn pure_analyzer_analysis::OutputSchemaField::clone(&self) -> pure_analyzer_analysis::OutputSchemaField
+impl core::cmp::Eq for pure_analyzer_analysis::OutputSchemaField
+impl core::cmp::PartialEq for pure_analyzer_analysis::OutputSchemaField
+pub fn pure_analyzer_analysis::OutputSchemaField::eq(&self, &pure_analyzer_analysis::OutputSchemaField) -> bool
+impl core::fmt::Debug for pure_analyzer_analysis::OutputSchemaField
+pub fn pure_analyzer_analysis::OutputSchemaField::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for pure_analyzer_analysis::OutputSchemaField
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::OutputSchemaField
+impl core::marker::Freeze for pure_analyzer_analysis::OutputSchemaField
+impl core::marker::Send for pure_analyzer_analysis::OutputSchemaField
+impl core::marker::Sync for pure_analyzer_analysis::OutputSchemaField
+impl core::marker::Unpin for pure_analyzer_analysis::OutputSchemaField
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::OutputSchemaField
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::OutputSchemaField
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::OutputSchemaField
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::OutputSchemaField where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::OutputSchemaField::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::OutputSchemaField where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::OutputSchemaField::Error = never
+pub fn pure_analyzer_analysis::OutputSchemaField::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::OutputSchemaField where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::OutputSchemaField::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::OutputSchemaField::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::OutputSchemaField where T: core::clone::Clone
+pub type pure_analyzer_analysis::OutputSchemaField::Owned = T
+pub fn pure_analyzer_analysis::OutputSchemaField::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::OutputSchemaField::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::OutputSchemaField where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::OutputSchemaField::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::OutputSchemaField where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::OutputSchemaField::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::OutputSchemaField where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::OutputSchemaField::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::OutputSchemaField where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::OutputSchemaField::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::OutputSchemaField
+pub fn pure_analyzer_analysis::OutputSchemaField::from(T) -> T
 pub enum pure_analyzer_analysis::RelationExpressionError
 pub pure_analyzer_analysis::RelationExpressionError::ColumnMetadataMismatch(pure_analyzer_analysis::ColumnId)
 pub pure_analyzer_analysis::RelationExpressionError::ComparisonTypeMismatch
@@ -848,6 +935,50 @@ impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::SortDirection whe
 pub unsafe fn pure_analyzer_analysis::SortDirection::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for pure_analyzer_analysis::SortDirection
 pub fn pure_analyzer_analysis::SortDirection::from(T) -> T
+pub enum pure_analyzer_analysis::StructuralDifferenceKind
+pub pure_analyzer_analysis::StructuralDifferenceKind::OutputColumn
+pub pure_analyzer_analysis::StructuralDifferenceKind::OutputColumn::field: pure_analyzer_analysis::OutputSchemaField
+pub pure_analyzer_analysis::StructuralDifferenceKind::OutputColumn::index: usize
+pub pure_analyzer_analysis::StructuralDifferenceKind::OutputColumnCount
+pub pure_analyzer_analysis::StructuralDifferenceKind::OutputColumnCount::primary_count: usize
+pub pure_analyzer_analysis::StructuralDifferenceKind::OutputColumnCount::secondary_count: usize
+impl core::clone::Clone for pure_analyzer_analysis::StructuralDifferenceKind
+pub fn pure_analyzer_analysis::StructuralDifferenceKind::clone(&self) -> pure_analyzer_analysis::StructuralDifferenceKind
+impl core::cmp::Eq for pure_analyzer_analysis::StructuralDifferenceKind
+impl core::cmp::PartialEq for pure_analyzer_analysis::StructuralDifferenceKind
+pub fn pure_analyzer_analysis::StructuralDifferenceKind::eq(&self, &pure_analyzer_analysis::StructuralDifferenceKind) -> bool
+impl core::fmt::Debug for pure_analyzer_analysis::StructuralDifferenceKind
+pub fn pure_analyzer_analysis::StructuralDifferenceKind::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::StructuralDifferenceKind
+impl core::marker::Freeze for pure_analyzer_analysis::StructuralDifferenceKind
+impl core::marker::Send for pure_analyzer_analysis::StructuralDifferenceKind
+impl core::marker::Sync for pure_analyzer_analysis::StructuralDifferenceKind
+impl core::marker::Unpin for pure_analyzer_analysis::StructuralDifferenceKind
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::StructuralDifferenceKind
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::StructuralDifferenceKind
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::StructuralDifferenceKind
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::StructuralDifferenceKind where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::StructuralDifferenceKind::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::StructuralDifferenceKind where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::StructuralDifferenceKind::Error = never
+pub fn pure_analyzer_analysis::StructuralDifferenceKind::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::StructuralDifferenceKind where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::StructuralDifferenceKind::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::StructuralDifferenceKind::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::StructuralDifferenceKind where T: core::clone::Clone
+pub type pure_analyzer_analysis::StructuralDifferenceKind::Owned = T
+pub fn pure_analyzer_analysis::StructuralDifferenceKind::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::StructuralDifferenceKind::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::StructuralDifferenceKind where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::StructuralDifferenceKind::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::StructuralDifferenceKind where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::StructuralDifferenceKind::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::StructuralDifferenceKind where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::StructuralDifferenceKind::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::StructuralDifferenceKind where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::StructuralDifferenceKind::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::StructuralDifferenceKind
+pub fn pure_analyzer_analysis::StructuralDifferenceKind::from(T) -> T
 pub enum pure_analyzer_analysis::Totality
 pub pure_analyzer_analysis::Totality::Partial
 pub pure_analyzer_analysis::Totality::Total
@@ -1268,6 +1399,47 @@ impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::ColumnSelectors w
 pub unsafe fn pure_analyzer_analysis::ColumnSelectors::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for pure_analyzer_analysis::ColumnSelectors
 pub fn pure_analyzer_analysis::ColumnSelectors::from(T) -> T
+pub struct pure_analyzer_analysis::ComparisonIndecision
+impl pure_analyzer_analysis::ComparisonIndecision
+pub const fn pure_analyzer_analysis::ComparisonIndecision::origin(&self) -> &pure_analyzer_analysis::IrOrigin
+pub const fn pure_analyzer_analysis::ComparisonIndecision::reason(&self) -> pure_analyzer_diagnostics::verdict::ReasonCode
+impl core::clone::Clone for pure_analyzer_analysis::ComparisonIndecision
+pub fn pure_analyzer_analysis::ComparisonIndecision::clone(&self) -> pure_analyzer_analysis::ComparisonIndecision
+impl core::cmp::Eq for pure_analyzer_analysis::ComparisonIndecision
+impl core::cmp::PartialEq for pure_analyzer_analysis::ComparisonIndecision
+pub fn pure_analyzer_analysis::ComparisonIndecision::eq(&self, &pure_analyzer_analysis::ComparisonIndecision) -> bool
+impl core::fmt::Debug for pure_analyzer_analysis::ComparisonIndecision
+pub fn pure_analyzer_analysis::ComparisonIndecision::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::ComparisonIndecision
+impl core::marker::Freeze for pure_analyzer_analysis::ComparisonIndecision
+impl core::marker::Send for pure_analyzer_analysis::ComparisonIndecision
+impl core::marker::Sync for pure_analyzer_analysis::ComparisonIndecision
+impl core::marker::Unpin for pure_analyzer_analysis::ComparisonIndecision
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::ComparisonIndecision
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::ComparisonIndecision
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::ComparisonIndecision
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::ComparisonIndecision where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::ComparisonIndecision::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::ComparisonIndecision where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::ComparisonIndecision::Error = never
+pub fn pure_analyzer_analysis::ComparisonIndecision::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::ComparisonIndecision where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::ComparisonIndecision::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::ComparisonIndecision::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::ComparisonIndecision where T: core::clone::Clone
+pub type pure_analyzer_analysis::ComparisonIndecision::Owned = T
+pub fn pure_analyzer_analysis::ComparisonIndecision::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::ComparisonIndecision::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::ComparisonIndecision where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::ComparisonIndecision::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::ComparisonIndecision where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::ComparisonIndecision::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::ComparisonIndecision where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::ComparisonIndecision::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::ComparisonIndecision where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::ComparisonIndecision::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::ComparisonIndecision
+pub fn pure_analyzer_analysis::ComparisonIndecision::from(T) -> T
 pub struct pure_analyzer_analysis::EquivalenceKey(_)
 impl pure_analyzer_analysis::EquivalenceKey
 pub fn pure_analyzer_analysis::EquivalenceKey::as_str(&self) -> &str
@@ -2295,6 +2467,48 @@ impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::SourceSpan where 
 pub unsafe fn pure_analyzer_analysis::SourceSpan::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for pure_analyzer_analysis::SourceSpan
 pub fn pure_analyzer_analysis::SourceSpan::from(T) -> T
+pub struct pure_analyzer_analysis::StructuralDifference
+impl pure_analyzer_analysis::StructuralDifference
+pub const fn pure_analyzer_analysis::StructuralDifference::kind(&self) -> &pure_analyzer_analysis::StructuralDifferenceKind
+pub const fn pure_analyzer_analysis::StructuralDifference::primary_origin(&self) -> &pure_analyzer_analysis::IrOrigin
+pub const fn pure_analyzer_analysis::StructuralDifference::secondary_origin(&self) -> &pure_analyzer_analysis::IrOrigin
+impl core::clone::Clone for pure_analyzer_analysis::StructuralDifference
+pub fn pure_analyzer_analysis::StructuralDifference::clone(&self) -> pure_analyzer_analysis::StructuralDifference
+impl core::cmp::Eq for pure_analyzer_analysis::StructuralDifference
+impl core::cmp::PartialEq for pure_analyzer_analysis::StructuralDifference
+pub fn pure_analyzer_analysis::StructuralDifference::eq(&self, &pure_analyzer_analysis::StructuralDifference) -> bool
+impl core::fmt::Debug for pure_analyzer_analysis::StructuralDifference
+pub fn pure_analyzer_analysis::StructuralDifference::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::StructuralDifference
+impl core::marker::Freeze for pure_analyzer_analysis::StructuralDifference
+impl core::marker::Send for pure_analyzer_analysis::StructuralDifference
+impl core::marker::Sync for pure_analyzer_analysis::StructuralDifference
+impl core::marker::Unpin for pure_analyzer_analysis::StructuralDifference
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::StructuralDifference
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::StructuralDifference
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::StructuralDifference
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::StructuralDifference where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::StructuralDifference::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::StructuralDifference where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::StructuralDifference::Error = never
+pub fn pure_analyzer_analysis::StructuralDifference::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::StructuralDifference where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::StructuralDifference::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::StructuralDifference::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::StructuralDifference where T: core::clone::Clone
+pub type pure_analyzer_analysis::StructuralDifference::Owned = T
+pub fn pure_analyzer_analysis::StructuralDifference::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::StructuralDifference::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::StructuralDifference where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::StructuralDifference::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::StructuralDifference where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::StructuralDifference::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::StructuralDifference where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::StructuralDifference::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::StructuralDifference where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::StructuralDifference::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::StructuralDifference
+pub fn pure_analyzer_analysis::StructuralDifference::from(T) -> T
 pub struct pure_analyzer_analysis::StructuralKey(_)
 impl pure_analyzer_analysis::StructuralKey
 pub fn pure_analyzer_analysis::StructuralKey::as_str(&self) -> &str
@@ -2395,6 +2609,8 @@ impl pure_analyzer_analysis::AnalysisPass for pure_analyzer_analysis::ValidatePa
 pub fn pure_analyzer_analysis::ValidatePass::analyze(&self, pure_analyzer_analysis::AnalysisInput<'_, '_>) -> alloc::vec::Vec<pure_analyzer_diagnostics::diagnostic::Diagnostic>
 pub fn pure_analyzer_analysis::ValidatePass::name(&self) -> &'static str
 pub fn pure_analyzer_analysis::analyze_m3_locals(&pure_analyzer_syntax::green::GreenNode, &pure_analyzer_model::types::ModelGraph) -> pure_analyzer_analysis::LocalNavigationAnalysis
+pub fn pure_analyzer_analysis::compare_relational_queries(&pure_analyzer_analysis::RelationalQuery, &pure_analyzer_analysis::RelationalQuery) -> pure_analyzer_analysis::ComparisonOutcome
+pub fn pure_analyzer_analysis::compare_relational_queries_with_budget(&pure_analyzer_analysis::RelationalQuery, &pure_analyzer_analysis::RelationalQuery, pure_analyzer_analysis::NormalizationBudget) -> pure_analyzer_analysis::ComparisonOutcome
 pub fn pure_analyzer_analysis::extract_relation_column_selectors(pure_analyzer_diagnostics::file::FileId, &pure_analyzer_syntax::green::GreenNode) -> core::result::Result<pure_analyzer_analysis::ColumnSelectors, pure_analyzer_analysis::ColumnSelectorOpaque>
 pub fn pure_analyzer_analysis::format_query(&str, pure_analyzer_diagnostics::file::FileId) -> core::result::Result<pure_analyzer_analysis::FormatResult, pure_analyzer_syntax::builder::BuildError>
 pub fn pure_analyzer_analysis::format_query_with_width(&str, pure_analyzer_diagnostics::file::FileId, usize) -> core::result::Result<pure_analyzer_analysis::FormatResult, pure_analyzer_syntax::builder::BuildError>
