@@ -37,7 +37,7 @@ The products are co-located, not layered together:
 - `xtask` and root automation are shared repository infrastructure, not a third
   product or an analyzer layer.
 - The analyzer processing pipeline is `lexer → syntax → parser → model
-  → resolve → analysis → libpure → cli`. Cargo dependencies point
+  → resolve → analysis → libpure → front ends (CLI, LSP)`. Cargo dependencies point
   toward prerequisites: notably, resolver may depend on model; model must not
   depend on resolver. Diagnostics is a shared leaf within the analyzer product.
 - Co-location does not authorize parser, corpus, or ownership sharing. Any such

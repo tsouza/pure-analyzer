@@ -72,6 +72,10 @@ name = "pure-analyzer-cli"
 publish = false
 
 [[package]]
+name = "pure-analyzer-lsp"
+publish = false
+
+[[package]]
 name = "pure-analyzer-purecard"
 publish = false
 

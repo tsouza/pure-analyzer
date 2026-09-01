@@ -1,0 +1,20 @@
+[package]
+name = "pure-analyzer-lsp"
+description = "Language Server Protocol front end for pure-analyzer."
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "pure-analyzer-lsp"
+path = "src/main.rs"
+
+[dependencies]
+serde_json.workspace = true

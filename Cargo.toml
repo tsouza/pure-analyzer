@@ -11,6 +11,7 @@ members = [
     "crates/pure-analyzer-analysis",
     "crates/libpure",
     "crates/pure-analyzer-cli",
+    "crates/pure-analyzer-lsp",
     "crates/pure-analyzer-purecard",
     "crates/pure-analyzer-purecard/schema-walker",
     "xtask",
