@@ -11,8 +11,8 @@ use pure_analyzer_syntax::{GreenElement, GreenNode, SyntaxKind, TextRange};
 use crate::{
     AnalysisInput, Column, ColumnId, IrOrigin, Knowledge, ModelOrigin, Nullability, OpaqueOutcome,
     Projection, RelationExpression, RelationFacts, RelationOperator, RelationSchema,
-    RelationSource, RelationalOutcome, RelationalQuery, ResolvedNavigation, ScalarExpression,
-    ScalarLiteral, ScalarOperator, SourceSpan, Totality,
+    RelationSource, RelationalOutcome, RelationalQuery, ResolvedNavigation, RowSemantics,
+    ScalarExpression, ScalarLiteral, ScalarOperator, SourceSpan, Totality,
     relational::compose_navigation_multiplicity,
 };
 
@@ -26,8 +26,8 @@ const STRING_TYPE: &str = "String";
 ///
 /// The input must contain exactly one top-level query expression and a model graph. The
 /// supported subset is deliberately limited to `Class.all()`, to-one resolved navigation,
-/// `->filter` with an equality predicate, and one-lambda `->map`. Other valid syntax stays
-/// explicit as an opaque outcome rather than being approximated.
+/// `->filter` with an equality predicate, one-lambda `->map`, and bare `->distinct()`. Other
+/// valid syntax stays explicit as an opaque outcome rather than being approximated.
 #[must_use]
 pub fn lower_m3_query(input: AnalysisInput<'_, '_>) -> RelationalOutcome {
     let fallback_origin = origin(input.file(), input.tree().text_range(), Vec::new());
@@ -209,12 +209,52 @@ impl<'model> QueryLowerer<'model> {
     ) -> Result<RelationState, ReasonCode> {
         self.mark_failure_with_origins(node, &[state.expression.origin()], &[]);
         let name = arrow_name(node).ok_or(ReasonCode::IndUnmodeledOp)?;
-        let lambda = arrow_lambda(node).ok_or(ReasonCode::IndUnmodeledOp)?;
         match name.as_str() {
-            "filter" => self.lower_filter(state, node, lambda),
-            "map" => self.lower_map(state, node, lambda),
+            "filter" => self.lower_filter(
+                state,
+                node,
+                arrow_lambda(node).ok_or(ReasonCode::IndUnmodeledOp)?,
+            ),
+            "map" => self.lower_map(
+                state,
+                node,
+                arrow_lambda(node).ok_or(ReasonCode::IndUnmodeledOp)?,
+            ),
+            "distinct" => self.lower_distinct(state, node),
             _ => Err(ReasonCode::IndUnmodeledOp),
         }
+    }
+
+    fn lower_distinct(
+        &mut self,
+        state: RelationState,
+        node: &GreenNode,
+    ) -> Result<RelationState, ReasonCode> {
+        self.mark_failure_with_origins(node, &[state.expression.origin()], &[]);
+        let call = arrow_call_arguments(node).ok_or(ReasonCode::IndUnmodeledOp)?;
+        if !empty_call_arguments(&call) {
+            return Err(ReasonCode::IndUnmodeledOp);
+        }
+        let schema = state.expression.schema().clone();
+        let operator_origin =
+            merged_origin(self.file, node.text_range(), &[state.expression.origin()]);
+        let facts = RelationFacts::new(
+            Knowledge::unknown(),
+            Knowledge::proven(RowSemantics::Set, operator_origin.clone()),
+        );
+        let expression = RelationExpression::new(
+            RelationOperator::Distinct {
+                input: Box::new(state.expression),
+            },
+            schema,
+            facts,
+            operator_origin,
+        )
+        .map_err(|_| ReasonCode::IndUnmodeledOp)?;
+        Ok(RelationState {
+            expression,
+            element: state.element,
+        })
     }
 
     fn lower_filter(
@@ -668,7 +708,7 @@ fn arrow_name(node: &GreenNode) -> Option<Name> {
         .flatten()
 }
 
-fn arrow_lambda(node: &GreenNode) -> Option<LambdaBody> {
+fn arrow_call_arguments(node: &GreenNode) -> Option<GreenNode> {
     let children = direct_nodes(node);
     let calls = children
         .iter()
@@ -677,7 +717,12 @@ fn arrow_lambda(node: &GreenNode) -> Option<LambdaBody> {
     let [call] = calls.as_slice() else {
         return None;
     };
-    let arguments = direct_nodes(call);
+    Some((*call).clone())
+}
+
+fn arrow_lambda(node: &GreenNode) -> Option<LambdaBody> {
+    let call = arrow_call_arguments(node)?;
+    let arguments = direct_nodes(&call);
     let [lambda] = arguments.as_slice() else {
         return None;
     };
@@ -957,6 +1002,35 @@ mod tests {
 
         assert_eq!(call_arguments.kind(), SyntaxKind::CALL_ARGS);
         assert!(!empty_call_arguments(&call_arguments));
+    }
+
+    #[test]
+    fn arrow_call_arguments_requires_exactly_one_direct_call() {
+        let source = "->distinct()()";
+        let tokens = lex(source);
+        let mut builder = GreenNodeBuilder::new(source, &tokens);
+        builder.open(SyntaxKind::ROOT);
+        builder.open(SyntaxKind::ARROW_CALL);
+        builder.advance();
+        builder.open(SyntaxKind::QUALIFIED_NAME);
+        builder.advance();
+        builder.close();
+        for _ in 0..2 {
+            builder.open(SyntaxKind::CALL_ARGS);
+            builder.advance();
+            builder.advance();
+            builder.close();
+        }
+        builder.close();
+        builder.close();
+        let root = builder.finish().expect("fixture tree must build");
+        let arrow = direct_nodes(&root)
+            .into_iter()
+            .next()
+            .expect("fixture must contain an arrow call");
+
+        assert_eq!(arrow.kind(), SyntaxKind::ARROW_CALL);
+        assert_eq!(arrow_call_arguments(&arrow), None);
     }
 
     #[test]

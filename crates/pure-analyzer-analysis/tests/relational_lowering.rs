@@ -4,7 +4,7 @@
 use proptest::prelude::*;
 use pure_analyzer_analysis::{
     AnalysisInput, ColumnId, ModelOrigin, Nullability, RelationOperator, RelationSource,
-    RelationalOutcome, ScalarLiteral, ScalarOperator, SourceSpan, lower_m3_query,
+    RelationalOutcome, RowSemantics, ScalarLiteral, ScalarOperator, SourceSpan, lower_m3_query,
 };
 use pure_analyzer_diagnostics::{FileId, ReasonCode};
 use pure_analyzer_model::{
@@ -109,6 +109,15 @@ fn filter_parts(
     match expression.operator() {
         RelationOperator::Filter { input, predicate } => (input, predicate),
         other => panic!("expected filter, got {other:#?}"),
+    }
+}
+
+fn distinct_input(
+    expression: &pure_analyzer_analysis::RelationExpression,
+) -> &pure_analyzer_analysis::RelationExpression {
+    match expression.operator() {
+        RelationOperator::Distinct { input } => input,
+        other => panic!("expected distinct, got {other:#?}"),
     }
 }
 
@@ -268,6 +277,76 @@ fn lowers_parenthesized_relation_roots_and_continuations() {
         ScalarOperator::Navigation { input, .. }
             if matches!(input.operator(), ScalarOperator::Column(id) if *id == ColumnId::new(0))
     ));
+}
+
+#[test]
+fn lowers_bare_distinct_with_explicit_set_facts() {
+    let model = filter_map_model();
+    let source = "model::Person.all()->distinct()";
+    let query = supported(lower(source, Some(&model)));
+    let input = distinct_input(query.root());
+
+    assert_eq!(query.output(), input.schema());
+    assert_eq!(class_scan(input).path().as_str(), "model::Person");
+    assert_eq!(
+        span_text(source, query.root().origin().source()),
+        "->distinct()"
+    );
+    assert!(query.facts().candidate_keys().is_unknown());
+    let (semantics, fact_origin) = query
+        .facts()
+        .row_semantics()
+        .as_proven()
+        .expect("distinct must establish set semantics");
+    assert_eq!(*semantics, RowSemantics::Set);
+    assert_eq!(span_text(source, fact_origin.source()), "->distinct()");
+    assert_eq!(
+        fact_origin.model_origins(),
+        query.root().origin().model_origins()
+    );
+}
+
+#[test]
+fn distinct_chains_after_filter_and_retains_the_element_binding() {
+    let model = filter_map_model();
+    let source = "model::Person.all()->filter(x| $x.name == 'Ada')->distinct()->map(x| $x.manager)";
+    let query = supported(lower(source, Some(&model)));
+    let (distinct, projection) = map_parts(&query);
+    let filter = distinct_input(distinct);
+    let (scan, _) = filter_parts(filter);
+
+    assert_eq!(class_scan(scan).path().as_str(), "model::Person");
+    assert!(matches!(
+        projection.expression().operator(),
+        ScalarOperator::Navigation { input, .. }
+            if matches!(input.operator(), ScalarOperator::Column(id) if *id == ColumnId::new(0))
+    ));
+    let (semantics, _) = distinct
+        .facts()
+        .row_semantics()
+        .as_proven()
+        .expect("distinct must establish set semantics before a later map");
+    assert_eq!(*semantics, RowSemantics::Set);
+}
+
+#[test]
+fn distinct_rejects_unproven_overloads_and_preserves_model_requirements() {
+    let model = filter_map_model();
+    for source in [
+        "model::Person.all()->distinct(x| $x.name)",
+        "model::Person.all()->distinct(1)",
+        "model::Person.all()->model::distinct()",
+    ] {
+        assert_reason(lower(source, Some(&model)), ReasonCode::IndUnmodeledOp);
+    }
+    assert_reason(
+        lower("model::Person.all()->distinct(", Some(&model)),
+        ReasonCode::IndUnparseable,
+    );
+    assert_reason(
+        lower("model::Person.all()->distinct()", None),
+        ReasonCode::ModelIncomplete,
+    );
 }
 
 #[test]
@@ -625,7 +704,7 @@ proptest! {
         steps in proptest::collection::vec(any::<bool>(), 0..=8),
     ) {
         let model = supported_pipeline_graph();
-        let source = supported_pipeline(&steps);
+        let source = format!("{}->distinct()", supported_pipeline(&steps));
         let first = lower(&source, Some(&model));
         let second = lower(&source, Some(&model));
 
@@ -634,6 +713,12 @@ proptest! {
             prop_assert!(false, "supported pipeline lowered opaque: {first:#?}");
             return Ok(());
         };
+        let (semantics, _) = query
+            .facts()
+            .row_semantics()
+            .as_proven()
+            .expect("terminal distinct must establish set semantics");
+        prop_assert_eq!(*semantics, RowSemantics::Set);
         prop_assert_eq!(query.output().columns().len(), 1);
         let mut ids = Vec::new();
         project_ids(query.root(), &mut ids);
