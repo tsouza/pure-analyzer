@@ -462,6 +462,18 @@ pub enum RelationExpressionError {
     /// A distinct expression did not retain its input schema.
     #[error("distinct output schema differs from its input schema")]
     DistinctSchemaMismatch,
+    /// A selected distinct expression did not select any output column.
+    #[error("selected distinct requires at least one output column")]
+    DistinctOnEmptySelection,
+    /// A selected distinct expression named an input column more than once.
+    #[error("selected distinct repeats an input column")]
+    DistinctOnDuplicateColumn(ColumnId),
+    /// A selected distinct expression named a column outside its input schema.
+    #[error("selected distinct refers to a column outside its input schema")]
+    DistinctOnUnknownColumn(ColumnId),
+    /// A selected distinct expression did not retain its ordered selected schema.
+    #[error("selected distinct output schema differs from its selected input columns")]
+    DistinctOnSchemaMismatch,
     /// A scalar expression referred to a column outside its input scope.
     #[error("scalar expression references a column outside its input schema")]
     UnknownColumnReference(ColumnId),
@@ -619,6 +631,18 @@ pub enum RelationOperator {
     Distinct {
         /// Input relation.
         input: Box<RelationExpression>,
+    },
+    /// Remove duplicate rows while retaining only an explicitly selected ordered subset.
+    ///
+    /// This represents the supported `->distinct(~[column, ...])` form. It is
+    /// deliberately separate from [`Self::Distinct`]: selected output columns
+    /// need not retain the input schema, and lowering does not infer set or key
+    /// facts from the operation alone.
+    DistinctOn {
+        /// Input relation.
+        input: Box<RelationExpression>,
+        /// Selected input-column identities in source and output order.
+        columns: Vec<ColumnId>,
     },
 }
 
@@ -932,6 +956,9 @@ fn validate_relation_operator(
             }
             Ok(())
         }
+        RelationOperator::DistinctOn { input, columns } => {
+            validate_distinct_on_schema(columns, schema, input.schema())
+        }
     }
 }
 
@@ -955,6 +982,31 @@ fn is_join_schema(schema: &RelationSchema, left: &RelationSchema, right: &Relati
         .columns()
         .iter()
         .eq(left.columns().iter().chain(right.columns()))
+}
+
+fn validate_distinct_on_schema(
+    columns: &[ColumnId],
+    schema: &RelationSchema,
+    input: &RelationSchema,
+) -> Result<(), RelationExpressionError> {
+    if columns.is_empty() {
+        return Err(RelationExpressionError::DistinctOnEmptySelection);
+    }
+    let mut selected = Vec::with_capacity(columns.len());
+    let mut seen = BTreeSet::new();
+    for column in columns {
+        if !seen.insert(*column) {
+            return Err(RelationExpressionError::DistinctOnDuplicateColumn(*column));
+        }
+        let Some(input_column) = input.column(*column) else {
+            return Err(RelationExpressionError::DistinctOnUnknownColumn(*column));
+        };
+        selected.push(input_column);
+    }
+    if !schema.columns().iter().eq(selected) {
+        return Err(RelationExpressionError::DistinctOnSchemaMismatch);
+    }
+    Ok(())
 }
 
 fn validate_scalar(
@@ -1967,6 +2019,85 @@ mod tests {
         assert_eq!(
             join_result,
             Err(RelationExpressionError::JoinSchemaMismatch)
+        );
+    }
+
+    #[test]
+    fn selected_distinct_requires_unique_input_columns_and_exact_ordered_schema() {
+        let input_schema = schema();
+        let first = input_schema.columns()[0].clone();
+        let second = input_schema.columns()[1].clone();
+        let selected_schema = RelationSchema::new(vec![second.clone(), first.clone()])
+            .expect("fixture schema must be valid");
+        let valid = RelationExpression::new(
+            RelationOperator::DistinctOn {
+                input: Box::new(scan(input_schema.clone())),
+                columns: vec![second.id(), first.id()],
+            },
+            selected_schema,
+            RelationFacts::unknown(),
+            origin(),
+        )
+        .expect("selected input columns must preserve their exact metadata and order");
+        assert!(valid.facts().candidate_keys().is_unknown());
+        assert!(valid.facts().row_semantics().is_unknown());
+
+        let empty = RelationExpression::new(
+            RelationOperator::DistinctOn {
+                input: Box::new(scan(input_schema.clone())),
+                columns: Vec::new(),
+            },
+            RelationSchema::new(Vec::new()).expect("empty fixture schema must be valid"),
+            RelationFacts::unknown(),
+            origin(),
+        );
+        let duplicate = RelationExpression::new(
+            RelationOperator::DistinctOn {
+                input: Box::new(scan(input_schema.clone())),
+                columns: vec![first.id(), first.id()],
+            },
+            RelationSchema::new(vec![first.clone()]).expect("fixture schema must be valid"),
+            RelationFacts::unknown(),
+            origin(),
+        );
+        let unknown = RelationExpression::new(
+            RelationOperator::DistinctOn {
+                input: Box::new(scan(input_schema.clone())),
+                columns: vec![ColumnId::new(UNKNOWN_COLUMN)],
+            },
+            RelationSchema::new(Vec::new()).expect("empty fixture schema must be valid"),
+            RelationFacts::unknown(),
+            origin(),
+        );
+        let reordered_schema = RelationExpression::new(
+            RelationOperator::DistinctOn {
+                input: Box::new(scan(input_schema.clone())),
+                columns: vec![second.id(), first.id()],
+            },
+            input_schema,
+            RelationFacts::unknown(),
+            origin(),
+        );
+
+        assert_eq!(
+            empty,
+            Err(RelationExpressionError::DistinctOnEmptySelection)
+        );
+        assert_eq!(
+            duplicate,
+            Err(RelationExpressionError::DistinctOnDuplicateColumn(
+                first.id()
+            ))
+        );
+        assert_eq!(
+            unknown,
+            Err(RelationExpressionError::DistinctOnUnknownColumn(
+                ColumnId::new(UNKNOWN_COLUMN)
+            ))
+        );
+        assert_eq!(
+            reordered_schema,
+            Err(RelationExpressionError::DistinctOnSchemaMismatch)
         );
     }
 

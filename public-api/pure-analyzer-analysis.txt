@@ -381,6 +381,10 @@ pub fn pure_analyzer_analysis::Nullability::from(T) -> T
 pub enum pure_analyzer_analysis::RelationExpressionError
 pub pure_analyzer_analysis::RelationExpressionError::ColumnMetadataMismatch(pure_analyzer_analysis::ColumnId)
 pub pure_analyzer_analysis::RelationExpressionError::ComparisonTypeMismatch
+pub pure_analyzer_analysis::RelationExpressionError::DistinctOnDuplicateColumn(pure_analyzer_analysis::ColumnId)
+pub pure_analyzer_analysis::RelationExpressionError::DistinctOnEmptySelection
+pub pure_analyzer_analysis::RelationExpressionError::DistinctOnSchemaMismatch
+pub pure_analyzer_analysis::RelationExpressionError::DistinctOnUnknownColumn(pure_analyzer_analysis::ColumnId)
 pub pure_analyzer_analysis::RelationExpressionError::DistinctSchemaMismatch
 pub pure_analyzer_analysis::RelationExpressionError::FilterSchemaMismatch
 pub pure_analyzer_analysis::RelationExpressionError::InvalidLiteralType
@@ -436,6 +440,9 @@ pub fn pure_analyzer_analysis::RelationExpressionError::from(T) -> T
 pub enum pure_analyzer_analysis::RelationOperator
 pub pure_analyzer_analysis::RelationOperator::Distinct
 pub pure_analyzer_analysis::RelationOperator::Distinct::input: alloc::boxed::Box<pure_analyzer_analysis::RelationExpression>
+pub pure_analyzer_analysis::RelationOperator::DistinctOn
+pub pure_analyzer_analysis::RelationOperator::DistinctOn::columns: alloc::vec::Vec<pure_analyzer_analysis::ColumnId>
+pub pure_analyzer_analysis::RelationOperator::DistinctOn::input: alloc::boxed::Box<pure_analyzer_analysis::RelationExpression>
 pub pure_analyzer_analysis::RelationOperator::Filter
 pub pure_analyzer_analysis::RelationOperator::Filter::input: alloc::boxed::Box<pure_analyzer_analysis::RelationExpression>
 pub pure_analyzer_analysis::RelationOperator::Filter::predicate: pure_analyzer_analysis::ScalarExpression

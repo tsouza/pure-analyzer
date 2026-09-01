@@ -77,6 +77,10 @@ test-unit:
 test-parser:
     cargo nextest run -p pure-analyzer-parser
 
+# Run the analysis crate's focused relational and pass contracts.
+test-analysis:
+    cargo nextest run -p pure-analyzer-analysis
+
 # Run the CLI's focused process-boundary workflow suite.
 test-cli:
     cargo nextest run -p pure-analyzer-cli
