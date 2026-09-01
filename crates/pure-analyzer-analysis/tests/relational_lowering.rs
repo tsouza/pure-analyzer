@@ -4,7 +4,8 @@
 use proptest::prelude::*;
 use pure_analyzer_analysis::{
     AnalysisInput, ColumnId, JoinKind, ModelOrigin, Nullability, RelationOperator, RelationSource,
-    RelationalOutcome, RowSemantics, ScalarLiteral, ScalarOperator, SourceSpan, lower_m3_query,
+    RelationalOutcome, RowSemantics, ScalarLiteral, ScalarOperator, SortDirection, SourceSpan,
+    lower_m3_query,
 };
 use pure_analyzer_diagnostics::{FileId, ReasonCode};
 use pure_analyzer_model::{
@@ -148,6 +149,18 @@ fn join_parts(
             condition,
         } => (left, right, condition),
         other => panic!("expected an inner join, got {other:#?}"),
+    }
+}
+
+fn sort_parts(
+    expression: &pure_analyzer_analysis::RelationExpression,
+) -> (
+    &pure_analyzer_analysis::RelationExpression,
+    &[pure_analyzer_analysis::SortKey],
+) {
+    match expression.operator() {
+        RelationOperator::Sort { input, keys } => (input, keys),
+        other => panic!("expected sort, got {other:#?}"),
     }
 }
 
@@ -571,10 +584,11 @@ fn relation_project_binds_its_output_as_a_resolved_row_for_following_lambdas() {
 #[test]
 fn selected_distinct_rebinds_selected_relation_project_columns_in_source_order() {
     let model = relation_project_model();
-    let source = "model::Person.all()->project(~[legal: person | $person.name, manager: person | $person.manager])->distinct(~[manager, legal])->map(row| $row.legal)";
+    let source = "model::Person.all()->project(~[legal: person | $person.name, manager: person | $person.manager])->distinct(~[manager, legal])->sort([ascending(~manager), ~legal->descending()])->map(row| $row.legal)";
     let query = supported(lower(source, Some(&model)));
 
-    let (selected, map_projection) = map_parts(&query);
+    let (sort, map_projection) = map_parts(&query);
+    let (selected, keys) = sort_parts(sort);
     let (project, columns) = selected_distinct_parts(selected);
     assert_eq!(columns, &[ColumnId::new(2), ColumnId::new(ONE)]);
     assert_eq!(
@@ -586,6 +600,14 @@ fn selected_distinct_rebinds_selected_relation_project_columns_in_source_order()
     );
     assert!(selected.facts().candidate_keys().is_unknown());
     assert!(selected.facts().row_semantics().is_unknown());
+    assert_eq!(
+        keys.iter().map(|key| key.column()).collect::<Vec<_>>(),
+        [ColumnId::new(2), ColumnId::new(ONE)]
+    );
+    assert_eq!(
+        keys.iter().map(|key| key.direction()).collect::<Vec<_>>(),
+        [SortDirection::Ascending, SortDirection::Descending]
+    );
     assert!(matches!(
         map_projection.expression().operator(),
         ScalarOperator::Column(id) if *id == ColumnId::new(ONE)
@@ -593,6 +615,10 @@ fn selected_distinct_rebinds_selected_relation_project_columns_in_source_order()
     assert_eq!(
         span_text(source, selected.origin().source()),
         "->distinct(~[manager, legal])"
+    );
+    assert_eq!(
+        span_text(source, sort.origin().source()),
+        "->sort([ascending(~manager), ~legal->descending()])"
     );
 }
 
@@ -810,6 +836,29 @@ fn lowers_selected_distinct_from_pure_with_ordered_cloned_columns() {
 }
 
 #[test]
+fn sort_accepts_schema_only_selected_distinct_output_after_a_join() {
+    let model = inner_join_model();
+    let source = "model::Person.all()->join(model::Membership.all(), JoinKind.INNER, {person, membership | $person.personId == $membership.personId})->distinct(~[Membership, Person])->sort([descending(~Membership), ~Person->ascending()])";
+    let query = supported(lower(source, Some(&model)));
+
+    let (selected, keys) = sort_parts(query.root());
+    let (join, columns) = selected_distinct_parts(selected);
+    assert!(matches!(join.operator(), RelationOperator::Join { .. }));
+    assert_eq!(columns, &[ColumnId::new(ONE), ColumnId::new(ZERO)]);
+    assert_eq!(
+        keys.iter().map(|key| key.column()).collect::<Vec<_>>(),
+        [ColumnId::new(ONE), ColumnId::new(ZERO)]
+    );
+    assert_eq!(
+        keys.iter().map(|key| key.direction()).collect::<Vec<_>>(),
+        [SortDirection::Descending, SortDirection::Ascending]
+    );
+    assert_eq!(query.output(), selected.schema());
+    assert!(query.facts().candidate_keys().is_unknown());
+    assert!(query.facts().row_semantics().is_unknown());
+}
+
+#[test]
 fn selected_distinct_retains_a_selected_element_binding() {
     let model = filter_map_model();
     let source = "model::Person.all()->distinct(~[Person])->map(x| $x.manager)";
@@ -940,6 +989,114 @@ fn inner_join_declines_unproven_forms_without_rebinding_rows() {
         ),
         ReasonCode::IndUnresolvedSchema,
     );
+}
+
+#[test]
+fn lowers_proven_ascending_sort_key_with_exact_origin() {
+    let model = filter_map_model();
+    let source = "model::Person.all()->distinct()->sort(ascending(~Person))";
+    let query = supported(lower(source, Some(&model)));
+    let (input, keys) = sort_parts(query.root());
+
+    assert_eq!(query.output(), input.schema());
+    assert_eq!(query.facts(), input.facts());
+    assert_eq!(keys.len(), 1);
+    assert_eq!(keys[0].column(), ColumnId::new(ZERO));
+    assert_eq!(keys[0].direction(), SortDirection::Ascending);
+    assert_eq!(
+        span_text(source, query.root().origin().source()),
+        "->sort(ascending(~Person))"
+    );
+    assert_eq!(
+        span_text(source, keys[0].origin().source()),
+        "ascending(~Person)"
+    );
+    let scan = distinct_input(input);
+    let class = class_scan(scan);
+    assert_eq!(
+        keys[0].origin().model_origins(),
+        &[ModelOrigin::from_class(class)]
+    );
+}
+
+#[test]
+fn lowers_proven_descending_sort_key_with_exact_origin() {
+    let model = filter_map_model();
+    let source = "model::Person.all()->sort(~Person->descending())";
+    let query = supported(lower(source, Some(&model)));
+    let (input, keys) = sort_parts(query.root());
+
+    assert_eq!(query.output(), input.schema());
+    assert_eq!(query.facts(), input.facts());
+    assert_eq!(keys.len(), 1);
+    assert_eq!(keys[0].column(), ColumnId::new(ZERO));
+    assert_eq!(keys[0].direction(), SortDirection::Descending);
+    assert_eq!(
+        span_text(source, keys[0].origin().source()),
+        "~Person->descending()"
+    );
+    assert_eq!(
+        query.root().origin().model_origins(),
+        &[ModelOrigin::from_class(class_scan(input))]
+    );
+}
+
+#[test]
+fn sort_retains_the_element_binding_for_later_supported_operations() {
+    let model = filter_map_model();
+    let source = "model::Person.all()->sort(~Person->ascending())->map(x| $x.manager)";
+    let query = supported(lower(source, Some(&model)));
+    let (sort, projection) = map_parts(&query);
+    let (scan, keys) = sort_parts(sort);
+
+    assert_eq!(class_scan(scan).path().as_str(), "model::Person");
+    assert_eq!(keys[0].column(), ColumnId::new(ZERO));
+    assert!(matches!(
+        projection.expression().operator(),
+        ScalarOperator::Navigation { input, .. }
+            if matches!(input.operator(), ScalarOperator::Column(id) if *id == ColumnId::new(ZERO))
+    ));
+}
+
+#[test]
+fn sort_rejects_unproven_forms_and_keeps_resolution_and_parse_failures_typed() {
+    let model = filter_map_model();
+    for source in [
+        "model::Person.all()->sort()",
+        "model::Person.all()->sort(~Person)",
+        "model::Person.all()->sort([~Person])",
+        "model::Person.all()->sort([ascending(~Person), descending(~Person)])",
+        "model::Person.all()->sort(~Person->ascending()->nullsFirst())",
+        "model::Person.all()->sort([~Person->descending()->nullsFirst()])",
+        "model::Person.all()->sort(x| $x)",
+        "model::Person.all()->sort(unknown(~Person))",
+        "model::Person.all()->sort([unknown(~Person)])",
+    ] {
+        assert_reason(lower(source, Some(&model)), ReasonCode::IndUnmodeledOp);
+    }
+
+    let missing_source = "model::Person.all()->sort([ascending(~Missing)])";
+    let missing = opaque(lower(missing_source, Some(&model)));
+    assert_eq!(missing.reason(), ReasonCode::IndUnresolvedSchema);
+    assert_eq!(
+        span_text(missing_source, missing.origin().source()),
+        "Missing"
+    );
+    assert_reason(
+        lower(
+            "model::Person.all()->sort(~Person->ascending(",
+            Some(&model),
+        ),
+        ReasonCode::IndUnparseable,
+    );
+}
+
+#[test]
+fn sort_lowering_is_deterministic_for_repeated_input() {
+    let model = filter_map_model();
+    let source = "model::Person.all()->distinct()->sort([descending(~Person)])";
+
+    assert_eq!(lower(source, Some(&model)), lower(source, Some(&model)));
 }
 
 #[test]
@@ -1279,7 +1436,8 @@ fn project_ids(expression: &pure_analyzer_analysis::RelationExpression, ids: &mu
         RelationOperator::Scan(_) => {}
         RelationOperator::Filter { input, .. }
         | RelationOperator::Distinct { input }
-        | RelationOperator::DistinctOn { input, .. } => {
+        | RelationOperator::DistinctOn { input, .. }
+        | RelationOperator::Sort { input, .. } => {
             project_ids(input, ids);
         }
         RelationOperator::Project { input, projections } => {

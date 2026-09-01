@@ -474,6 +474,18 @@ pub enum RelationExpressionError {
     /// A selected distinct expression did not retain its ordered selected schema.
     #[error("selected distinct output schema differs from its selected input columns")]
     DistinctOnSchemaMismatch,
+    /// A sort expression did not retain its input schema.
+    #[error("sort output schema differs from its input schema")]
+    SortSchemaMismatch,
+    /// A sort expression did not provide a direction for at least one key.
+    #[error("sort requires at least one key")]
+    EmptySortKeys,
+    /// A sort key referred to a column outside its input schema.
+    #[error("sort key references a column outside its input schema")]
+    UnknownSortKeyColumn(ColumnId),
+    /// A sort expression selected the same input column more than once.
+    #[error("sort keys contain a duplicate column")]
+    DuplicateSortKeyColumn(ColumnId),
     /// A scalar expression referred to a column outside its input scope.
     #[error("scalar expression references a column outside its input schema")]
     UnknownColumnReference(ColumnId),
@@ -573,6 +585,53 @@ pub struct Projection {
     expression: ScalarExpression,
 }
 
+/// One proven direction for a relation sort key.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SortDirection {
+    /// Order values from low to high.
+    Ascending,
+    /// Order values from high to low.
+    Descending,
+}
+
+/// One source-ordered, resolved key for a relation sort.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SortKey {
+    column: ColumnId,
+    direction: SortDirection,
+    origin: IrOrigin,
+}
+
+impl SortKey {
+    /// Construct one resolved sort key with its exact query/model evidence.
+    #[must_use]
+    pub fn new(column: ColumnId, direction: SortDirection, origin: IrOrigin) -> Self {
+        Self {
+            column,
+            direction,
+            origin,
+        }
+    }
+
+    /// Return the stable input-column identity used by this key.
+    #[must_use]
+    pub const fn column(&self) -> ColumnId {
+        self.column
+    }
+
+    /// Return the explicitly proven sort direction.
+    #[must_use]
+    pub const fn direction(&self) -> SortDirection {
+        self.direction
+    }
+
+    /// Return the exact query/model evidence for this key form.
+    #[must_use]
+    pub const fn origin(&self) -> &IrOrigin {
+        &self.origin
+    }
+}
+
 impl Projection {
     /// Bind a scalar expression to one explicit output column identity.
     #[must_use]
@@ -643,6 +702,13 @@ pub enum RelationOperator {
         input: Box<RelationExpression>,
         /// Selected input-column identities in source and output order.
         columns: Vec<ColumnId>,
+    },
+    /// Order rows by explicitly resolved source-order keys.
+    Sort {
+        /// Input relation.
+        input: Box<RelationExpression>,
+        /// Ordered key definitions.
+        keys: Vec<SortKey>,
     },
 }
 
@@ -959,7 +1025,33 @@ fn validate_relation_operator(
         RelationOperator::DistinctOn { input, columns } => {
             validate_distinct_on_schema(columns, schema, input.schema())
         }
+        RelationOperator::Sort { input, keys } => validate_sort(input, keys, schema),
     }
+}
+
+fn validate_sort(
+    input: &RelationExpression,
+    keys: &[SortKey],
+    schema: &RelationSchema,
+) -> Result<(), RelationExpressionError> {
+    if schema != input.schema() {
+        return Err(RelationExpressionError::SortSchemaMismatch);
+    }
+    if keys.is_empty() {
+        return Err(RelationExpressionError::EmptySortKeys);
+    }
+
+    let mut seen = BTreeSet::new();
+    for key in keys {
+        let column = key.column();
+        if input.schema().column(column).is_none() {
+            return Err(RelationExpressionError::UnknownSortKeyColumn(column));
+        }
+        if !seen.insert(column) {
+            return Err(RelationExpressionError::DuplicateSortKeyColumn(column));
+        }
+    }
+    Ok(())
 }
 
 fn validate_projection_schema(
@@ -2098,6 +2190,151 @@ mod tests {
         assert_eq!(
             reordered_schema,
             Err(RelationExpressionError::DistinctOnSchemaMismatch)
+        );
+    }
+
+    #[test]
+    fn sort_retains_input_schema_facts_and_source_ordered_keys() {
+        let input_schema = schema();
+        let input_facts = RelationFacts::new(
+            Knowledge::proven(
+                vec![CandidateKey::new(vec![ColumnId::new(FIRST_COLUMN)])],
+                origin(),
+            ),
+            Knowledge::proven(RowSemantics::Bag, origin()),
+        );
+        let input = RelationExpression::new(
+            RelationOperator::Scan(RelationSource::Class(resolved_class())),
+            input_schema,
+            input_facts,
+            origin(),
+        )
+        .expect("fixture scan must be valid");
+        let output = input.schema().clone();
+        let facts = input.facts().clone();
+        let result = RelationExpression::new(
+            RelationOperator::Sort {
+                input: Box::new(input),
+                keys: vec![
+                    SortKey::new(
+                        ColumnId::new(SECOND_COLUMN),
+                        SortDirection::Descending,
+                        origin(),
+                    ),
+                    SortKey::new(
+                        ColumnId::new(FIRST_COLUMN),
+                        SortDirection::Ascending,
+                        origin(),
+                    ),
+                ],
+            },
+            output,
+            facts,
+            origin(),
+        )
+        .expect("sort fixture must be valid");
+
+        let RelationOperator::Sort { input, keys } = result.operator() else {
+            panic!("fixture must be a sort");
+        };
+        assert_eq!(result.schema(), input.schema());
+        assert_eq!(result.facts(), input.facts());
+        assert_eq!(
+            keys.iter().map(SortKey::column).collect::<Vec<_>>(),
+            vec![ColumnId::new(SECOND_COLUMN), ColumnId::new(FIRST_COLUMN)]
+        );
+        assert_eq!(
+            keys.iter().map(SortKey::direction).collect::<Vec<_>>(),
+            vec![SortDirection::Descending, SortDirection::Ascending]
+        );
+    }
+
+    #[test]
+    fn sort_rejects_mismatched_schema_empty_unknown_and_duplicate_keys() {
+        let mismatched_schema = RelationSchema::new(vec![column(
+            FIRST_COLUMN,
+            "zeta",
+            Multiplicity::zero_or_more(),
+        )])
+        .expect("fixture schema must be valid");
+        let schema_mismatch = RelationExpression::new(
+            RelationOperator::Sort {
+                input: Box::new(scan(schema())),
+                keys: vec![SortKey::new(
+                    ColumnId::new(FIRST_COLUMN),
+                    SortDirection::Ascending,
+                    origin(),
+                )],
+            },
+            mismatched_schema,
+            RelationFacts::unknown(),
+            origin(),
+        );
+
+        let input = scan(schema());
+        let empty = RelationExpression::new(
+            RelationOperator::Sort {
+                input: Box::new(input),
+                keys: Vec::new(),
+            },
+            schema(),
+            RelationFacts::unknown(),
+            origin(),
+        );
+
+        let input = scan(schema());
+        let unknown = RelationExpression::new(
+            RelationOperator::Sort {
+                input: Box::new(input),
+                keys: vec![SortKey::new(
+                    ColumnId::new(UNKNOWN_COLUMN),
+                    SortDirection::Ascending,
+                    origin(),
+                )],
+            },
+            schema(),
+            RelationFacts::unknown(),
+            origin(),
+        );
+
+        let input = scan(schema());
+        let duplicate = RelationExpression::new(
+            RelationOperator::Sort {
+                input: Box::new(input),
+                keys: vec![
+                    SortKey::new(
+                        ColumnId::new(FIRST_COLUMN),
+                        SortDirection::Ascending,
+                        origin(),
+                    ),
+                    SortKey::new(
+                        ColumnId::new(FIRST_COLUMN),
+                        SortDirection::Descending,
+                        origin(),
+                    ),
+                ],
+            },
+            schema(),
+            RelationFacts::unknown(),
+            origin(),
+        );
+
+        assert_eq!(
+            schema_mismatch,
+            Err(RelationExpressionError::SortSchemaMismatch)
+        );
+        assert_eq!(empty, Err(RelationExpressionError::EmptySortKeys));
+        assert_eq!(
+            unknown,
+            Err(RelationExpressionError::UnknownSortKeyColumn(
+                ColumnId::new(UNKNOWN_COLUMN)
+            ))
+        );
+        assert_eq!(
+            duplicate,
+            Err(RelationExpressionError::DuplicateSortKeyColumn(
+                ColumnId::new(FIRST_COLUMN)
+            ))
         );
     }
 

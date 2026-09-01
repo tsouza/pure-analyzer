@@ -386,14 +386,18 @@ pub pure_analyzer_analysis::RelationExpressionError::DistinctOnEmptySelection
 pub pure_analyzer_analysis::RelationExpressionError::DistinctOnSchemaMismatch
 pub pure_analyzer_analysis::RelationExpressionError::DistinctOnUnknownColumn(pure_analyzer_analysis::ColumnId)
 pub pure_analyzer_analysis::RelationExpressionError::DistinctSchemaMismatch
+pub pure_analyzer_analysis::RelationExpressionError::DuplicateSortKeyColumn(pure_analyzer_analysis::ColumnId)
+pub pure_analyzer_analysis::RelationExpressionError::EmptySortKeys
 pub pure_analyzer_analysis::RelationExpressionError::FilterSchemaMismatch
 pub pure_analyzer_analysis::RelationExpressionError::InvalidLiteralType
 pub pure_analyzer_analysis::RelationExpressionError::JoinSchemaMismatch
 pub pure_analyzer_analysis::RelationExpressionError::NavigationMetadataMismatch
 pub pure_analyzer_analysis::RelationExpressionError::NonBooleanPredicate
 pub pure_analyzer_analysis::RelationExpressionError::ProjectionSchemaMismatch
+pub pure_analyzer_analysis::RelationExpressionError::SortSchemaMismatch
 pub pure_analyzer_analysis::RelationExpressionError::UnknownColumnReference(pure_analyzer_analysis::ColumnId)
 pub pure_analyzer_analysis::RelationExpressionError::UnknownKeyColumn(pure_analyzer_analysis::ColumnId)
+pub pure_analyzer_analysis::RelationExpressionError::UnknownSortKeyColumn(pure_analyzer_analysis::ColumnId)
 impl core::clone::Clone for pure_analyzer_analysis::RelationExpressionError
 pub fn pure_analyzer_analysis::RelationExpressionError::clone(&self) -> pure_analyzer_analysis::RelationExpressionError
 impl core::cmp::Eq for pure_analyzer_analysis::RelationExpressionError
@@ -455,6 +459,9 @@ pub pure_analyzer_analysis::RelationOperator::Project
 pub pure_analyzer_analysis::RelationOperator::Project::input: alloc::boxed::Box<pure_analyzer_analysis::RelationExpression>
 pub pure_analyzer_analysis::RelationOperator::Project::projections: alloc::vec::Vec<pure_analyzer_analysis::Projection>
 pub pure_analyzer_analysis::RelationOperator::Scan(pure_analyzer_analysis::RelationSource)
+pub pure_analyzer_analysis::RelationOperator::Sort
+pub pure_analyzer_analysis::RelationOperator::Sort::input: alloc::boxed::Box<pure_analyzer_analysis::RelationExpression>
+pub pure_analyzer_analysis::RelationOperator::Sort::keys: alloc::vec::Vec<pure_analyzer_analysis::SortKey>
 impl core::clone::Clone for pure_analyzer_analysis::RelationOperator
 pub fn pure_analyzer_analysis::RelationOperator::clone(&self) -> pure_analyzer_analysis::RelationOperator
 impl core::cmp::Eq for pure_analyzer_analysis::RelationOperator
@@ -757,6 +764,47 @@ impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::SchemaError where
 pub unsafe fn pure_analyzer_analysis::SchemaError::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for pure_analyzer_analysis::SchemaError
 pub fn pure_analyzer_analysis::SchemaError::from(T) -> T
+pub enum pure_analyzer_analysis::SortDirection
+pub pure_analyzer_analysis::SortDirection::Ascending
+pub pure_analyzer_analysis::SortDirection::Descending
+impl core::clone::Clone for pure_analyzer_analysis::SortDirection
+pub fn pure_analyzer_analysis::SortDirection::clone(&self) -> pure_analyzer_analysis::SortDirection
+impl core::cmp::Eq for pure_analyzer_analysis::SortDirection
+impl core::cmp::PartialEq for pure_analyzer_analysis::SortDirection
+pub fn pure_analyzer_analysis::SortDirection::eq(&self, &pure_analyzer_analysis::SortDirection) -> bool
+impl core::fmt::Debug for pure_analyzer_analysis::SortDirection
+pub fn pure_analyzer_analysis::SortDirection::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for pure_analyzer_analysis::SortDirection
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::SortDirection
+impl core::marker::Freeze for pure_analyzer_analysis::SortDirection
+impl core::marker::Send for pure_analyzer_analysis::SortDirection
+impl core::marker::Sync for pure_analyzer_analysis::SortDirection
+impl core::marker::Unpin for pure_analyzer_analysis::SortDirection
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::SortDirection
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::SortDirection
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::SortDirection
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::SortDirection where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::SortDirection::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::SortDirection where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::SortDirection::Error = never
+pub fn pure_analyzer_analysis::SortDirection::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::SortDirection where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::SortDirection::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::SortDirection::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::SortDirection where T: core::clone::Clone
+pub type pure_analyzer_analysis::SortDirection::Owned = T
+pub fn pure_analyzer_analysis::SortDirection::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::SortDirection::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::SortDirection where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::SortDirection::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::SortDirection where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::SortDirection::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::SortDirection where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::SortDirection::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::SortDirection where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::SortDirection::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::SortDirection
+pub fn pure_analyzer_analysis::SortDirection::from(T) -> T
 pub enum pure_analyzer_analysis::Totality
 pub pure_analyzer_analysis::Totality::Partial
 pub pure_analyzer_analysis::Totality::Total
@@ -1942,6 +1990,49 @@ impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::ScalarExpression 
 pub unsafe fn pure_analyzer_analysis::ScalarExpression::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for pure_analyzer_analysis::ScalarExpression
 pub fn pure_analyzer_analysis::ScalarExpression::from(T) -> T
+pub struct pure_analyzer_analysis::SortKey
+impl pure_analyzer_analysis::SortKey
+pub const fn pure_analyzer_analysis::SortKey::column(&self) -> pure_analyzer_analysis::ColumnId
+pub const fn pure_analyzer_analysis::SortKey::direction(&self) -> pure_analyzer_analysis::SortDirection
+pub fn pure_analyzer_analysis::SortKey::new(pure_analyzer_analysis::ColumnId, pure_analyzer_analysis::SortDirection, pure_analyzer_analysis::IrOrigin) -> Self
+pub const fn pure_analyzer_analysis::SortKey::origin(&self) -> &pure_analyzer_analysis::IrOrigin
+impl core::clone::Clone for pure_analyzer_analysis::SortKey
+pub fn pure_analyzer_analysis::SortKey::clone(&self) -> pure_analyzer_analysis::SortKey
+impl core::cmp::Eq for pure_analyzer_analysis::SortKey
+impl core::cmp::PartialEq for pure_analyzer_analysis::SortKey
+pub fn pure_analyzer_analysis::SortKey::eq(&self, &pure_analyzer_analysis::SortKey) -> bool
+impl core::fmt::Debug for pure_analyzer_analysis::SortKey
+pub fn pure_analyzer_analysis::SortKey::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::SortKey
+impl core::marker::Freeze for pure_analyzer_analysis::SortKey
+impl core::marker::Send for pure_analyzer_analysis::SortKey
+impl core::marker::Sync for pure_analyzer_analysis::SortKey
+impl core::marker::Unpin for pure_analyzer_analysis::SortKey
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::SortKey
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::SortKey
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::SortKey
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::SortKey where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::SortKey::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::SortKey where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::SortKey::Error = never
+pub fn pure_analyzer_analysis::SortKey::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::SortKey where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::SortKey::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::SortKey::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::SortKey where T: core::clone::Clone
+pub type pure_analyzer_analysis::SortKey::Owned = T
+pub fn pure_analyzer_analysis::SortKey::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::SortKey::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::SortKey where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::SortKey::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::SortKey where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::SortKey::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::SortKey where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::SortKey::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::SortKey where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::SortKey::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::SortKey
+pub fn pure_analyzer_analysis::SortKey::from(T) -> T
 pub struct pure_analyzer_analysis::SourceSpan
 impl pure_analyzer_analysis::SourceSpan
 pub const fn pure_analyzer_analysis::SourceSpan::file(self) -> pure_analyzer_diagnostics::file::FileId

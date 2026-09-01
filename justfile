@@ -77,7 +77,7 @@ test-unit:
 test-parser:
     cargo nextest run -p pure-analyzer-parser
 
-# Run the analysis crate's focused relational and pass contracts.
+# Run the analysis crate's focused relational and semantic contracts.
 test-analysis:
     cargo nextest run -p pure-analyzer-analysis
 
