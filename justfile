@@ -81,6 +81,10 @@ test-parser:
 test-cli:
     cargo nextest run -p pure-analyzer-cli
 
+# Run the LSP's focused protocol transcript suite.
+test-lsp:
+    cargo nextest run -p pure-analyzer-lsp
+
 # Run the libpure facade's focused driver contracts.
 test-libpure:
     cargo nextest run -p libpure

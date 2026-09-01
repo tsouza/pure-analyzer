@@ -635,6 +635,23 @@ impl AnalysisDriver {
         })
     }
 
+    /// Load and validate model inputs without requiring a query source.
+    ///
+    /// Protocol front ends use this when only configured model documents are
+    /// open, so a malformed model can be reported before a query document is
+    /// available for linting.
+    ///
+    /// # Errors
+    ///
+    /// Returns model diagnostics in deterministic input order, or a typed
+    /// [`DriverError`] when retaining or loading a model input fails.
+    pub fn validate_models(&self, models: &[ModelInput]) -> Result<Vec<Diagnostic>, DriverError> {
+        let sources = SourceStore::load(models.iter().map(ModelInput::source).cloned())
+            .map_err(DriverError::model_source_load)?;
+        Ok(load_model(&sources, models)?
+            .map_or_else(Vec::new, |graph| graph.diagnostics().to_vec()))
+    }
+
     /// Resolve the supported reference at one byte position to its definition.
     ///
     /// The lookup keeps protocol position conversion outside the analysis
@@ -1581,6 +1598,38 @@ Class model::Person
         assert!(matches!(
             driver.lint(&malformed_model),
             Err(DriverError::ModelLoad { .. })
+        ));
+    }
+
+    #[test]
+    fn model_validation_reports_model_loading_without_a_query_source() {
+        let driver = AnalysisDriver;
+        let diagnostics = driver
+            .validate_models(&[ModelInput::pmcd(SourceInput::in_memory(
+                "model.pmcd",
+                MODEL,
+            ))])
+            .expect("valid model without query source");
+        assert!(diagnostics.is_empty());
+
+        let diagnostics = driver
+            .validate_models(&[
+                ModelInput::pmcd(SourceInput::in_memory("first.pmcd", MODEL)),
+                ModelInput::pure(SourceInput::in_memory("second.pure", PURE_MODEL)),
+            ])
+            .expect("merged models without query source");
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(diagnostics[0].code, DiagCode::ModelMergeConflict);
+        assert_eq!(diagnostics[0].primary.file, FileId::new(1));
+
+        let error = driver
+            .validate_models(&[ModelInput::pmcd(SourceInput::in_memory("broken.pmcd", "{"))])
+            .expect_err("malformed model must fail without query source");
+        assert!(matches!(
+            error,
+            DriverError::ModelLoad {
+                source: ModelError::Json { source_name, .. }
+            } if source_name == "broken.pmcd"
         ));
     }
 

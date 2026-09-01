@@ -462,6 +462,7 @@ pub fn libpure::AnalysisDriver::format(&self, &libpure::SourceRequest) -> core::
 pub fn libpure::AnalysisDriver::lint(&self, &libpure::LintRequest) -> core::result::Result<libpure::AnalysisOutput, libpure::DriverError>
 pub fn libpure::AnalysisDriver::parse(&self, &libpure::SourceRequest) -> core::result::Result<libpure::ParseOutput, libpure::DriverError>
 pub fn libpure::AnalysisDriver::validate(&self, &libpure::SourceRequest) -> core::result::Result<libpure::AnalysisOutput, libpure::DriverError>
+pub fn libpure::AnalysisDriver::validate_models(&self, &[libpure::ModelInput]) -> core::result::Result<alloc::vec::Vec<pure_analyzer_diagnostics::diagnostic::Diagnostic>, libpure::DriverError>
 impl core::clone::Clone for libpure::AnalysisDriver
 pub fn libpure::AnalysisDriver::clone(&self) -> libpure::AnalysisDriver
 impl core::default::Default for libpure::AnalysisDriver

@@ -7,7 +7,25 @@ use pure_analyzer_lsp::{
     CancellationRegistry, DocumentSnapshot, DocumentStore, RequestId, Server, ServerExit,
     WorkspaceConfiguration,
 };
-use serde_json::Value;
+use serde_json::{Map, Value};
+
+const PURE_WINNER_MODEL: &str = "Class demo::Winner\n{\n  value: String[0..1];\n}";
+const PMCD_WINNER_MODEL: &str = r#"{
+    "_type": "data",
+    "elements": [{
+        "_type": "class",
+        "package": "demo",
+        "name": "Winner",
+        "stereotypes": [],
+        "superTypes": [],
+        "properties": [{
+            "name": "value",
+            "genericType": {"rawType": "Integer", "typeArguments": []},
+            "multiplicity": {"lowerBound": 1, "upperBound": 1}
+        }],
+        "qualifiedProperties": []
+    }]
+}"#;
 
 #[test]
 fn startup_shutdown_and_exit_follow_one_deterministic_transcript() {
@@ -25,16 +43,29 @@ fn startup_shutdown_and_exit_follow_one_deterministic_transcript() {
             .expect("valid transcript"),
         ServerExit::Clean
     );
-    let initialize = format!(
-        r#"{{"jsonrpc":"2.0","id":1,"result":{{"capabilities":{{}},"serverInfo":{{"name":"pure-analyzer-lsp","version":"{}"}}}}}}"#,
+    let frames = responses(&output);
+    assert_eq!(frames.len(), 2);
+    assert_eq!(frames[0]["jsonrpc"], "2.0");
+    assert_eq!(frames[0]["id"], 1);
+    assert_eq!(
+        frames[0]["result"]["capabilities"]["positionEncoding"],
+        "utf-16"
+    );
+    assert_eq!(
+        frames[0]["result"]["capabilities"]["textDocumentSync"],
+        value(r#"{"openClose":true,"change":2,"save":{"includeText":false}}"#)
+    );
+    assert_eq!(
+        frames[0]["result"]["serverInfo"]["name"],
+        "pure-analyzer-lsp"
+    );
+    assert_eq!(
+        frames[0]["result"]["serverInfo"]["version"],
         env!("CARGO_PKG_VERSION")
     );
     assert_eq!(
-        responses(&output),
-        vec![
-            value(&initialize),
-            value(r#"{"jsonrpc":"2.0","id":2,"result":null}"#),
-        ]
+        frames[1],
+        value(r#"{"jsonrpc":"2.0","id":2,"result":null}"#)
     );
 }
 
@@ -101,6 +132,203 @@ fn numeric_cancellation_and_document_close_stay_at_the_front_end() {
     );
     assert!(server.cancellation().is_cancelled(&RequestId::Number(7)));
     assert!(server.documents().is_empty());
+}
+
+#[test]
+fn unicode_incremental_lifecycle_rejects_stale_and_invalid_changes() {
+    let mut server = Server::new();
+    let mut output = Vec::new();
+    let mut input = Cursor::new(transcript(&[
+        value(r#"{"jsonrpc":"2.0","id":1,"method":"initialize"}"#),
+        value(
+            r#"{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"untitled:unicode","version":1,"text":"/* 😀 */ [a,]"}}}"#,
+        ),
+        value(
+            r#"{"jsonrpc":"2.0","method":"textDocument/didChange","params":{"textDocument":{"uri":"untitled:unicode","version":2},"contentChanges":[{"range":{"start":{"line":0,"character":12},"end":{"line":0,"character":13}},"rangeLength":1,"text":"b]"}]}}"#,
+        ),
+        value(
+            r#"{"jsonrpc":"2.0","method":"textDocument/didSave","params":{"textDocument":{"uri":"untitled:unicode"}}}"#,
+        ),
+        value(
+            r#"{"jsonrpc":"2.0","method":"textDocument/didChange","params":{"textDocument":{"uri":"untitled:unicode","version":1},"contentChanges":[{"text":"[a,]"}]}}"#,
+        ),
+        value(
+            r#"{"jsonrpc":"2.0","method":"textDocument/didChange","params":{"textDocument":{"uri":"untitled:unicode","version":3},"contentChanges":[{"range":{"start":{"line":0,"character":12},"end":{"line":0,"character":13}},"rangeLength":2,"text":"c"}]}}"#,
+        ),
+        value(
+            r#"{"jsonrpc":"2.0","method":"textDocument/didChange","params":{"textDocument":{"uri":"untitled:unicode","version":4},"contentChanges":[{"range":{"start":{"line":0,"character":4},"end":{"line":0,"character":5}},"rangeLength":1,"text":"x"}]}}"#,
+        ),
+        value(
+            r#"{"jsonrpc":"2.0","method":"textDocument/didClose","params":{"textDocument":{"uri":"untitled:unicode"}}}"#,
+        ),
+        value(r#"{"jsonrpc":"2.0","id":2,"method":"shutdown"}"#),
+        value(r#"{"jsonrpc":"2.0","method":"exit"}"#),
+    ]));
+
+    assert_eq!(
+        server
+            .serve(&mut input, &mut output)
+            .expect("valid transcript"),
+        ServerExit::Clean
+    );
+    let publications = published_diagnostics(&output);
+    assert_eq!(publications.len(), 4);
+    assert_eq!(
+        publications[0],
+        value(
+            r#"{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"untitled:unicode","version":1,"diagnostics":[{"range":{"start":{"line":0,"character":12},"end":{"line":0,"character":13}},"severity":1,"code":"PUR1200","source":"pure-analyzer","message":"expected an expression after `,`"}]}}"#,
+        )
+    );
+    for publication in &publications[1..] {
+        assert_eq!(publication["params"]["uri"], "untitled:unicode");
+        assert_eq!(publication["params"]["version"], 2);
+        assert_eq!(publication["params"]["diagnostics"], value("[]"));
+    }
+    assert!(server.documents().is_empty());
+}
+
+#[test]
+fn incomplete_unconfigured_document_publishes_a_deterministic_diagnostic() {
+    let mut server = Server::new();
+    let mut output = Vec::new();
+    let mut input = Cursor::new(transcript(&[
+        value(r#"{"jsonrpc":"2.0","id":1,"method":"initialize"}"#),
+        value(
+            r#"{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///query.pmcd","version":7,"text":"[a,]"}}}"#,
+        ),
+        value(r#"{"jsonrpc":"2.0","id":2,"method":"shutdown"}"#),
+        value(r#"{"jsonrpc":"2.0","method":"exit"}"#),
+    ]));
+
+    assert_eq!(
+        server
+            .serve(&mut input, &mut output)
+            .expect("valid transcript"),
+        ServerExit::Clean
+    );
+    assert_eq!(
+        published_diagnostics(&output),
+        vec![value(
+            r#"{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///query.pmcd","version":7,"diagnostics":[{"range":{"start":{"line":0,"character":3},"end":{"line":0,"character":4}},"severity":1,"code":"PUR1200","source":"pure-analyzer","message":"expected an expression after `,`"}]}}"#,
+        )]
+    );
+}
+
+#[test]
+fn configured_multi_file_models_publish_findings_to_their_explicit_routes() {
+    let mut server = Server::new();
+    let mut output = Vec::new();
+    let mut input = Cursor::new(transcript(&[
+        value(r#"{"jsonrpc":"2.0","id":1,"method":"initialize"}"#),
+        value(
+            r#"{"jsonrpc":"2.0","method":"workspace/didChangeConfiguration","params":{"settings":{"modelDocuments":[{"uri":"untitled:domain-one","kind":"pure"},{"uri":"untitled:domain-two","kind":"pmcd"}]}}}"#,
+        ),
+        did_open("untitled:domain-one", 1, PURE_WINNER_MODEL),
+        did_open("untitled:domain-two", 1, PMCD_WINNER_MODEL),
+        value(
+            r#"{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///query.pmcd","version":1,"text":"demo::Winner.all()"}}}"#,
+        ),
+        value(r#"{"jsonrpc":"2.0","id":2,"method":"shutdown"}"#),
+        value(r#"{"jsonrpc":"2.0","method":"exit"}"#),
+    ]));
+
+    assert_eq!(
+        server
+            .serve(&mut input, &mut output)
+            .expect("valid transcript"),
+        ServerExit::Clean
+    );
+    let publications = published_diagnostics(&output);
+    assert_eq!(publications.len(), 6);
+    let final_publications = &publications[3..];
+    let first_model = publication_for(final_publications, "untitled:domain-one");
+    let second_model = publication_for(final_publications, "untitled:domain-two");
+    let query = publication_for(final_publications, "file:///query.pmcd");
+    assert_eq!(first_model["params"]["diagnostics"], value("[]"));
+    assert_eq!(query["params"]["diagnostics"], value("[]"));
+    assert_eq!(
+        second_model["params"]["diagnostics"],
+        value(
+            r#"[{"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":0}},"severity":2,"code":"PUR9000","source":"pure-analyzer","message":"model element `demo::Winner` from `untitled:domain-two` replaces the definition from `untitled:domain-one`"}]"#,
+        )
+    );
+}
+
+#[test]
+fn model_only_routes_publish_merge_diagnostics_without_queries() {
+    let mut server = Server::new();
+    let mut output = Vec::new();
+    let mut input = Cursor::new(transcript(&[
+        value(r#"{"jsonrpc":"2.0","id":1,"method":"initialize"}"#),
+        value(
+            r#"{"jsonrpc":"2.0","method":"workspace/didChangeConfiguration","params":{"settings":{"modelDocuments":[{"uri":"untitled:domain-one","kind":"pure"},{"uri":"untitled:domain-two","kind":"pmcd"}]}}}"#,
+        ),
+        did_open("untitled:domain-one", 1, PURE_WINNER_MODEL),
+        did_open("untitled:domain-two", 1, PMCD_WINNER_MODEL),
+        value(r#"{"jsonrpc":"2.0","id":2,"method":"shutdown"}"#),
+        value(r#"{"jsonrpc":"2.0","method":"exit"}"#),
+    ]));
+
+    assert_eq!(
+        server
+            .serve(&mut input, &mut output)
+            .expect("valid transcript"),
+        ServerExit::Clean
+    );
+    let publications = published_diagnostics(&output);
+    assert_eq!(publications.len(), 3);
+    let final_publications = &publications[1..];
+    let first_model = publication_for(final_publications, "untitled:domain-one");
+    let second_model = publication_for(final_publications, "untitled:domain-two");
+    assert_eq!(first_model["params"]["diagnostics"], value("[]"));
+    assert_eq!(
+        second_model["params"]["diagnostics"],
+        value(
+            r#"[{"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":0}},"severity":2,"code":"PUR9000","source":"pure-analyzer","message":"model element `demo::Winner` from `untitled:domain-two` replaces the definition from `untitled:domain-one`"}]"#,
+        )
+    );
+}
+
+#[test]
+fn malformed_configured_pmcd_is_reported_without_queries_and_after_query_close() {
+    let mut server = Server::new();
+    let mut output = Vec::new();
+    let mut input = Cursor::new(transcript(&[
+        value(r#"{"jsonrpc":"2.0","id":1,"method":"initialize"}"#),
+        value(
+            r#"{"jsonrpc":"2.0","method":"workspace/didChangeConfiguration","params":{"settings":{"modelDocuments":[{"uri":"untitled:broken","kind":"pmcd"}]}}}"#,
+        ),
+        value(
+            r#"{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"untitled:broken","version":1,"text":"{"}}}"#,
+        ),
+        value(
+            r#"{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///query.pure","version":1,"text":"demo::Winner.all()"}}}"#,
+        ),
+        value(
+            r#"{"jsonrpc":"2.0","method":"textDocument/didClose","params":{"textDocument":{"uri":"file:///query.pure"}}}"#,
+        ),
+        value(r#"{"jsonrpc":"2.0","id":2,"method":"shutdown"}"#),
+        value(r#"{"jsonrpc":"2.0","method":"exit"}"#),
+    ]));
+
+    assert_eq!(
+        server
+            .serve(&mut input, &mut output)
+            .expect("valid transcript"),
+        ServerExit::Clean
+    );
+    let publications = published_diagnostics(&output);
+    assert_eq!(publications.len(), 5);
+    let model_publications = publications_for(&publications, "untitled:broken");
+    assert_eq!(model_publications.len(), 3);
+    for publication in model_publications {
+        assert_model_load_diagnostic(publication);
+    }
+    let query_publications = publications_for(&publications, "file:///query.pure");
+    assert_eq!(query_publications.len(), 2);
+    for publication in query_publications {
+        assert_eq!(publication["params"]["diagnostics"], value("[]"));
+    }
 }
 
 #[test]
@@ -212,8 +440,73 @@ fn workspace_configuration_distinguishes_initial_and_replaced_values() {
     );
 }
 
+fn published_diagnostics(output: &[u8]) -> Vec<Value> {
+    responses(output)
+        .into_iter()
+        .filter(|message| message["method"] == "textDocument/publishDiagnostics")
+        .collect()
+}
+
+fn publication_for<'a>(publications: &'a [Value], uri: &str) -> &'a Value {
+    let matches = publications_for(publications, uri);
+    assert_eq!(matches.len(), 1, "expected one publication for {uri}");
+    matches[0]
+}
+
+fn publications_for<'a>(publications: &'a [Value], uri: &str) -> Vec<&'a Value> {
+    publications
+        .iter()
+        .filter(|publication| publication["params"]["uri"] == uri)
+        .collect()
+}
+
+fn assert_model_load_diagnostic(publication: &Value) {
+    let diagnostics = publication["params"]["diagnostics"]
+        .as_array()
+        .expect("diagnostics array");
+    assert_eq!(diagnostics.len(), 1);
+    let diagnostic = &diagnostics[0];
+    assert_eq!(
+        diagnostic["range"],
+        value(r#"{"start":{"line":0,"character":0},"end":{"line":0,"character":0}}"#)
+    );
+    assert_eq!(diagnostic["severity"], 1);
+    assert_eq!(diagnostic["code"], Value::Null);
+    assert_eq!(diagnostic["source"], "pure-analyzer");
+    assert!(diagnostic["message"].as_str().is_some_and(|message| {
+        message.starts_with("PMCD source `untitled:broken` is not valid JSON")
+    }));
+}
+
+fn did_open(uri: &str, version: i64, text: &str) -> Value {
+    object([
+        ("jsonrpc", Value::String("2.0".to_owned())),
+        ("method", Value::String("textDocument/didOpen".to_owned())),
+        (
+            "params",
+            object([(
+                "textDocument",
+                object([
+                    ("uri", Value::String(uri.to_owned())),
+                    ("version", Value::Number(version.into())),
+                    ("text", Value::String(text.to_owned())),
+                ]),
+            )]),
+        ),
+    ])
+}
+
 fn value(source: &str) -> Value {
     serde_json::from_str(source).expect("test JSON must parse")
+}
+
+fn object(fields: impl IntoIterator<Item = (&'static str, Value)>) -> Value {
+    Value::Object(
+        fields
+            .into_iter()
+            .map(|(name, value)| (name.to_owned(), value))
+            .collect::<Map<_, _>>(),
+    )
 }
 
 fn transcript(messages: &[Value]) -> Vec<u8> {

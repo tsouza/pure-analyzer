@@ -1173,6 +1173,7 @@ dependencies = [
 name = "pure-analyzer-lsp"
 version = "0.1.0"
 dependencies = [
+ "libpure",
  "serde_json",
 ]
 
