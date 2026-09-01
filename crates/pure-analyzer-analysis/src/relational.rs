@@ -1103,13 +1103,67 @@ mod tests {
         )
     }
 
+    fn multiplicity(lower: u32, upper: Option<u32>) -> Multiplicity {
+        Multiplicity::new(lower, upper).expect("fixture multiplicity must be valid")
+    }
+
+    fn type_with_argument(raw_type: &str) -> TypeRef {
+        TypeRef::new(
+            QName::new(raw_type).expect("fixture type must be valid"),
+            vec![string_type()],
+        )
+    }
+
+    fn literal_expression(
+        literal: ScalarLiteral,
+        type_ref: TypeRef,
+        multiplicity: Multiplicity,
+        nullability: Nullability,
+    ) -> ScalarExpression {
+        ScalarExpression::new(
+            ScalarOperator::Literal(literal),
+            type_ref,
+            multiplicity,
+            nullability,
+            Knowledge::unknown(),
+            origin(),
+        )
+    }
+
+    fn assert_accepted_literal(
+        literal: ScalarLiteral,
+        type_ref: TypeRef,
+        multiplicity: Multiplicity,
+        nullability: Nullability,
+    ) {
+        let expression = literal_expression(literal.clone(), type_ref, multiplicity, nullability);
+
+        assert_eq!(validate_literal(&expression, &literal), Ok(()));
+    }
+
+    fn assert_rejected_literal(
+        literal: ScalarLiteral,
+        type_ref: TypeRef,
+        multiplicity: Multiplicity,
+        nullability: Nullability,
+    ) {
+        let expression = literal_expression(literal.clone(), type_ref, multiplicity, nullability);
+
+        assert_eq!(
+            validate_literal(&expression, &literal),
+            Err(RelationExpressionError::InvalidLiteralType)
+        );
+    }
+
     #[test]
     fn schema_preserves_explicit_output_order_and_identity() {
         let schema = schema();
 
         assert_eq!(schema.columns()[0].id(), ColumnId::new(FIRST_COLUMN));
+        assert_eq!(schema.columns()[0].id().index(), FIRST_COLUMN);
         assert_eq!(schema.columns()[0].name().as_str(), "zeta");
         assert_eq!(schema.columns()[1].id(), ColumnId::new(SECOND_COLUMN));
+        assert_eq!(schema.columns()[1].id().index(), SECOND_COLUMN);
         assert_eq!(schema.columns()[1].name().as_str(), "alpha");
     }
 
@@ -1185,6 +1239,7 @@ mod tests {
         assert!(facts.candidate_keys().is_unknown());
         assert!(facts.row_semantics().is_unknown());
         assert!(scalar.totality().is_unknown());
+        assert!(!Knowledge::proven(RowSemantics::Bag, origin()).is_unknown());
         assert!(matches!(
             bag_facts.row_semantics(),
             Knowledge::Proven {
@@ -1225,6 +1280,219 @@ mod tests {
             Some((keys, _)) if keys.is_empty()
         ));
         assert!(RelationFacts::unknown().candidate_keys().is_unknown());
+    }
+
+    #[test]
+    fn scalar_validation_preserves_every_column_metadata_field() {
+        let column = column(
+            FIRST_COLUMN,
+            "value",
+            multiplicity(EXACTLY_ONE, Some(EXACTLY_ONE)),
+        );
+        let matching = scalar_column(&column);
+        let wrong_type = ScalarExpression::new(
+            ScalarOperator::Column(column.id()),
+            boolean_type(),
+            column.multiplicity(),
+            column.nullability(),
+            Knowledge::unknown(),
+            origin(),
+        );
+        let wrong_multiplicity = ScalarExpression::new(
+            ScalarOperator::Column(column.id()),
+            column.type_ref().clone(),
+            Multiplicity::zero_or_more(),
+            column.nullability(),
+            Knowledge::unknown(),
+            origin(),
+        );
+        let wrong_nullability = ScalarExpression::new(
+            ScalarOperator::Column(column.id()),
+            column.type_ref().clone(),
+            column.multiplicity(),
+            Nullability::NonNullable,
+            Knowledge::unknown(),
+            origin(),
+        );
+
+        assert!(same_column_metadata(&matching, &column));
+        assert!(!same_column_metadata(&wrong_type, &column));
+        assert!(!same_column_metadata(&wrong_multiplicity, &column));
+        assert!(!same_column_metadata(&wrong_nullability, &column));
+    }
+
+    #[test]
+    fn join_schema_requires_the_ordered_concatenation_of_both_inputs() {
+        let left = schema();
+        let right = RelationSchema::new(vec![column(
+            UNKNOWN_COLUMN,
+            "right",
+            Multiplicity::zero_or_more(),
+        )])
+        .expect("fixture schema must be valid");
+        let joined = RelationSchema::new(
+            left.columns()
+                .iter()
+                .chain(right.columns())
+                .cloned()
+                .collect(),
+        )
+        .expect("fixture schema must be valid");
+
+        assert!(is_join_schema(&joined, &left, &right));
+        assert!(!is_join_schema(&left, &left, &right));
+    }
+
+    #[test]
+    fn literal_validation_requires_every_supported_metadata_fact() {
+        let exactly_one = multiplicity(EXACTLY_ONE, Some(EXACTLY_ONE));
+        let optional = multiplicity(0, Some(EXACTLY_ONE));
+
+        assert_accepted_literal(
+            ScalarLiteral::Boolean(true),
+            boolean_type(),
+            exactly_one,
+            Nullability::NonNullable,
+        );
+        assert_rejected_literal(
+            ScalarLiteral::Boolean(true),
+            type_with_argument(BOOLEAN_TYPE),
+            exactly_one,
+            Nullability::NonNullable,
+        );
+        assert_rejected_literal(
+            ScalarLiteral::Boolean(true),
+            string_type(),
+            exactly_one,
+            Nullability::NonNullable,
+        );
+        assert_rejected_literal(
+            ScalarLiteral::Boolean(true),
+            boolean_type(),
+            optional,
+            Nullability::NonNullable,
+        );
+        assert_rejected_literal(
+            ScalarLiteral::Boolean(true),
+            boolean_type(),
+            exactly_one,
+            Nullability::Nullable,
+        );
+
+        assert_accepted_literal(
+            ScalarLiteral::Integer(7),
+            integer_type(),
+            exactly_one,
+            Nullability::NonNullable,
+        );
+        assert_rejected_literal(
+            ScalarLiteral::Integer(7),
+            type_with_argument(INTEGER_TYPE),
+            exactly_one,
+            Nullability::NonNullable,
+        );
+        assert_rejected_literal(
+            ScalarLiteral::Integer(7),
+            string_type(),
+            exactly_one,
+            Nullability::NonNullable,
+        );
+        assert_rejected_literal(
+            ScalarLiteral::Integer(7),
+            integer_type(),
+            optional,
+            Nullability::NonNullable,
+        );
+        assert_rejected_literal(
+            ScalarLiteral::Integer(7),
+            integer_type(),
+            exactly_one,
+            Nullability::Nullable,
+        );
+
+        assert_accepted_literal(
+            ScalarLiteral::String("value".to_owned()),
+            string_type(),
+            exactly_one,
+            Nullability::NonNullable,
+        );
+        assert_rejected_literal(
+            ScalarLiteral::String("value".to_owned()),
+            type_with_argument(STRING_TYPE),
+            exactly_one,
+            Nullability::NonNullable,
+        );
+        assert_rejected_literal(
+            ScalarLiteral::String("value".to_owned()),
+            boolean_type(),
+            exactly_one,
+            Nullability::NonNullable,
+        );
+        assert_rejected_literal(
+            ScalarLiteral::String("value".to_owned()),
+            string_type(),
+            optional,
+            Nullability::NonNullable,
+        );
+        assert_rejected_literal(
+            ScalarLiteral::String("value".to_owned()),
+            string_type(),
+            exactly_one,
+            Nullability::Nullable,
+        );
+
+        assert_accepted_literal(
+            ScalarLiteral::Null,
+            boolean_type(),
+            exactly_one,
+            Nullability::Nullable,
+        );
+        assert_rejected_literal(
+            ScalarLiteral::Null,
+            boolean_type(),
+            optional,
+            Nullability::Nullable,
+        );
+        assert_rejected_literal(
+            ScalarLiteral::Null,
+            boolean_type(),
+            exactly_one,
+            Nullability::NonNullable,
+        );
+    }
+
+    #[test]
+    fn boolean_validation_requires_boolean_exactly_one_non_null_metadata() {
+        let valid = boolean_literal(true);
+        let wrong_type = ScalarExpression::new(
+            ScalarOperator::Literal(ScalarLiteral::Boolean(true)),
+            integer_type(),
+            multiplicity(EXACTLY_ONE, Some(EXACTLY_ONE)),
+            Nullability::NonNullable,
+            Knowledge::unknown(),
+            origin(),
+        );
+        let nullable = ScalarExpression::new(
+            ScalarOperator::Literal(ScalarLiteral::Boolean(true)),
+            boolean_type(),
+            multiplicity(EXACTLY_ONE, Some(EXACTLY_ONE)),
+            Nullability::Nullable,
+            Knowledge::unknown(),
+            origin(),
+        );
+
+        assert_eq!(validate_boolean(&valid), Ok(()));
+        assert_eq!(
+            validate_boolean(&wrong_type),
+            Err(RelationExpressionError::NonBooleanPredicate)
+        );
+        assert_eq!(
+            validate_boolean(&nullable),
+            Err(RelationExpressionError::NonBooleanPredicate)
+        );
+        assert!(is_exactly_one(multiplicity(EXACTLY_ONE, Some(EXACTLY_ONE))));
+        assert!(!is_exactly_one(multiplicity(0, Some(EXACTLY_ONE))));
+        assert!(!is_exactly_one(multiplicity(EXACTLY_ONE, None)));
     }
 
     #[test]
