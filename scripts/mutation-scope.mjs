@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
-// Plan a fail-closed incremental cargo-mutants run for a pull request. Direct
-// PR runs use the event head; merge groups stay on the full synthetic candidate.
+// Plan a fail-closed incremental cargo-mutants run. Direct-PR CI may defer
+// known full fallbacks to nightly while keeping planner-integrity failures hard.
 import { appendFile, mkdir, open, rename, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
@@ -10,6 +10,8 @@ import { runCommand } from "./lib/process.mjs";
 
 export const FULL_MUTATION_SHARDS = 12;
 export const MUTANTS_PER_DIFF_SHARD = 75;
+export const PR_DIFF_MUTANTS_PER_SHARD = 12;
+export const PR_DIFF_MAX_SHARDS = 3;
 export const MUTATION_COMMAND_TIMEOUT_SECONDS = "120";
 export const PLANNER_COMMAND_TIMEOUT_MS = 2 * 60 * 1_000;
 export const PLANNER_COMMAND_MAX_BUFFER_BYTES = 8 * 1024 * 1024;
@@ -35,6 +37,15 @@ const INLINE_TEST_MACRO = /\b(?:\w*test\w*|quickcheck)\s*!/;
 const RUSTDOC_FENCE = /```/;
 const DIFF_OPTIONS = ["--no-ext-diff", "--no-renames", "--no-textconv", "--unified=0"];
 const USAGE = "usage: bun scripts/mutation-scope.mjs <plan|prepare>";
+const DEFERRED_FULL_REASONS = new Set([
+  "documentation-change",
+  "empty-change-set",
+  "inline-test-surface",
+  "non-production-or-configuration-change",
+  "non-pull-request-event",
+  "rename-delete-or-type-change",
+  "zero-diff-mutant-list",
+]);
 
 /** Parse NUL-delimited `git diff --name-status -z` output. */
 export function parseNameStatus(output) {
@@ -170,6 +181,13 @@ export function diffShardCount(mutantCount) {
   );
 }
 
+/** Number of shards for the bounded direct-PR mutation lane, or zero when deferred. */
+export function prDiffShardCount(mutantCount) {
+  if (!Number.isSafeInteger(mutantCount) || mutantCount < 1) return 0;
+  const shardTotal = Math.ceil(mutantCount / PR_DIFF_MUTANTS_PER_SHARD);
+  return shardTotal <= PR_DIFF_MAX_SHARDS ? shardTotal : 0;
+}
+
 /** Create the GitHub Actions matrix, including a sentinel for a skipped run. */
 export function mutationMatrix(scope, total) {
   const shardTotal = scope === "skip" ? 1 : total;
@@ -217,13 +235,33 @@ export function eventFallbackPlan(eventName, draft) {
   return undefined;
 }
 
+/** Apply the bounded direct-PR lane, deferring full proofs to a valid sentinel. */
+export function deferFullPlan(plan, deferFull = false) {
+  if (!deferFull) return plan;
+  if (plan.scope === "full") {
+    if (!DEFERRED_FULL_REASONS.has(plan.reason)) {
+      throw new Error(`full mutation plan is not safely deferrable: ${plan.reason}`);
+    }
+    return skippedPlan(`deferred-${plan.reason}`);
+  }
+  if (plan.scope !== "diff") return plan;
+
+  const shardTotal = prDiffShardCount(plan.mutantCount);
+  if (shardTotal === 0) return skippedPlan("deferred-pr-diff-budget-exceeded");
+  return { ...plan, matrix: mutationMatrix("diff", shardTotal) };
+}
+
 /** Turn a classified change set and list result into a fail-closed plan. */
 export function planFromClassification(classification, details = {}) {
   if (classification.scope === "skip") return skippedPlan(classification.reason);
   if (classification.scope !== "diff") return fullPlan(classification.reason);
 
-  const shardTotal = diffShardCount(details.mutantCount);
-  if (shardTotal === 0) return fullPlan("zero-or-invalid-diff-mutant-list");
+  const mutantCount = details.mutantCount;
+  if (!Number.isSafeInteger(mutantCount) || mutantCount < 0) {
+    return fullPlan("invalid-diff-mutant-list");
+  }
+  if (mutantCount === 0) return fullPlan("zero-diff-mutant-list");
+  const shardTotal = diffShardCount(mutantCount);
   if (
     !isGitSha(details.mergeBase ?? "") ||
     !isGitSha(details.headSha ?? "") ||
@@ -415,36 +453,55 @@ async function emitPlan(plan) {
   );
 }
 
-async function planFromEnvironment() {
+export async function planFromEnvironment(environment = process.env, dependencies = {}) {
+  const {
+    checkedOutHead: verifyHead = checkedOutHead,
+    changedPaths: listChangedPaths = changedPaths,
+    classifyCheckedOutChanges: classify = classifyCheckedOutChanges,
+    listedMutantCount: countMutants = listedMutantCount,
+    mergeBase: findMergeBase = mergeBase,
+    repoRoot: findRepoRoot = repoRoot,
+    writeDiff: writeMutationDiff = writeDiff,
+  } = dependencies;
+  const deferFull = environment.MUTATION_DEFER_FULL === "true";
+  const applyDeferral = (plan) => deferFullPlan(plan, deferFull);
   const eventFallback = eventFallbackPlan(
-    process.env.GITHUB_EVENT_NAME,
-    process.env.MUTATION_PR_DRAFT,
+    environment.GITHUB_EVENT_NAME,
+    environment.MUTATION_PR_DRAFT,
   );
-  if (eventFallback) return eventFallback;
+  if (eventFallback) return applyDeferral(eventFallback);
 
   try {
-    const root = await repoRoot();
-    const headSha = await checkedOutHead(root, process.env.MUTATION_HEAD_SHA ?? "");
-    const baseSha = await mergeBase(root, process.env.MUTATION_BASE_SHA ?? "", headSha);
-    const changes = await changedPaths(root, baseSha, headSha);
-    const classification = await classifyCheckedOutChanges(
+    const root = await findRepoRoot();
+    const headSha = await verifyHead(root, environment.MUTATION_HEAD_SHA ?? "");
+    const baseSha = await findMergeBase(root, environment.MUTATION_BASE_SHA ?? "", headSha);
+    const changes = await listChangedPaths(root, baseSha, headSha);
+    const classification = await classify(
       root,
       baseSha,
       headSha,
       changes,
     );
-    if (classification.scope !== "diff") return planFromClassification(classification);
+    if (classification.scope !== "diff") {
+      return applyDeferral(planFromClassification(classification));
+    }
 
-    const diffPath = join(process.env.RUNNER_TEMP ?? root, "mutation-scope.diff");
-    const diffSha256 = await writeDiff(root, baseSha, headSha, diffPath);
-    const mutantCount = await listedMutantCount(root, diffPath);
-    return planFromClassification(classification, {
-      diffSha256,
-      headSha,
-      mergeBase: baseSha,
-      mutantCount,
-    });
+    const diffPath = join(environment.RUNNER_TEMP ?? root, "mutation-scope.diff");
+    const diffSha256 = await writeMutationDiff(root, baseSha, headSha, diffPath);
+    const mutantCount = await countMutants(root, diffPath);
+    return applyDeferral(
+      planFromClassification(classification, {
+        diffSha256,
+        headSha,
+        mergeBase: baseSha,
+        mutantCount,
+      }),
+    );
   } catch (error) {
+    if (deferFull) {
+      notice("incremental mutation planning failed; direct-PR CI fails closed");
+      throw error;
+    }
     notice("incremental mutation planning failed closed");
     return fullPlan("invalid-diff-or-mutant-list");
   }

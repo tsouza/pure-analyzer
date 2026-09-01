@@ -1,0 +1,168 @@
+name: Mutation
+
+# Full mutation testing is intentionally outside review and merge-queue CI: it
+# proves test sensitivity without turning ambiguous changes into a long PR gate.
+on:
+  schedule:
+    # Avoid GitHub's top-of-hour scheduling congestion.
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+concurrency:
+  # Never discard a completed-or-pending nightly proof for a manual request.
+  group: mutation-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # The shared planner is retained as the single source of truth for the
+  # twelve-shard matrix. Every event here is non-PR, so it emits a full plan.
+  mutation-plan:
+    name: mutation-plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      diff_sha256: ${{ steps.plan.outputs.diff_sha256 }}
+      head_sha: ${{ steps.plan.outputs.head_sha }}
+      matrix: ${{ steps.plan.outputs.matrix }}
+      merge_base: ${{ steps.plan.outputs.merge_base }}
+      scope: ${{ steps.plan.outputs.scope }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - uses: taiki-e/install-action@b6ff580856c41316412a0b9b60540fbc6f8c82cc # v2.86.7
+        with:
+          tool: cargo-mutants@27.1.0,just
+      - id: plan
+        run: just plan-mutation
+      - name: Require the full mutation matrix
+        if: steps.plan.outputs.scope != 'full'
+        run: exit 1
+
+  mutation:
+    name: mutation (full ${{ matrix.index }}/${{ matrix.total }})
+    needs: mutation-plan
+    if: needs.mutation-plan.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix: ${{ fromJSON(needs.mutation-plan.outputs.matrix) }}
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: sccache
+      CARGO_INCREMENTAL: "0"
+      MUTATION_SHARD_INDEX: ${{ matrix.index }}
+      MUTATION_SHARD_TOTAL: ${{ matrix.total }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba # v0.0.11
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - uses: taiki-e/install-action@b6ff580856c41316412a0b9b60540fbc6f8c82cc # v2.86.7
+        with:
+          tool: cargo-mutants@27.1.0,cargo-nextest,just
+      - name: cargo mutants (full shard ${{ matrix.index }}/${{ matrix.total }})
+        run: bun scripts/run-mutation-debug.mjs shard "$MUTATION_SHARD_INDEX" "$MUTATION_SHARD_TOTAL"
+      - name: Collect mutation diagnostics
+        if: always()
+        run: bun scripts/run-mutation-debug.mjs --collect shard "$MUTATION_SHARD_INDEX"
+      - name: Upload mutation report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: mutants-out-shard-${{ matrix.index }}
+          path: target/mutants-default-shard-${{ matrix.index }}
+          if-no-files-found: error
+      - name: Upload mutation diagnostics
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: mutation-diagnostics-shard-${{ matrix.index }}
+          path: target/mutation-diagnostics-shard-${{ matrix.index }}
+          if-no-files-found: warn
+
+  # The feature-gated FFI boundary is a separate, short cargo-mutants pass.
+  mutation-ffi:
+    name: mutation-ffi
+    needs: mutation-plan
+    if: >-
+      needs.mutation-plan.result == 'success' &&
+      needs.mutation-plan.outputs.scope == 'full'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: sccache
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba # v0.0.11
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - uses: taiki-e/install-action@b6ff580856c41316412a0b9b60540fbc6f8c82cc # v2.86.7
+        with:
+          tool: cargo-mutants@27.1.0,cargo-nextest,just
+      - name: cargo mutants (FFI boundary)
+        run: bun scripts/run-mutation-debug.mjs ffi
+      - name: Collect mutation diagnostics
+        if: always()
+        run: bun scripts/run-mutation-debug.mjs --collect ffi
+      - name: Upload mutation report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: mutants-out-ffi
+          path: target/mutants-ffi
+          if-no-files-found: error
+      - name: Upload mutation diagnostics
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: mutation-diagnostics-ffi
+          path: target/mutation-diagnostics-ffi
+          if-no-files-found: warn
+
+  no-warnings:
+    name: no-warnings (log sweep)
+    needs: [mutation-plan, mutation, mutation-ffi]
+    if: always()
+    permissions:
+      actions: read
+      contents: read
+    uses: ./.github/workflows/no-warnings.yml
+
+  mutation-full-gate:
+    name: mutation-full-gate
+    needs: [mutation-plan, mutation, mutation-ffi, no-warnings]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if mutation evidence failed
+        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+        run: exit 1
