@@ -5,8 +5,9 @@ use serde_json::Value;
 use crate::{
     Server, ServerExit,
     response::{initialization_result, send_error, send_result},
+    scheduler::{RequestScheduler, ScheduleResult},
     server::Lifecycle,
-    state,
+    state::{self, RequestWork},
 };
 
 const INVALID_REQUEST_CODE: i64 = -32_600;
@@ -17,6 +18,7 @@ pub(crate) fn handle<W: Write>(
     server: &mut Server,
     message: Value,
     writer: &mut W,
+    scheduler: &mut RequestScheduler,
 ) -> io::Result<Option<ServerExit>> {
     let Some(object) = message.as_object() else {
         send_error(writer, Value::Null, INVALID_REQUEST_CODE, "invalid request")?;
@@ -49,20 +51,28 @@ pub(crate) fn handle<W: Write>(
             state::close_document(server, params, writer)?;
             Ok(None)
         }
-        Some("textDocument/hover") => hover(server, id, params, writer),
+        Some("textDocument/hover") => hover(server, id, params, writer, scheduler),
         Some("workspace/didChangeConfiguration") => {
             state::update_configuration(server, params, writer)?;
             Ok(None)
         }
         Some("textDocument/definition") => {
             if let Some(id) = id {
-                send_result(writer, id, state::definition(server, params))?;
+                if let Some(work) = state::definition_work(server, params) {
+                    schedule(server, id, work, writer, scheduler)?;
+                } else {
+                    send_result(writer, id, Value::Null)?;
+                }
             }
             Ok(None)
         }
         Some("textDocument/codeAction") => {
             if let Some(id) = id {
-                send_result(writer, id, state::code_actions(server, params))?;
+                if let Some(work) = state::code_actions_work(server, params) {
+                    schedule(server, id, work, writer, scheduler)?;
+                } else {
+                    send_result(writer, id, Value::Array(Vec::new()))?;
+                }
             }
             Ok(None)
         }
@@ -128,17 +138,36 @@ fn hover<W: Write>(
     id: Option<Value>,
     params: Option<&Value>,
     writer: &mut W,
+    scheduler: &mut RequestScheduler,
 ) -> io::Result<Option<ServerExit>> {
     let Some(id) = id else {
         return Ok(None);
     };
-    match state::hover(server, params) {
-        Ok(result) => send_result(writer, id, result.unwrap_or(Value::Null))?,
+    match state::hover_work(server, params) {
+        Ok(work) => schedule(server, id, work, writer, scheduler)?,
         Err(state::HoverError::InvalidParams) => {
             send_error(writer, id, INVALID_PARAMS_CODE, "invalid params")?;
         }
     }
     Ok(None)
+}
+
+fn schedule<W: Write>(
+    server: &Server,
+    id: Value,
+    work: RequestWork,
+    writer: &mut W,
+    scheduler: &mut RequestScheduler,
+) -> io::Result<()> {
+    match scheduler.schedule(server, id, work)? {
+        ScheduleResult::Scheduled => Ok(()),
+        ScheduleResult::DuplicateIdentifier(id) => send_error(
+            writer,
+            id,
+            INVALID_REQUEST_CODE,
+            "duplicate active request id",
+        ),
+    }
 }
 
 fn exit(server: &Server) -> ServerExit {

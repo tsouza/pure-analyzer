@@ -12,6 +12,7 @@ mod dispatch;
 mod document;
 mod frame;
 mod response;
+mod scheduler;
 mod server;
 mod state;
 mod workspace;

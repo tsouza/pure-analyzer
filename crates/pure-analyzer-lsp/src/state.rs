@@ -29,12 +29,93 @@ pub(crate) fn cancel(server: &mut Server, params: Option<&Value>) {
     }
 }
 
-pub(crate) fn hover(server: &Server, params: Option<&Value>) -> Result<Option<Value>, HoverError> {
+/// A front-end request detached from the mutable server before analysis begins.
+///
+/// Every variant owns an immutable analysis snapshot, so workers can never
+/// observe a later document or configuration revision while computing.
+#[derive(Debug)]
+pub(crate) enum RequestWork {
+    /// A hover request at one protocol position.
+    Hover {
+        snapshot: AnalysisSnapshot,
+        uri: String,
+        position: ProtocolPosition,
+    },
+    /// A go-to-definition request at one protocol position.
+    Definition {
+        snapshot: AnalysisSnapshot,
+        uri: String,
+        position: ProtocolPosition,
+    },
+    /// A code-action request for one document.
+    CodeActions {
+        snapshot: AnalysisSnapshot,
+        uri: String,
+    },
+}
+
+/// The detached outcome of one LSP request worker.
+#[derive(Debug)]
+pub(crate) struct RequestCompletion {
+    snapshot: AnalysisSnapshot,
+    stale_result: Value,
+    result: Value,
+}
+
+impl RequestWork {
+    pub(crate) fn execute(self) -> RequestCompletion {
+        match self {
+            Self::Hover {
+                snapshot,
+                uri,
+                position,
+            } => RequestCompletion {
+                result: snapshot.hover(&uri, position).unwrap_or(Value::Null),
+                snapshot,
+                stale_result: Value::Null,
+            },
+            Self::Definition {
+                snapshot,
+                uri,
+                position,
+            } => RequestCompletion {
+                result: snapshot.definition(&uri, position),
+                snapshot,
+                stale_result: Value::Null,
+            },
+            Self::CodeActions { snapshot, uri } => RequestCompletion {
+                result: Value::Array(snapshot.code_actions(&uri).unwrap_or_default()),
+                snapshot,
+                stale_result: Value::Array(Vec::new()),
+            },
+        }
+    }
+}
+
+impl RequestCompletion {
+    pub(crate) fn is_current(&self, server: &Server) -> bool {
+        self.snapshot.is_current(server)
+    }
+
+    pub(crate) fn into_result(self) -> Value {
+        self.result
+    }
+
+    pub(crate) fn stale_result(&self) -> &Value {
+        &self.stale_result
+    }
+}
+
+pub(crate) fn hover_work(
+    server: &Server,
+    params: Option<&Value>,
+) -> Result<RequestWork, HoverError> {
     let request = hover_request(params).ok_or(HoverError::InvalidParams)?;
-    let snapshot = AnalysisSnapshot::capture(server);
-    Ok(snapshot
-        .hover(request.uri, request.position)
-        .filter(|_| snapshot.is_current(server)))
+    Ok(RequestWork::Hover {
+        snapshot: AnalysisSnapshot::capture(server),
+        uri: request.uri.to_owned(),
+        position: request.position,
+    })
 }
 
 pub(crate) fn open_document<W: Write>(
@@ -133,49 +214,21 @@ pub(crate) fn update_configuration<W: Write>(
     publish_current_diagnostics(server, writer)
 }
 
-pub(crate) fn definition(server: &Server, params: Option<&Value>) -> Value {
-    let Some((uri, position)) = definition_params(params) else {
-        return Value::Null;
-    };
-    let snapshot = AnalysisSnapshot::capture(server);
-    let Some(document) = snapshot.documents.get(uri) else {
-        return Value::Null;
-    };
-    let Some(offset) = byte_offset(document.text(), position) else {
-        return Value::Null;
-    };
-    let Some((request, files)) = snapshot.request() else {
-        return Value::Null;
-    };
-    let Some(file) = files
-        .iter()
-        .find_map(|(file, candidate)| (candidate == uri).then_some(*file))
-    else {
-        return Value::Null;
-    };
-    let Ok(offset) = u32::try_from(offset) else {
-        return Value::Null;
-    };
-
-    match AnalysisDriver.definition(&request, DefinitionPosition::new(file, offset.into())) {
-        Ok(DefinitionResult::Found(target)) => {
-            definition_location(&snapshot, &files, target).unwrap_or(Value::Null)
-        }
-        Ok(DefinitionResult::Unavailable(_)) | Err(_) => Value::Null,
-    }
+pub(crate) fn definition_work(server: &Server, params: Option<&Value>) -> Option<RequestWork> {
+    let (uri, position) = definition_params(params)?;
+    Some(RequestWork::Definition {
+        snapshot: AnalysisSnapshot::capture(server),
+        uri: uri.to_owned(),
+        position,
+    })
 }
 
-pub(crate) fn code_actions(server: &Server, params: Option<&Value>) -> Value {
-    let Some(uri) = code_action_uri(params) else {
-        return Value::Array(Vec::new());
-    };
-    let snapshot = AnalysisSnapshot::capture(server);
-    let actions = snapshot.code_actions(uri).unwrap_or_default();
-    if snapshot.is_current(server) {
-        Value::Array(actions)
-    } else {
-        Value::Array(Vec::new())
-    }
+pub(crate) fn code_actions_work(server: &Server, params: Option<&Value>) -> Option<RequestWork> {
+    let uri = code_action_uri(params)?;
+    Some(RequestWork::CodeActions {
+        snapshot: AnalysisSnapshot::capture(server),
+        uri: uri.to_owned(),
+    })
 }
 
 fn definition_params(params: Option<&Value>) -> Option<(&str, ProtocolPosition)> {
@@ -307,7 +360,7 @@ fn publish_current_diagnostics<W: Write>(server: &Server, writer: &mut W) -> io:
 }
 
 #[derive(Clone, Debug)]
-struct AnalysisSnapshot {
+pub(crate) struct AnalysisSnapshot {
     document_revision: u64,
     configuration_revision: u64,
     documents: BTreeMap<String, DocumentSnapshot>,
@@ -385,6 +438,34 @@ impl AnalysisSnapshot {
             .filter(|diagnostic| diagnostic_contains(diagnostic.primary.span, offset))
             .min_by(|left, right| hover_sort_key(left).cmp(&hover_sort_key(right)))?;
         diagnostic_hover(document, diagnostic)
+    }
+
+    fn definition(&self, uri: &str, position: ProtocolPosition) -> Value {
+        let Some(document) = self.documents.get(uri) else {
+            return Value::Null;
+        };
+        let Some(offset) = byte_offset(document.text(), position) else {
+            return Value::Null;
+        };
+        let Some((request, files)) = self.request() else {
+            return Value::Null;
+        };
+        let Some(file) = files
+            .iter()
+            .find_map(|(file, candidate)| (candidate == uri).then_some(*file))
+        else {
+            return Value::Null;
+        };
+        let Ok(offset) = u32::try_from(offset) else {
+            return Value::Null;
+        };
+
+        match AnalysisDriver.definition(&request, DefinitionPosition::new(file, offset.into())) {
+            Ok(DefinitionResult::Found(target)) => {
+                definition_location(self, &files, target).unwrap_or(Value::Null)
+            }
+            Ok(DefinitionResult::Unavailable(_)) | Err(_) => Value::Null,
+        }
     }
 
     fn code_actions(&self, uri: &str) -> Option<Vec<Value>> {
