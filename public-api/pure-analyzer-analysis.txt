@@ -1,4 +1,91 @@
 pub mod pure_analyzer_analysis
+pub enum pure_analyzer_analysis::JoinKind
+pub pure_analyzer_analysis::JoinKind::Inner
+impl core::clone::Clone for pure_analyzer_analysis::JoinKind
+pub fn pure_analyzer_analysis::JoinKind::clone(&self) -> pure_analyzer_analysis::JoinKind
+impl core::cmp::Eq for pure_analyzer_analysis::JoinKind
+impl core::cmp::PartialEq for pure_analyzer_analysis::JoinKind
+pub fn pure_analyzer_analysis::JoinKind::eq(&self, &pure_analyzer_analysis::JoinKind) -> bool
+impl core::fmt::Debug for pure_analyzer_analysis::JoinKind
+pub fn pure_analyzer_analysis::JoinKind::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for pure_analyzer_analysis::JoinKind
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::JoinKind
+impl core::marker::Freeze for pure_analyzer_analysis::JoinKind
+impl core::marker::Send for pure_analyzer_analysis::JoinKind
+impl core::marker::Sync for pure_analyzer_analysis::JoinKind
+impl core::marker::Unpin for pure_analyzer_analysis::JoinKind
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::JoinKind
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::JoinKind
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::JoinKind
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::JoinKind where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::JoinKind::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::JoinKind where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::JoinKind::Error = never
+pub fn pure_analyzer_analysis::JoinKind::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::JoinKind where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::JoinKind::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::JoinKind::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::JoinKind where T: core::clone::Clone
+pub type pure_analyzer_analysis::JoinKind::Owned = T
+pub fn pure_analyzer_analysis::JoinKind::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::JoinKind::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::JoinKind where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::JoinKind::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::JoinKind where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::JoinKind::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::JoinKind where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::JoinKind::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::JoinKind where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::JoinKind::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::JoinKind
+pub fn pure_analyzer_analysis::JoinKind::from(T) -> T
+pub enum pure_analyzer_analysis::Knowledge<T>
+pub pure_analyzer_analysis::Knowledge::Proven
+pub pure_analyzer_analysis::Knowledge::Proven::origin: pure_analyzer_analysis::IrOrigin
+pub pure_analyzer_analysis::Knowledge::Proven::value: T
+pub pure_analyzer_analysis::Knowledge::Unknown
+impl<T> pure_analyzer_analysis::Knowledge<T>
+pub fn pure_analyzer_analysis::Knowledge<T>::as_proven(&self) -> core::option::Option<(&T, &pure_analyzer_analysis::IrOrigin)>
+pub const fn pure_analyzer_analysis::Knowledge<T>::is_unknown(&self) -> bool
+pub fn pure_analyzer_analysis::Knowledge<T>::proven(T, pure_analyzer_analysis::IrOrigin) -> Self
+pub const fn pure_analyzer_analysis::Knowledge<T>::unknown() -> Self
+impl<T: core::clone::Clone> core::clone::Clone for pure_analyzer_analysis::Knowledge<T>
+pub fn pure_analyzer_analysis::Knowledge<T>::clone(&self) -> pure_analyzer_analysis::Knowledge<T>
+impl<T: core::cmp::Eq> core::cmp::Eq for pure_analyzer_analysis::Knowledge<T>
+impl<T: core::cmp::PartialEq> core::cmp::PartialEq for pure_analyzer_analysis::Knowledge<T>
+pub fn pure_analyzer_analysis::Knowledge<T>::eq(&self, &pure_analyzer_analysis::Knowledge<T>) -> bool
+impl<T: core::cmp::PartialEq> core::marker::StructuralPartialEq for pure_analyzer_analysis::Knowledge<T>
+impl<T: core::fmt::Debug> core::fmt::Debug for pure_analyzer_analysis::Knowledge<T>
+pub fn pure_analyzer_analysis::Knowledge<T>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl<T> core::marker::Freeze for pure_analyzer_analysis::Knowledge<T> where T: core::marker::Freeze
+impl<T> core::marker::Send for pure_analyzer_analysis::Knowledge<T> where T: core::marker::Send
+impl<T> core::marker::Sync for pure_analyzer_analysis::Knowledge<T> where T: core::marker::Sync
+impl<T> core::marker::Unpin for pure_analyzer_analysis::Knowledge<T> where T: core::marker::Unpin
+impl<T> core::marker::UnsafeUnpin for pure_analyzer_analysis::Knowledge<T> where T: core::marker::UnsafeUnpin
+impl<T> core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::Knowledge<T> where T: core::panic::unwind_safe::RefUnwindSafe
+impl<T> core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::Knowledge<T> where T: core::panic::unwind_safe::UnwindSafe
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::Knowledge<T> where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::Knowledge<T>::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::Knowledge<T> where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::Knowledge<T>::Error = never
+pub fn pure_analyzer_analysis::Knowledge<T>::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::Knowledge<T> where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::Knowledge<T>::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::Knowledge<T>::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::Knowledge<T> where T: core::clone::Clone
+pub type pure_analyzer_analysis::Knowledge<T>::Owned = T
+pub fn pure_analyzer_analysis::Knowledge<T>::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::Knowledge<T>::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::Knowledge<T> where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::Knowledge<T>::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::Knowledge<T> where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::Knowledge<T>::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::Knowledge<T> where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::Knowledge<T>::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::Knowledge<T> where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::Knowledge<T>::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::Knowledge<T>
+pub fn pure_analyzer_analysis::Knowledge<T>::from(T) -> T
 pub enum pure_analyzer_analysis::LocalResolution
 pub pure_analyzer_analysis::LocalResolution::ClassAll(pure_analyzer_resolve::Resolution<pure_analyzer_resolve::local::LocalValue>)
 pub pure_analyzer_analysis::LocalResolution::Navigation(pure_analyzer_resolve::local::NavigationResolution)
@@ -80,6 +167,457 @@ impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::ModelAvailability
 pub unsafe fn pure_analyzer_analysis::ModelAvailability::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for pure_analyzer_analysis::ModelAvailability
 pub fn pure_analyzer_analysis::ModelAvailability::from(T) -> T
+pub enum pure_analyzer_analysis::Nullability
+pub pure_analyzer_analysis::Nullability::NonNullable
+pub pure_analyzer_analysis::Nullability::Nullable
+pub pure_analyzer_analysis::Nullability::Unknown
+impl core::clone::Clone for pure_analyzer_analysis::Nullability
+pub fn pure_analyzer_analysis::Nullability::clone(&self) -> pure_analyzer_analysis::Nullability
+impl core::cmp::Eq for pure_analyzer_analysis::Nullability
+impl core::cmp::PartialEq for pure_analyzer_analysis::Nullability
+pub fn pure_analyzer_analysis::Nullability::eq(&self, &pure_analyzer_analysis::Nullability) -> bool
+impl core::fmt::Debug for pure_analyzer_analysis::Nullability
+pub fn pure_analyzer_analysis::Nullability::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for pure_analyzer_analysis::Nullability
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::Nullability
+impl core::marker::Freeze for pure_analyzer_analysis::Nullability
+impl core::marker::Send for pure_analyzer_analysis::Nullability
+impl core::marker::Sync for pure_analyzer_analysis::Nullability
+impl core::marker::Unpin for pure_analyzer_analysis::Nullability
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::Nullability
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::Nullability
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::Nullability
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::Nullability where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::Nullability::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::Nullability where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::Nullability::Error = never
+pub fn pure_analyzer_analysis::Nullability::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::Nullability where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::Nullability::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::Nullability::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::Nullability where T: core::clone::Clone
+pub type pure_analyzer_analysis::Nullability::Owned = T
+pub fn pure_analyzer_analysis::Nullability::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::Nullability::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::Nullability where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::Nullability::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::Nullability where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::Nullability::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::Nullability where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::Nullability::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::Nullability where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::Nullability::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::Nullability
+pub fn pure_analyzer_analysis::Nullability::from(T) -> T
+pub enum pure_analyzer_analysis::RelationExpressionError
+pub pure_analyzer_analysis::RelationExpressionError::ColumnMetadataMismatch(pure_analyzer_analysis::ColumnId)
+pub pure_analyzer_analysis::RelationExpressionError::ComparisonTypeMismatch
+pub pure_analyzer_analysis::RelationExpressionError::DistinctSchemaMismatch
+pub pure_analyzer_analysis::RelationExpressionError::FilterSchemaMismatch
+pub pure_analyzer_analysis::RelationExpressionError::InvalidLiteralType
+pub pure_analyzer_analysis::RelationExpressionError::JoinSchemaMismatch
+pub pure_analyzer_analysis::RelationExpressionError::NonBooleanPredicate
+pub pure_analyzer_analysis::RelationExpressionError::ProjectionSchemaMismatch
+pub pure_analyzer_analysis::RelationExpressionError::UnknownColumnReference(pure_analyzer_analysis::ColumnId)
+pub pure_analyzer_analysis::RelationExpressionError::UnknownKeyColumn(pure_analyzer_analysis::ColumnId)
+impl core::clone::Clone for pure_analyzer_analysis::RelationExpressionError
+pub fn pure_analyzer_analysis::RelationExpressionError::clone(&self) -> pure_analyzer_analysis::RelationExpressionError
+impl core::cmp::Eq for pure_analyzer_analysis::RelationExpressionError
+impl core::cmp::PartialEq for pure_analyzer_analysis::RelationExpressionError
+pub fn pure_analyzer_analysis::RelationExpressionError::eq(&self, &pure_analyzer_analysis::RelationExpressionError) -> bool
+impl core::error::Error for pure_analyzer_analysis::RelationExpressionError
+impl core::fmt::Debug for pure_analyzer_analysis::RelationExpressionError
+pub fn pure_analyzer_analysis::RelationExpressionError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for pure_analyzer_analysis::RelationExpressionError
+pub fn pure_analyzer_analysis::RelationExpressionError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for pure_analyzer_analysis::RelationExpressionError
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::RelationExpressionError
+impl core::marker::Freeze for pure_analyzer_analysis::RelationExpressionError
+impl core::marker::Send for pure_analyzer_analysis::RelationExpressionError
+impl core::marker::Sync for pure_analyzer_analysis::RelationExpressionError
+impl core::marker::Unpin for pure_analyzer_analysis::RelationExpressionError
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::RelationExpressionError
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::RelationExpressionError
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::RelationExpressionError
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::RelationExpressionError where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::RelationExpressionError::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::RelationExpressionError where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::RelationExpressionError::Error = never
+pub fn pure_analyzer_analysis::RelationExpressionError::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::RelationExpressionError where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::RelationExpressionError::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::RelationExpressionError::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::RelationExpressionError where T: core::clone::Clone
+pub type pure_analyzer_analysis::RelationExpressionError::Owned = T
+pub fn pure_analyzer_analysis::RelationExpressionError::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::RelationExpressionError::to_owned(&self) -> T
+impl<T> alloc::string::ToString for pure_analyzer_analysis::RelationExpressionError where T: core::fmt::Display + ?core::marker::Sized
+pub fn pure_analyzer_analysis::RelationExpressionError::to_string(&self) -> alloc::string::String
+impl<T> core::any::Any for pure_analyzer_analysis::RelationExpressionError where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::RelationExpressionError::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::RelationExpressionError where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::RelationExpressionError::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::RelationExpressionError where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::RelationExpressionError::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::RelationExpressionError where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::RelationExpressionError::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::RelationExpressionError
+pub fn pure_analyzer_analysis::RelationExpressionError::from(T) -> T
+pub enum pure_analyzer_analysis::RelationOperator
+pub pure_analyzer_analysis::RelationOperator::Distinct
+pub pure_analyzer_analysis::RelationOperator::Distinct::input: alloc::boxed::Box<pure_analyzer_analysis::RelationExpression>
+pub pure_analyzer_analysis::RelationOperator::Filter
+pub pure_analyzer_analysis::RelationOperator::Filter::input: alloc::boxed::Box<pure_analyzer_analysis::RelationExpression>
+pub pure_analyzer_analysis::RelationOperator::Filter::predicate: pure_analyzer_analysis::ScalarExpression
+pub pure_analyzer_analysis::RelationOperator::Join
+pub pure_analyzer_analysis::RelationOperator::Join::condition: pure_analyzer_analysis::ScalarExpression
+pub pure_analyzer_analysis::RelationOperator::Join::kind: pure_analyzer_analysis::JoinKind
+pub pure_analyzer_analysis::RelationOperator::Join::left: alloc::boxed::Box<pure_analyzer_analysis::RelationExpression>
+pub pure_analyzer_analysis::RelationOperator::Join::right: alloc::boxed::Box<pure_analyzer_analysis::RelationExpression>
+pub pure_analyzer_analysis::RelationOperator::Project
+pub pure_analyzer_analysis::RelationOperator::Project::input: alloc::boxed::Box<pure_analyzer_analysis::RelationExpression>
+pub pure_analyzer_analysis::RelationOperator::Project::projections: alloc::vec::Vec<pure_analyzer_analysis::Projection>
+pub pure_analyzer_analysis::RelationOperator::Scan(pure_analyzer_analysis::RelationSource)
+impl core::clone::Clone for pure_analyzer_analysis::RelationOperator
+pub fn pure_analyzer_analysis::RelationOperator::clone(&self) -> pure_analyzer_analysis::RelationOperator
+impl core::cmp::Eq for pure_analyzer_analysis::RelationOperator
+impl core::cmp::PartialEq for pure_analyzer_analysis::RelationOperator
+pub fn pure_analyzer_analysis::RelationOperator::eq(&self, &pure_analyzer_analysis::RelationOperator) -> bool
+impl core::fmt::Debug for pure_analyzer_analysis::RelationOperator
+pub fn pure_analyzer_analysis::RelationOperator::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::RelationOperator
+impl core::marker::Freeze for pure_analyzer_analysis::RelationOperator
+impl core::marker::Send for pure_analyzer_analysis::RelationOperator
+impl core::marker::Sync for pure_analyzer_analysis::RelationOperator
+impl core::marker::Unpin for pure_analyzer_analysis::RelationOperator
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::RelationOperator
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::RelationOperator
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::RelationOperator
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::RelationOperator where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::RelationOperator::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::RelationOperator where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::RelationOperator::Error = never
+pub fn pure_analyzer_analysis::RelationOperator::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::RelationOperator where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::RelationOperator::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::RelationOperator::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::RelationOperator where T: core::clone::Clone
+pub type pure_analyzer_analysis::RelationOperator::Owned = T
+pub fn pure_analyzer_analysis::RelationOperator::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::RelationOperator::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::RelationOperator where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::RelationOperator::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::RelationOperator where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::RelationOperator::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::RelationOperator where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::RelationOperator::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::RelationOperator where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::RelationOperator::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::RelationOperator
+pub fn pure_analyzer_analysis::RelationOperator::from(T) -> T
+pub enum pure_analyzer_analysis::RelationSource
+pub pure_analyzer_analysis::RelationSource::Class(pure_analyzer_resolve::ResolvedClass)
+pub pure_analyzer_analysis::RelationSource::Member(pure_analyzer_resolve::ResolvedMember)
+impl core::clone::Clone for pure_analyzer_analysis::RelationSource
+pub fn pure_analyzer_analysis::RelationSource::clone(&self) -> pure_analyzer_analysis::RelationSource
+impl core::cmp::Eq for pure_analyzer_analysis::RelationSource
+impl core::cmp::PartialEq for pure_analyzer_analysis::RelationSource
+pub fn pure_analyzer_analysis::RelationSource::eq(&self, &pure_analyzer_analysis::RelationSource) -> bool
+impl core::fmt::Debug for pure_analyzer_analysis::RelationSource
+pub fn pure_analyzer_analysis::RelationSource::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::RelationSource
+impl core::marker::Freeze for pure_analyzer_analysis::RelationSource
+impl core::marker::Send for pure_analyzer_analysis::RelationSource
+impl core::marker::Sync for pure_analyzer_analysis::RelationSource
+impl core::marker::Unpin for pure_analyzer_analysis::RelationSource
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::RelationSource
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::RelationSource
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::RelationSource
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::RelationSource where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::RelationSource::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::RelationSource where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::RelationSource::Error = never
+pub fn pure_analyzer_analysis::RelationSource::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::RelationSource where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::RelationSource::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::RelationSource::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::RelationSource where T: core::clone::Clone
+pub type pure_analyzer_analysis::RelationSource::Owned = T
+pub fn pure_analyzer_analysis::RelationSource::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::RelationSource::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::RelationSource where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::RelationSource::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::RelationSource where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::RelationSource::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::RelationSource where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::RelationSource::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::RelationSource where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::RelationSource::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::RelationSource
+pub fn pure_analyzer_analysis::RelationSource::from(T) -> T
+pub enum pure_analyzer_analysis::RelationalOutcome
+pub pure_analyzer_analysis::RelationalOutcome::Opaque(pure_analyzer_analysis::OpaqueOutcome)
+pub pure_analyzer_analysis::RelationalOutcome::Supported(alloc::boxed::Box<pure_analyzer_analysis::RelationalQuery>)
+impl pure_analyzer_analysis::RelationalOutcome
+pub fn pure_analyzer_analysis::RelationalOutcome::opaque(pure_analyzer_analysis::OpaqueOutcome) -> Self
+pub fn pure_analyzer_analysis::RelationalOutcome::supported(pure_analyzer_analysis::RelationalQuery) -> Self
+impl core::clone::Clone for pure_analyzer_analysis::RelationalOutcome
+pub fn pure_analyzer_analysis::RelationalOutcome::clone(&self) -> pure_analyzer_analysis::RelationalOutcome
+impl core::cmp::Eq for pure_analyzer_analysis::RelationalOutcome
+impl core::cmp::PartialEq for pure_analyzer_analysis::RelationalOutcome
+pub fn pure_analyzer_analysis::RelationalOutcome::eq(&self, &pure_analyzer_analysis::RelationalOutcome) -> bool
+impl core::fmt::Debug for pure_analyzer_analysis::RelationalOutcome
+pub fn pure_analyzer_analysis::RelationalOutcome::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::RelationalOutcome
+impl core::marker::Freeze for pure_analyzer_analysis::RelationalOutcome
+impl core::marker::Send for pure_analyzer_analysis::RelationalOutcome
+impl core::marker::Sync for pure_analyzer_analysis::RelationalOutcome
+impl core::marker::Unpin for pure_analyzer_analysis::RelationalOutcome
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::RelationalOutcome
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::RelationalOutcome
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::RelationalOutcome
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::RelationalOutcome where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::RelationalOutcome::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::RelationalOutcome where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::RelationalOutcome::Error = never
+pub fn pure_analyzer_analysis::RelationalOutcome::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::RelationalOutcome where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::RelationalOutcome::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::RelationalOutcome::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::RelationalOutcome where T: core::clone::Clone
+pub type pure_analyzer_analysis::RelationalOutcome::Owned = T
+pub fn pure_analyzer_analysis::RelationalOutcome::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::RelationalOutcome::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::RelationalOutcome where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::RelationalOutcome::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::RelationalOutcome where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::RelationalOutcome::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::RelationalOutcome where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::RelationalOutcome::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::RelationalOutcome where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::RelationalOutcome::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::RelationalOutcome
+pub fn pure_analyzer_analysis::RelationalOutcome::from(T) -> T
+pub enum pure_analyzer_analysis::RowSemantics
+pub pure_analyzer_analysis::RowSemantics::Bag
+pub pure_analyzer_analysis::RowSemantics::Set
+impl core::clone::Clone for pure_analyzer_analysis::RowSemantics
+pub fn pure_analyzer_analysis::RowSemantics::clone(&self) -> pure_analyzer_analysis::RowSemantics
+impl core::cmp::Eq for pure_analyzer_analysis::RowSemantics
+impl core::cmp::PartialEq for pure_analyzer_analysis::RowSemantics
+pub fn pure_analyzer_analysis::RowSemantics::eq(&self, &pure_analyzer_analysis::RowSemantics) -> bool
+impl core::fmt::Debug for pure_analyzer_analysis::RowSemantics
+pub fn pure_analyzer_analysis::RowSemantics::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for pure_analyzer_analysis::RowSemantics
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::RowSemantics
+impl core::marker::Freeze for pure_analyzer_analysis::RowSemantics
+impl core::marker::Send for pure_analyzer_analysis::RowSemantics
+impl core::marker::Sync for pure_analyzer_analysis::RowSemantics
+impl core::marker::Unpin for pure_analyzer_analysis::RowSemantics
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::RowSemantics
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::RowSemantics
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::RowSemantics
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::RowSemantics where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::RowSemantics::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::RowSemantics where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::RowSemantics::Error = never
+pub fn pure_analyzer_analysis::RowSemantics::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::RowSemantics where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::RowSemantics::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::RowSemantics::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::RowSemantics where T: core::clone::Clone
+pub type pure_analyzer_analysis::RowSemantics::Owned = T
+pub fn pure_analyzer_analysis::RowSemantics::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::RowSemantics::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::RowSemantics where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::RowSemantics::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::RowSemantics where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::RowSemantics::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::RowSemantics where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::RowSemantics::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::RowSemantics where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::RowSemantics::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::RowSemantics
+pub fn pure_analyzer_analysis::RowSemantics::from(T) -> T
+pub enum pure_analyzer_analysis::ScalarLiteral
+pub pure_analyzer_analysis::ScalarLiteral::Boolean(bool)
+pub pure_analyzer_analysis::ScalarLiteral::Integer(i64)
+pub pure_analyzer_analysis::ScalarLiteral::Null
+pub pure_analyzer_analysis::ScalarLiteral::String(alloc::string::String)
+impl core::clone::Clone for pure_analyzer_analysis::ScalarLiteral
+pub fn pure_analyzer_analysis::ScalarLiteral::clone(&self) -> pure_analyzer_analysis::ScalarLiteral
+impl core::cmp::Eq for pure_analyzer_analysis::ScalarLiteral
+impl core::cmp::PartialEq for pure_analyzer_analysis::ScalarLiteral
+pub fn pure_analyzer_analysis::ScalarLiteral::eq(&self, &pure_analyzer_analysis::ScalarLiteral) -> bool
+impl core::fmt::Debug for pure_analyzer_analysis::ScalarLiteral
+pub fn pure_analyzer_analysis::ScalarLiteral::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::ScalarLiteral
+impl core::marker::Freeze for pure_analyzer_analysis::ScalarLiteral
+impl core::marker::Send for pure_analyzer_analysis::ScalarLiteral
+impl core::marker::Sync for pure_analyzer_analysis::ScalarLiteral
+impl core::marker::Unpin for pure_analyzer_analysis::ScalarLiteral
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::ScalarLiteral
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::ScalarLiteral
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::ScalarLiteral
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::ScalarLiteral where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::ScalarLiteral::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::ScalarLiteral where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::ScalarLiteral::Error = never
+pub fn pure_analyzer_analysis::ScalarLiteral::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::ScalarLiteral where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::ScalarLiteral::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::ScalarLiteral::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::ScalarLiteral where T: core::clone::Clone
+pub type pure_analyzer_analysis::ScalarLiteral::Owned = T
+pub fn pure_analyzer_analysis::ScalarLiteral::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::ScalarLiteral::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::ScalarLiteral where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::ScalarLiteral::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::ScalarLiteral where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::ScalarLiteral::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::ScalarLiteral where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::ScalarLiteral::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::ScalarLiteral where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::ScalarLiteral::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::ScalarLiteral
+pub fn pure_analyzer_analysis::ScalarLiteral::from(T) -> T
+pub enum pure_analyzer_analysis::ScalarOperator
+pub pure_analyzer_analysis::ScalarOperator::And
+pub pure_analyzer_analysis::ScalarOperator::And::left: alloc::boxed::Box<pure_analyzer_analysis::ScalarExpression>
+pub pure_analyzer_analysis::ScalarOperator::And::right: alloc::boxed::Box<pure_analyzer_analysis::ScalarExpression>
+pub pure_analyzer_analysis::ScalarOperator::Column(pure_analyzer_analysis::ColumnId)
+pub pure_analyzer_analysis::ScalarOperator::Equal
+pub pure_analyzer_analysis::ScalarOperator::Equal::left: alloc::boxed::Box<pure_analyzer_analysis::ScalarExpression>
+pub pure_analyzer_analysis::ScalarOperator::Equal::right: alloc::boxed::Box<pure_analyzer_analysis::ScalarExpression>
+pub pure_analyzer_analysis::ScalarOperator::Literal(pure_analyzer_analysis::ScalarLiteral)
+pub pure_analyzer_analysis::ScalarOperator::Not
+pub pure_analyzer_analysis::ScalarOperator::Not::input: alloc::boxed::Box<pure_analyzer_analysis::ScalarExpression>
+pub pure_analyzer_analysis::ScalarOperator::Or
+pub pure_analyzer_analysis::ScalarOperator::Or::left: alloc::boxed::Box<pure_analyzer_analysis::ScalarExpression>
+pub pure_analyzer_analysis::ScalarOperator::Or::right: alloc::boxed::Box<pure_analyzer_analysis::ScalarExpression>
+impl core::clone::Clone for pure_analyzer_analysis::ScalarOperator
+pub fn pure_analyzer_analysis::ScalarOperator::clone(&self) -> pure_analyzer_analysis::ScalarOperator
+impl core::cmp::Eq for pure_analyzer_analysis::ScalarOperator
+impl core::cmp::PartialEq for pure_analyzer_analysis::ScalarOperator
+pub fn pure_analyzer_analysis::ScalarOperator::eq(&self, &pure_analyzer_analysis::ScalarOperator) -> bool
+impl core::fmt::Debug for pure_analyzer_analysis::ScalarOperator
+pub fn pure_analyzer_analysis::ScalarOperator::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::ScalarOperator
+impl core::marker::Freeze for pure_analyzer_analysis::ScalarOperator
+impl core::marker::Send for pure_analyzer_analysis::ScalarOperator
+impl core::marker::Sync for pure_analyzer_analysis::ScalarOperator
+impl core::marker::Unpin for pure_analyzer_analysis::ScalarOperator
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::ScalarOperator
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::ScalarOperator
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::ScalarOperator
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::ScalarOperator where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::ScalarOperator::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::ScalarOperator where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::ScalarOperator::Error = never
+pub fn pure_analyzer_analysis::ScalarOperator::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::ScalarOperator where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::ScalarOperator::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::ScalarOperator::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::ScalarOperator where T: core::clone::Clone
+pub type pure_analyzer_analysis::ScalarOperator::Owned = T
+pub fn pure_analyzer_analysis::ScalarOperator::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::ScalarOperator::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::ScalarOperator where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::ScalarOperator::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::ScalarOperator where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::ScalarOperator::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::ScalarOperator where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::ScalarOperator::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::ScalarOperator where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::ScalarOperator::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::ScalarOperator
+pub fn pure_analyzer_analysis::ScalarOperator::from(T) -> T
+pub enum pure_analyzer_analysis::SchemaError
+pub pure_analyzer_analysis::SchemaError::DuplicateColumnId(pure_analyzer_analysis::ColumnId)
+impl core::clone::Clone for pure_analyzer_analysis::SchemaError
+pub fn pure_analyzer_analysis::SchemaError::clone(&self) -> pure_analyzer_analysis::SchemaError
+impl core::cmp::Eq for pure_analyzer_analysis::SchemaError
+impl core::cmp::PartialEq for pure_analyzer_analysis::SchemaError
+pub fn pure_analyzer_analysis::SchemaError::eq(&self, &pure_analyzer_analysis::SchemaError) -> bool
+impl core::error::Error for pure_analyzer_analysis::SchemaError
+impl core::fmt::Debug for pure_analyzer_analysis::SchemaError
+pub fn pure_analyzer_analysis::SchemaError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for pure_analyzer_analysis::SchemaError
+pub fn pure_analyzer_analysis::SchemaError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for pure_analyzer_analysis::SchemaError
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::SchemaError
+impl core::marker::Freeze for pure_analyzer_analysis::SchemaError
+impl core::marker::Send for pure_analyzer_analysis::SchemaError
+impl core::marker::Sync for pure_analyzer_analysis::SchemaError
+impl core::marker::Unpin for pure_analyzer_analysis::SchemaError
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::SchemaError
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::SchemaError
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::SchemaError
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::SchemaError where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::SchemaError::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::SchemaError where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::SchemaError::Error = never
+pub fn pure_analyzer_analysis::SchemaError::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::SchemaError where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::SchemaError::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::SchemaError::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::SchemaError where T: core::clone::Clone
+pub type pure_analyzer_analysis::SchemaError::Owned = T
+pub fn pure_analyzer_analysis::SchemaError::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::SchemaError::to_owned(&self) -> T
+impl<T> alloc::string::ToString for pure_analyzer_analysis::SchemaError where T: core::fmt::Display + ?core::marker::Sized
+pub fn pure_analyzer_analysis::SchemaError::to_string(&self) -> alloc::string::String
+impl<T> core::any::Any for pure_analyzer_analysis::SchemaError where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::SchemaError::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::SchemaError where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::SchemaError::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::SchemaError where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::SchemaError::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::SchemaError where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::SchemaError::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::SchemaError
+pub fn pure_analyzer_analysis::SchemaError::from(T) -> T
+pub enum pure_analyzer_analysis::Totality
+pub pure_analyzer_analysis::Totality::Partial
+pub pure_analyzer_analysis::Totality::Total
+impl core::clone::Clone for pure_analyzer_analysis::Totality
+pub fn pure_analyzer_analysis::Totality::clone(&self) -> pure_analyzer_analysis::Totality
+impl core::cmp::Eq for pure_analyzer_analysis::Totality
+impl core::cmp::PartialEq for pure_analyzer_analysis::Totality
+pub fn pure_analyzer_analysis::Totality::eq(&self, &pure_analyzer_analysis::Totality) -> bool
+impl core::fmt::Debug for pure_analyzer_analysis::Totality
+pub fn pure_analyzer_analysis::Totality::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for pure_analyzer_analysis::Totality
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::Totality
+impl core::marker::Freeze for pure_analyzer_analysis::Totality
+impl core::marker::Send for pure_analyzer_analysis::Totality
+impl core::marker::Sync for pure_analyzer_analysis::Totality
+impl core::marker::Unpin for pure_analyzer_analysis::Totality
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::Totality
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::Totality
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::Totality
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::Totality where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::Totality::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::Totality where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::Totality::Error = never
+pub fn pure_analyzer_analysis::Totality::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::Totality where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::Totality::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::Totality::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::Totality where T: core::clone::Clone
+pub type pure_analyzer_analysis::Totality::Owned = T
+pub fn pure_analyzer_analysis::Totality::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::Totality::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::Totality where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::Totality::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::Totality where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::Totality::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::Totality where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::Totality::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::Totality where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::Totality::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::Totality
+pub fn pure_analyzer_analysis::Totality::from(T) -> T
 pub struct pure_analyzer_analysis::AnalysisEngine
 impl pure_analyzer_analysis::AnalysisEngine
 pub fn pure_analyzer_analysis::AnalysisEngine::analyze(&self, pure_analyzer_analysis::AnalysisInput<'_, '_>) -> pure_analyzer_analysis::AnalysisResult
@@ -196,6 +734,145 @@ impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::AnalysisResult wh
 pub unsafe fn pure_analyzer_analysis::AnalysisResult::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for pure_analyzer_analysis::AnalysisResult
 pub fn pure_analyzer_analysis::AnalysisResult::from(T) -> T
+pub struct pure_analyzer_analysis::CandidateKey
+impl pure_analyzer_analysis::CandidateKey
+pub fn pure_analyzer_analysis::CandidateKey::columns(&self) -> &[pure_analyzer_analysis::ColumnId]
+pub fn pure_analyzer_analysis::CandidateKey::new(alloc::vec::Vec<pure_analyzer_analysis::ColumnId>) -> Self
+impl core::clone::Clone for pure_analyzer_analysis::CandidateKey
+pub fn pure_analyzer_analysis::CandidateKey::clone(&self) -> pure_analyzer_analysis::CandidateKey
+impl core::cmp::Eq for pure_analyzer_analysis::CandidateKey
+impl core::cmp::Ord for pure_analyzer_analysis::CandidateKey
+pub fn pure_analyzer_analysis::CandidateKey::cmp(&self, &pure_analyzer_analysis::CandidateKey) -> core::cmp::Ordering
+impl core::cmp::PartialEq for pure_analyzer_analysis::CandidateKey
+pub fn pure_analyzer_analysis::CandidateKey::eq(&self, &pure_analyzer_analysis::CandidateKey) -> bool
+impl core::cmp::PartialOrd for pure_analyzer_analysis::CandidateKey
+pub fn pure_analyzer_analysis::CandidateKey::partial_cmp(&self, &pure_analyzer_analysis::CandidateKey) -> core::option::Option<core::cmp::Ordering>
+impl core::fmt::Debug for pure_analyzer_analysis::CandidateKey
+pub fn pure_analyzer_analysis::CandidateKey::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::CandidateKey
+impl core::marker::Freeze for pure_analyzer_analysis::CandidateKey
+impl core::marker::Send for pure_analyzer_analysis::CandidateKey
+impl core::marker::Sync for pure_analyzer_analysis::CandidateKey
+impl core::marker::Unpin for pure_analyzer_analysis::CandidateKey
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::CandidateKey
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::CandidateKey
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::CandidateKey
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::CandidateKey where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::CandidateKey::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::CandidateKey where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::CandidateKey::Error = never
+pub fn pure_analyzer_analysis::CandidateKey::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::CandidateKey where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::CandidateKey::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::CandidateKey::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::CandidateKey where T: core::clone::Clone
+pub type pure_analyzer_analysis::CandidateKey::Owned = T
+pub fn pure_analyzer_analysis::CandidateKey::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::CandidateKey::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::CandidateKey where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::CandidateKey::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::CandidateKey where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::CandidateKey::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::CandidateKey where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::CandidateKey::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::CandidateKey where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::CandidateKey::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::CandidateKey
+pub fn pure_analyzer_analysis::CandidateKey::from(T) -> T
+pub struct pure_analyzer_analysis::Column
+impl pure_analyzer_analysis::Column
+pub const fn pure_analyzer_analysis::Column::id(&self) -> pure_analyzer_analysis::ColumnId
+pub const fn pure_analyzer_analysis::Column::multiplicity(&self) -> pure_analyzer_model::types::Multiplicity
+pub const fn pure_analyzer_analysis::Column::name(&self) -> &pure_analyzer_model::types::Name
+pub fn pure_analyzer_analysis::Column::new(pure_analyzer_analysis::ColumnId, pure_analyzer_model::types::Name, pure_analyzer_model::types::TypeRef, pure_analyzer_model::types::Multiplicity, pure_analyzer_analysis::Nullability, pure_analyzer_analysis::IrOrigin) -> Self
+pub const fn pure_analyzer_analysis::Column::nullability(&self) -> pure_analyzer_analysis::Nullability
+pub const fn pure_analyzer_analysis::Column::origin(&self) -> &pure_analyzer_analysis::IrOrigin
+pub const fn pure_analyzer_analysis::Column::type_ref(&self) -> &pure_analyzer_model::types::TypeRef
+impl core::clone::Clone for pure_analyzer_analysis::Column
+pub fn pure_analyzer_analysis::Column::clone(&self) -> pure_analyzer_analysis::Column
+impl core::cmp::Eq for pure_analyzer_analysis::Column
+impl core::cmp::PartialEq for pure_analyzer_analysis::Column
+pub fn pure_analyzer_analysis::Column::eq(&self, &pure_analyzer_analysis::Column) -> bool
+impl core::fmt::Debug for pure_analyzer_analysis::Column
+pub fn pure_analyzer_analysis::Column::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::Column
+impl core::marker::Freeze for pure_analyzer_analysis::Column
+impl core::marker::Send for pure_analyzer_analysis::Column
+impl core::marker::Sync for pure_analyzer_analysis::Column
+impl core::marker::Unpin for pure_analyzer_analysis::Column
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::Column
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::Column
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::Column
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::Column where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::Column::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::Column where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::Column::Error = never
+pub fn pure_analyzer_analysis::Column::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::Column where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::Column::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::Column::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::Column where T: core::clone::Clone
+pub type pure_analyzer_analysis::Column::Owned = T
+pub fn pure_analyzer_analysis::Column::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::Column::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::Column where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::Column::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::Column where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::Column::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::Column where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::Column::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::Column where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::Column::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::Column
+pub fn pure_analyzer_analysis::Column::from(T) -> T
+pub struct pure_analyzer_analysis::ColumnId(_)
+impl pure_analyzer_analysis::ColumnId
+pub const fn pure_analyzer_analysis::ColumnId::index(self) -> u32
+pub const fn pure_analyzer_analysis::ColumnId::new(u32) -> Self
+impl core::clone::Clone for pure_analyzer_analysis::ColumnId
+pub fn pure_analyzer_analysis::ColumnId::clone(&self) -> pure_analyzer_analysis::ColumnId
+impl core::cmp::Eq for pure_analyzer_analysis::ColumnId
+impl core::cmp::Ord for pure_analyzer_analysis::ColumnId
+pub fn pure_analyzer_analysis::ColumnId::cmp(&self, &pure_analyzer_analysis::ColumnId) -> core::cmp::Ordering
+impl core::cmp::PartialEq for pure_analyzer_analysis::ColumnId
+pub fn pure_analyzer_analysis::ColumnId::eq(&self, &pure_analyzer_analysis::ColumnId) -> bool
+impl core::cmp::PartialOrd for pure_analyzer_analysis::ColumnId
+pub fn pure_analyzer_analysis::ColumnId::partial_cmp(&self, &pure_analyzer_analysis::ColumnId) -> core::option::Option<core::cmp::Ordering>
+impl core::fmt::Debug for pure_analyzer_analysis::ColumnId
+pub fn pure_analyzer_analysis::ColumnId::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for pure_analyzer_analysis::ColumnId
+pub fn pure_analyzer_analysis::ColumnId::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::Copy for pure_analyzer_analysis::ColumnId
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::ColumnId
+impl core::marker::Freeze for pure_analyzer_analysis::ColumnId
+impl core::marker::Send for pure_analyzer_analysis::ColumnId
+impl core::marker::Sync for pure_analyzer_analysis::ColumnId
+impl core::marker::Unpin for pure_analyzer_analysis::ColumnId
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::ColumnId
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::ColumnId
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::ColumnId
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::ColumnId where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::ColumnId::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::ColumnId where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::ColumnId::Error = never
+pub fn pure_analyzer_analysis::ColumnId::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::ColumnId where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::ColumnId::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::ColumnId::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::ColumnId where T: core::clone::Clone
+pub type pure_analyzer_analysis::ColumnId::Owned = T
+pub fn pure_analyzer_analysis::ColumnId::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::ColumnId::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::ColumnId where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::ColumnId::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::ColumnId where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::ColumnId::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::ColumnId where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::ColumnId::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::ColumnId where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::ColumnId::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::ColumnId
+pub fn pure_analyzer_analysis::ColumnId::from(T) -> T
 pub struct pure_analyzer_analysis::FindingPolicy
 impl pure_analyzer_analysis::FindingPolicy
 pub fn pure_analyzer_analysis::FindingPolicy::apply(&self, pure_analyzer_diagnostics::diagnostic::Diagnostic) -> core::option::Option<pure_analyzer_diagnostics::diagnostic::Diagnostic>
@@ -285,6 +962,48 @@ impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::FormatResult wher
 pub unsafe fn pure_analyzer_analysis::FormatResult::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for pure_analyzer_analysis::FormatResult
 pub fn pure_analyzer_analysis::FormatResult::from(T) -> T
+pub struct pure_analyzer_analysis::IrOrigin
+impl pure_analyzer_analysis::IrOrigin
+pub fn pure_analyzer_analysis::IrOrigin::model_origins(&self) -> &[pure_analyzer_analysis::ModelOrigin]
+pub fn pure_analyzer_analysis::IrOrigin::new(pure_analyzer_analysis::SourceSpan, alloc::vec::Vec<pure_analyzer_analysis::ModelOrigin>) -> Self
+pub const fn pure_analyzer_analysis::IrOrigin::source(&self) -> pure_analyzer_analysis::SourceSpan
+impl core::clone::Clone for pure_analyzer_analysis::IrOrigin
+pub fn pure_analyzer_analysis::IrOrigin::clone(&self) -> pure_analyzer_analysis::IrOrigin
+impl core::cmp::Eq for pure_analyzer_analysis::IrOrigin
+impl core::cmp::PartialEq for pure_analyzer_analysis::IrOrigin
+pub fn pure_analyzer_analysis::IrOrigin::eq(&self, &pure_analyzer_analysis::IrOrigin) -> bool
+impl core::fmt::Debug for pure_analyzer_analysis::IrOrigin
+pub fn pure_analyzer_analysis::IrOrigin::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::IrOrigin
+impl core::marker::Freeze for pure_analyzer_analysis::IrOrigin
+impl core::marker::Send for pure_analyzer_analysis::IrOrigin
+impl core::marker::Sync for pure_analyzer_analysis::IrOrigin
+impl core::marker::Unpin for pure_analyzer_analysis::IrOrigin
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::IrOrigin
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::IrOrigin
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::IrOrigin
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::IrOrigin where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::IrOrigin::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::IrOrigin where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::IrOrigin::Error = never
+pub fn pure_analyzer_analysis::IrOrigin::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::IrOrigin where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::IrOrigin::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::IrOrigin::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::IrOrigin where T: core::clone::Clone
+pub type pure_analyzer_analysis::IrOrigin::Owned = T
+pub fn pure_analyzer_analysis::IrOrigin::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::IrOrigin::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::IrOrigin where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::IrOrigin::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::IrOrigin where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::IrOrigin::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::IrOrigin where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::IrOrigin::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::IrOrigin where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::IrOrigin::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::IrOrigin
+pub fn pure_analyzer_analysis::IrOrigin::from(T) -> T
 pub struct pure_analyzer_analysis::LocalNavigationAnalysis
 impl pure_analyzer_analysis::LocalNavigationAnalysis
 pub fn pure_analyzer_analysis::LocalNavigationAnalysis::sites(&self) -> &[pure_analyzer_analysis::LocalResolutionSite]
@@ -408,6 +1127,51 @@ impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::MilestoningArityL
 pub unsafe fn pure_analyzer_analysis::MilestoningArityLintPass::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for pure_analyzer_analysis::MilestoningArityLintPass
 pub fn pure_analyzer_analysis::MilestoningArityLintPass::from(T) -> T
+pub struct pure_analyzer_analysis::ModelOrigin
+impl pure_analyzer_analysis::ModelOrigin
+pub const fn pure_analyzer_analysis::ModelOrigin::definition(self) -> pure_analyzer_resolve::DefinitionAnchor
+pub const fn pure_analyzer_analysis::ModelOrigin::from_class(&pure_analyzer_resolve::ResolvedClass) -> Self
+pub const fn pure_analyzer_analysis::ModelOrigin::from_member(&pure_analyzer_resolve::ResolvedMember) -> Self
+pub const fn pure_analyzer_analysis::ModelOrigin::new(pure_analyzer_model::types::Provenance, pure_analyzer_resolve::DefinitionAnchor) -> Self
+pub const fn pure_analyzer_analysis::ModelOrigin::provenance(self) -> pure_analyzer_model::types::Provenance
+impl core::clone::Clone for pure_analyzer_analysis::ModelOrigin
+pub fn pure_analyzer_analysis::ModelOrigin::clone(&self) -> pure_analyzer_analysis::ModelOrigin
+impl core::cmp::Eq for pure_analyzer_analysis::ModelOrigin
+impl core::cmp::PartialEq for pure_analyzer_analysis::ModelOrigin
+pub fn pure_analyzer_analysis::ModelOrigin::eq(&self, &pure_analyzer_analysis::ModelOrigin) -> bool
+impl core::fmt::Debug for pure_analyzer_analysis::ModelOrigin
+pub fn pure_analyzer_analysis::ModelOrigin::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for pure_analyzer_analysis::ModelOrigin
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::ModelOrigin
+impl core::marker::Freeze for pure_analyzer_analysis::ModelOrigin
+impl core::marker::Send for pure_analyzer_analysis::ModelOrigin
+impl core::marker::Sync for pure_analyzer_analysis::ModelOrigin
+impl core::marker::Unpin for pure_analyzer_analysis::ModelOrigin
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::ModelOrigin
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::ModelOrigin
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::ModelOrigin
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::ModelOrigin where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::ModelOrigin::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::ModelOrigin where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::ModelOrigin::Error = never
+pub fn pure_analyzer_analysis::ModelOrigin::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::ModelOrigin where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::ModelOrigin::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::ModelOrigin::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::ModelOrigin where T: core::clone::Clone
+pub type pure_analyzer_analysis::ModelOrigin::Owned = T
+pub fn pure_analyzer_analysis::ModelOrigin::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::ModelOrigin::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::ModelOrigin where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::ModelOrigin::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::ModelOrigin where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::ModelOrigin::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::ModelOrigin where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::ModelOrigin::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::ModelOrigin where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::ModelOrigin::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::ModelOrigin
+pub fn pure_analyzer_analysis::ModelOrigin::from(T) -> T
 pub struct pure_analyzer_analysis::NavigationLintPass
 impl core::clone::Clone for pure_analyzer_analysis::NavigationLintPass
 pub fn pure_analyzer_analysis::NavigationLintPass::clone(&self) -> pure_analyzer_analysis::NavigationLintPass
@@ -448,6 +1212,353 @@ impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::NavigationLintPas
 pub unsafe fn pure_analyzer_analysis::NavigationLintPass::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for pure_analyzer_analysis::NavigationLintPass
 pub fn pure_analyzer_analysis::NavigationLintPass::from(T) -> T
+pub struct pure_analyzer_analysis::OpaqueOutcome
+impl pure_analyzer_analysis::OpaqueOutcome
+pub fn pure_analyzer_analysis::OpaqueOutcome::new(pure_analyzer_diagnostics::verdict::ReasonCode, pure_analyzer_analysis::IrOrigin) -> Self
+pub const fn pure_analyzer_analysis::OpaqueOutcome::origin(&self) -> &pure_analyzer_analysis::IrOrigin
+pub const fn pure_analyzer_analysis::OpaqueOutcome::reason(&self) -> pure_analyzer_diagnostics::verdict::ReasonCode
+impl core::clone::Clone for pure_analyzer_analysis::OpaqueOutcome
+pub fn pure_analyzer_analysis::OpaqueOutcome::clone(&self) -> pure_analyzer_analysis::OpaqueOutcome
+impl core::cmp::Eq for pure_analyzer_analysis::OpaqueOutcome
+impl core::cmp::PartialEq for pure_analyzer_analysis::OpaqueOutcome
+pub fn pure_analyzer_analysis::OpaqueOutcome::eq(&self, &pure_analyzer_analysis::OpaqueOutcome) -> bool
+impl core::fmt::Debug for pure_analyzer_analysis::OpaqueOutcome
+pub fn pure_analyzer_analysis::OpaqueOutcome::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::OpaqueOutcome
+impl core::marker::Freeze for pure_analyzer_analysis::OpaqueOutcome
+impl core::marker::Send for pure_analyzer_analysis::OpaqueOutcome
+impl core::marker::Sync for pure_analyzer_analysis::OpaqueOutcome
+impl core::marker::Unpin for pure_analyzer_analysis::OpaqueOutcome
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::OpaqueOutcome
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::OpaqueOutcome
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::OpaqueOutcome
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::OpaqueOutcome where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::OpaqueOutcome::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::OpaqueOutcome where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::OpaqueOutcome::Error = never
+pub fn pure_analyzer_analysis::OpaqueOutcome::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::OpaqueOutcome where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::OpaqueOutcome::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::OpaqueOutcome::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::OpaqueOutcome where T: core::clone::Clone
+pub type pure_analyzer_analysis::OpaqueOutcome::Owned = T
+pub fn pure_analyzer_analysis::OpaqueOutcome::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::OpaqueOutcome::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::OpaqueOutcome where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::OpaqueOutcome::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::OpaqueOutcome where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::OpaqueOutcome::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::OpaqueOutcome where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::OpaqueOutcome::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::OpaqueOutcome where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::OpaqueOutcome::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::OpaqueOutcome
+pub fn pure_analyzer_analysis::OpaqueOutcome::from(T) -> T
+pub struct pure_analyzer_analysis::Projection
+impl pure_analyzer_analysis::Projection
+pub const fn pure_analyzer_analysis::Projection::column(&self) -> pure_analyzer_analysis::ColumnId
+pub const fn pure_analyzer_analysis::Projection::expression(&self) -> &pure_analyzer_analysis::ScalarExpression
+pub fn pure_analyzer_analysis::Projection::new(pure_analyzer_analysis::ColumnId, pure_analyzer_analysis::ScalarExpression) -> Self
+impl core::clone::Clone for pure_analyzer_analysis::Projection
+pub fn pure_analyzer_analysis::Projection::clone(&self) -> pure_analyzer_analysis::Projection
+impl core::cmp::Eq for pure_analyzer_analysis::Projection
+impl core::cmp::PartialEq for pure_analyzer_analysis::Projection
+pub fn pure_analyzer_analysis::Projection::eq(&self, &pure_analyzer_analysis::Projection) -> bool
+impl core::fmt::Debug for pure_analyzer_analysis::Projection
+pub fn pure_analyzer_analysis::Projection::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::Projection
+impl core::marker::Freeze for pure_analyzer_analysis::Projection
+impl core::marker::Send for pure_analyzer_analysis::Projection
+impl core::marker::Sync for pure_analyzer_analysis::Projection
+impl core::marker::Unpin for pure_analyzer_analysis::Projection
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::Projection
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::Projection
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::Projection
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::Projection where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::Projection::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::Projection where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::Projection::Error = never
+pub fn pure_analyzer_analysis::Projection::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::Projection where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::Projection::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::Projection::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::Projection where T: core::clone::Clone
+pub type pure_analyzer_analysis::Projection::Owned = T
+pub fn pure_analyzer_analysis::Projection::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::Projection::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::Projection where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::Projection::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::Projection where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::Projection::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::Projection where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::Projection::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::Projection where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::Projection::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::Projection
+pub fn pure_analyzer_analysis::Projection::from(T) -> T
+pub struct pure_analyzer_analysis::RelationExpression
+impl pure_analyzer_analysis::RelationExpression
+pub const fn pure_analyzer_analysis::RelationExpression::facts(&self) -> &pure_analyzer_analysis::RelationFacts
+pub fn pure_analyzer_analysis::RelationExpression::new(pure_analyzer_analysis::RelationOperator, pure_analyzer_analysis::RelationSchema, pure_analyzer_analysis::RelationFacts, pure_analyzer_analysis::IrOrigin) -> core::result::Result<Self, pure_analyzer_analysis::RelationExpressionError>
+pub const fn pure_analyzer_analysis::RelationExpression::operator(&self) -> &pure_analyzer_analysis::RelationOperator
+pub const fn pure_analyzer_analysis::RelationExpression::origin(&self) -> &pure_analyzer_analysis::IrOrigin
+pub const fn pure_analyzer_analysis::RelationExpression::schema(&self) -> &pure_analyzer_analysis::RelationSchema
+impl core::clone::Clone for pure_analyzer_analysis::RelationExpression
+pub fn pure_analyzer_analysis::RelationExpression::clone(&self) -> pure_analyzer_analysis::RelationExpression
+impl core::cmp::Eq for pure_analyzer_analysis::RelationExpression
+impl core::cmp::PartialEq for pure_analyzer_analysis::RelationExpression
+pub fn pure_analyzer_analysis::RelationExpression::eq(&self, &pure_analyzer_analysis::RelationExpression) -> bool
+impl core::fmt::Debug for pure_analyzer_analysis::RelationExpression
+pub fn pure_analyzer_analysis::RelationExpression::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::RelationExpression
+impl core::marker::Freeze for pure_analyzer_analysis::RelationExpression
+impl core::marker::Send for pure_analyzer_analysis::RelationExpression
+impl core::marker::Sync for pure_analyzer_analysis::RelationExpression
+impl core::marker::Unpin for pure_analyzer_analysis::RelationExpression
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::RelationExpression
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::RelationExpression
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::RelationExpression
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::RelationExpression where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::RelationExpression::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::RelationExpression where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::RelationExpression::Error = never
+pub fn pure_analyzer_analysis::RelationExpression::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::RelationExpression where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::RelationExpression::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::RelationExpression::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::RelationExpression where T: core::clone::Clone
+pub type pure_analyzer_analysis::RelationExpression::Owned = T
+pub fn pure_analyzer_analysis::RelationExpression::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::RelationExpression::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::RelationExpression where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::RelationExpression::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::RelationExpression where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::RelationExpression::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::RelationExpression where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::RelationExpression::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::RelationExpression where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::RelationExpression::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::RelationExpression
+pub fn pure_analyzer_analysis::RelationExpression::from(T) -> T
+pub struct pure_analyzer_analysis::RelationFacts
+impl pure_analyzer_analysis::RelationFacts
+pub const fn pure_analyzer_analysis::RelationFacts::candidate_keys(&self) -> &pure_analyzer_analysis::Knowledge<alloc::vec::Vec<pure_analyzer_analysis::CandidateKey>>
+pub fn pure_analyzer_analysis::RelationFacts::new(pure_analyzer_analysis::Knowledge<alloc::vec::Vec<pure_analyzer_analysis::CandidateKey>>, pure_analyzer_analysis::Knowledge<pure_analyzer_analysis::RowSemantics>) -> Self
+pub const fn pure_analyzer_analysis::RelationFacts::row_semantics(&self) -> &pure_analyzer_analysis::Knowledge<pure_analyzer_analysis::RowSemantics>
+pub fn pure_analyzer_analysis::RelationFacts::unknown() -> Self
+impl core::clone::Clone for pure_analyzer_analysis::RelationFacts
+pub fn pure_analyzer_analysis::RelationFacts::clone(&self) -> pure_analyzer_analysis::RelationFacts
+impl core::cmp::Eq for pure_analyzer_analysis::RelationFacts
+impl core::cmp::PartialEq for pure_analyzer_analysis::RelationFacts
+pub fn pure_analyzer_analysis::RelationFacts::eq(&self, &pure_analyzer_analysis::RelationFacts) -> bool
+impl core::fmt::Debug for pure_analyzer_analysis::RelationFacts
+pub fn pure_analyzer_analysis::RelationFacts::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::RelationFacts
+impl core::marker::Freeze for pure_analyzer_analysis::RelationFacts
+impl core::marker::Send for pure_analyzer_analysis::RelationFacts
+impl core::marker::Sync for pure_analyzer_analysis::RelationFacts
+impl core::marker::Unpin for pure_analyzer_analysis::RelationFacts
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::RelationFacts
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::RelationFacts
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::RelationFacts
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::RelationFacts where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::RelationFacts::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::RelationFacts where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::RelationFacts::Error = never
+pub fn pure_analyzer_analysis::RelationFacts::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::RelationFacts where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::RelationFacts::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::RelationFacts::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::RelationFacts where T: core::clone::Clone
+pub type pure_analyzer_analysis::RelationFacts::Owned = T
+pub fn pure_analyzer_analysis::RelationFacts::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::RelationFacts::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::RelationFacts where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::RelationFacts::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::RelationFacts where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::RelationFacts::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::RelationFacts where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::RelationFacts::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::RelationFacts where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::RelationFacts::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::RelationFacts
+pub fn pure_analyzer_analysis::RelationFacts::from(T) -> T
+pub struct pure_analyzer_analysis::RelationSchema
+impl pure_analyzer_analysis::RelationSchema
+pub fn pure_analyzer_analysis::RelationSchema::column(&self, pure_analyzer_analysis::ColumnId) -> core::option::Option<&pure_analyzer_analysis::Column>
+pub fn pure_analyzer_analysis::RelationSchema::columns(&self) -> &[pure_analyzer_analysis::Column]
+pub fn pure_analyzer_analysis::RelationSchema::new(alloc::vec::Vec<pure_analyzer_analysis::Column>) -> core::result::Result<Self, pure_analyzer_analysis::SchemaError>
+impl core::clone::Clone for pure_analyzer_analysis::RelationSchema
+pub fn pure_analyzer_analysis::RelationSchema::clone(&self) -> pure_analyzer_analysis::RelationSchema
+impl core::cmp::Eq for pure_analyzer_analysis::RelationSchema
+impl core::cmp::PartialEq for pure_analyzer_analysis::RelationSchema
+pub fn pure_analyzer_analysis::RelationSchema::eq(&self, &pure_analyzer_analysis::RelationSchema) -> bool
+impl core::fmt::Debug for pure_analyzer_analysis::RelationSchema
+pub fn pure_analyzer_analysis::RelationSchema::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::RelationSchema
+impl core::marker::Freeze for pure_analyzer_analysis::RelationSchema
+impl core::marker::Send for pure_analyzer_analysis::RelationSchema
+impl core::marker::Sync for pure_analyzer_analysis::RelationSchema
+impl core::marker::Unpin for pure_analyzer_analysis::RelationSchema
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::RelationSchema
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::RelationSchema
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::RelationSchema
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::RelationSchema where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::RelationSchema::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::RelationSchema where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::RelationSchema::Error = never
+pub fn pure_analyzer_analysis::RelationSchema::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::RelationSchema where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::RelationSchema::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::RelationSchema::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::RelationSchema where T: core::clone::Clone
+pub type pure_analyzer_analysis::RelationSchema::Owned = T
+pub fn pure_analyzer_analysis::RelationSchema::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::RelationSchema::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::RelationSchema where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::RelationSchema::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::RelationSchema where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::RelationSchema::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::RelationSchema where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::RelationSchema::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::RelationSchema where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::RelationSchema::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::RelationSchema
+pub fn pure_analyzer_analysis::RelationSchema::from(T) -> T
+pub struct pure_analyzer_analysis::RelationalQuery
+impl pure_analyzer_analysis::RelationalQuery
+pub const fn pure_analyzer_analysis::RelationalQuery::facts(&self) -> &pure_analyzer_analysis::RelationFacts
+pub fn pure_analyzer_analysis::RelationalQuery::new(pure_analyzer_analysis::RelationExpression) -> Self
+pub const fn pure_analyzer_analysis::RelationalQuery::output(&self) -> &pure_analyzer_analysis::RelationSchema
+pub const fn pure_analyzer_analysis::RelationalQuery::root(&self) -> &pure_analyzer_analysis::RelationExpression
+impl core::clone::Clone for pure_analyzer_analysis::RelationalQuery
+pub fn pure_analyzer_analysis::RelationalQuery::clone(&self) -> pure_analyzer_analysis::RelationalQuery
+impl core::cmp::Eq for pure_analyzer_analysis::RelationalQuery
+impl core::cmp::PartialEq for pure_analyzer_analysis::RelationalQuery
+pub fn pure_analyzer_analysis::RelationalQuery::eq(&self, &pure_analyzer_analysis::RelationalQuery) -> bool
+impl core::fmt::Debug for pure_analyzer_analysis::RelationalQuery
+pub fn pure_analyzer_analysis::RelationalQuery::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::RelationalQuery
+impl core::marker::Freeze for pure_analyzer_analysis::RelationalQuery
+impl core::marker::Send for pure_analyzer_analysis::RelationalQuery
+impl core::marker::Sync for pure_analyzer_analysis::RelationalQuery
+impl core::marker::Unpin for pure_analyzer_analysis::RelationalQuery
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::RelationalQuery
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::RelationalQuery
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::RelationalQuery
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::RelationalQuery where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::RelationalQuery::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::RelationalQuery where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::RelationalQuery::Error = never
+pub fn pure_analyzer_analysis::RelationalQuery::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::RelationalQuery where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::RelationalQuery::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::RelationalQuery::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::RelationalQuery where T: core::clone::Clone
+pub type pure_analyzer_analysis::RelationalQuery::Owned = T
+pub fn pure_analyzer_analysis::RelationalQuery::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::RelationalQuery::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::RelationalQuery where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::RelationalQuery::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::RelationalQuery where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::RelationalQuery::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::RelationalQuery where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::RelationalQuery::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::RelationalQuery where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::RelationalQuery::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::RelationalQuery
+pub fn pure_analyzer_analysis::RelationalQuery::from(T) -> T
+pub struct pure_analyzer_analysis::ScalarExpression
+impl pure_analyzer_analysis::ScalarExpression
+pub const fn pure_analyzer_analysis::ScalarExpression::multiplicity(&self) -> pure_analyzer_model::types::Multiplicity
+pub fn pure_analyzer_analysis::ScalarExpression::new(pure_analyzer_analysis::ScalarOperator, pure_analyzer_model::types::TypeRef, pure_analyzer_model::types::Multiplicity, pure_analyzer_analysis::Nullability, pure_analyzer_analysis::Knowledge<pure_analyzer_analysis::Totality>, pure_analyzer_analysis::IrOrigin) -> Self
+pub const fn pure_analyzer_analysis::ScalarExpression::nullability(&self) -> pure_analyzer_analysis::Nullability
+pub const fn pure_analyzer_analysis::ScalarExpression::operator(&self) -> &pure_analyzer_analysis::ScalarOperator
+pub const fn pure_analyzer_analysis::ScalarExpression::origin(&self) -> &pure_analyzer_analysis::IrOrigin
+pub const fn pure_analyzer_analysis::ScalarExpression::totality(&self) -> &pure_analyzer_analysis::Knowledge<pure_analyzer_analysis::Totality>
+pub const fn pure_analyzer_analysis::ScalarExpression::type_ref(&self) -> &pure_analyzer_model::types::TypeRef
+impl core::clone::Clone for pure_analyzer_analysis::ScalarExpression
+pub fn pure_analyzer_analysis::ScalarExpression::clone(&self) -> pure_analyzer_analysis::ScalarExpression
+impl core::cmp::Eq for pure_analyzer_analysis::ScalarExpression
+impl core::cmp::PartialEq for pure_analyzer_analysis::ScalarExpression
+pub fn pure_analyzer_analysis::ScalarExpression::eq(&self, &pure_analyzer_analysis::ScalarExpression) -> bool
+impl core::fmt::Debug for pure_analyzer_analysis::ScalarExpression
+pub fn pure_analyzer_analysis::ScalarExpression::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::ScalarExpression
+impl core::marker::Freeze for pure_analyzer_analysis::ScalarExpression
+impl core::marker::Send for pure_analyzer_analysis::ScalarExpression
+impl core::marker::Sync for pure_analyzer_analysis::ScalarExpression
+impl core::marker::Unpin for pure_analyzer_analysis::ScalarExpression
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::ScalarExpression
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::ScalarExpression
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::ScalarExpression
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::ScalarExpression where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::ScalarExpression::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::ScalarExpression where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::ScalarExpression::Error = never
+pub fn pure_analyzer_analysis::ScalarExpression::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::ScalarExpression where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::ScalarExpression::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::ScalarExpression::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::ScalarExpression where T: core::clone::Clone
+pub type pure_analyzer_analysis::ScalarExpression::Owned = T
+pub fn pure_analyzer_analysis::ScalarExpression::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::ScalarExpression::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::ScalarExpression where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::ScalarExpression::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::ScalarExpression where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::ScalarExpression::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::ScalarExpression where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::ScalarExpression::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::ScalarExpression where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::ScalarExpression::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::ScalarExpression
+pub fn pure_analyzer_analysis::ScalarExpression::from(T) -> T
+pub struct pure_analyzer_analysis::SourceSpan
+impl pure_analyzer_analysis::SourceSpan
+pub const fn pure_analyzer_analysis::SourceSpan::file(self) -> pure_analyzer_diagnostics::file::FileId
+pub const fn pure_analyzer_analysis::SourceSpan::new(pure_analyzer_diagnostics::file::FileId, text_size::range::TextRange) -> Self
+pub const fn pure_analyzer_analysis::SourceSpan::range(self) -> text_size::range::TextRange
+impl core::clone::Clone for pure_analyzer_analysis::SourceSpan
+pub fn pure_analyzer_analysis::SourceSpan::clone(&self) -> pure_analyzer_analysis::SourceSpan
+impl core::cmp::Eq for pure_analyzer_analysis::SourceSpan
+impl core::cmp::PartialEq for pure_analyzer_analysis::SourceSpan
+pub fn pure_analyzer_analysis::SourceSpan::eq(&self, &pure_analyzer_analysis::SourceSpan) -> bool
+impl core::fmt::Debug for pure_analyzer_analysis::SourceSpan
+pub fn pure_analyzer_analysis::SourceSpan::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for pure_analyzer_analysis::SourceSpan
+pub fn pure_analyzer_analysis::SourceSpan::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::Copy for pure_analyzer_analysis::SourceSpan
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::SourceSpan
+impl core::marker::Freeze for pure_analyzer_analysis::SourceSpan
+impl core::marker::Send for pure_analyzer_analysis::SourceSpan
+impl core::marker::Sync for pure_analyzer_analysis::SourceSpan
+impl core::marker::Unpin for pure_analyzer_analysis::SourceSpan
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::SourceSpan
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::SourceSpan
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::SourceSpan
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::SourceSpan where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::SourceSpan::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::SourceSpan where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::SourceSpan::Error = never
+pub fn pure_analyzer_analysis::SourceSpan::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::SourceSpan where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::SourceSpan::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::SourceSpan::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::SourceSpan where T: core::clone::Clone
+pub type pure_analyzer_analysis::SourceSpan::Owned = T
+pub fn pure_analyzer_analysis::SourceSpan::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::SourceSpan::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::SourceSpan where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::SourceSpan::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::SourceSpan where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::SourceSpan::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::SourceSpan where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::SourceSpan::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::SourceSpan where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::SourceSpan::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::SourceSpan
+pub fn pure_analyzer_analysis::SourceSpan::from(T) -> T
 pub struct pure_analyzer_analysis::ValidatePass
 impl core::clone::Clone for pure_analyzer_analysis::ValidatePass
 pub fn pure_analyzer_analysis::ValidatePass::clone(&self) -> pure_analyzer_analysis::ValidatePass
