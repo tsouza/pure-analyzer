@@ -252,7 +252,12 @@ impl Normalizer {
                     .iter()
                     .map(|projection| self.projection(projection))
                     .collect::<Result<Vec<_>, _>>()?;
-                if is_identity_project(&input, expression.schema(), &projections) {
+                if is_identity_project(
+                    &input,
+                    expression.schema(),
+                    expression.facts(),
+                    &projections,
+                ) {
                     return Ok(input);
                 }
                 Self::rebuild(
@@ -351,20 +356,29 @@ impl Normalizer {
 fn is_identity_project(
     input: &RelationExpression,
     schema: &RelationSchema,
+    facts: &RelationFacts,
     projections: &[Projection],
 ) -> bool {
     schema == input.schema()
+        && facts == input.facts()
         && projections.len() == schema.columns().len()
         && projections
             .iter()
             .zip(schema.columns())
-            .all(|(projection, column)| {
-                projection.column() == column.id()
-                    && matches!(
-                        projection.expression().operator(),
-                        ScalarOperator::Column(id) if *id == column.id()
-                    )
-            })
+            .all(|(projection, column)| is_identity_read(projection, column))
+}
+
+fn is_identity_read(projection: &Projection, column: &Column) -> bool {
+    let expression = projection.expression();
+    projection.column() == column.id()
+        && expression.type_ref() == column.type_ref()
+        && expression.multiplicity() == column.multiplicity()
+        && expression.nullability() == column.nullability()
+        && expression.totality().is_unknown()
+        && matches!(
+            expression.operator(),
+            ScalarOperator::Column(id) if *id == column.id()
+        )
 }
 
 struct KeyEncoder {
