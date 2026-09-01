@@ -41,6 +41,12 @@ enum Command {
         #[arg(long)]
         refresh: bool,
     },
+    /// Verify frozen analyzer semantic witnesses; `--refresh` also checks decisive rows live.
+    AnalysisSemanticCorpus {
+        /// Verify decisive witnesses against an exactly pinned Legend engine before replaying.
+        #[arg(long)]
+        refresh: bool,
+    },
     /// Run the default and feature-gated mutation-test passes, unsharded.
     TestMutation,
     /// Run one shard of the workspace-wide mutation pass (CI matrix only).
@@ -111,6 +117,7 @@ fn main() -> Result<()> {
         Command::TestLegend => tasks::test_legend(),
         Command::TestRealModel => tasks::test_real_model(),
         Command::ParserDifferential { refresh } => tasks::parser_differential(refresh),
+        Command::AnalysisSemanticCorpus { refresh } => tasks::analysis_semantic_corpus(refresh),
         Command::TestMutation => tasks::test_mutation(),
         Command::TestMutationShard { index, total } => tasks::test_mutation_shard(index, total),
         Command::TestMutationDiffShard { index, total, diff } => {

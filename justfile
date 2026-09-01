@@ -103,6 +103,16 @@ parser-differential-verify:
 parser-differential-refresh:
     cargo xtask parser-differential --refresh
 
+# Replay the frozen analyzer semantic witnesses without a running Legend engine.
+analysis-semantic-corpus-verify:
+    cargo xtask analysis-semantic-corpus
+
+# Verify decisive analyzer semantic witnesses against an exactly pinned running
+# Legend engine, then replay the frozen corpus locally. Indecisive witnesses
+# intentionally remain result-free until an authoritative execution exists.
+analysis-semantic-corpus-refresh:
+    cargo xtask analysis-semantic-corpus --refresh
+
 # Run doctests explicitly: nextest does not execute them. All features remain
 # compile-checked here; PureCARD's environment-bound feature tests are separate
 # integration-test binaries, so they are not executed by this doc-only command.

@@ -398,6 +398,38 @@ pub fn parser_differential(refresh: bool) -> Result<()> {
     )
 }
 
+/// Replay frozen Legend semantic witnesses against their declared relationship.
+///
+/// With `refresh`, first ask the explicit Bun tool to verify only decisive
+/// witnesses against a running, exactly pinned Legend engine. The ordinary
+/// path remains hermetic and never starts or contacts an engine. Indecisive
+/// witnesses are deliberately validated as result-free rather than treated as
+/// equal.
+///
+/// # Errors
+///
+/// Returns an error when the optional oracle replay cannot validate the pin,
+/// or when the frozen semantic corpus is malformed or internally inconsistent.
+pub fn analysis_semantic_corpus(refresh: bool) -> Result<()> {
+    if refresh {
+        run(
+            "bun",
+            &["scripts/analysis-semantic-corpus.mjs", "--refresh"],
+        )?;
+    }
+    run(
+        "cargo",
+        &[
+            "nextest",
+            "run",
+            "-p",
+            "pure-analyzer-analysis",
+            "--test",
+            "semantic_corpus",
+        ],
+    )
+}
+
 /// Run the default workspace-wide mutation pass, excluding PureCARD's
 /// feature-gated FFI source (covered separately by [`test_mutation_ffi`]).
 ///
