@@ -134,6 +134,12 @@ impl<'model> QueryLowerer<'model> {
                     }
                     state = Some(self.lower_all(node)?);
                 }
+                SyntaxKind::PAREN_EXPR => {
+                    if state.is_some() {
+                        return Err(ReasonCode::IndUnmodeledOp);
+                    }
+                    state = Some(self.lower_parenthesized_relation(node)?);
+                }
                 SyntaxKind::PROPERTY_NAV => {
                     state = Some(self.project_navigation(require_relation(state)?, node)?);
                 }
@@ -144,6 +150,14 @@ impl<'model> QueryLowerer<'model> {
             }
         }
         require_relation(state)
+    }
+
+    fn lower_parenthesized_relation(
+        &mut self,
+        node: &GreenNode,
+    ) -> Result<RelationState, ReasonCode> {
+        self.mark_failure(node);
+        self.lower_relation_nodes(&direct_nodes(node))
     }
 
     fn lower_all(&mut self, node: &GreenNode) -> Result<RelationState, ReasonCode> {

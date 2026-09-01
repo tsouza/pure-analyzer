@@ -245,6 +245,26 @@ fn lowers_parenthesized_and_integer_literals() {
 }
 
 #[test]
+fn lowers_parenthesized_relation_roots_and_continuations() {
+    let model = filter_map_model();
+
+    let root = supported(lower("(model::Person.all())", Some(&model)));
+    assert_eq!(class_scan(root.root()).path().as_str(), "model::Person");
+
+    let continued = supported(lower(
+        "(model::Person.all())->map(x| $x.manager)",
+        Some(&model),
+    ));
+    let (input, projection) = map_parts(&continued);
+    assert_eq!(class_scan(input).path().as_str(), "model::Person");
+    assert!(matches!(
+        projection.expression().operator(),
+        ScalarOperator::Navigation { input, .. }
+            if matches!(input.operator(), ScalarOperator::Column(id) if *id == ColumnId::new(0))
+    ));
+}
+
+#[test]
 fn preserves_scan_and_navigation_model_provenance() {
     let model = filter_map_model();
     let query = supported(lower(FILTER_MAP_SOURCE, Some(&model)));
