@@ -32,7 +32,7 @@ This ADR governs **only the `pure-analyzer` product**. The later-migrated
 The analyzer processing pipeline is:
 
 ```text
-lexer → syntax → parser → model → resolve → analysis → libpure → cli
+lexer → syntax → parser → model → resolve → analysis → libpure → front ends (CLI, LSP)
 ```
 
 That arrow means data-processing order. Cargo dependency edges point toward
@@ -52,7 +52,7 @@ allow-set permits each later layer to depend only on its declared prerequisites:
 - `pure-analyzer-resolve` may additionally depend on model.
 - `pure-analyzer-analysis` may additionally depend on resolve.
 - `libpure` may facade the analyzer layers below it.
-- `pure-analyzer-cli` may depend on `libpure` and diagnostics.
+- `pure-analyzer-cli` and `pure-analyzer-lsp` are front ends and may depend on `libpure` and diagnostics.
 
 `pure-analyzer-diagnostics` is a shared leaf inside the analyzer product. It has
 no analyzer dependencies and contains no renderer. Only analyzer front ends may

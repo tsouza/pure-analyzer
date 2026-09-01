@@ -1170,6 +1170,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "pure-analyzer-lsp"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
 name = "pure-analyzer-model"
 version = "0.1.0"
 dependencies = [
