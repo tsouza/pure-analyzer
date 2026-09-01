@@ -16,6 +16,118 @@ pub use libpure::TextRange
 pub use libpure::TextSize
 pub use libpure::format_query
 pub use libpure::format_query_with_width
+pub enum libpure::DefinitionResult
+pub libpure::DefinitionResult::Found(libpure::DefinitionTarget)
+pub libpure::DefinitionResult::Unavailable(libpure::DefinitionUnavailable)
+impl core::clone::Clone for libpure::DefinitionResult
+pub fn libpure::DefinitionResult::clone(&self) -> libpure::DefinitionResult
+impl core::cmp::Eq for libpure::DefinitionResult
+impl core::cmp::PartialEq for libpure::DefinitionResult
+pub fn libpure::DefinitionResult::eq(&self, &libpure::DefinitionResult) -> bool
+impl core::fmt::Debug for libpure::DefinitionResult
+pub fn libpure::DefinitionResult::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for libpure::DefinitionResult
+impl core::marker::StructuralPartialEq for libpure::DefinitionResult
+impl core::marker::Freeze for libpure::DefinitionResult
+impl core::marker::Send for libpure::DefinitionResult
+impl core::marker::Sync for libpure::DefinitionResult
+impl core::marker::Unpin for libpure::DefinitionResult
+impl core::marker::UnsafeUnpin for libpure::DefinitionResult
+impl core::panic::unwind_safe::RefUnwindSafe for libpure::DefinitionResult
+impl core::panic::unwind_safe::UnwindSafe for libpure::DefinitionResult
+impl<T, U> core::convert::Into<U> for libpure::DefinitionResult where U: core::convert::From<T>
+pub fn libpure::DefinitionResult::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for libpure::DefinitionResult where U: core::convert::Into<T>
+pub type libpure::DefinitionResult::Error = never
+pub fn libpure::DefinitionResult::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for libpure::DefinitionResult where U: core::convert::TryFrom<T>
+pub type libpure::DefinitionResult::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn libpure::DefinitionResult::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for libpure::DefinitionResult where T: core::clone::Clone
+pub type libpure::DefinitionResult::Owned = T
+pub fn libpure::DefinitionResult::clone_into(&self, &mut T)
+pub fn libpure::DefinitionResult::to_owned(&self) -> T
+impl<T> core::any::Any for libpure::DefinitionResult where T: 'static + ?core::marker::Sized
+pub fn libpure::DefinitionResult::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for libpure::DefinitionResult where T: ?core::marker::Sized
+pub fn libpure::DefinitionResult::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for libpure::DefinitionResult where T: ?core::marker::Sized
+pub fn libpure::DefinitionResult::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for libpure::DefinitionResult where T: core::clone::Clone
+pub unsafe fn libpure::DefinitionResult::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for libpure::DefinitionResult
+pub fn libpure::DefinitionResult::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for libpure::DefinitionResult
+pub type libpure::DefinitionResult::Init = T
+pub const libpure::DefinitionResult::ALIGN: usize
+pub unsafe fn libpure::DefinitionResult::deref<'a>(usize) -> &'a T
+pub unsafe fn libpure::DefinitionResult::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn libpure::DefinitionResult::drop(usize)
+pub unsafe fn libpure::DefinitionResult::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for libpure::DefinitionResult
+pub enum libpure::DefinitionUnavailable
+pub libpure::DefinitionUnavailable::Ambiguous
+pub libpure::DefinitionUnavailable::Cycle
+pub libpure::DefinitionUnavailable::InvalidAnchor
+pub libpure::DefinitionUnavailable::InvalidPosition
+pub libpure::DefinitionUnavailable::InvalidPosition::file: pure_analyzer_diagnostics::file::FileId
+pub libpure::DefinitionUnavailable::InvalidPosition::offset: text_size::size::TextSize
+pub libpure::DefinitionUnavailable::Missing
+pub libpure::DefinitionUnavailable::NoModel
+pub libpure::DefinitionUnavailable::NoReference
+pub libpure::DefinitionUnavailable::NonQueryFile
+pub libpure::DefinitionUnavailable::NonQueryFile::file: pure_analyzer_diagnostics::file::FileId
+pub libpure::DefinitionUnavailable::Recovery
+pub libpure::DefinitionUnavailable::UnderResolved
+pub libpure::DefinitionUnavailable::UnknownFile
+pub libpure::DefinitionUnavailable::UnknownFile::file: pure_analyzer_diagnostics::file::FileId
+pub libpure::DefinitionUnavailable::WrongArity
+impl core::clone::Clone for libpure::DefinitionUnavailable
+pub fn libpure::DefinitionUnavailable::clone(&self) -> libpure::DefinitionUnavailable
+impl core::cmp::Eq for libpure::DefinitionUnavailable
+impl core::cmp::PartialEq for libpure::DefinitionUnavailable
+pub fn libpure::DefinitionUnavailable::eq(&self, &libpure::DefinitionUnavailable) -> bool
+impl core::fmt::Debug for libpure::DefinitionUnavailable
+pub fn libpure::DefinitionUnavailable::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for libpure::DefinitionUnavailable
+impl core::marker::StructuralPartialEq for libpure::DefinitionUnavailable
+impl core::marker::Freeze for libpure::DefinitionUnavailable
+impl core::marker::Send for libpure::DefinitionUnavailable
+impl core::marker::Sync for libpure::DefinitionUnavailable
+impl core::marker::Unpin for libpure::DefinitionUnavailable
+impl core::marker::UnsafeUnpin for libpure::DefinitionUnavailable
+impl core::panic::unwind_safe::RefUnwindSafe for libpure::DefinitionUnavailable
+impl core::panic::unwind_safe::UnwindSafe for libpure::DefinitionUnavailable
+impl<T, U> core::convert::Into<U> for libpure::DefinitionUnavailable where U: core::convert::From<T>
+pub fn libpure::DefinitionUnavailable::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for libpure::DefinitionUnavailable where U: core::convert::Into<T>
+pub type libpure::DefinitionUnavailable::Error = never
+pub fn libpure::DefinitionUnavailable::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for libpure::DefinitionUnavailable where U: core::convert::TryFrom<T>
+pub type libpure::DefinitionUnavailable::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn libpure::DefinitionUnavailable::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for libpure::DefinitionUnavailable where T: core::clone::Clone
+pub type libpure::DefinitionUnavailable::Owned = T
+pub fn libpure::DefinitionUnavailable::clone_into(&self, &mut T)
+pub fn libpure::DefinitionUnavailable::to_owned(&self) -> T
+impl<T> core::any::Any for libpure::DefinitionUnavailable where T: 'static + ?core::marker::Sized
+pub fn libpure::DefinitionUnavailable::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for libpure::DefinitionUnavailable where T: ?core::marker::Sized
+pub fn libpure::DefinitionUnavailable::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for libpure::DefinitionUnavailable where T: ?core::marker::Sized
+pub fn libpure::DefinitionUnavailable::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for libpure::DefinitionUnavailable where T: core::clone::Clone
+pub unsafe fn libpure::DefinitionUnavailable::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for libpure::DefinitionUnavailable
+pub fn libpure::DefinitionUnavailable::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for libpure::DefinitionUnavailable
+pub type libpure::DefinitionUnavailable::Init = T
+pub const libpure::DefinitionUnavailable::ALIGN: usize
+pub unsafe fn libpure::DefinitionUnavailable::deref<'a>(usize) -> &'a T
+pub unsafe fn libpure::DefinitionUnavailable::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn libpure::DefinitionUnavailable::drop(usize)
+pub unsafe fn libpure::DefinitionUnavailable::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for libpure::DefinitionUnavailable
 pub enum libpure::DriverError
 pub libpure::DriverError::MissingSource
 pub libpure::DriverError::MissingSource::file: pure_analyzer_diagnostics::file::FileId
@@ -340,6 +452,7 @@ pub unsafe fn libpure::SourceStoreError::init(<T as crossbeam_epoch::atomic::Poi
 impl<T> either::into_either::IntoEither for libpure::SourceStoreError
 pub struct libpure::AnalysisDriver
 impl libpure::AnalysisDriver
+pub fn libpure::AnalysisDriver::definition(&self, &libpure::LintRequest, libpure::DefinitionPosition) -> core::result::Result<libpure::DefinitionResult, libpure::DriverError>
 pub fn libpure::AnalysisDriver::format(&self, &libpure::SourceRequest) -> core::result::Result<libpure::FormatOutput, libpure::DriverError>
 pub fn libpure::AnalysisDriver::lint(&self, &libpure::LintRequest) -> core::result::Result<libpure::AnalysisOutput, libpure::DriverError>
 pub fn libpure::AnalysisDriver::parse(&self, &libpure::SourceRequest) -> core::result::Result<libpure::ParseOutput, libpure::DriverError>
@@ -439,6 +552,107 @@ pub unsafe fn libpure::AnalysisOutput::deref_mut<'a>(usize) -> &'a mut T
 pub unsafe fn libpure::AnalysisOutput::drop(usize)
 pub unsafe fn libpure::AnalysisOutput::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
 impl<T> either::into_either::IntoEither for libpure::AnalysisOutput
+pub struct libpure::DefinitionPosition
+impl libpure::DefinitionPosition
+pub const fn libpure::DefinitionPosition::file(self) -> pure_analyzer_diagnostics::file::FileId
+pub const fn libpure::DefinitionPosition::new(pure_analyzer_diagnostics::file::FileId, text_size::size::TextSize) -> Self
+pub const fn libpure::DefinitionPosition::offset(self) -> text_size::size::TextSize
+impl core::clone::Clone for libpure::DefinitionPosition
+pub fn libpure::DefinitionPosition::clone(&self) -> libpure::DefinitionPosition
+impl core::cmp::Eq for libpure::DefinitionPosition
+impl core::cmp::PartialEq for libpure::DefinitionPosition
+pub fn libpure::DefinitionPosition::eq(&self, &libpure::DefinitionPosition) -> bool
+impl core::fmt::Debug for libpure::DefinitionPosition
+pub fn libpure::DefinitionPosition::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for libpure::DefinitionPosition
+impl core::marker::StructuralPartialEq for libpure::DefinitionPosition
+impl core::marker::Freeze for libpure::DefinitionPosition
+impl core::marker::Send for libpure::DefinitionPosition
+impl core::marker::Sync for libpure::DefinitionPosition
+impl core::marker::Unpin for libpure::DefinitionPosition
+impl core::marker::UnsafeUnpin for libpure::DefinitionPosition
+impl core::panic::unwind_safe::RefUnwindSafe for libpure::DefinitionPosition
+impl core::panic::unwind_safe::UnwindSafe for libpure::DefinitionPosition
+impl<T, U> core::convert::Into<U> for libpure::DefinitionPosition where U: core::convert::From<T>
+pub fn libpure::DefinitionPosition::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for libpure::DefinitionPosition where U: core::convert::Into<T>
+pub type libpure::DefinitionPosition::Error = never
+pub fn libpure::DefinitionPosition::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for libpure::DefinitionPosition where U: core::convert::TryFrom<T>
+pub type libpure::DefinitionPosition::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn libpure::DefinitionPosition::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for libpure::DefinitionPosition where T: core::clone::Clone
+pub type libpure::DefinitionPosition::Owned = T
+pub fn libpure::DefinitionPosition::clone_into(&self, &mut T)
+pub fn libpure::DefinitionPosition::to_owned(&self) -> T
+impl<T> core::any::Any for libpure::DefinitionPosition where T: 'static + ?core::marker::Sized
+pub fn libpure::DefinitionPosition::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for libpure::DefinitionPosition where T: ?core::marker::Sized
+pub fn libpure::DefinitionPosition::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for libpure::DefinitionPosition where T: ?core::marker::Sized
+pub fn libpure::DefinitionPosition::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for libpure::DefinitionPosition where T: core::clone::Clone
+pub unsafe fn libpure::DefinitionPosition::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for libpure::DefinitionPosition
+pub fn libpure::DefinitionPosition::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for libpure::DefinitionPosition
+pub type libpure::DefinitionPosition::Init = T
+pub const libpure::DefinitionPosition::ALIGN: usize
+pub unsafe fn libpure::DefinitionPosition::deref<'a>(usize) -> &'a T
+pub unsafe fn libpure::DefinitionPosition::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn libpure::DefinitionPosition::drop(usize)
+pub unsafe fn libpure::DefinitionPosition::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for libpure::DefinitionPosition
+pub struct libpure::DefinitionTarget
+impl libpure::DefinitionTarget
+pub const fn libpure::DefinitionTarget::file(self) -> pure_analyzer_diagnostics::file::FileId
+pub const fn libpure::DefinitionTarget::span(self) -> core::option::Option<text_size::range::TextRange>
+impl core::clone::Clone for libpure::DefinitionTarget
+pub fn libpure::DefinitionTarget::clone(&self) -> libpure::DefinitionTarget
+impl core::cmp::Eq for libpure::DefinitionTarget
+impl core::cmp::PartialEq for libpure::DefinitionTarget
+pub fn libpure::DefinitionTarget::eq(&self, &libpure::DefinitionTarget) -> bool
+impl core::fmt::Debug for libpure::DefinitionTarget
+pub fn libpure::DefinitionTarget::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for libpure::DefinitionTarget
+impl core::marker::StructuralPartialEq for libpure::DefinitionTarget
+impl core::marker::Freeze for libpure::DefinitionTarget
+impl core::marker::Send for libpure::DefinitionTarget
+impl core::marker::Sync for libpure::DefinitionTarget
+impl core::marker::Unpin for libpure::DefinitionTarget
+impl core::marker::UnsafeUnpin for libpure::DefinitionTarget
+impl core::panic::unwind_safe::RefUnwindSafe for libpure::DefinitionTarget
+impl core::panic::unwind_safe::UnwindSafe for libpure::DefinitionTarget
+impl<T, U> core::convert::Into<U> for libpure::DefinitionTarget where U: core::convert::From<T>
+pub fn libpure::DefinitionTarget::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for libpure::DefinitionTarget where U: core::convert::Into<T>
+pub type libpure::DefinitionTarget::Error = never
+pub fn libpure::DefinitionTarget::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for libpure::DefinitionTarget where U: core::convert::TryFrom<T>
+pub type libpure::DefinitionTarget::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn libpure::DefinitionTarget::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for libpure::DefinitionTarget where T: core::clone::Clone
+pub type libpure::DefinitionTarget::Owned = T
+pub fn libpure::DefinitionTarget::clone_into(&self, &mut T)
+pub fn libpure::DefinitionTarget::to_owned(&self) -> T
+impl<T> core::any::Any for libpure::DefinitionTarget where T: 'static + ?core::marker::Sized
+pub fn libpure::DefinitionTarget::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for libpure::DefinitionTarget where T: ?core::marker::Sized
+pub fn libpure::DefinitionTarget::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for libpure::DefinitionTarget where T: ?core::marker::Sized
+pub fn libpure::DefinitionTarget::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for libpure::DefinitionTarget where T: core::clone::Clone
+pub unsafe fn libpure::DefinitionTarget::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for libpure::DefinitionTarget
+pub fn libpure::DefinitionTarget::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for libpure::DefinitionTarget
+pub type libpure::DefinitionTarget::Init = T
+pub const libpure::DefinitionTarget::ALIGN: usize
+pub unsafe fn libpure::DefinitionTarget::deref<'a>(usize) -> &'a T
+pub unsafe fn libpure::DefinitionTarget::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn libpure::DefinitionTarget::drop(usize)
+pub unsafe fn libpure::DefinitionTarget::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for libpure::DefinitionTarget
 pub struct libpure::DiagnosticPolicy
 impl libpure::DiagnosticPolicy
 pub fn libpure::DiagnosticPolicy::ignore(self, pure_analyzer_diagnostics::code::DiagCode) -> Self
@@ -645,8 +859,10 @@ pub unsafe fn libpure::LineColumn::init(<T as crossbeam_epoch::atomic::Pointable
 impl<T> either::into_either::IntoEither for libpure::LineColumn
 pub struct libpure::LintRequest
 impl libpure::LintRequest
+pub fn libpure::LintRequest::model_file_id(&self, usize) -> core::option::Option<pure_analyzer_diagnostics::file::FileId>
 pub fn libpure::LintRequest::models(&self) -> &[libpure::ModelInput]
 pub fn libpure::LintRequest::new(libpure::SourceRequest, impl core::iter::traits::collect::IntoIterator<Item = libpure::ModelInput>) -> Self
+pub fn libpure::LintRequest::query_file_id(&self, usize) -> core::option::Option<pure_analyzer_diagnostics::file::FileId>
 pub const fn libpure::LintRequest::sources(&self) -> &libpure::SourceRequest
 impl core::clone::Clone for libpure::LintRequest
 pub fn libpure::LintRequest::clone(&self) -> libpure::LintRequest

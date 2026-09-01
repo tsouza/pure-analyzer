@@ -1,18 +1,24 @@
 //! Renderer-independent orchestration over retained source snapshots.
 
 use pure_analyzer_analysis::{
-    AnalysisEngine, AnalysisInput, AnalysisPass, FindingPolicy, MilestoningArityLintPass,
-    NavigationLintPass, ValidatePass, format_query, format_query_with_width,
+    AnalysisEngine, AnalysisInput, AnalysisPass, FindingPolicy, LocalResolution,
+    MilestoningArityLintPass, NavigationLintPass, ValidatePass, analyze_m3_locals, format_query,
+    format_query_with_width,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
 use pure_analyzer_diagnostics::{
     ALL_DIAG_CODES, DiagCode, Diagnostic, FileId, FixPlan, FixPlanError, PlannedFile, Severity,
+    TextRange, TextSize,
 };
 use pure_analyzer_model::{
     ModelDocument, ModelError, ModelGraph, PmcdDocument, PureDocument, load_model_documents,
 };
 use pure_analyzer_parser::parse_query;
+use pure_analyzer_resolve::{
+    DefinitionAnchor as ResolverDefinitionAnchor, LocalValue, LocalValueKind, NavigationResolution,
+    NavigationTarget, Resolution,
+};
 use pure_analyzer_syntax::{BuildError, GreenNode};
 use rayon::prelude::*;
 use thiserror::Error;
@@ -232,6 +238,143 @@ impl LintRequest {
     pub fn models(&self) -> &[ModelInput] {
         &self.models
     }
+
+    /// Return the request-local source identity of the model input at `index`.
+    ///
+    /// Model inputs occupy the first source identities in the stable order
+    /// returned by [`Self::models`], before every query input. When
+    /// [`AnalysisDriver::lint`] or [`AnalysisDriver::definition`] successfully
+    /// loads this request, the returned identity is the model source's ID in
+    /// the retained [`SourceStore`]. Returns [`None`] when no model input
+    /// exists at `index` or its identity cannot be represented by [`FileId`].
+    #[must_use]
+    pub fn model_file_id(&self, index: usize) -> Option<FileId> {
+        self.models.get(index)?;
+        request_file_id(index)
+    }
+
+    /// Return the request-local source identity of the query input at `index`.
+    ///
+    /// Query inputs follow every model input in the stable order returned by
+    /// [`SourceRequest::sources`]. When [`AnalysisDriver::lint`] or
+    /// [`AnalysisDriver::definition`] successfully loads this request, the
+    /// returned identity is the retained query source's ID and may construct a
+    /// [`DefinitionPosition`]. Returns [`None`] when no query input exists at
+    /// `index` or its identity cannot be represented by [`FileId`].
+    #[must_use]
+    pub fn query_file_id(&self, index: usize) -> Option<FileId> {
+        self.sources.sources.get(index)?;
+        let first_query_id = request_file_id(self.models.len())?.index();
+        let query_index = request_file_id(index)?.index();
+        first_query_id.checked_add(query_index).map(FileId::new)
+    }
+}
+
+/// A byte position in one request-local query snapshot.
+///
+/// Protocol front ends convert their own position encodings at their boundary,
+/// then pass the resulting UTF-8 byte offset to this facade.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DefinitionPosition {
+    file: FileId,
+    offset: TextSize,
+}
+
+impl DefinitionPosition {
+    /// Construct a position in the retained query source identified by `file`.
+    #[must_use]
+    pub const fn new(file: FileId, offset: TextSize) -> Self {
+        Self { file, offset }
+    }
+
+    /// Return the request-local source identity containing the reference.
+    #[must_use]
+    pub const fn file(self) -> FileId {
+        self.file
+    }
+
+    /// Return the UTF-8 byte offset within [`Self::file`].
+    #[must_use]
+    pub const fn offset(self) -> TextSize {
+        self.offset
+    }
+}
+
+/// A stable, front-end-neutral anchor for one resolved definition.
+///
+/// `span` is absent when the model source identifies the definition but does
+/// not retain a precise declaration range, as is currently possible for PMCD.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DefinitionTarget {
+    file: FileId,
+    span: Option<TextRange>,
+}
+
+impl DefinitionTarget {
+    const fn new(file: FileId, span: Option<TextRange>) -> Self {
+        Self { file, span }
+    }
+
+    /// Return the retained source identity that owns the definition.
+    #[must_use]
+    pub const fn file(self) -> FileId {
+        self.file
+    }
+
+    /// Return the exact declaration span when the source format preserves it.
+    #[must_use]
+    pub const fn span(self) -> Option<TextRange> {
+        self.span
+    }
+}
+
+/// The result of a front-end-neutral definition lookup.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DefinitionResult {
+    /// A single deterministic definition target was resolved.
+    Found(DefinitionTarget),
+    /// No definition can be returned conservatively for the requested position.
+    Unavailable(DefinitionUnavailable),
+}
+
+/// Why a definition lookup cannot return a stable target.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DefinitionUnavailable {
+    /// The requested source identity was not retained by the request.
+    UnknownFile {
+        /// The missing request-local source identity.
+        file: FileId,
+    },
+    /// The requested source is a model input, not an analyzable query input.
+    NonQueryFile {
+        /// The model-source identity selected by the caller.
+        file: FileId,
+    },
+    /// The requested byte offset is outside the exact source snapshot or splits a UTF-8 code point.
+    InvalidPosition {
+        /// The retained source identity whose snapshot rejected the offset.
+        file: FileId,
+        /// The invalid UTF-8 byte offset.
+        offset: TextSize,
+    },
+    /// The selected query source has parser-recovery findings.
+    Recovery,
+    /// The requested position does not select a locally supported reference.
+    NoReference,
+    /// No model facts were supplied for a model-dependent reference.
+    NoModel,
+    /// The selected name is absent from a closed-world model or relation row.
+    Missing,
+    /// Available local or model facts cannot resolve the selected reference safely.
+    UnderResolved,
+    /// Multiple equally preferred definitions apply to the selected reference.
+    Ambiguous,
+    /// A model generalization cycle prevents deterministic resolution.
+    Cycle,
+    /// The selected call has a known arity mismatch without a definition anchor.
+    WrongArity,
+    /// A resolver anchor could not be represented by the retained source snapshots.
+    InvalidAnchor,
 }
 
 /// One lossless syntax tree and recovery findings produced for a source file.
@@ -492,6 +635,25 @@ impl AnalysisDriver {
         })
     }
 
+    /// Resolve the supported reference at one byte position to its definition.
+    ///
+    /// The lookup keeps protocol position conversion outside the analysis
+    /// facade. It returns a typed unavailable result for incomplete or
+    /// ambiguous facts rather than choosing an arbitrary target.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed [`DriverError`] when request loading or parsing cannot
+    /// retain the exact source snapshots needed for the lookup.
+    pub fn definition(
+        &self,
+        request: &LintRequest,
+        position: DefinitionPosition,
+    ) -> Result<DefinitionResult, DriverError> {
+        let (sources, query_files, model) = load_lint_request(request)?;
+        resolve_definition(&sources, &query_files, model.as_ref(), position)
+    }
+
     /// Format sources into buffers without rereading, printing, or writing them.
     ///
     /// # Errors
@@ -619,8 +781,9 @@ fn load_lint_request(
     request.sources.validate().map_err(DriverError::usage)?;
     let model_sources = SourceStore::load(request.models.iter().map(ModelInput::source).cloned())
         .map_err(DriverError::model_source_load)?;
-    let first_query_id = u32::try_from(model_sources.len())
-        .map_err(|_| DriverError::model_source_load(SourceStoreError::TooManySources))?;
+    let first_query_id = request_file_id(model_sources.len())
+        .map(FileId::index)
+        .ok_or_else(|| DriverError::model_source_load(SourceStoreError::TooManySources))?;
     let query_sources =
         SourceStore::load_from(first_query_id, request.sources.sources.iter().cloned())
             .map_err(DriverError::source_load)?;
@@ -631,6 +794,10 @@ fn load_lint_request(
     let sources = model_sources.append(query_sources);
     let model = load_model(&sources, &request.models)?;
     Ok((sources, files, model))
+}
+
+fn request_file_id(index: usize) -> Option<FileId> {
+    u32::try_from(index).ok().map(FileId::new)
 }
 
 fn load_model(
@@ -656,6 +823,171 @@ fn load_model(
     load_model_documents(&documents)
         .map(Some)
         .map_err(DriverError::model_load)
+}
+
+fn resolve_definition(
+    sources: &SourceStore,
+    query_files: &[FileId],
+    model: Option<&ModelGraph>,
+    position: DefinitionPosition,
+) -> Result<DefinitionResult, DriverError> {
+    let Some(source) = sources.get(position.file()) else {
+        return Ok(DefinitionResult::Unavailable(
+            DefinitionUnavailable::UnknownFile {
+                file: position.file(),
+            },
+        ));
+    };
+    if !query_files.contains(&position.file()) {
+        return Ok(DefinitionResult::Unavailable(
+            DefinitionUnavailable::NonQueryFile {
+                file: position.file(),
+            },
+        ));
+    }
+    if !is_valid_position(source, position.offset()) {
+        return Ok(DefinitionResult::Unavailable(
+            DefinitionUnavailable::InvalidPosition {
+                file: position.file(),
+                offset: position.offset(),
+            },
+        ));
+    }
+
+    let parsed = parse_query(source.text(), source.id())
+        .map_err(|error| DriverError::parse(source.id(), error))?;
+    if !parsed.diagnostics.is_empty() {
+        return Ok(DefinitionResult::Unavailable(
+            DefinitionUnavailable::Recovery,
+        ));
+    }
+    let empty_model = ModelGraph::default();
+    let graph = model.unwrap_or(&empty_model);
+    let analysis = analyze_m3_locals(&parsed.green, graph);
+    let Some(site) = analysis
+        .sites()
+        .iter()
+        .find(|site| range_contains(site.reference_span(), position.offset()))
+    else {
+        return Ok(DefinitionResult::Unavailable(
+            DefinitionUnavailable::NoReference,
+        ));
+    };
+
+    Ok(match site.outcome() {
+        LocalResolution::ClassAll(outcome) => {
+            definition_from_class_resolution(sources, outcome, model.is_some())
+        }
+        LocalResolution::Navigation(outcome) => {
+            definition_from_navigation(sources, source, outcome)
+        }
+    })
+}
+
+fn definition_from_class_resolution(
+    sources: &SourceStore,
+    outcome: &Resolution<LocalValue>,
+    has_model: bool,
+) -> DefinitionResult {
+    match outcome {
+        Resolution::Found(value) => match value.kind() {
+            LocalValueKind::Class(class) => {
+                definition_from_model_anchor(sources, class.definition())
+            }
+            LocalValueKind::Scalar(_)
+            | LocalValueKind::RelationRow(_)
+            | LocalValueKind::Unknown(_) => {
+                DefinitionResult::Unavailable(DefinitionUnavailable::UnderResolved)
+            }
+        },
+        Resolution::Missing if has_model => {
+            DefinitionResult::Unavailable(DefinitionUnavailable::Missing)
+        }
+        Resolution::Missing => DefinitionResult::Unavailable(DefinitionUnavailable::NoModel),
+        Resolution::UnderResolved(_) => {
+            DefinitionResult::Unavailable(DefinitionUnavailable::UnderResolved)
+        }
+        Resolution::Ambiguous(_) => DefinitionResult::Unavailable(DefinitionUnavailable::Ambiguous),
+        Resolution::Cycle(_) => DefinitionResult::Unavailable(DefinitionUnavailable::Cycle),
+    }
+}
+
+fn definition_from_navigation(
+    sources: &SourceStore,
+    query_source: &SourceFile,
+    outcome: &NavigationResolution,
+) -> DefinitionResult {
+    match outcome {
+        NavigationResolution::Found(chain) => chain.hops().last().map_or_else(
+            || DefinitionResult::Unavailable(DefinitionUnavailable::UnderResolved),
+            |hop| match hop.target() {
+                NavigationTarget::Member(member) => {
+                    definition_from_model_anchor(sources, member.definition())
+                }
+                NavigationTarget::RelationColumn(column) => {
+                    target_from_span(query_source.id(), query_source.text(), Some(column.span()))
+                        .map_or(
+                            DefinitionResult::Unavailable(DefinitionUnavailable::InvalidAnchor),
+                            DefinitionResult::Found,
+                        )
+                }
+            },
+        ),
+        NavigationResolution::Missing(_) => {
+            DefinitionResult::Unavailable(DefinitionUnavailable::Missing)
+        }
+        NavigationResolution::UnderResolved(_) => {
+            DefinitionResult::Unavailable(DefinitionUnavailable::UnderResolved)
+        }
+        NavigationResolution::Ambiguous(_) => {
+            DefinitionResult::Unavailable(DefinitionUnavailable::Ambiguous)
+        }
+        NavigationResolution::Cycle(_) => {
+            DefinitionResult::Unavailable(DefinitionUnavailable::Cycle)
+        }
+        NavigationResolution::WrongArity(mismatch) => mismatch.definition().map_or(
+            DefinitionResult::Unavailable(DefinitionUnavailable::WrongArity),
+            |anchor| definition_from_model_anchor(sources, anchor),
+        ),
+    }
+}
+
+fn definition_from_model_anchor(
+    sources: &SourceStore,
+    anchor: ResolverDefinitionAnchor,
+) -> DefinitionResult {
+    let file = anchor.source().file_id();
+    sources
+        .get(file)
+        .and_then(|source| target_from_span(file, source.text(), anchor.span()))
+        .map_or(
+            DefinitionResult::Unavailable(DefinitionUnavailable::InvalidAnchor),
+            DefinitionResult::Found,
+        )
+}
+
+fn target_from_span(file: FileId, text: &str, span: Option<TextRange>) -> Option<DefinitionTarget> {
+    if let Some(span) = span
+        && !is_valid_range(text, span)
+    {
+        return None;
+    }
+    Some(DefinitionTarget::new(file, span))
+}
+
+fn is_valid_position(source: &SourceFile, offset: TextSize) -> bool {
+    let offset = usize::from(offset);
+    offset <= source.text().len() && source.text().is_char_boundary(offset)
+}
+
+fn is_valid_range(text: &str, range: TextRange) -> bool {
+    let start = usize::from(range.start());
+    let end = usize::from(range.end());
+    start <= end && end <= text.len() && text.is_char_boundary(start) && text.is_char_boundary(end)
+}
+
+fn range_contains(range: TextRange, offset: TextSize) -> bool {
+    range.start() <= offset && offset < range.end()
 }
 
 fn source_at(sources: &SourceStore, index: usize) -> Result<&SourceFile, DriverError> {
