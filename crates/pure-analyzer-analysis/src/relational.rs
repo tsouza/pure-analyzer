@@ -614,7 +614,8 @@ pub enum RelationOperator {
         /// Join condition evaluated over the combined row.
         condition: ScalarExpression,
     },
-    /// Remove duplicate rows when set semantics are explicitly established.
+    /// Remove duplicate rows; lowering attaches explicit set-semantics evidence
+    /// when it has a proven implementation of this operation.
     Distinct {
         /// Input relation.
         input: Box<RelationExpression>,
