@@ -66,13 +66,13 @@ Any parser or corpus integration between them requires a future issue and ADR.
 Legend Pure's modern `Relation<>` dialect.
 
 **Invariants.** Its processing order is `lexer → syntax → parser → model
-→ resolve → analysis → libpure → cli`. Cargo edges point toward
+→ resolve → analysis → libpure → front ends (CLI, LSP)`. Cargo edges point toward
 prerequisites: resolver may depend on model; model must not depend on resolver.
 Diagnostics is a shared analyzer leaf. Runtime analysis remains mechanical:
 no LLM, network, clock, or runtime Legend engine.
 
 **Relationships.** The analyzer pipeline is composed from the crate layers
-listed above; `libpure` is its facade and the CLI is its command-line boundary.
+listed above; `libpure` is its facade and the CLI and LSP are transport-specific front-end boundaries.
 
 **Authority.** Repository bootstrap ·
 [ADR-0003](decisions/0003-analysis-engine-crate-dag.md).

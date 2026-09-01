@@ -24,6 +24,7 @@ Closes #
 - [ ] pure-analyzer-diagnostics
 - [ ] libpure
 - [ ] pure-analyzer-cli
+- [ ] pure-analyzer-lsp
 - [ ] pure-analyzer-purecard
 - [ ] PureCARD corpus / oracle fixtures
 - [ ] PureCARD Python wheel / FFI
