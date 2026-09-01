@@ -1124,6 +1124,7 @@ dependencies = [
 name = "pure-analyzer-analysis"
 version = "0.1.0"
 dependencies = [
+ "proptest",
  "pure-analyzer-diagnostics",
  "pure-analyzer-lexer",
  "pure-analyzer-model",

@@ -115,6 +115,7 @@ pub enum ResolvedMemberKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResolvedMember {
     owner: ResolvedClass,
+    name: Name,
     target: TypeRef,
     multiplicity: Multiplicity,
     kind: ResolvedMemberKind,
@@ -129,6 +130,12 @@ impl ResolvedMember {
     #[must_use]
     pub const fn owner(&self) -> &ResolvedClass {
         &self.owner
+    }
+
+    /// Return the simple name of the selected member.
+    #[must_use]
+    pub const fn name(&self) -> &Name {
+        &self.name
     }
 
     /// Return the member's target type, including generic arguments.
@@ -481,7 +488,7 @@ impl<'model> Resolver<'model> {
             };
             return Ok(Some(DirectMember {
                 priority,
-                member: Self::qualified_member(owner, class, property),
+                member: Self::qualified_member(owner, name, class, property),
                 association: None,
             }));
         }
@@ -543,6 +550,7 @@ impl<'model> Resolver<'model> {
             priority,
             member: ResolvedMember {
                 owner,
+                name: name.clone(),
                 target: property.target().clone(),
                 multiplicity: property.multiplicity(),
                 kind,
@@ -557,11 +565,13 @@ impl<'model> Resolver<'model> {
 
     fn qualified_member(
         owner: ResolvedClass,
+        name: &Name,
         class: &ClassInfo,
         property: &QpInfo,
     ) -> ResolvedMember {
         ResolvedMember {
             owner,
+            name: name.clone(),
             target: property.target().clone(),
             multiplicity: property.multiplicity(),
             kind: ResolvedMemberKind::Qualified(property.kind()),

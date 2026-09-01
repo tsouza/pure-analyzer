@@ -8,8 +8,11 @@
 use std::collections::BTreeSet;
 
 use pure_analyzer_diagnostics::{FileId, ReasonCode, TextRange};
-use pure_analyzer_model::{Multiplicity, Name, Provenance, TypeRef};
-use pure_analyzer_resolve::{DefinitionAnchor, ResolvedClass, ResolvedMember};
+use pure_analyzer_model::{Multiplicity, Name, Provenance, QName, TypeRef};
+use pure_analyzer_resolve::{
+    DefinitionAnchor, LocalValue, LocalValueKind, NavigationChain, NavigationTarget, ResolvedClass,
+    ResolvedMember, ResolvedMemberKind,
+};
 
 const BOOLEAN_TYPE: &str = "Boolean";
 const EXACTLY_ONE: u32 = 1;
@@ -47,44 +50,95 @@ impl SourceSpan {
     }
 }
 
-/// A resolved model definition that contributed to an IR value.
+/// The model definition category that contributed an IR provenance fact.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModelOriginKind {
+    /// A resolved class supplied the fact.
+    Class,
+    /// A resolved property or association end supplied the fact.
+    Member,
+    /// A caller supplied an anchor without a more specific category.
+    Unspecified,
+}
+
+/// A resolved model definition that contributed to an IR value.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ModelOrigin {
+    kind: ModelOriginKind,
     provenance: Provenance,
     definition: DefinitionAnchor,
+    identity: ModelOriginIdentity,
+}
+
+/// Graph-level identity retained when a source anchor is not precise enough.
+///
+/// PMCD definitions currently share a document-level anchor without element
+/// spans. The path/name identity prevents unrelated resolved definitions from
+/// collapsing when IR provenance is merged.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ModelOriginIdentity {
+    Unspecified,
+    Class(QName),
+    Member {
+        owner: QName,
+        name: Name,
+        kind: ResolvedMemberKind,
+    },
 }
 
 impl ModelOrigin {
-    /// Construct model-origin facts from their explicit provenance and anchor.
+    /// Construct an uncategorized model-origin fact from its provenance and anchor.
     #[must_use]
     pub const fn new(provenance: Provenance, definition: DefinitionAnchor) -> Self {
         Self {
+            kind: ModelOriginKind::Unspecified,
             provenance,
             definition,
+            identity: ModelOriginIdentity::Unspecified,
         }
     }
 
     /// Construct an origin from a resolved class.
     #[must_use]
-    pub const fn from_class(class: &ResolvedClass) -> Self {
-        Self::new(class.provenance(), class.definition())
+    pub fn from_class(class: &ResolvedClass) -> Self {
+        Self {
+            kind: ModelOriginKind::Class,
+            provenance: class.provenance(),
+            definition: class.definition(),
+            identity: ModelOriginIdentity::Class(class.path().clone()),
+        }
     }
 
     /// Construct an origin from a resolved member.
     #[must_use]
-    pub const fn from_member(member: &ResolvedMember) -> Self {
-        Self::new(member.provenance(), member.definition())
+    pub fn from_member(member: &ResolvedMember) -> Self {
+        Self {
+            kind: ModelOriginKind::Member,
+            provenance: member.provenance(),
+            definition: member.definition(),
+            identity: ModelOriginIdentity::Member {
+                owner: member.owner().path().clone(),
+                name: member.name().clone(),
+                kind: member.kind().clone(),
+            },
+        }
+    }
+
+    /// Return the definition category that supplied this fact.
+    #[must_use]
+    pub const fn kind(&self) -> ModelOriginKind {
+        self.kind
     }
 
     /// Return the source kind that supplied the model fact.
     #[must_use]
-    pub const fn provenance(self) -> Provenance {
+    pub const fn provenance(&self) -> Provenance {
         self.provenance
     }
 
     /// Return the resolved definition's source and optional span.
     #[must_use]
-    pub const fn definition(self) -> DefinitionAnchor {
+    pub const fn definition(&self) -> DefinitionAnchor {
         self.definition
     }
 }
@@ -417,6 +471,9 @@ pub enum RelationExpressionError {
     /// A column reference did not retain the referenced column's type facts.
     #[error("column reference does not retain the referenced column metadata")]
     ColumnMetadataMismatch(ColumnId),
+    /// A navigation receiver or result did not retain its resolved model facts.
+    #[error("navigation does not retain resolved receiver or member metadata")]
+    NavigationMetadataMismatch,
     /// Equality compared two scalar expressions with distinct exact types.
     #[error("equality operands do not have the same exact type")]
     ComparisonTypeMismatch,
@@ -435,6 +492,59 @@ pub enum RelationSource {
     Class(ResolvedClass),
     /// A resolved member source, retaining the exact association or property identity.
     Member(ResolvedMember),
+}
+
+/// Resolver-issued evidence for one supported correlated member navigation.
+///
+/// The private receiver preserves the exact local value from which the resolver
+/// selected the member. It prevents callers from combining an arbitrary member
+/// with an unrelated scalar expression in [`ScalarOperator::Navigation`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResolvedNavigation {
+    receiver: LocalValue,
+    member: ResolvedMember,
+}
+
+impl ResolvedNavigation {
+    /// Retain one resolver-proven, argument-free to-one member navigation.
+    ///
+    /// Returns `None` unless `chain` contains exactly one property or
+    /// association-end hop from a class receiver, with no arguments and a
+    /// to-one declared member multiplicity. [`NavigationChain`] values can
+    /// only be created by [`pure_analyzer_resolve::NavigationResolver`].
+    #[must_use]
+    pub fn from_chain(chain: &NavigationChain) -> Option<Self> {
+        let [hop] = chain.hops() else {
+            return None;
+        };
+        let NavigationTarget::Member(member) = hop.target() else {
+            return None;
+        };
+        // `NavigationChain` is only resolver-constructed. A member hop is
+        // therefore already class-rooted and argument-valid; retain the two
+        // restrictions that define this relational subset.
+        if !matches!(
+            member.kind(),
+            ResolvedMemberKind::Property | ResolvedMemberKind::AssociationEnd { .. }
+        ) || !member.multiplicity().is_to_one()
+        {
+            return None;
+        }
+        Some(Self {
+            receiver: chain.source().clone(),
+            member: member.clone(),
+        })
+    }
+
+    /// Return the exact resolved member selected by the navigation proof.
+    #[must_use]
+    pub const fn member(&self) -> &ResolvedMember {
+        &self.member
+    }
+
+    pub(crate) const fn receiver(&self) -> &LocalValue {
+        &self.receiver
+    }
 }
 
 /// One supported join form in the initial decidable relational core.
@@ -588,6 +698,16 @@ pub enum ScalarOperator {
     Column(ColumnId),
     /// Embed a supported literal.
     Literal(ScalarLiteral),
+    /// Navigate a resolved model member from one input scalar.
+    ///
+    /// Keeping `input` explicit preserves the correlation between a row
+    /// element and the member value derived from it.
+    Navigation {
+        /// Input value that owns the resolved member navigation.
+        input: Box<ScalarExpression>,
+        /// Resolver-issued proof for the exact member and receiver.
+        navigation: Box<ResolvedNavigation>,
+    },
     /// Compare two scalar expressions for equality.
     Equal {
         /// Left operand.
@@ -851,6 +971,29 @@ fn validate_scalar(
             Ok(())
         }
         ScalarOperator::Literal(literal) => validate_literal(expression, literal),
+        ScalarOperator::Navigation { input, navigation } => {
+            validate_scalar(input, input_schemas)?;
+            if !navigation_receiver_matches(input, navigation.receiver()) {
+                return Err(RelationExpressionError::NavigationMetadataMismatch);
+            }
+            let member = navigation.member();
+            let Some(expected_multiplicity) =
+                compose_navigation_multiplicity(input.multiplicity(), member.multiplicity())
+            else {
+                return Err(RelationExpressionError::NavigationMetadataMismatch);
+            };
+            if expression.type_ref() != member.target()
+                || expression.multiplicity() != expected_multiplicity
+                || expression.nullability() != Nullability::Unknown
+                || !expression
+                    .origin()
+                    .model_origins()
+                    .contains(&ModelOrigin::from_member(member))
+            {
+                return Err(RelationExpressionError::NavigationMetadataMismatch);
+            }
+            Ok(())
+        }
         ScalarOperator::Equal { left, right } => {
             validate_scalar(left, input_schemas)?;
             validate_scalar(right, input_schemas)?;
@@ -878,6 +1021,18 @@ fn same_column_metadata(expression: &ScalarExpression, column: &Column) -> bool 
     expression.type_ref() == column.type_ref()
         && expression.multiplicity() == column.multiplicity()
         && expression.nullability() == column.nullability()
+}
+
+fn navigation_receiver_matches(expression: &ScalarExpression, receiver: &LocalValue) -> bool {
+    let LocalValueKind::Class(class) = receiver.kind() else {
+        return false;
+    };
+    expression.type_ref() == &TypeRef::new(class.path().clone(), Vec::new())
+        && expression.multiplicity() == receiver.multiplicity()
+        && expression
+            .origin()
+            .model_origins()
+            .contains(&ModelOrigin::from_class(class))
 }
 
 fn validate_literal(
@@ -931,6 +1086,23 @@ fn is_exactly_one(multiplicity: Multiplicity) -> bool {
     multiplicity.lower() == EXACTLY_ONE && multiplicity.upper() == Some(EXACTLY_ONE)
 }
 
+/// Compose receiver and member cardinalities for correlated navigation.
+///
+/// The result is absent only when multiplying two finite upper bounds would
+/// overflow the model's representable multiplicity range.
+pub(crate) fn compose_navigation_multiplicity(
+    receiver: Multiplicity,
+    member: Multiplicity,
+) -> Option<Multiplicity> {
+    let lower = receiver.lower().checked_mul(member.lower())?;
+    let upper = match (receiver.upper(), member.upper()) {
+        (Some(0), _) | (_, Some(0)) => Some(0),
+        (Some(left), Some(right)) => Some(left.checked_mul(right)?),
+        _ => None,
+    };
+    Multiplicity::new(lower, upper).ok()
+}
+
 fn validate_expression_keys(
     schema: &RelationSchema,
     candidate_keys: &Knowledge<Vec<CandidateKey>>,
@@ -967,7 +1139,10 @@ fn canonicalize_candidate_keys(
 mod tests {
     use pure_analyzer_diagnostics::{TextRange, TextSize};
     use pure_analyzer_model::{PmcdDocument, QName, load_pmcd_documents};
-    use pure_analyzer_resolve::{Resolution, Resolver};
+    use pure_analyzer_resolve::{
+        LocalValue, NavigationChain, NavigationResolution, NavigationResolver, NavigationStep,
+        Resolution, Resolver,
+    };
     use serde_json::json;
 
     use super::*;
@@ -1055,6 +1230,70 @@ mod tests {
         match Resolver::new(&graph).resolve_class(&person) {
             Resolution::Found(class) => class,
             outcome => panic!("fixture class must resolve, got {outcome:?}"),
+        }
+    }
+
+    fn navigation_fixture() -> (pure_analyzer_model::ModelGraph, ResolvedClass) {
+        let document = json!({
+            "_type": "data",
+            "elements": [
+                {
+                    "_type": "class",
+                    "package": "model",
+                    "name": "Person",
+                    "stereotypes": [],
+                    "superTypes": [],
+                    "properties": [{
+                        "name": "manager",
+                        "genericType": {"rawType": "model::Manager", "typeArguments": []},
+                        "multiplicity": {"lowerBound": 1, "upperBound": 1}
+                    }, {
+                        "name": "reports",
+                        "genericType": {"rawType": "model::Manager", "typeArguments": []},
+                        "multiplicity": {"lowerBound": 0, "upperBound": null}
+                    }],
+                    "qualifiedProperties": [{
+                        "name": "zero",
+                        "returnGenericType": {"rawType": "String", "typeArguments": []},
+                        "returnMultiplicity": {"lowerBound": 1, "upperBound": 1},
+                        "stereotypes": [],
+                        "parameters": []
+                    }]
+                },
+                {
+                    "_type": "class",
+                    "package": "model",
+                    "name": "Manager",
+                    "stereotypes": [],
+                    "superTypes": [],
+                    "properties": [],
+                    "qualifiedProperties": []
+                }
+            ]
+        })
+        .to_string();
+        let graph = load_pmcd_documents(&[PmcdDocument::new("fixture", &document)])
+            .expect("fixture model must load");
+        let person = QName::new("model::Person").expect("fixture path must be valid");
+        let class = match Resolver::new(&graph).resolve_class(&person) {
+            Resolution::Found(class) => class,
+            outcome => panic!("fixture class must resolve, got {outcome:?}"),
+        };
+        (graph, class)
+    }
+
+    fn navigation_chain(
+        graph: &pure_analyzer_model::ModelGraph,
+        class: &ResolvedClass,
+        name: &str,
+    ) -> NavigationChain {
+        let multiplicity = Multiplicity::new(EXACTLY_ONE, Some(EXACTLY_ONE))
+            .expect("fixture multiplicity must be valid");
+        let source = LocalValue::class(class.clone(), multiplicity);
+        let step = NavigationStep::property(Name::new(name).expect("fixture name must be valid"));
+        match NavigationResolver::new(graph).resolve(&source, &[step]) {
+            NavigationResolution::Found(chain) => chain,
+            outcome => panic!("fixture navigation must resolve, got {outcome:?}"),
         }
     }
 
@@ -1199,10 +1438,13 @@ mod tests {
     fn query_and_model_origins_remain_distinct() {
         let class = resolved_class();
         let model_origin = ModelOrigin::from_class(&class);
-        let query_origin = IrOrigin::new(origin().source(), vec![model_origin]);
+        let query_origin = IrOrigin::new(origin().source(), vec![model_origin.clone()]);
 
         assert_eq!(query_origin.source().file(), FileId::new(QUERY_FILE));
-        assert_eq!(query_origin.model_origins(), &[model_origin]);
+        assert_eq!(
+            query_origin.model_origins(),
+            std::slice::from_ref(&model_origin)
+        );
         assert_ne!(
             query_origin.source().file(),
             model_origin.definition().source().file_id()
@@ -1748,5 +1990,303 @@ mod tests {
         assert_eq!(query.output().columns().len(), 2);
         assert!(query.facts().row_semantics().is_unknown());
         assert!(matches!(outcome, RelationalOutcome::Supported(value) if value.as_ref() == &query));
+    }
+
+    #[test]
+    fn navigation_multiplicity_composes_receiver_and_member_bounds() {
+        let exactly_one = Multiplicity::new(EXACTLY_ONE, Some(EXACTLY_ONE))
+            .expect("fixture multiplicity must be valid");
+        let optional =
+            Multiplicity::new(0, Some(EXACTLY_ONE)).expect("fixture multiplicity must be valid");
+        let empty = Multiplicity::new(0, Some(0)).expect("fixture multiplicity must be valid");
+
+        assert_eq!(
+            compose_navigation_multiplicity(optional, exactly_one),
+            Some(optional)
+        );
+        assert_eq!(
+            compose_navigation_multiplicity(optional, optional),
+            Some(optional)
+        );
+        assert_eq!(
+            compose_navigation_multiplicity(empty, Multiplicity::zero_or_more()),
+            Some(empty)
+        );
+    }
+
+    #[test]
+    fn navigation_proofs_reject_qualified_members_and_mismatched_receivers() {
+        let (graph, person) = navigation_fixture();
+        let manager_chain = navigation_chain(&graph, &person, "manager");
+        let navigation = ResolvedNavigation::from_chain(&manager_chain)
+            .expect("plain to-one property must produce a navigation proof");
+        let target = navigation.member().target().clone();
+        let multiplicity = navigation.member().multiplicity();
+        let member_origin = ModelOrigin::from_member(navigation.member());
+
+        let input_column = Column::new(
+            ColumnId::new(FIRST_COLUMN),
+            Name::new("unprovenReceiver").expect("fixture name must be valid"),
+            TypeRef::new(person.path().clone(), Vec::new()),
+            Multiplicity::new(EXACTLY_ONE, Some(EXACTLY_ONE))
+                .expect("fixture multiplicity must be valid"),
+            Nullability::Unknown,
+            origin(),
+        );
+        let input_schema =
+            RelationSchema::new(vec![input_column.clone()]).expect("fixture schema must be valid");
+        let input = scan(input_schema);
+        let scalar = ScalarExpression::new(
+            ScalarOperator::Navigation {
+                input: Box::new(scalar_column(&input_column)),
+                navigation: Box::new(navigation),
+            },
+            target,
+            multiplicity,
+            Nullability::Unknown,
+            Knowledge::unknown(),
+            IrOrigin::new(origin().source(), vec![member_origin]),
+        );
+        let output_column = Column::new(
+            ColumnId::new(SECOND_COLUMN),
+            Name::new("manager").expect("fixture name must be valid"),
+            scalar.type_ref().clone(),
+            scalar.multiplicity(),
+            scalar.nullability(),
+            origin(),
+        );
+        let output_schema =
+            RelationSchema::new(vec![output_column.clone()]).expect("fixture schema must be valid");
+        let invalid_receiver = RelationExpression::new(
+            RelationOperator::Project {
+                input: Box::new(input),
+                projections: vec![Projection::new(output_column.id(), scalar)],
+            },
+            output_schema,
+            RelationFacts::unknown(),
+            origin(),
+        );
+        let qualified_chain = navigation_chain(&graph, &person, "zero");
+        let to_many_chain = navigation_chain(&graph, &person, "reports");
+
+        assert_eq!(
+            invalid_receiver,
+            Err(RelationExpressionError::NavigationMetadataMismatch)
+        );
+        assert!(ResolvedNavigation::from_chain(&qualified_chain).is_none());
+        assert!(ResolvedNavigation::from_chain(&to_many_chain).is_none());
+    }
+
+    #[test]
+    fn navigation_requires_member_provenance_on_its_result() {
+        let (graph, person) = navigation_fixture();
+        let chain = navigation_chain(&graph, &person, "manager");
+        let navigation = ResolvedNavigation::from_chain(&chain)
+            .expect("plain to-one property must produce a navigation proof");
+        let multiplicity = navigation.member().multiplicity();
+        let target = navigation.member().target().clone();
+        let receiver_origin =
+            IrOrigin::new(origin().source(), vec![ModelOrigin::from_class(&person)]);
+        let input_column = Column::new(
+            ColumnId::new(FIRST_COLUMN),
+            Name::new("person").expect("fixture name must be valid"),
+            TypeRef::new(person.path().clone(), Vec::new()),
+            Multiplicity::new(EXACTLY_ONE, Some(EXACTLY_ONE))
+                .expect("fixture multiplicity must be valid"),
+            Nullability::Unknown,
+            receiver_origin.clone(),
+        );
+        let input_schema =
+            RelationSchema::new(vec![input_column.clone()]).expect("fixture schema must be valid");
+        let input = scan(input_schema);
+        let input_scalar = ScalarExpression::new(
+            ScalarOperator::Column(input_column.id()),
+            input_column.type_ref().clone(),
+            input_column.multiplicity(),
+            input_column.nullability(),
+            Knowledge::unknown(),
+            receiver_origin.clone(),
+        );
+        let scalar = ScalarExpression::new(
+            ScalarOperator::Navigation {
+                input: Box::new(input_scalar),
+                navigation: Box::new(navigation),
+            },
+            target,
+            multiplicity,
+            Nullability::Unknown,
+            Knowledge::unknown(),
+            receiver_origin,
+        );
+        let output_column = Column::new(
+            ColumnId::new(SECOND_COLUMN),
+            Name::new("manager").expect("fixture name must be valid"),
+            scalar.type_ref().clone(),
+            scalar.multiplicity(),
+            scalar.nullability(),
+            scalar.origin().clone(),
+        );
+        let result = RelationExpression::new(
+            RelationOperator::Project {
+                input: Box::new(input),
+                projections: vec![Projection::new(output_column.id(), scalar)],
+            },
+            RelationSchema::new(vec![output_column]).expect("fixture schema must be valid"),
+            RelationFacts::unknown(),
+            origin(),
+        );
+
+        assert_eq!(
+            result,
+            Err(RelationExpressionError::NavigationMetadataMismatch)
+        );
+    }
+
+    #[test]
+    fn navigation_requires_its_proven_output_multiplicity() {
+        let (graph, person) = navigation_fixture();
+        let chain = navigation_chain(&graph, &person, "manager");
+        let navigation = ResolvedNavigation::from_chain(&chain)
+            .expect("plain to-one property must produce a navigation proof");
+        let receiver_origin =
+            IrOrigin::new(origin().source(), vec![ModelOrigin::from_class(&person)]);
+        let input_column = Column::new(
+            ColumnId::new(FIRST_COLUMN),
+            Name::new("person").expect("fixture name must be valid"),
+            TypeRef::new(person.path().clone(), Vec::new()),
+            multiplicity(EXACTLY_ONE, Some(EXACTLY_ONE)),
+            Nullability::Unknown,
+            receiver_origin.clone(),
+        );
+        let input_schema =
+            RelationSchema::new(vec![input_column.clone()]).expect("fixture schema must be valid");
+        let input = scan(input_schema);
+        let input_scalar = ScalarExpression::new(
+            ScalarOperator::Column(input_column.id()),
+            input_column.type_ref().clone(),
+            input_column.multiplicity(),
+            input_column.nullability(),
+            Knowledge::unknown(),
+            receiver_origin,
+        );
+        let output_multiplicity = multiplicity(0, Some(EXACTLY_ONE));
+        let scalar = ScalarExpression::new(
+            ScalarOperator::Navigation {
+                input: Box::new(input_scalar),
+                navigation: Box::new(navigation.clone()),
+            },
+            navigation.member().target().clone(),
+            output_multiplicity,
+            Nullability::Unknown,
+            Knowledge::unknown(),
+            IrOrigin::new(
+                origin().source(),
+                vec![ModelOrigin::from_member(navigation.member())],
+            ),
+        );
+        let output_column = Column::new(
+            ColumnId::new(SECOND_COLUMN),
+            Name::new("manager").expect("fixture name must be valid"),
+            scalar.type_ref().clone(),
+            scalar.multiplicity(),
+            scalar.nullability(),
+            scalar.origin().clone(),
+        );
+        let result = RelationExpression::new(
+            RelationOperator::Project {
+                input: Box::new(input),
+                projections: vec![Projection::new(output_column.id(), scalar)],
+            },
+            RelationSchema::new(vec![output_column]).expect("fixture schema must be valid"),
+            RelationFacts::unknown(),
+            origin(),
+        );
+
+        assert_eq!(
+            result,
+            Err(RelationExpressionError::NavigationMetadataMismatch)
+        );
+    }
+
+    #[test]
+    fn navigation_receiver_requires_exact_type_and_multiplicity() {
+        let (graph, person) = navigation_fixture();
+        let chain = navigation_chain(&graph, &person, "manager");
+        let navigation = ResolvedNavigation::from_chain(&chain)
+            .expect("plain to-one property must produce a navigation proof");
+        let receiver_origin =
+            IrOrigin::new(origin().source(), vec![ModelOrigin::from_class(&person)]);
+        let member_origin = ModelOrigin::from_member(navigation.member());
+
+        let wrong_type_column = Column::new(
+            ColumnId::new(FIRST_COLUMN),
+            Name::new("person").expect("fixture name must be valid"),
+            string_type(),
+            multiplicity(EXACTLY_ONE, Some(EXACTLY_ONE)),
+            Nullability::Unknown,
+            receiver_origin.clone(),
+        );
+        let wrong_type_schema = RelationSchema::new(vec![wrong_type_column.clone()])
+            .expect("fixture schema must be valid");
+        let wrong_type_input = ScalarExpression::new(
+            ScalarOperator::Column(wrong_type_column.id()),
+            wrong_type_column.type_ref().clone(),
+            wrong_type_column.multiplicity(),
+            wrong_type_column.nullability(),
+            Knowledge::unknown(),
+            receiver_origin.clone(),
+        );
+        let wrong_type = ScalarExpression::new(
+            ScalarOperator::Navigation {
+                input: Box::new(wrong_type_input),
+                navigation: Box::new(navigation.clone()),
+            },
+            navigation.member().target().clone(),
+            navigation.member().multiplicity(),
+            Nullability::Unknown,
+            Knowledge::unknown(),
+            IrOrigin::new(origin().source(), vec![member_origin.clone()]),
+        );
+
+        let wrong_multiplicity = multiplicity(0, Some(EXACTLY_ONE));
+        let wrong_multiplicity_column = Column::new(
+            ColumnId::new(FIRST_COLUMN),
+            Name::new("person").expect("fixture name must be valid"),
+            TypeRef::new(person.path().clone(), Vec::new()),
+            wrong_multiplicity,
+            Nullability::Unknown,
+            receiver_origin.clone(),
+        );
+        let wrong_multiplicity_schema =
+            RelationSchema::new(vec![wrong_multiplicity_column.clone()])
+                .expect("fixture schema must be valid");
+        let wrong_multiplicity_input = ScalarExpression::new(
+            ScalarOperator::Column(wrong_multiplicity_column.id()),
+            wrong_multiplicity_column.type_ref().clone(),
+            wrong_multiplicity_column.multiplicity(),
+            wrong_multiplicity_column.nullability(),
+            Knowledge::unknown(),
+            receiver_origin,
+        );
+        let wrong_multiplicity_scalar = ScalarExpression::new(
+            ScalarOperator::Navigation {
+                input: Box::new(wrong_multiplicity_input),
+                navigation: Box::new(navigation.clone()),
+            },
+            navigation.member().target().clone(),
+            wrong_multiplicity,
+            Nullability::Unknown,
+            Knowledge::unknown(),
+            IrOrigin::new(origin().source(), vec![member_origin]),
+        );
+
+        assert_eq!(
+            validate_scalar(&wrong_type, &[&wrong_type_schema]),
+            Err(RelationExpressionError::NavigationMetadataMismatch)
+        );
+        assert_eq!(
+            validate_scalar(&wrong_multiplicity_scalar, &[&wrong_multiplicity_schema]),
+            Err(RelationExpressionError::NavigationMetadataMismatch)
+        );
     }
 }
