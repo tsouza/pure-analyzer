@@ -1131,6 +1131,7 @@ dependencies = [
  "pure-analyzer-resolve",
  "pure-analyzer-syntax",
  "serde_json",
+ "thiserror",
 ]
 
 [[package]]
