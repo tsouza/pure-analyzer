@@ -251,6 +251,12 @@ fn lowers_parenthesized_relation_roots_and_continuations() {
     let root = supported(lower("(model::Person.all())", Some(&model)));
     assert_eq!(class_scan(root.root()).path().as_str(), "model::Person");
 
+    let nested_root = supported(lower("((model::Person.all()))", Some(&model)));
+    assert_eq!(
+        class_scan(nested_root.root()).path().as_str(),
+        "model::Person"
+    );
+
     let continued = supported(lower(
         "(model::Person.all())->map(x| $x.manager)",
         Some(&model),
