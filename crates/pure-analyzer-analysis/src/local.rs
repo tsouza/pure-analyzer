@@ -753,7 +753,7 @@ mod tests {
 
     #[test]
     fn malformed_relation_type_is_an_invalid_parameter_binding() {
-        let parameters = relation_parameters_fixture(SyntaxKind::TYPE_REF, true);
+        let parameters = relation_parameters_fixture(SyntaxKind::TYPE_REF, true, true);
 
         assert!(matches!(
             typed_relation_rows(&parameters, Multiplicity::zero_or_more()).as_slice(),
@@ -791,7 +791,7 @@ mod tests {
 
     #[test]
     fn relation_shaped_non_type_parameter_is_not_bound() {
-        let parameters = relation_parameters_fixture(SyntaxKind::PAREN_EXPR, false);
+        let parameters = relation_parameters_fixture(SyntaxKind::PAREN_EXPR, false, true);
 
         assert!(matches!(
             typed_relation_rows(&parameters, Multiplicity::zero_or_more()).as_slice(),
@@ -799,8 +799,23 @@ mod tests {
         ));
     }
 
-    fn relation_parameters_fixture(outer_kind: SyntaxKind, outer_error: bool) -> GreenNode {
-        let source = "row:Relation<(name:String[1])>";
+    #[test]
+    fn non_name_tokens_do_not_introduce_relation_parameters() {
+        let parameters = relation_parameters_fixture(SyntaxKind::TYPE_REF, false, false);
+
+        assert!(typed_relation_rows(&parameters, Multiplicity::zero_or_more()).is_empty());
+    }
+
+    fn relation_parameters_fixture(
+        outer_kind: SyntaxKind,
+        outer_error: bool,
+        has_name_token: bool,
+    ) -> GreenNode {
+        let source = if has_name_token {
+            "row:Relation<(name:String[1])>"
+        } else {
+            "(:Relation<(name:String[1])>"
+        };
         let tokens = lex(source);
         let mut builder = GreenNodeBuilder::new(source, &tokens);
         builder.open(SyntaxKind::ROOT);
