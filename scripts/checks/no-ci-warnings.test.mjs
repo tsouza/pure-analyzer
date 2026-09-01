@@ -9,6 +9,7 @@
 // genuine tool warning is still caught (constitution §2: never weaken a gate).
 import { expect, test, describe } from "bun:test";
 import {
+  emptySweepState,
   findWarnings,
   isTransientLogArchiveFailure,
   scannableJobs,
@@ -127,6 +128,38 @@ describe("scannableJobs — only real runner jobs are swept", () => {
     const testScripts = { name: "test-scripts", conclusion: "success", steps: [{}] };
     const noWarnings = { name: "no-warnings / no-warnings (log sweep)", conclusion: "success", steps: [{}] };
     expect(scannableJobs([real, testScripts, noWarnings])).toEqual([real]);
+  });
+});
+
+describe("emptySweepState — cancellation is distinct from a miswired sweep", () => {
+  test("a terminal cancellation-only dependency set needs no log sweep", () => {
+    const cancelled = { name: "check", conclusion: "cancelled", steps: [] };
+    const skipped = { name: "coverage", conclusion: "skipped", steps: [] };
+    const sweep = { name: "no-warnings (log sweep)", conclusion: null, steps: [] };
+
+    expect(emptySweepState([cancelled, skipped, sweep])).toBe("cancelled");
+  });
+
+  test("an incomplete job list is retried instead of being accepted", () => {
+    const cancelled = { name: "changes", conclusion: "cancelled", steps: [] };
+    const inflight = { name: "check", conclusion: null, steps: [] };
+    const sweep = { name: "no-warnings (log sweep)", conclusion: null, steps: [] };
+
+    expect(emptySweepState([])).toBe("retry");
+    expect(emptySweepState([inflight, sweep])).toBe("retry");
+    expect(emptySweepState([cancelled, inflight, sweep])).toBe("retry");
+    expect(emptySweepState([sweep])).toBe("retry");
+  });
+
+  test("a persistent non-cancellation empty selection remains fail-closed", () => {
+    const skipped = { name: "check", conclusion: "skipped", steps: [] };
+    const synthetic = { name: "actionlint", conclusion: "success", steps: [] };
+    const timedOut = { name: "coverage", conclusion: "timed_out", steps: [] };
+    const cancelled = { name: "changes", conclusion: "cancelled", steps: [] };
+
+    expect(emptySweepState([skipped])).toBe("miswired");
+    expect(emptySweepState([synthetic])).toBe("miswired");
+    expect(emptySweepState([cancelled, timedOut])).toBe("miswired");
   });
 });
 

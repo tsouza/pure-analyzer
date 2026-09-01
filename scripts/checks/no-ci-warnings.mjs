@@ -95,6 +95,12 @@ const SCANNABLE = new Set(["success", "failure"]);
 // Excluded by name so the net can never flag its own scaffolding.
 const NON_SWEPT_JOB = /\b(test-scripts|no-warnings)\b/i;
 
+const EmptySweepState = Object.freeze({
+  Cancelled: "cancelled",
+  Retry: "retry",
+  Miswired: "miswired",
+});
+
 /**
  * Pure selection of the jobs whose logs should be swept. A real runner job has
  * one or more `steps`; a synthetic check-run surfaced in the jobs list by a
@@ -114,6 +120,34 @@ export function scannableJobs(jobs) {
       (job.steps?.length ?? 0) > 0 &&
       !NON_SWEPT_JOB.test(job.name ?? ""),
   );
+}
+
+/**
+ * Classify an empty scannable-job selection without weakening the warning gate.
+ *
+ * The job-list endpoint can briefly lag workflow scheduling, so a missing or
+ * in-flight dependency list must be retried. A concurrency-cancelled run is
+ * different: when every non-sweep job is terminally `cancelled` or `skipped`,
+ * with at least one cancellation, it has no completed logs to inspect. All
+ * other persistent empty selections are a miswired sweep and must fail.
+ *
+ * @param {Array<{name?: string, conclusion?: string | null}>} jobs run's jobs
+ * @returns {"cancelled" | "retry" | "miswired"} how the caller must handle an empty selection
+ */
+export function emptySweepState(jobs) {
+  const nonSwept = jobs.filter((job) => !NON_SWEPT_JOB.test(job.name ?? ""));
+  if (nonSwept.length === 0 || nonSwept.some((job) => job.conclusion == null)) {
+    return EmptySweepState.Retry;
+  }
+  if (
+    nonSwept.some((job) => job.conclusion === "cancelled") &&
+    nonSwept.every(
+      (job) => job.conclusion === "cancelled" || job.conclusion === "skipped",
+    )
+  ) {
+    return EmptySweepState.Cancelled;
+  }
+  return EmptySweepState.Miswired;
 }
 
 /**
@@ -140,11 +174,38 @@ if (import.meta.main) {
     (await $`gh repo view --json nameWithOwner -q .nameWithOwner`.nothrow().text()).trim();
   if (!repo) die("could not determine repo (set GITHUB_REPOSITORY or run inside a gh-authed repo)");
 
-  const jobsRaw = await $`gh run view ${runId} --repo ${repo} --json jobs`.nothrow().text();
-  if (!jobsRaw.trim()) die(`could not list jobs for run ${runId} (need actions:read scope / GH_TOKEN)`);
+  // The workflow only starts this job after its dependencies settle, but the
+  // Actions job-list API is eventually consistent. Retry an incomplete list;
+  // otherwise a clean run can spuriously look like a miswired sweep. A run
+  // cancelled by workflow concurrency is separately safe: it has no completed
+  // logs to sweep, and its aggregate gate still records the cancellation.
+  const JOB_LIST_ATTEMPTS = 8;
+  const JOB_LIST_RETRY_BACKOFF_MS = 2000;
+  let scanned = null;
+  for (let attempt = 1; attempt <= JOB_LIST_ATTEMPTS; attempt++) {
+    const jobsRaw = await $`gh run view ${runId} --repo ${repo} --json jobs`.nothrow().text();
+    if (!jobsRaw.trim()) {
+      die(`could not list jobs for run ${runId} (need actions:read scope / GH_TOKEN)`);
+    }
 
-  const scanned = scannableJobs(JSON.parse(jobsRaw).jobs);
-  if (scanned.length === 0) die(`run ${runId} has no completed jobs to sweep`);
+    const jobs = JSON.parse(jobsRaw).jobs;
+    const candidates = scannableJobs(jobs);
+    if (candidates.length > 0) {
+      scanned = candidates;
+      break;
+    }
+
+    if (emptySweepState(jobs) === EmptySweepState.Cancelled) {
+      notice(`run ${runId} was cancelled before any completed logs were available; nothing to sweep.`);
+      process.exit(0);
+    }
+    if (attempt < JOB_LIST_ATTEMPTS) {
+      await Bun.sleep(JOB_LIST_RETRY_BACKOFF_MS * attempt);
+    }
+  }
+  if (scanned === null) {
+    die(`run ${runId} has no completed jobs to sweep after ${JOB_LIST_ATTEMPTS} observations`);
+  }
 
   // A dropped log means its warnings go unscanned, so a fetch failure must fail
   // the gate — never vanish silently. Retry first so a transient gh/API blip
