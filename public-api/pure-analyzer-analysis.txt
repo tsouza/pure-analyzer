@@ -1346,6 +1346,7 @@ pub fn pure_analyzer_analysis::LocalNavigationAnalysis::from(T) -> T
 pub struct pure_analyzer_analysis::LocalResolutionSite
 impl pure_analyzer_analysis::LocalResolutionSite
 pub const fn pure_analyzer_analysis::LocalResolutionSite::outcome(&self) -> &pure_analyzer_analysis::LocalResolution
+pub const fn pure_analyzer_analysis::LocalResolutionSite::reference_span(&self) -> text_size::range::TextRange
 pub const fn pure_analyzer_analysis::LocalResolutionSite::span(&self) -> text_size::range::TextRange
 impl core::clone::Clone for pure_analyzer_analysis::LocalResolutionSite
 pub fn pure_analyzer_analysis::LocalResolutionSite::clone(&self) -> pure_analyzer_analysis::LocalResolutionSite

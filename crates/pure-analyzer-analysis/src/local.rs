@@ -23,18 +23,29 @@ const NAME_KINDS: [SyntaxKind; 6] = [
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LocalResolutionSite {
     span: TextRange,
+    reference_span: TextRange,
     outcome: LocalResolution,
 }
 
 impl LocalResolutionSite {
-    fn new(span: TextRange, outcome: LocalResolution) -> Self {
-        Self { span, outcome }
+    fn new(span: TextRange, reference_span: TextRange, outcome: LocalResolution) -> Self {
+        Self {
+            span,
+            reference_span,
+            outcome,
+        }
     }
 
     /// Return the exact syntax span that produced this result.
     #[must_use]
     pub const fn span(&self) -> TextRange {
         self.span
+    }
+
+    /// Return the exact identifier span that this resolution site resolves.
+    #[must_use]
+    pub const fn reference_span(&self) -> TextRange {
+        self.reference_span
     }
 
     /// Return the resolution outcome at [`Self::span`].
@@ -200,10 +211,13 @@ impl LocalAnalyzer<'_> {
     }
 
     fn evaluate_class_all(&mut self, node: &GreenNode) -> LocalValue {
-        let Some(path) = direct_nodes(node)
+        let Some((path, reference_span)) = direct_nodes(node)
             .into_iter()
             .find(|child| child.kind() == SyntaxKind::QUALIFIED_NAME)
-            .and_then(qualified_name)
+            .and_then(|child| {
+                let reference_span = child.text_range();
+                qualified_name(child).map(|path| (path, reference_span))
+            })
         else {
             return Self::unknown_value();
         };
@@ -218,6 +232,7 @@ impl LocalAnalyzer<'_> {
         };
         self.sites.push(LocalResolutionSite::new(
             node.text_range(),
+            reference_span,
             LocalResolution::ClassAll(outcome),
         ));
         value
@@ -231,7 +246,7 @@ impl LocalAnalyzer<'_> {
         environment: &mut impl LocalBindings,
     ) -> LocalValue {
         self.evaluate_call_arguments(node, environment);
-        let Some(step) = navigation_step(node) else {
+        let Some((step, reference_span)) = navigation_step(node) else {
             return Self::unknown_value();
         };
 
@@ -247,6 +262,7 @@ impl LocalAnalyzer<'_> {
         let value = navigation_value(&outcome).unwrap_or_else(Self::unknown_value);
         self.sites.push(LocalResolutionSite::new(
             node.text_range(),
+            reference_span,
             LocalResolution::Navigation(outcome),
         ));
         value
@@ -407,6 +423,10 @@ fn let_binding_name(node: &GreenNode) -> Option<Name> {
 }
 
 fn direct_name_after(node: &GreenNode, marker: SyntaxKind) -> Option<Name> {
+    direct_name_after_with_span(node, marker).map(|(name, _)| name)
+}
+
+fn direct_name_after_with_span(node: &GreenNode, marker: SyntaxKind) -> Option<(Name, TextRange)> {
     let mut found_marker = false;
     for element in node.children() {
         let Some(token) = element.as_token() else {
@@ -417,23 +437,28 @@ fn direct_name_after(node: &GreenNode, marker: SyntaxKind) -> Option<Name> {
             continue;
         }
         if found_marker && NAME_KINDS.contains(&token.kind()) {
-            return Name::new(token.text()).ok();
+            return Name::new(token.text())
+                .ok()
+                .map(|name| (name, token.text_range()));
         }
     }
     None
 }
 
-fn navigation_step(node: &GreenNode) -> Option<NavigationStep> {
-    let name = direct_name_after(node, SyntaxKind::DOT)?;
+fn navigation_step(node: &GreenNode) -> Option<(NavigationStep, TextRange)> {
+    let (name, reference_span) = direct_name_after_with_span(node, SyntaxKind::DOT)?;
     let arguments = direct_nodes(node)
         .into_iter()
         .find(|child| child.kind() == SyntaxKind::CALL_ARGS)
         .map_or(0, |arguments| call_argument_count(&arguments));
-    Some(if arguments == 0 {
-        NavigationStep::property(name)
-    } else {
-        NavigationStep::call(name, arguments)
-    })
+    Some((
+        if arguments == 0 {
+            NavigationStep::property(name)
+        } else {
+            NavigationStep::call(name, arguments)
+        },
+        reference_span,
+    ))
 }
 
 fn call_argument_count(node: &GreenNode) -> usize {

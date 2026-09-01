@@ -7,7 +7,8 @@ mod driver;
 mod source;
 
 pub use driver::{
-    AnalysisDriver, AnalysisOutput, DiagnosticPolicy, DriverError, FormatOutput, FormattedSource,
+    AnalysisDriver, AnalysisOutput, DefinitionPosition, DefinitionResult, DefinitionTarget,
+    DefinitionUnavailable, DiagnosticPolicy, DriverError, FormatOutput, FormattedSource,
     LintRequest, ModelInput, ParseOutput, ParsedSource, RequestError, SourceRequest,
 };
 /// Formatter API exposed to front ends through the workspace facade.
