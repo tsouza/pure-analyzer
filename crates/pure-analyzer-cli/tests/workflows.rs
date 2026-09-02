@@ -13,6 +13,7 @@ use libpure::ExplainContent;
 use serde_json::Value;
 
 const EXIT_ACTIONABLE: i32 = 1;
+const EXIT_INDECISIVE: i32 = 2;
 #[cfg(not(any(target_os = "linux", target_vendor = "apple")))]
 const EXIT_INTERNAL: i32 = 4;
 const EXIT_USAGE: i32 = 3;
@@ -26,22 +27,29 @@ fn command_surface_completion_and_config_independence_are_stable() {
     assert!(help.status.success());
     assert!(help.stderr.is_empty());
     let help = utf8(&help.stdout);
-    for command in ["validate", "lint", "fmt", "explain", "completions"] {
+    for command in [
+        "validate",
+        "lint",
+        "fmt",
+        "eq",
+        "diff",
+        "explain",
+        "completions",
+    ] {
         assert!(help.contains(command), "help omitted {command}: {help}");
     }
     assert!(
         help.contains("transactional in-place file updates"),
         "fmt help omitted its write contract: {help}"
     );
-    for unavailable in ["eq", "diff"] {
-        let output = run(&fixture.root, &[unavailable]);
-        assert_eq!(output.status.code(), Some(EXIT_USAGE));
-        assert!(output.stdout.is_empty());
-        assert!(
-            utf8(&output.stderr).contains("unrecognized subcommand"),
-            "{unavailable} unexpectedly remains a supported command"
-        );
-    }
+    let comparison_help = run(&fixture.root, &["eq", "--help"]);
+    assert!(comparison_help.status.success());
+    assert!(comparison_help.stderr.is_empty());
+    assert!(
+        utf8(&comparison_help.stdout)
+            .contains("Exit status: 0 equivalent; 1 structurally not equivalent; 2 indecisive."),
+        "comparison help must document the unified result codes"
+    );
 
     let mut command = analyzer(&fixture.root);
     command
@@ -1032,6 +1040,319 @@ fn assert_default_format_write_is_blocked(
     }
     assert_eq!(fixture.read("valid.pure"), FORMATTER_VALID_SOURCE);
     assert_eq!(fixture.read("broken.pure"), FORMATTER_BROKEN_SOURCE);
+}
+
+const EQUIVALENT_COMPARISON_QUERY: &str =
+    "model::Person.all()->project(~[label: person | $person.name])";
+
+fn equivalent_comparison_fixture(name: &str) -> Fixture {
+    let fixture = Fixture::new(name);
+    fixture.write("query.pure", EQUIVALENT_COMPARISON_QUERY);
+    fixture.write("model.json", &person_model());
+    fixture
+}
+
+#[test]
+fn comparison_commands_render_equivalence() {
+    let fixture = equivalent_comparison_fixture("comparison-equivalent-human");
+
+    for command in ["eq", "diff"] {
+        let output = run(
+            &fixture.root,
+            &[
+                command,
+                "query.pure",
+                "query.pure",
+                "--model",
+                "model.json",
+                "--no-config",
+            ],
+        );
+        assert!(
+            output.status.success(),
+            "{command}: {}",
+            utf8(&output.stderr)
+        );
+        assert!(output.stderr.is_empty());
+        assert!(
+            utf8(&output.stdout).contains("equivalent"),
+            "{command} did not render equivalence: {}",
+            utf8(&output.stdout)
+        );
+    }
+}
+
+#[test]
+fn comparison_equivalence_json_is_witness_free() {
+    let fixture = equivalent_comparison_fixture("comparison-equivalent-json");
+    let output = run(
+        &fixture.root,
+        &[
+            "eq",
+            "query.pure",
+            "query.pure",
+            "--model",
+            "model.json",
+            "--format",
+            "json",
+            "--no-config",
+        ],
+    );
+    assert!(output.status.success());
+    assert!(output.stderr.is_empty());
+    let document: Value = serde_json::from_slice(&output.stdout).expect("valid comparison JSON");
+    assert_eq!(document["version"], "1.0");
+    assert_eq!(document["outcome"], "equivalent");
+    assert!(document.get("witness").is_none());
+}
+
+#[test]
+fn comparison_quiet_mode_suppresses_equivalence_output() {
+    let fixture = equivalent_comparison_fixture("comparison-equivalent-quiet");
+    let output = run(
+        &fixture.root,
+        &[
+            "eq",
+            "query.pure",
+            "query.pure",
+            "--model",
+            "model.json",
+            "--quiet",
+            "--no-config",
+        ],
+    );
+    assert!(output.status.success());
+    assert!(output.stdout.is_empty());
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
+fn comparison_accepts_one_standard_input_operand() {
+    let fixture = equivalent_comparison_fixture("comparison-equivalent-stdin");
+    let output = run_with_stdin(
+        &fixture.root,
+        &[
+            "diff",
+            "-",
+            "query.pure",
+            "--model",
+            "model.json",
+            "--format",
+            "json",
+            "--no-config",
+        ],
+        EQUIVALENT_COMPARISON_QUERY,
+    );
+    assert!(output.status.success());
+    assert!(output.stderr.is_empty());
+    let document: Value =
+        serde_json::from_slice(&output.stdout).expect("valid stdin comparison JSON");
+    assert_eq!(document["outcome"], "equivalent");
+    assert_eq!(document["version"], "1.0");
+}
+
+#[test]
+fn comparison_glob_operands_resolve_to_exactly_one_file() {
+    let fixture = equivalent_comparison_fixture("comparison-equivalent-glob");
+    let glob = run(
+        &fixture.root,
+        &[
+            "eq",
+            "*.pure",
+            "query.pure",
+            "--model",
+            "model.json",
+            "--no-config",
+        ],
+    );
+    assert!(glob.status.success());
+    fixture.write("other.pure", EQUIVALENT_COMPARISON_QUERY);
+    let multiple_glob = run(
+        &fixture.root,
+        &[
+            "eq",
+            "*.pure",
+            "query.pure",
+            "--model",
+            "model.json",
+            "--no-config",
+        ],
+    );
+    assert_eq!(multiple_glob.status.code(), Some(EXIT_USAGE));
+    assert!(multiple_glob.stdout.is_empty());
+    assert!(utf8(&multiple_glob.stderr).contains("must resolve to exactly one file"));
+}
+
+#[test]
+fn comparison_structural_refutation_uses_the_typed_difference_without_a_witness() {
+    let fixture = Fixture::new("comparison-not-equivalent");
+    fixture.write(
+        "left.pure",
+        "model::Person.all()->project(~[label: person | $person.name])",
+    );
+    fixture.write(
+        "right.pure",
+        "model::Person.all()->project(~[other: person | $person.name])",
+    );
+    fixture.write("model.json", &person_model());
+
+    let output = run(
+        &fixture.root,
+        &[
+            "eq",
+            "left.pure",
+            "right.pure",
+            "--model",
+            "model.json",
+            "--format",
+            "json",
+            "--no-config",
+        ],
+    );
+    assert_eq!(output.status.code(), Some(EXIT_ACTIONABLE));
+    assert!(output.stderr.is_empty());
+    let document: Value = serde_json::from_slice(&output.stdout).expect("valid comparison JSON");
+    assert_eq!(document["outcome"], "not_equivalent");
+    assert_eq!(document["difference"]["kind"], "output_column");
+    assert_eq!(document["difference"]["index"], 0);
+    assert_eq!(document["difference"]["field"], "name");
+    assert!(document["difference"].get("primary_origin").is_some());
+    assert!(document["difference"].get("secondary_origin").is_some());
+    assert!(document.get("witness").is_none());
+    assert!(document["difference"].get("witness").is_none());
+}
+
+fn comparison_indecision_fixture(name: &str) -> Fixture {
+    let fixture = Fixture::new(name);
+    fixture.write("left.pure", "model::Person.all()");
+    fixture.write("right.pure", "model::Person.all()");
+    fixture
+}
+
+fn assert_indecisive_json(output: Output, reason: &str) {
+    assert_eq!(output.status.code(), Some(EXIT_INDECISIVE));
+    assert!(output.stderr.is_empty());
+    let document: Value = serde_json::from_slice(&output.stdout).expect("valid comparison JSON");
+    assert_eq!(document["outcome"], "indecisive");
+    assert_eq!(document["reason"]["id"], reason);
+}
+
+#[test]
+fn comparison_without_a_model_is_indecisive() {
+    let fixture = comparison_indecision_fixture("comparison-without-model");
+    let output = run(
+        &fixture.root,
+        &[
+            "diff",
+            "left.pure",
+            "right.pure",
+            "--format",
+            "json",
+            "--no-config",
+        ],
+    );
+    assert_indecisive_json(output, "MODEL_INCOMPLETE");
+}
+
+#[test]
+fn comparison_with_an_unresolved_schema_is_indecisive() {
+    let fixture = comparison_indecision_fixture("comparison-unresolved-schema");
+    fixture.write("model.json", &person_model());
+    fixture.write(
+        "unresolved.pure",
+        "model::Person.all()->project(~[label: person | $person.missing])",
+    );
+    let output = run(
+        &fixture.root,
+        &[
+            "diff",
+            "unresolved.pure",
+            "right.pure",
+            "--model",
+            "model.json",
+            "--format",
+            "json",
+            "--no-config",
+        ],
+    );
+    assert_indecisive_json(output, "IND_UNRESOLVED_SCHEMA");
+}
+
+#[test]
+fn comparison_with_malformed_syntax_is_indecisive() {
+    let fixture = comparison_indecision_fixture("comparison-malformed-syntax");
+    fixture.write("model.json", &person_model());
+    fixture.write(
+        "malformed.pure",
+        "model::Person.all()->filter(person| $person.name ==)",
+    );
+    let output = run(
+        &fixture.root,
+        &[
+            "eq",
+            "malformed.pure",
+            "right.pure",
+            "--model",
+            "model.json",
+            "--format",
+            "json",
+            "--no-config",
+        ],
+    );
+    assert_indecisive_json(output, "IND_UNPARSEABLE");
+}
+
+#[test]
+fn comparison_rejects_a_malformed_model_at_the_boundary() {
+    let fixture = comparison_indecision_fixture("comparison-bad-model");
+    fixture.write("broken.json", "not JSON");
+    let model_failure = run(
+        &fixture.root,
+        &[
+            "eq",
+            "left.pure",
+            "right.pure",
+            "--model",
+            "broken.json",
+            "--no-config",
+        ],
+    );
+    assert_eq!(model_failure.status.code(), Some(EXIT_USAGE));
+    assert!(model_failure.stdout.is_empty());
+    assert!(utf8(&model_failure.stderr).contains("could not load model"));
+}
+
+#[test]
+fn comparison_rejects_sarif_and_two_standard_input_operands_as_usage_errors() {
+    let fixture = Fixture::new("comparison-usage");
+    fixture.write("left.pure", "model::Person.all()");
+    fixture.write("right.pure", "model::Person.all()");
+
+    let sarif = run(
+        &fixture.root,
+        &[
+            "eq",
+            "left.pure",
+            "right.pure",
+            "--format",
+            "sarif",
+            "--no-config",
+        ],
+    );
+    assert_eq!(sarif.status.code(), Some(EXIT_USAGE));
+    assert!(sarif.stdout.is_empty());
+    assert_eq!(
+        utf8(&sarif.stderr),
+        "error: eq and diff support only --format human or --format json\n"
+    );
+
+    let duplicate_stdin = run(&fixture.root, &["diff", "-", "-", "--no-config"]);
+    assert_eq!(duplicate_stdin.status.code(), Some(EXIT_USAGE));
+    assert!(duplicate_stdin.stdout.is_empty());
+    assert!(
+        utf8(&duplicate_stdin.stderr)
+            .contains("comparison accepts standard input for at most one operand")
+    );
 }
 
 #[test]

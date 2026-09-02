@@ -1,6 +1,6 @@
 [package]
 name = "pure-analyzer-render"
-description = "Deterministic diagnostic renderers for pure-analyzer."
+description = "Deterministic analyzer result renderers for pure-analyzer."
 edition.workspace = true
 version.workspace = true
 license.workspace = true

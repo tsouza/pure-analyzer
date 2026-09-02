@@ -2609,6 +2609,8 @@ impl pure_analyzer_analysis::AnalysisPass for pure_analyzer_analysis::ValidatePa
 pub fn pure_analyzer_analysis::ValidatePass::analyze(&self, pure_analyzer_analysis::AnalysisInput<'_, '_>) -> alloc::vec::Vec<pure_analyzer_diagnostics::diagnostic::Diagnostic>
 pub fn pure_analyzer_analysis::ValidatePass::name(&self) -> &'static str
 pub fn pure_analyzer_analysis::analyze_m3_locals(&pure_analyzer_syntax::green::GreenNode, &pure_analyzer_model::types::ModelGraph) -> pure_analyzer_analysis::LocalNavigationAnalysis
+pub fn pure_analyzer_analysis::compare_lowered_queries(&pure_analyzer_analysis::RelationalOutcome, &pure_analyzer_analysis::RelationalOutcome) -> pure_analyzer_analysis::ComparisonOutcome
+pub fn pure_analyzer_analysis::compare_lowered_queries_with_budget(&pure_analyzer_analysis::RelationalOutcome, &pure_analyzer_analysis::RelationalOutcome, pure_analyzer_analysis::NormalizationBudget) -> pure_analyzer_analysis::ComparisonOutcome
 pub fn pure_analyzer_analysis::compare_relational_queries(&pure_analyzer_analysis::RelationalQuery, &pure_analyzer_analysis::RelationalQuery) -> pure_analyzer_analysis::ComparisonOutcome
 pub fn pure_analyzer_analysis::compare_relational_queries_with_budget(&pure_analyzer_analysis::RelationalQuery, &pure_analyzer_analysis::RelationalQuery, pure_analyzer_analysis::NormalizationBudget) -> pure_analyzer_analysis::ComparisonOutcome
 pub fn pure_analyzer_analysis::extract_relation_column_selectors(pure_analyzer_diagnostics::file::FileId, &pure_analyzer_syntax::green::GreenNode) -> core::result::Result<pure_analyzer_analysis::ColumnSelectors, pure_analyzer_analysis::ColumnSelectorOpaque>
