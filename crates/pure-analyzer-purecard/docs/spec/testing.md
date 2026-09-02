@@ -107,8 +107,11 @@ Opt-in via `just real-model-infer` (harness alone) or `just test-real-model`
 (harness + live Legend compile-check, with guaranteed stack teardown); never
 part of `just test-python` / `just ci` — it needs the pinned model weights
 (`just qwen-infer-model-fetch`, never committed) and, for the compile-check, a
-live engine. Scheduled and on-demand via `purecard-real-model.yml`, on the same
-self-hosted-runner basis as the heavier Legend lanes.
+live engine. Scheduled and on-demand via `purecard-real-model.yml`, which
+dispatches to a self-hosted runner carrying the `purecard-real-model` label and
+fails its own preflight job when no such runner is declared registered (see that
+workflow's header). While the lane is parked that way, this proof's evidence
+comes from local `just test-real-model` runs, not from CI.
 
 ---
 

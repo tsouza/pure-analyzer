@@ -1,9 +1,12 @@
 //! Property tests for the token surface (`docs/spec/testing.md` §8.5, G2).
 //!
-//! `proptest` with a fixed config and committed `proptest-regressions/`, matching
-//! the walker determinism rule (constitution §2 — no local-only state): a failing
-//! case is pinned as a seed and re-run every build. The reachable states are real
-//! (walk prefixes, `tests/support/walker.rs`), never synthetic `State` literals.
+//! `proptest` with a fixed config and its default source-parallel failure
+//! persistence, matching the walker determinism rule (constitution §2 — no
+//! local-only state): a failing case's seed is written to
+//! `tests/proptest-regressions/`, committed alongside its fix, and re-run every
+//! build from then on. No property here has failed, so that directory holds
+//! nothing and is not tracked. The reachable states are real (walk prefixes,
+//! `tests/support/walker.rs`), never synthetic `State` literals.
 //!
 //! Properties:
 //! - **(a) admissible ⇒ safe.** Every id set in `allowed_mask()`, `accept_token`'d

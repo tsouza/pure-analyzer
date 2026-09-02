@@ -89,8 +89,12 @@ does not guarantee full name resolution or type-checking across the query.
 **False-confidence risk.** A compiling query can still be 100% wrong (wrong
 column, wrong join, wrong aggregate). Schema constraints can narrow syntax,
 phantom-reference, and type-error surfaces; they cannot shrink the wrong-answer
-class and may enlarge it at the margin. Evaluation therefore measures
-execution-equivalence (faithfulness) with the constraint enabled.
+class and may enlarge it at the margin. Measuring that class needs
+execution-equivalence against real data, which nothing in this product
+measures. The closest lane, `tests/real_model_legend_compile.rs`, reports
+compile success plus **return-type** faithfulness against a hand-authored gold
+reference, over a store that seeds no rows (`docs/spec/testing.md` §13), and it
+runs only on the opt-in self-hosted lane described there — never per PR.
 
 ---
 

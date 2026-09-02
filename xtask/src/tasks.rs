@@ -1406,6 +1406,17 @@ const DECODER_TESTING_DOC: &str = "docs/methodology/decoder-testing.md";
 const SORT_DIRECTION_LITERALS: [&str; 2] = ["SortDirection.ASC", "SortDirection.DESC"];
 /// Pipeline step whose per-record gold count is documented.
 const MAP_STEP: &str = "->map(";
+/// Root `justfile`, scanned alongside PureCARD's docs because its recipe
+/// comments restate counts the code owns.
+const JUSTFILE: &str = "justfile";
+/// The phrase a prose claim about how many fuzz targets exist attaches to.
+const FUZZ_TARGETS_PHRASE: &str = "fuzz targets";
+/// How many words before [`FUZZ_TARGETS_PHRASE`] are read for that claim.
+const FUZZ_TARGETS_COUNT_LOOKBACK: usize = 4;
+/// Small counts as English number words, indexed by the value each spells.
+const COUNT_WORDS: [&str; 11] = [
+    "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+];
 
 /// Assert every discrete PureCARD documentation fact matches its source.
 ///
@@ -1422,8 +1433,10 @@ pub fn check_doc_facts() -> Result<()> {
     let gold = check_gold_count_facts(&mut errors)?;
     check_in_scope_facts(&mut errors)?;
     check_module_tree_fact(&mut errors)?;
-    check_doc_enumerations(&collect_docs()?, gold, &mut errors);
+    let docs = collect_docs()?;
+    check_doc_enumerations(&docs, gold, &mut errors);
     check_grammar_and_usage_facts(&mut errors)?;
+    check_fuzz_target_count_facts(&docs, &mut errors)?;
 
     if !errors.is_empty() {
         anyhow::bail!(
@@ -1554,6 +1567,66 @@ fn check_doc_enumerations(docs: &[(String, String)], gold: usize, errors: &mut V
             }
         }
     }
+}
+
+/// Check every prose restatement of how many PureCARD fuzz targets exist
+/// against [`PURECARD_FUZZ_TARGETS`], the one list that owns the count — whose
+/// own agreement with the fuzz manifest and `fuzz_targets/*.rs` is enforced
+/// separately by [`fuzz_target_registry_problems`]. Prose may name the number;
+/// it may not be the number's source. The root `justfile` is scanned with the
+/// docs because its recipe comments restate it too.
+fn check_fuzz_target_count_facts(
+    docs: &[(String, String)],
+    errors: &mut Vec<String>,
+) -> Result<()> {
+    let expected = PURECARD_FUZZ_TARGETS.len();
+    let justfile =
+        std::fs::read_to_string(JUSTFILE).with_context(|| format!("reading {JUSTFILE}"))?;
+    let scanned = docs
+        .iter()
+        .map(|(path, text)| (path.as_str(), text.as_str()))
+        .chain(std::iter::once((JUSTFILE, justfile.as_str())));
+    for (path, text) in scanned {
+        for claimed in fuzz_target_count_claims(text) {
+            if claimed != expected {
+                errors.push(format!(
+                    "{path} claims {claimed} PureCARD fuzz targets; PURECARD_FUZZ_TARGETS \
+                     registers {expected}"
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Every count `text` attaches to a [`FUZZ_TARGETS_PHRASE`] mention, read from
+/// the [`FUZZ_TARGETS_COUNT_LOOKBACK`] words preceding it. A mention carrying no
+/// number word there ("registered in the ... fuzz targets list") claims nothing
+/// and is not checked.
+fn fuzz_target_count_claims(text: &str) -> Vec<usize> {
+    let lower = text.to_lowercase();
+    let mut claims = Vec::new();
+    let mut from = 0;
+    while let Some(offset) = lower[from..].find(FUZZ_TARGETS_PHRASE) {
+        let at = from + offset;
+        let claim = lower[..at]
+            .split_whitespace()
+            .rev()
+            .take(FUZZ_TARGETS_COUNT_LOOKBACK)
+            .find_map(count_word_value);
+        if let Some(value) = claim {
+            claims.push(value);
+        }
+        from = at + FUZZ_TARGETS_PHRASE.len();
+    }
+    claims
+}
+
+/// The value an English number word spells, ignoring adjacent punctuation and
+/// Markdown emphasis.
+fn count_word_value(word: &str) -> Option<usize> {
+    let bare = word.trim_matches(|character: char| !character.is_ascii_alphanumeric());
+    COUNT_WORDS.iter().position(|candidate| *candidate == bare)
 }
 
 /// Check the engine pin, SortDirection count, and `map` record count.
@@ -2952,6 +3025,25 @@ intro\n\n### 3.2 Crate layout\n\n```\npurecard/\n  vocab.rs   the vocab\n  sessi
         assert_eq!(problems.len(), 2);
         assert!(problems[0].contains("new_target"));
         assert!(problems[1].contains("allowed_mask"));
+    }
+
+    #[test]
+    fn fuzz_target_count_claims_reads_the_number_word_near_each_mention() {
+        let text = "Time-box all five PureCARD fuzz targets. The crate has three fuzz \
+                    targets: a, b, c. New fuzz targets must be registered.";
+        assert_eq!(fuzz_target_count_claims(text), vec![5, 3]);
+    }
+
+    #[test]
+    fn fuzz_target_count_claims_ignores_a_number_beyond_the_lookback_window() {
+        let text = "five corpus seeds are stored under the fuzz targets directory";
+        assert_eq!(fuzz_target_count_claims(text), Vec::<usize>::new());
+    }
+
+    #[test]
+    fn count_word_value_reads_through_markdown_punctuation() {
+        assert_eq!(count_word_value("**five**,"), Some(5));
+        assert_eq!(count_word_value("targets"), None);
     }
 
     #[test]

@@ -1,9 +1,10 @@
 # Vetting: proptest 1.11.0
 
 - Purpose: property-based testing — drives `pure-analyzer-purecard`'s §8.5
-  rollback/equivalence properties from committed seeds
-  (`proptest-regressions/`). Dev-only dependency, newly added to this
-  workspace's `[workspace.dependencies]` as part of the purecard migration
+  rollback/equivalence properties, pinning any failing case's seed under
+  `tests/proptest-regressions/` to be committed with its fix (no property has
+  failed, so no seed file is tracked yet). Dev-only dependency, newly added
+  to this workspace's `[workspace.dependencies]` as part of the purecard migration
   (pure-analyzer had no property-testing dependency before this).
 - License: `MIT OR Apache-2.0` — compatible with Apache-2.0: yes (deny.toml
   allowlisted: yes, both arms already present).
