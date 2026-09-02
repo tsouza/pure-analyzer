@@ -69,6 +69,9 @@ jobs:
               - 'sgconfig.yml'
               - 'scripts/**'
               - 'release-plz.toml'
+              # Generated reference pages: `xtask ci` regenerates and diffs them,
+              # so a docs-only edit must reach the gate that owns them.
+              - 'docs/**'
               - '.github/workflows/ci.yml'
 
   # --- Primary gate: fmt + lint + build + all nextest layers via xtask -----

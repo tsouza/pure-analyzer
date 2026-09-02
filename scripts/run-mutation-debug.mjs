@@ -27,6 +27,19 @@ export const SNAPSHOT_TAIL_LINES = 80;
 export const SNAPSHOT_LINE_LIMIT = 1_000;
 export const MEMORY_MAX_BYTES = 6 * 1024 * 1024 * 1024;
 export const PIDS_MAX = 2_048;
+/**
+ * Per-process heap ceiling for the contained mutation tree.
+ *
+ * A mutant can turn a terminating loop into an unbounded one, and the test
+ * process then grows until the cgroup limit kills the whole shard. Run
+ * 33577273491 shard 2 lost every process this way: one test binary reached
+ * 5.91 GiB while the largest legitimate process in the same run was a 422 MiB
+ * rustc (rust-lld 225 MiB, cargo 63 MiB). Bounding each process well above
+ * anything legitimate but well below {@link MEMORY_MAX_BYTES} makes the
+ * runaway allocation fail in that one process, so cargo-mutants records a
+ * caught mutant instead of the cgroup killing the run.
+ */
+export const PROCESS_HEAP_MAX_BYTES = 2 * 1024 * 1024 * 1024;
 export const INNER_WALL_LIMIT = "25m";
 export const INNER_KILL_GRACE = "30s";
 export const OUTER_WALL_LIMIT_MS = 26 * 60 * 1_000;
@@ -223,6 +236,8 @@ export function containedCommand({ wallLimit, killGrace, mutationCommand }) {
     "--signal=TERM",
     `--kill-after=${killGrace}`,
     wallLimit,
+    "prlimit",
+    `--data=${PROCESS_HEAP_MAX_BYTES}`,
     "stdbuf",
     "-oL",
     "-eL",

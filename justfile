@@ -445,6 +445,10 @@ postponed-markers:
 no-work-ledger:
     bun scripts/checks/no-work-ledger.mjs
 
+# Reject a generated directory that its owning gate's paths filter does not match.
+generated-paths-gated:
+    bun scripts/checks/generated-paths-gated.mjs
+
 # Reject tracked shell files and shell shebangs: repository automation is just, xtask, or Bun.
 no-shell-scripts:
     bun scripts/checks/no-shell-scripts.mjs
@@ -493,7 +497,7 @@ new-feature name:
 
 # The fast inner-loop gate: layering + fmt-check + clippy + test. This is the
 # necessary-but-not-sufficient pre-PR check; the full gate is CI (see ci-full).
-ci: no-work-ledger
+ci: no-work-ledger generated-paths-gated
     cargo xtask ci
 
 # The full local gate: every PR-blocking CI gate, chained in CI's job order,
