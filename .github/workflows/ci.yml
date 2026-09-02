@@ -281,16 +281,18 @@ jobs:
           python-version: "3.12"
       - uses: taiki-e/install-action@b6ff580856c41316412a0b9b60540fbc6f8c82cc # v2.86.7
         with:
-          tool: cargo-semver-checks,cargo-public-api,just
+          tool: cargo-semver-checks,cargo-public-api@0.52.0,just
       - name: cargo semver-checks
         run: just semver
       # public-api needs a nightly toolchain for rustdoc JSON. Its committed,
       # all-features baselines are mandatory: a missing or stale file fails the
       # PR instead of quietly dropping exact API-surface protection.
-      - name: Install nightly (for cargo public-api)
+      # Use the dated nightly that produced those baselines, never the rolling
+      # alias: rustdoc JSON is part of the snapshot format.
+      - name: Install pinned nightly (for cargo public-api)
         uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
         with:
-          toolchain: nightly
+          toolchain: nightly-2026-09-01
       - name: public API snapshot
         run: just public-api
 

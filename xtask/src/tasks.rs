@@ -1013,6 +1013,35 @@ fn missing_names(required: &[String], configured: &[String]) -> Vec<String> {
 /// Directory holding the committed public-API baseline snapshots.
 const PUBLIC_API_DIR: &str = "public-api";
 
+/// Dated nightly that produced the committed public-API snapshots.
+///
+/// Snapshot output is rustdoc-JSON dependent, so a rolling `nightly` alias
+/// would turn an otherwise unchanged checkout into apparent API drift.
+const PUBLIC_API_TOOLCHAIN: &str = "+nightly-2026-09-01";
+
+/// Exact `cargo-public-api` release used with [`PUBLIC_API_TOOLCHAIN`].
+const PUBLIC_API_TOOL_VERSION: &str = "0.52.0";
+
+const PUBLIC_API_TOOL_NAME: &str = "cargo-public-api";
+
+/// Reject a rolling or otherwise mismatched `cargo-public-api` installation.
+fn verify_public_api_tool_version(version: &str) -> Result<()> {
+    let expected = format!("{PUBLIC_API_TOOL_NAME} {PUBLIC_API_TOOL_VERSION}");
+    let actual = version.trim();
+    if actual != expected {
+        anyhow::bail!(
+            "public API tool version mismatch: expected `{expected}` with `{PUBLIC_API_TOOLCHAIN}`, found `{actual}`; install `cargo install cargo-public-api --version {PUBLIC_API_TOOL_VERSION} --locked`"
+        );
+    }
+    Ok(())
+}
+
+/// Verify the exact public-API toolchain before comparing tracked snapshots.
+fn verify_public_api_tool() -> Result<()> {
+    let version = run_stdout("cargo", &[PUBLIC_API_TOOLCHAIN, "public-api", "--version"])?;
+    verify_public_api_tool_version(&version)
+}
+
 /// Return the workspace packages that expose a Rust library API.
 ///
 /// A package may provide an ordinary `lib`, an `rlib` alongside a `cdylib`, or
@@ -1138,6 +1167,8 @@ fn verify_public_api_baseline_inventory(
 /// Returns an error if a snapshot cannot be produced or written, or (when not
 /// blessing) if a baseline is missing/stale or the regenerated surface differs.
 pub fn public_api(bless: bool) -> Result<()> {
+    verify_public_api_tool()?;
+
     if bless {
         std::fs::create_dir_all(PUBLIC_API_DIR)
             .with_context(|| format!("creating {PUBLIC_API_DIR}/"))?;
@@ -1153,7 +1184,7 @@ pub fn public_api(bless: bool) -> Result<()> {
         let surface = run_stdout(
             "cargo",
             &[
-                "+nightly",
+                PUBLIC_API_TOOLCHAIN,
                 "public-api",
                 "--all-features",
                 "--color",
@@ -2576,6 +2607,22 @@ mod tests {
             "public API baseline inventory is not exact (missing: pure-analyzer-lexer.txt; \
              unexpected: removed-package.txt); remove unexpected files before blessing"
         );
+    }
+
+    #[test]
+    fn public_api_tool_version_guard_is_exact_and_dated() {
+        assert!(PUBLIC_API_TOOLCHAIN.starts_with("+nightly-"));
+        assert_ne!(PUBLIC_API_TOOLCHAIN, "+nightly");
+        assert!(verify_public_api_tool_version("cargo-public-api 0.52.0\n").is_ok());
+
+        let error = verify_public_api_tool_version("cargo-public-api 0.52.1\n")
+            .expect_err("a rolling cargo-public-api release must fail closed");
+        assert!(
+            error
+                .to_string()
+                .contains("expected `cargo-public-api 0.52.0`")
+        );
+        assert!(error.to_string().contains("+nightly-2026-09-01"));
     }
 
     #[test]
