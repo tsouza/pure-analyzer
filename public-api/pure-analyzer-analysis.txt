@@ -1,4 +1,47 @@
 pub mod pure_analyzer_analysis
+pub enum pure_analyzer_analysis::CanonicalEmissionOutcome
+pub pure_analyzer_analysis::CanonicalEmissionOutcome::Emitted(pure_analyzer_analysis::CanonicalPure)
+pub pure_analyzer_analysis::CanonicalEmissionOutcome::Indecisive(pure_analyzer_analysis::CanonicalEmissionIndecision)
+impl pure_analyzer_analysis::CanonicalEmissionOutcome
+pub const fn pure_analyzer_analysis::CanonicalEmissionOutcome::emitted(&self) -> core::option::Option<&pure_analyzer_analysis::CanonicalPure>
+pub const fn pure_analyzer_analysis::CanonicalEmissionOutcome::indecision(&self) -> core::option::Option<&pure_analyzer_analysis::CanonicalEmissionIndecision>
+impl core::clone::Clone for pure_analyzer_analysis::CanonicalEmissionOutcome
+pub fn pure_analyzer_analysis::CanonicalEmissionOutcome::clone(&self) -> pure_analyzer_analysis::CanonicalEmissionOutcome
+impl core::cmp::Eq for pure_analyzer_analysis::CanonicalEmissionOutcome
+impl core::cmp::PartialEq for pure_analyzer_analysis::CanonicalEmissionOutcome
+pub fn pure_analyzer_analysis::CanonicalEmissionOutcome::eq(&self, &pure_analyzer_analysis::CanonicalEmissionOutcome) -> bool
+impl core::fmt::Debug for pure_analyzer_analysis::CanonicalEmissionOutcome
+pub fn pure_analyzer_analysis::CanonicalEmissionOutcome::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::CanonicalEmissionOutcome
+impl core::marker::Freeze for pure_analyzer_analysis::CanonicalEmissionOutcome
+impl core::marker::Send for pure_analyzer_analysis::CanonicalEmissionOutcome
+impl core::marker::Sync for pure_analyzer_analysis::CanonicalEmissionOutcome
+impl core::marker::Unpin for pure_analyzer_analysis::CanonicalEmissionOutcome
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::CanonicalEmissionOutcome
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::CanonicalEmissionOutcome
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::CanonicalEmissionOutcome
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::CanonicalEmissionOutcome where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::CanonicalEmissionOutcome::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::CanonicalEmissionOutcome where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::CanonicalEmissionOutcome::Error = never
+pub fn pure_analyzer_analysis::CanonicalEmissionOutcome::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::CanonicalEmissionOutcome where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::CanonicalEmissionOutcome::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::CanonicalEmissionOutcome::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::CanonicalEmissionOutcome where T: core::clone::Clone
+pub type pure_analyzer_analysis::CanonicalEmissionOutcome::Owned = T
+pub fn pure_analyzer_analysis::CanonicalEmissionOutcome::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::CanonicalEmissionOutcome::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::CanonicalEmissionOutcome where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::CanonicalEmissionOutcome::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::CanonicalEmissionOutcome where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::CanonicalEmissionOutcome::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::CanonicalEmissionOutcome where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::CanonicalEmissionOutcome::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::CanonicalEmissionOutcome where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::CanonicalEmissionOutcome::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::CanonicalEmissionOutcome
+pub fn pure_analyzer_analysis::CanonicalEmissionOutcome::from(T) -> T
 pub enum pure_analyzer_analysis::ColumnSelectorName
 pub pure_analyzer_analysis::ColumnSelectorName::Bare(pure_analyzer_model::types::Name)
 pub pure_analyzer_analysis::ColumnSelectorName::Quoted(pure_analyzer_model::types::Name)
@@ -1181,6 +1224,88 @@ impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::CandidateKey wher
 pub unsafe fn pure_analyzer_analysis::CandidateKey::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for pure_analyzer_analysis::CandidateKey
 pub fn pure_analyzer_analysis::CandidateKey::from(T) -> T
+pub struct pure_analyzer_analysis::CanonicalEmissionIndecision
+impl pure_analyzer_analysis::CanonicalEmissionIndecision
+pub const fn pure_analyzer_analysis::CanonicalEmissionIndecision::origin(&self) -> &pure_analyzer_analysis::IrOrigin
+pub const fn pure_analyzer_analysis::CanonicalEmissionIndecision::reason(&self) -> pure_analyzer_diagnostics::verdict::ReasonCode
+impl core::clone::Clone for pure_analyzer_analysis::CanonicalEmissionIndecision
+pub fn pure_analyzer_analysis::CanonicalEmissionIndecision::clone(&self) -> pure_analyzer_analysis::CanonicalEmissionIndecision
+impl core::cmp::Eq for pure_analyzer_analysis::CanonicalEmissionIndecision
+impl core::cmp::PartialEq for pure_analyzer_analysis::CanonicalEmissionIndecision
+pub fn pure_analyzer_analysis::CanonicalEmissionIndecision::eq(&self, &pure_analyzer_analysis::CanonicalEmissionIndecision) -> bool
+impl core::fmt::Debug for pure_analyzer_analysis::CanonicalEmissionIndecision
+pub fn pure_analyzer_analysis::CanonicalEmissionIndecision::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::CanonicalEmissionIndecision
+impl core::marker::Freeze for pure_analyzer_analysis::CanonicalEmissionIndecision
+impl core::marker::Send for pure_analyzer_analysis::CanonicalEmissionIndecision
+impl core::marker::Sync for pure_analyzer_analysis::CanonicalEmissionIndecision
+impl core::marker::Unpin for pure_analyzer_analysis::CanonicalEmissionIndecision
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::CanonicalEmissionIndecision
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::CanonicalEmissionIndecision
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::CanonicalEmissionIndecision
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::CanonicalEmissionIndecision where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::CanonicalEmissionIndecision::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::CanonicalEmissionIndecision where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::CanonicalEmissionIndecision::Error = never
+pub fn pure_analyzer_analysis::CanonicalEmissionIndecision::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::CanonicalEmissionIndecision where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::CanonicalEmissionIndecision::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::CanonicalEmissionIndecision::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::CanonicalEmissionIndecision where T: core::clone::Clone
+pub type pure_analyzer_analysis::CanonicalEmissionIndecision::Owned = T
+pub fn pure_analyzer_analysis::CanonicalEmissionIndecision::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::CanonicalEmissionIndecision::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::CanonicalEmissionIndecision where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::CanonicalEmissionIndecision::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::CanonicalEmissionIndecision where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::CanonicalEmissionIndecision::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::CanonicalEmissionIndecision where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::CanonicalEmissionIndecision::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::CanonicalEmissionIndecision where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::CanonicalEmissionIndecision::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::CanonicalEmissionIndecision
+pub fn pure_analyzer_analysis::CanonicalEmissionIndecision::from(T) -> T
+pub struct pure_analyzer_analysis::CanonicalPure
+impl pure_analyzer_analysis::CanonicalPure
+pub fn pure_analyzer_analysis::CanonicalPure::as_str(&self) -> &str
+pub fn pure_analyzer_analysis::CanonicalPure::into_string(self) -> alloc::string::String
+impl core::clone::Clone for pure_analyzer_analysis::CanonicalPure
+pub fn pure_analyzer_analysis::CanonicalPure::clone(&self) -> pure_analyzer_analysis::CanonicalPure
+impl core::cmp::Eq for pure_analyzer_analysis::CanonicalPure
+impl core::cmp::PartialEq for pure_analyzer_analysis::CanonicalPure
+pub fn pure_analyzer_analysis::CanonicalPure::eq(&self, &pure_analyzer_analysis::CanonicalPure) -> bool
+impl core::fmt::Debug for pure_analyzer_analysis::CanonicalPure
+pub fn pure_analyzer_analysis::CanonicalPure::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::CanonicalPure
+impl core::marker::Freeze for pure_analyzer_analysis::CanonicalPure
+impl core::marker::Send for pure_analyzer_analysis::CanonicalPure
+impl core::marker::Sync for pure_analyzer_analysis::CanonicalPure
+impl core::marker::Unpin for pure_analyzer_analysis::CanonicalPure
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::CanonicalPure
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::CanonicalPure
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::CanonicalPure
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::CanonicalPure where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::CanonicalPure::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::CanonicalPure where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::CanonicalPure::Error = never
+pub fn pure_analyzer_analysis::CanonicalPure::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::CanonicalPure where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::CanonicalPure::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::CanonicalPure::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::CanonicalPure where T: core::clone::Clone
+pub type pure_analyzer_analysis::CanonicalPure::Owned = T
+pub fn pure_analyzer_analysis::CanonicalPure::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::CanonicalPure::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::CanonicalPure where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::CanonicalPure::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::CanonicalPure where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::CanonicalPure::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::CanonicalPure where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::CanonicalPure::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::CanonicalPure where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::CanonicalPure::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::CanonicalPure
+pub fn pure_analyzer_analysis::CanonicalPure::from(T) -> T
 pub struct pure_analyzer_analysis::Column
 impl pure_analyzer_analysis::Column
 pub const fn pure_analyzer_analysis::Column::id(&self) -> pure_analyzer_analysis::ColumnId
@@ -2613,6 +2738,8 @@ pub fn pure_analyzer_analysis::compare_lowered_queries(&pure_analyzer_analysis::
 pub fn pure_analyzer_analysis::compare_lowered_queries_with_budget(&pure_analyzer_analysis::RelationalOutcome, &pure_analyzer_analysis::RelationalOutcome, pure_analyzer_analysis::NormalizationBudget) -> pure_analyzer_analysis::ComparisonOutcome
 pub fn pure_analyzer_analysis::compare_relational_queries(&pure_analyzer_analysis::RelationalQuery, &pure_analyzer_analysis::RelationalQuery) -> pure_analyzer_analysis::ComparisonOutcome
 pub fn pure_analyzer_analysis::compare_relational_queries_with_budget(&pure_analyzer_analysis::RelationalQuery, &pure_analyzer_analysis::RelationalQuery, pure_analyzer_analysis::NormalizationBudget) -> pure_analyzer_analysis::ComparisonOutcome
+pub fn pure_analyzer_analysis::emit_canonical_normal_form(&pure_analyzer_analysis::NormalizedQuery) -> pure_analyzer_analysis::CanonicalEmissionOutcome
+pub fn pure_analyzer_analysis::emit_canonical_normalization(&pure_analyzer_analysis::NormalizationOutcome) -> pure_analyzer_analysis::CanonicalEmissionOutcome
 pub fn pure_analyzer_analysis::extract_relation_column_selectors(pure_analyzer_diagnostics::file::FileId, &pure_analyzer_syntax::green::GreenNode) -> core::result::Result<pure_analyzer_analysis::ColumnSelectors, pure_analyzer_analysis::ColumnSelectorOpaque>
 pub fn pure_analyzer_analysis::format_query(&str, pure_analyzer_diagnostics::file::FileId) -> core::result::Result<pure_analyzer_analysis::FormatResult, pure_analyzer_syntax::builder::BuildError>
 pub fn pure_analyzer_analysis::format_query_with_width(&str, pure_analyzer_diagnostics::file::FileId, usize) -> core::result::Result<pure_analyzer_analysis::FormatResult, pure_analyzer_syntax::builder::BuildError>
