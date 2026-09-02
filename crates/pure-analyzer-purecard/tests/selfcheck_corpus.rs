@@ -37,8 +37,7 @@ fn faithful_query_vocab(query: &str) -> Vocab {
             tokens.push(tok);
         }
     }
-    let eos = tokens.len() as u32;
-    Vocab::from_byte_tokens(tokens, eos)
+    Vocab::from_byte_tokens(tokens)
 }
 
 /// The full committed corpus size (arm-A 4639 + arm-C 395), asserted exactly so

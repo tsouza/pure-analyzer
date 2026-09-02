@@ -170,7 +170,7 @@ This is a signature sketch, not compilable code. The authoritative, compile-and-
 
 ```text
 pub struct Vocab { /* token id -> raw bytes */ }
-impl Vocab { pub fn from_byte_tokens(tokens: Vec<Vec<u8>>, eos: u32) -> Self; }
+impl Vocab { pub fn from_byte_tokens(tokens: Vec<Vec<u8>>) -> Self; }
 
 pub struct CompiledGrammar { /* owns Vocab + lazy per-state mask cache */ }
 impl CompiledGrammar {
@@ -205,7 +205,7 @@ impl<'g> DecoderSession<'g> {
 
 ```python
 # purecard (compiled extension)
-g    = compile_grammar(spec_str, vocab_bytes, eos_id)     # once per (model, grammar)
+g    = compile_grammar(spec_str, vocab_bytes)             # once per (model, grammar)
 sess = Session(g, schema_json_or_None)                    # once per generation
 mask = sess.allowed_mask()        # -> np.ndarray[bool] or packed bits, len == vocab
 sess.accept_token(tok_id)         # advance; raises on illegal token

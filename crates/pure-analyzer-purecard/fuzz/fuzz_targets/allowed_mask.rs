@@ -22,8 +22,7 @@ fuzz_target!(|data: &[u8]| {
             b"]".to_vec(),
             b",".to_vec(),
             b"".to_vec(),
-        ],
-        7,
+        ]
     );
     let vocab_len = vocab.len();
     let eos = vocab_len as u32;

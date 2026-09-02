@@ -21,7 +21,7 @@ pub const ALPHABET: &[u8] = b"abXY1_ |{}()[].,;:$%'-><=!&+*/";
 /// A deterministic synthetic vocabulary of `count` distinct byte-tokens: every
 /// string over [`ALPHABET`] in ascending length, then ascending index within a
 /// length, until `count` are produced. The reserved EOS bit is `count` (one past
-/// the last id), so `Vocab`'s own eos is set to `0` and is irrelevant here.
+/// the last id) and is not part of the table.
 #[must_use]
 pub fn synthetic_vocab(count: usize) -> Vocab {
     let base = ALPHABET.len();
@@ -43,5 +43,5 @@ pub fn synthetic_vocab(count: usize) -> Vocab {
         }
         len += 1;
     }
-    Vocab::from_byte_tokens(tokens, 0)
+    Vocab::from_byte_tokens(tokens)
 }

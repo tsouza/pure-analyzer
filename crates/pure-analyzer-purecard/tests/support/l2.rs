@@ -67,10 +67,9 @@ impl TokenVocab {
         for tok in extra {
             add(tok.clone(), &mut ids, &mut tokens);
         }
-        let eos = tokens.len() as u32;
         Self {
             ids,
-            vocab: Vocab::from_byte_tokens(tokens, eos),
+            vocab: Vocab::from_byte_tokens(tokens),
         }
     }
 

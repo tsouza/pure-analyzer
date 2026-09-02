@@ -1462,8 +1462,7 @@ pub mod purecard::vocab
 pub struct purecard::vocab::Vocab
 impl purecard::vocab::Vocab
 pub fn purecard::vocab::Vocab::bytes(&self, u32) -> core::option::Option<&[u8]>
-pub fn purecard::vocab::Vocab::eos(&self) -> u32
-pub fn purecard::vocab::Vocab::from_byte_tokens(alloc::vec::Vec<alloc::vec::Vec<u8>>, u32) -> Self
+pub fn purecard::vocab::Vocab::from_byte_tokens(alloc::vec::Vec<alloc::vec::Vec<u8>>) -> Self
 pub fn purecard::vocab::Vocab::is_empty(&self) -> bool
 pub fn purecard::vocab::Vocab::len(&self) -> usize
 impl core::clone::Clone for purecard::vocab::Vocab
@@ -1957,8 +1956,7 @@ impl<T> pyo3::marker::Ungil for purecard::Schema where T: core::marker::Send
 pub struct purecard::Vocab
 impl purecard::vocab::Vocab
 pub fn purecard::vocab::Vocab::bytes(&self, u32) -> core::option::Option<&[u8]>
-pub fn purecard::vocab::Vocab::eos(&self) -> u32
-pub fn purecard::vocab::Vocab::from_byte_tokens(alloc::vec::Vec<alloc::vec::Vec<u8>>, u32) -> Self
+pub fn purecard::vocab::Vocab::from_byte_tokens(alloc::vec::Vec<alloc::vec::Vec<u8>>) -> Self
 pub fn purecard::vocab::Vocab::is_empty(&self) -> bool
 pub fn purecard::vocab::Vocab::len(&self) -> usize
 impl core::clone::Clone for purecard::vocab::Vocab

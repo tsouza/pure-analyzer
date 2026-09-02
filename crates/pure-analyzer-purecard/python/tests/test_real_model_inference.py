@@ -63,14 +63,13 @@ def model_bundle():
             "and never silently skips — issue #58 bullet 5)."
         )
     tokenizer, model, device = load_model_and_tokenizer(MODEL_DIR)
-    vocab_bytes, eos_id = build_qwen_vocab(tokenizer)
-    grammar = purecard.compile_grammar("", vocab_bytes, eos_id)
+    vocab_bytes = build_qwen_vocab(tokenizer)
+    grammar = purecard.compile_grammar("", vocab_bytes)
     return {
         "tokenizer": tokenizer,
         "model": model,
         "device": device,
         "vocab_bytes": vocab_bytes,
-        "eos_id": eos_id,
         "grammar": grammar,
     }
 
@@ -101,7 +100,6 @@ def test_reset_and_error_propagation_against_the_real_vocabulary(model_bundle):
     tokenizer = model_bundle["tokenizer"]
     vocab_bytes = model_bundle["vocab_bytes"]
     grammar = model_bundle["grammar"]
-    eos_id = model_bundle["eos_id"]
     gold_text = "|spider::pets_1::model::default::Student.all()"
     gold_ids = tokenizer.encode(gold_text, add_special_tokens=False)
 
@@ -122,7 +120,7 @@ def test_reset_and_error_propagation_against_the_real_vocabulary(model_bundle):
     disallowed = next(
         token_id
         for token_id in range(len(vocab_bytes))
-        if not _bit_set(mask_before, token_id) and token_id != eos_id
+        if not _bit_set(mask_before, token_id)
     )
     with pytest.raises(purecard.PureCARDError):
         session.accept_token(disallowed)
@@ -144,7 +142,6 @@ def test_generation_across_all_fixtures_and_modes(model_bundle):
     model = model_bundle["model"]
     device = model_bundle["device"]
     vocab_bytes = model_bundle["vocab_bytes"]
-    eos_id = model_bundle["eos_id"]
     grammar = model_bundle["grammar"]
 
     results = []
@@ -158,7 +155,6 @@ def test_generation_across_all_fixtures_and_modes(model_bundle):
                 tokenizer,
                 device,
                 vocab_bytes,
-                eos_id,
                 prompt_ids,
                 budgets["unconstrained"],
                 fixture["fixture_id"],
@@ -174,7 +170,6 @@ def test_generation_across_all_fixtures_and_modes(model_bundle):
                 tokenizer,
                 device,
                 vocab_bytes,
-                eos_id,
                 prompt_ids,
                 budgets["constrained"],
                 fixture["fixture_id"],
@@ -190,7 +185,6 @@ def test_generation_across_all_fixtures_and_modes(model_bundle):
                 tokenizer,
                 device,
                 vocab_bytes,
-                eos_id,
                 prompt_ids,
                 budgets["constrained"],
                 fixture["fixture_id"],

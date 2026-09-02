@@ -38,10 +38,6 @@ use purecard::grammar::EMITTED_SUBSET_SPEC;
 use purecard::grammar::pda::Frame;
 use purecard::{ByteRecognizer, CompiledGrammar, DecodeError, DecoderSession, Vocab};
 
-/// The `Vocab` EOS-token id an empty test vocabulary is built with — the
-/// byte-recognizer lanes this suite drives never consult the vocab.
-const EMPTY_VOCAB_EOS: u32 = 0;
-
 /// The number of reachable `(state, stack-top)` pairs
 /// [`every_reachable_configuration_agrees_on_every_byte_across_both_engines`]
 /// sweeps. Pinned so a state or frame that silently stops being reachable — the
@@ -76,15 +72,12 @@ fn seed_corpus_path() -> PathBuf {
 }
 
 fn fixed_grammar() -> CompiledGrammar {
-    CompiledGrammar::compile(Vocab::from_byte_tokens(Vec::new(), EMPTY_VOCAB_EOS))
+    CompiledGrammar::compile(Vocab::from_byte_tokens(Vec::new()))
 }
 
 fn spec_grammar() -> CompiledGrammar {
-    CompiledGrammar::from_spec(
-        EMITTED_SUBSET_SPEC,
-        Vocab::from_byte_tokens(Vec::new(), EMPTY_VOCAB_EOS),
-    )
-    .expect("the emitted-subset spec transcription compiles")
+    CompiledGrammar::from_spec(EMITTED_SUBSET_SPEC, Vocab::from_byte_tokens(Vec::new()))
+        .expect("the emitted-subset spec transcription compiles")
 }
 
 /// The observable outcome of replaying a byte string through one engine: the

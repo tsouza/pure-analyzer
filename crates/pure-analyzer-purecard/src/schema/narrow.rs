@@ -1656,7 +1656,7 @@ mod tests {
     /// A vocabulary whose tokens span every lexeme class the rules distinguish.
     fn vocab(tokens: &[&[u8]]) -> Vocab {
         let owned: Vec<Vec<u8>> = tokens.iter().map(|t| t.to_vec()).collect();
-        Vocab::from_byte_tokens(owned, tokens.len() as u32)
+        Vocab::from_byte_tokens(owned)
     }
 
     fn bit(mask: &BitMask, id: u32) -> bool {

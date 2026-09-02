@@ -89,7 +89,11 @@ pub(crate) struct Grammar {
 }
 
 /// Compile `spec` against the byte-token vocabulary `vocab_bytes` (token id =
-/// list index) with reserved EOS id `eos_id`, returning a shareable [`Grammar`].
+/// list index), returning a shareable [`Grammar`].
+///
+/// The vocabulary carries real tokens only. EOS is the reserved id one past the
+/// last of them (`len(vocab_bytes)`), so a host does not — and cannot — name its
+/// tokenizer's own EOS id here.
 ///
 /// An empty `spec` is a convenience alias for the shipped emitted-subset
 /// grammar, compiled through the fast, hand-optimized path
@@ -102,12 +106,8 @@ pub(crate) struct Grammar {
 /// Raises [`PureCARDError`] if a non-empty `spec` is not a well-formed, valid
 /// grammar spec (see [`CompiledGrammar::from_spec`]).
 #[pyfunction]
-pub(crate) fn compile_grammar(
-    spec: &str,
-    vocab_bytes: Vec<Vec<u8>>,
-    eos_id: u32,
-) -> PyResult<Grammar> {
-    let vocab = Vocab::from_byte_tokens(vocab_bytes, eos_id);
+pub(crate) fn compile_grammar(spec: &str, vocab_bytes: Vec<Vec<u8>>) -> PyResult<Grammar> {
+    let vocab = Vocab::from_byte_tokens(vocab_bytes);
     let inner = if spec.is_empty() {
         CompiledGrammar::compile(vocab)
     } else {
@@ -256,9 +256,11 @@ mod tests {
 
     use super::{DecodeError, PureCARDError, Schema, Session, compile_grammar, purecard};
 
-    const EOS_ID: u32 = 4;
     const VOCAB_LEN: usize = 5;
-    const OUT_OF_RANGE_TOKEN_ID: u32 = EOS_ID + 1;
+    /// The reserved EOS bit: one past the last real token id (Decision D3).
+    const EOS_BIT: u32 = VOCAB_LEN as u32;
+    /// One past the reserved EOS bit — neither a real token nor EOS.
+    const OUT_OF_RANGE_TOKEN_ID: u32 = EOS_BIT + 1;
     const GOLD_QUERY: [u32; 4] = [0, 1, 2, 3];
 
     /// A grammar spec accepting exactly the literal byte string `text` — a
@@ -287,9 +289,9 @@ mod tests {
     /// very first byte, so a mutation that empties [`literal_spec`] out and
     /// silently substitutes the fixed grammar is caught by
     /// `session_surface_delegates_to_the_decoder_core` rather than passing
-    /// unnoticed — the fixed grammar happens to also accept real Pure syntax
-    /// like `|X.all()->take(1)`, which this literal spec used to be built
-    /// from, so that choice couldn't distinguish the two grammars.
+    /// unnoticed. Real Pure syntax like `|X.all()->take(1)` cannot serve here:
+    /// the fixed grammar accepts that too, leaving a spec over those bytes
+    /// indistinguishable from the fallback.
     const LITERAL_TEXT: [u8; 4] = [0x01, 0x02, 0x03, 0x04];
 
     fn grammar() -> super::Grammar {
@@ -302,7 +304,6 @@ mod tests {
                 vec![LITERAL_TEXT[3]],
                 Vec::new(),
             ],
-            EOS_ID,
         )
         .expect("literal spec compiles")
     }
@@ -346,13 +347,19 @@ mod tests {
         assert!(session.is_complete());
         Python::attach(|py| {
             let mask = session.allowed_mask(py);
-            assert_ne!(mask.as_bytes()[0] & (1 << VOCAB_LEN), 0);
+            assert_ne!(mask.as_bytes()[0] & (1 << EOS_BIT), 0);
         });
 
         session.reset();
         assert!(!session.is_complete());
-        assert_eq!(OUT_OF_RANGE_TOKEN_ID, EOS_ID + 1);
-        assert!(session.accept_token(OUT_OF_RANGE_TOKEN_ID).is_err());
+        assert!(
+            session.accept_token(EOS_BIT).is_err(),
+            "EOS is inadmissible until the stream completes"
+        );
+        assert!(
+            session.accept_token(OUT_OF_RANGE_TOKEN_ID).is_err(),
+            "an id past the reserved EOS bit is unknown"
+        );
     }
 
     #[test]

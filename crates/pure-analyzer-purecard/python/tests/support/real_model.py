@@ -38,10 +38,10 @@ QWEN_IM_END = 151645
 Mode = Literal["unconstrained", "l1", "l2"]
 
 
-def build_qwen_vocab(tokenizer) -> tuple[list[bytes], int]:
-    """Build the ``vocab_bytes``/``eos_id`` pair ``compile_grammar`` needs from
-    a real tokenizer: token id -> true emitted bytes, decoded through the
-    shared GPT-2 byte table. Mirrors `tests/qwen_soundness.rs::build_qwen_vocab`
+def build_qwen_vocab(tokenizer) -> list[bytes]:
+    """Build the ``vocab_bytes`` list ``compile_grammar`` needs from a real
+    tokenizer: token id -> true emitted bytes, decoded through the shared GPT-2
+    byte table. Mirrors `tests/qwen_soundness.rs::build_qwen_vocab`
     (constitution §4, DRY) — same dense-id-space validation, same convention
     that EOS is the reserved bit at ``vocab_len``, not any in-vocab id.
     """
@@ -60,7 +60,7 @@ def build_qwen_vocab(tokenizer) -> tuple[list[bytes], int]:
         if entry is None:
             raise ValueError(f"tokenizer id {index} unfilled: holey id space")
         filled.append(entry)
-    return filled, size
+    return filled
 
 
 # Fixed textual "reasoning" that ends every prompt, never generated and never
@@ -174,7 +174,6 @@ def generate(
     tokenizer,
     device: str,
     vocab_bytes: list[bytes],
-    eos_id: int,
     prompt_ids: list[int],
     max_new_tokens: int,
     fixture_id: str,
@@ -232,7 +231,7 @@ def generate(
                 extended[vocab_len] = max(logits[QWEN_ENDOFTEXT], logits[QWEN_IM_END])
             candidate = int(np.argmax(extended))
             if candidate == vocab_len:
-                session.accept_token(eos_id)
+                session.accept_token(vocab_len)
                 completed = True
                 break
             try:

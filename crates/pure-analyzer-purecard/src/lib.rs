@@ -31,8 +31,7 @@
 //! // segment the first query's opening byte fails loud with a locatable drift
 //! // error — asserted, not ignored, so a change to the self-check contract (or a
 //! // silently-passing smoke check) breaks this example.
-//! const TOY_EOS: u32 = 1; // reserved EOS id, one past the toy vocab's lone token
-//! let toy = Vocab::from_byte_tokens(vec![b"filter".to_vec()], TOY_EOS);
+//! let toy = Vocab::from_byte_tokens(vec![b"filter".to_vec()]);
 //! let toy_grammar = CompiledGrammar::compile(toy);
 //! assert_eq!(
 //!     self_check_smoke(&toy_grammar),
@@ -48,16 +47,12 @@
 //! const OPEN: u32 = 1; //   a step opening a call, `->take(`
 //! const INT: u32 = 2; //    an integer literal, `1`
 //! const CLOSE: u32 = 3; //  the closer, `)`
-//! const EOS: u32 = 4; //    the reserved EOS id, one past the last token
-//! let vocab = Vocab::from_byte_tokens(
-//!     vec![
-//!         b"|X.all()".to_vec(),
-//!         b"->take(".to_vec(),
-//!         b"1".to_vec(),
-//!         b")".to_vec(),
-//!     ],
-//!     EOS,
-//! );
+//! let vocab = Vocab::from_byte_tokens(vec![
+//!     b"|X.all()".to_vec(),
+//!     b"->take(".to_vec(),
+//!     b"1".to_vec(),
+//!     b")".to_vec(),
+//! ]);
 //! let grammar = CompiledGrammar::compile(vocab);
 //!
 //! // L1 (syntactic) session: the source token is admissible from the start; once

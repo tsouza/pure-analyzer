@@ -137,7 +137,7 @@ fuzz_target!(|raw: RawSchema| {
     vocab_tokens.sort();
     vocab_tokens.dedup();
     let eos = vocab_tokens.len() as u32;
-    let vocab = Vocab::from_byte_tokens(vocab_tokens, eos);
+    let vocab = Vocab::from_byte_tokens(vocab_tokens);
     let grammar = CompiledGrammar::compile(vocab);
 
     // Never panic (generate_schema_walks/generate_first_complete_schema_walks

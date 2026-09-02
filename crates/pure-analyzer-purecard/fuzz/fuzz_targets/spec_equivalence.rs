@@ -16,9 +16,9 @@ use purecard::grammar::EMITTED_SUBSET_SPEC;
 use purecard::{ByteRecognizer, CompiledGrammar, DecoderSession, Vocab};
 
 fuzz_target!(|data: &[u8]| {
-    let fixed = CompiledGrammar::compile(Vocab::from_byte_tokens(Vec::new(), 0));
+    let fixed = CompiledGrammar::compile(Vocab::from_byte_tokens(Vec::new()));
     let spec =
-        CompiledGrammar::from_spec(EMITTED_SUBSET_SPEC, Vocab::from_byte_tokens(Vec::new(), 0))
+        CompiledGrammar::from_spec(EMITTED_SUBSET_SPEC, Vocab::from_byte_tokens(Vec::new()))
             .expect("the shipped emitted-subset spec always compiles");
 
     let mut fixed_session = DecoderSession::new(&fixed);
