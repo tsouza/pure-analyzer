@@ -1,6 +1,9 @@
 pub mod libpure
 pub use libpure::ALL_DIAG_CODES
 pub use libpure::BuildError
+pub use libpure::CanonicalEmissionIndecision
+pub use libpure::CanonicalEmissionOutcome
+pub use libpure::CanonicalPure
 pub use libpure::ComparisonIndecision
 pub use libpure::ComparisonOutcome
 pub use libpure::DiagCode
@@ -468,6 +471,7 @@ pub struct libpure::AnalysisDriver
 impl libpure::AnalysisDriver
 pub fn libpure::AnalysisDriver::compare(&self, &libpure::ComparisonRequest) -> core::result::Result<libpure::ComparisonOutput, libpure::DriverError>
 pub fn libpure::AnalysisDriver::definition(&self, &libpure::LintRequest, libpure::DefinitionPosition) -> core::result::Result<libpure::DefinitionResult, libpure::DriverError>
+pub fn libpure::AnalysisDriver::emit_canonical(&self, &libpure::CanonicalEmissionRequest) -> core::result::Result<libpure::CanonicalEmissionOutput, libpure::DriverError>
 pub fn libpure::AnalysisDriver::format(&self, &libpure::SourceRequest) -> core::result::Result<libpure::FormatOutput, libpure::DriverError>
 pub fn libpure::AnalysisDriver::lint(&self, &libpure::LintRequest) -> core::result::Result<libpure::AnalysisOutput, libpure::DriverError>
 pub fn libpure::AnalysisDriver::parse(&self, &libpure::SourceRequest) -> core::result::Result<libpure::ParseOutput, libpure::DriverError>
@@ -568,6 +572,108 @@ pub unsafe fn libpure::AnalysisOutput::deref_mut<'a>(usize) -> &'a mut T
 pub unsafe fn libpure::AnalysisOutput::drop(usize)
 pub unsafe fn libpure::AnalysisOutput::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
 impl<T> either::into_either::IntoEither for libpure::AnalysisOutput
+pub struct libpure::CanonicalEmissionOutput
+impl libpure::CanonicalEmissionOutput
+pub fn libpure::CanonicalEmissionOutput::into_parts(self) -> (libpure::SourceStore, pure_analyzer_analysis::canonical::CanonicalEmissionOutcome)
+pub const fn libpure::CanonicalEmissionOutput::outcome(&self) -> &pure_analyzer_analysis::canonical::CanonicalEmissionOutcome
+pub const fn libpure::CanonicalEmissionOutput::sources(&self) -> &libpure::SourceStore
+impl core::clone::Clone for libpure::CanonicalEmissionOutput
+pub fn libpure::CanonicalEmissionOutput::clone(&self) -> libpure::CanonicalEmissionOutput
+impl core::cmp::Eq for libpure::CanonicalEmissionOutput
+impl core::cmp::PartialEq for libpure::CanonicalEmissionOutput
+pub fn libpure::CanonicalEmissionOutput::eq(&self, &libpure::CanonicalEmissionOutput) -> bool
+impl core::fmt::Debug for libpure::CanonicalEmissionOutput
+pub fn libpure::CanonicalEmissionOutput::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for libpure::CanonicalEmissionOutput
+impl core::marker::Freeze for libpure::CanonicalEmissionOutput
+impl core::marker::Send for libpure::CanonicalEmissionOutput
+impl core::marker::Sync for libpure::CanonicalEmissionOutput
+impl core::marker::Unpin for libpure::CanonicalEmissionOutput
+impl core::marker::UnsafeUnpin for libpure::CanonicalEmissionOutput
+impl core::panic::unwind_safe::RefUnwindSafe for libpure::CanonicalEmissionOutput
+impl core::panic::unwind_safe::UnwindSafe for libpure::CanonicalEmissionOutput
+impl<T, U> core::convert::Into<U> for libpure::CanonicalEmissionOutput where U: core::convert::From<T>
+pub fn libpure::CanonicalEmissionOutput::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for libpure::CanonicalEmissionOutput where U: core::convert::Into<T>
+pub type libpure::CanonicalEmissionOutput::Error = never
+pub fn libpure::CanonicalEmissionOutput::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for libpure::CanonicalEmissionOutput where U: core::convert::TryFrom<T>
+pub type libpure::CanonicalEmissionOutput::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn libpure::CanonicalEmissionOutput::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for libpure::CanonicalEmissionOutput where T: core::clone::Clone
+pub type libpure::CanonicalEmissionOutput::Owned = T
+pub fn libpure::CanonicalEmissionOutput::clone_into(&self, &mut T)
+pub fn libpure::CanonicalEmissionOutput::to_owned(&self) -> T
+impl<T> core::any::Any for libpure::CanonicalEmissionOutput where T: 'static + ?core::marker::Sized
+pub fn libpure::CanonicalEmissionOutput::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for libpure::CanonicalEmissionOutput where T: ?core::marker::Sized
+pub fn libpure::CanonicalEmissionOutput::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for libpure::CanonicalEmissionOutput where T: ?core::marker::Sized
+pub fn libpure::CanonicalEmissionOutput::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for libpure::CanonicalEmissionOutput where T: core::clone::Clone
+pub unsafe fn libpure::CanonicalEmissionOutput::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for libpure::CanonicalEmissionOutput
+pub fn libpure::CanonicalEmissionOutput::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for libpure::CanonicalEmissionOutput
+pub type libpure::CanonicalEmissionOutput::Init = T
+pub const libpure::CanonicalEmissionOutput::ALIGN: usize
+pub unsafe fn libpure::CanonicalEmissionOutput::deref<'a>(usize) -> &'a T
+pub unsafe fn libpure::CanonicalEmissionOutput::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn libpure::CanonicalEmissionOutput::drop(usize)
+pub unsafe fn libpure::CanonicalEmissionOutput::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for libpure::CanonicalEmissionOutput
+pub struct libpure::CanonicalEmissionRequest
+impl libpure::CanonicalEmissionRequest
+pub fn libpure::CanonicalEmissionRequest::models(&self) -> &[libpure::ModelInput]
+pub fn libpure::CanonicalEmissionRequest::new(libpure::SourceInput, impl core::iter::traits::collect::IntoIterator<Item = libpure::ModelInput>) -> Self
+pub const fn libpure::CanonicalEmissionRequest::normalization_budget(&self) -> pure_analyzer_analysis::normalizer::NormalizationBudget
+pub const fn libpure::CanonicalEmissionRequest::source(&self) -> &libpure::SourceInput
+pub const fn libpure::CanonicalEmissionRequest::with_normalization_budget(self, pure_analyzer_analysis::normalizer::NormalizationBudget) -> Self
+impl core::clone::Clone for libpure::CanonicalEmissionRequest
+pub fn libpure::CanonicalEmissionRequest::clone(&self) -> libpure::CanonicalEmissionRequest
+impl core::cmp::Eq for libpure::CanonicalEmissionRequest
+impl core::cmp::PartialEq for libpure::CanonicalEmissionRequest
+pub fn libpure::CanonicalEmissionRequest::eq(&self, &libpure::CanonicalEmissionRequest) -> bool
+impl core::fmt::Debug for libpure::CanonicalEmissionRequest
+pub fn libpure::CanonicalEmissionRequest::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for libpure::CanonicalEmissionRequest
+impl core::marker::Freeze for libpure::CanonicalEmissionRequest
+impl core::marker::Send for libpure::CanonicalEmissionRequest
+impl core::marker::Sync for libpure::CanonicalEmissionRequest
+impl core::marker::Unpin for libpure::CanonicalEmissionRequest
+impl core::marker::UnsafeUnpin for libpure::CanonicalEmissionRequest
+impl core::panic::unwind_safe::RefUnwindSafe for libpure::CanonicalEmissionRequest
+impl core::panic::unwind_safe::UnwindSafe for libpure::CanonicalEmissionRequest
+impl<T, U> core::convert::Into<U> for libpure::CanonicalEmissionRequest where U: core::convert::From<T>
+pub fn libpure::CanonicalEmissionRequest::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for libpure::CanonicalEmissionRequest where U: core::convert::Into<T>
+pub type libpure::CanonicalEmissionRequest::Error = never
+pub fn libpure::CanonicalEmissionRequest::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for libpure::CanonicalEmissionRequest where U: core::convert::TryFrom<T>
+pub type libpure::CanonicalEmissionRequest::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn libpure::CanonicalEmissionRequest::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for libpure::CanonicalEmissionRequest where T: core::clone::Clone
+pub type libpure::CanonicalEmissionRequest::Owned = T
+pub fn libpure::CanonicalEmissionRequest::clone_into(&self, &mut T)
+pub fn libpure::CanonicalEmissionRequest::to_owned(&self) -> T
+impl<T> core::any::Any for libpure::CanonicalEmissionRequest where T: 'static + ?core::marker::Sized
+pub fn libpure::CanonicalEmissionRequest::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for libpure::CanonicalEmissionRequest where T: ?core::marker::Sized
+pub fn libpure::CanonicalEmissionRequest::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for libpure::CanonicalEmissionRequest where T: ?core::marker::Sized
+pub fn libpure::CanonicalEmissionRequest::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for libpure::CanonicalEmissionRequest where T: core::clone::Clone
+pub unsafe fn libpure::CanonicalEmissionRequest::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for libpure::CanonicalEmissionRequest
+pub fn libpure::CanonicalEmissionRequest::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for libpure::CanonicalEmissionRequest
+pub type libpure::CanonicalEmissionRequest::Init = T
+pub const libpure::CanonicalEmissionRequest::ALIGN: usize
+pub unsafe fn libpure::CanonicalEmissionRequest::deref<'a>(usize) -> &'a T
+pub unsafe fn libpure::CanonicalEmissionRequest::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn libpure::CanonicalEmissionRequest::drop(usize)
+pub unsafe fn libpure::CanonicalEmissionRequest::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for libpure::CanonicalEmissionRequest
 pub struct libpure::ComparisonOutput
 impl libpure::ComparisonOutput
 pub fn libpure::ComparisonOutput::into_parts(self) -> (libpure::SourceStore, pure_analyzer_analysis::comparison::ComparisonOutcome)

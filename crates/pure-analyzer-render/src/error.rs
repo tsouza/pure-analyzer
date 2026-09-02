@@ -55,6 +55,80 @@ impl fmt::Display for ComparisonOriginRole {
     }
 }
 
+/// The role of an invalid origin in a canonical-emission result.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CanonicalEmissionOriginRole {
+    /// The origin attached to an indecisive canonical-emission result.
+    Indecision,
+    /// A model anchor contributing to an indecisive canonical-emission origin.
+    IndecisionModel(usize),
+}
+
+impl CanonicalEmissionOriginRole {
+    pub(crate) const fn model(self, index: usize) -> Self {
+        match self {
+            Self::Indecision | Self::IndecisionModel(_) => Self::IndecisionModel(index),
+        }
+    }
+}
+
+impl fmt::Display for CanonicalEmissionOriginRole {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Indecision => formatter.write_str("indecision"),
+            Self::IndecisionModel(index) => {
+                write!(formatter, "indecision model anchor #{index}")
+            }
+        }
+    }
+}
+
+pub(crate) trait OriginRole: Clone {
+    fn model(self, index: usize) -> Self;
+
+    fn unknown_file(role: Self, file: FileId) -> RenderError;
+
+    fn invalid_span(role: Self, file: FileId, start: u32, end: u32) -> RenderError;
+}
+
+impl OriginRole for ComparisonOriginRole {
+    fn model(self, index: usize) -> Self {
+        Self::model(self, index)
+    }
+
+    fn unknown_file(role: Self, file: FileId) -> RenderError {
+        RenderError::UnknownComparisonFile { role, file }
+    }
+
+    fn invalid_span(role: Self, file: FileId, start: u32, end: u32) -> RenderError {
+        RenderError::InvalidComparisonSpan {
+            role,
+            file,
+            start,
+            end,
+        }
+    }
+}
+
+impl OriginRole for CanonicalEmissionOriginRole {
+    fn model(self, index: usize) -> Self {
+        Self::model(self, index)
+    }
+
+    fn unknown_file(role: Self, file: FileId) -> RenderError {
+        RenderError::UnknownCanonicalEmissionFile { role, file }
+    }
+
+    fn invalid_span(role: Self, file: FileId, start: u32, end: u32) -> RenderError {
+        RenderError::InvalidCanonicalEmissionSpan {
+            role,
+            file,
+            start,
+            end,
+        }
+    }
+}
+
 /// The role of an invalid span in a diagnostic.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SpanKind {
@@ -121,6 +195,26 @@ pub enum RenderError {
         /// Start byte offset supplied by the comparison result.
         start: u32,
         /// End byte offset supplied by the comparison result.
+        end: u32,
+    },
+    /// A canonical-emission origin refers to no file in the retained source snapshot.
+    #[error("canonical emission {role} origin refers to unknown source file {file}")]
+    UnknownCanonicalEmissionFile {
+        /// Role of the invalid canonical-emission origin.
+        role: CanonicalEmissionOriginRole,
+        /// Unknown source identity.
+        file: FileId,
+    },
+    /// A canonical-emission origin has invalid byte bounds for its retained source.
+    #[error("canonical emission {role} origin has invalid byte span {start}..{end} in {file}")]
+    InvalidCanonicalEmissionSpan {
+        /// Role of the invalid canonical-emission origin.
+        role: CanonicalEmissionOriginRole,
+        /// Source identity owning the invalid span.
+        file: FileId,
+        /// Start byte offset supplied by the canonical-emission result.
+        start: u32,
+        /// End byte offset supplied by the canonical-emission result.
         end: u32,
     },
     /// A structured output document could not be serialized.
