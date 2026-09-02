@@ -81,6 +81,20 @@ export const ALLOWLIST = [
     re: /::warning title=(Upgrade to Trusted Publishing|Create a Trusted Publisher)::/,
     why: "pypa/gh-action-pypi-publish Trusted Publishing advocacy on token auth (unsuppressible; architecture choice recorded in ADR-0006)",
   },
+  {
+    // `taiki-e/install-action` emits this annotation when its own tool-install
+    // step hits a transient bash-startup failure on a GitHub-hosted partner
+    // runner image and retries — a known, upstream-tracked runner-image defect
+    // (github.com/actions/partner-runner-images#169), reproduced against this
+    // PR's new 5-platform wheel matrix, not a defect in this repository or its
+    // pinned tool versions. The retry is the action's own recovery: the step
+    // then succeeds, so there is nothing here to fix at a source we control.
+    // Matched on the action's exact wording plus the issue URL it cites, so an
+    // unrelated bash-startup warning from a different tool still fails the
+    // sweep.
+    re: /::warning::install-action: installation failed due to bash startup failure \(<https:\/\/github\.com\/actions\/partner-runner-images\/issues\/169>\); retrying\.\.\./,
+    why: "taiki-e/install-action retry on a known upstream partner-runner-images bash-startup flake (actions/partner-runner-images#169); self-healing, not a repo defect",
+  },
 ];
 
 /**
