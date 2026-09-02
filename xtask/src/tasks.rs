@@ -933,18 +933,44 @@ const RELEASE_PLZ_CONFIG: &str = "release-plz.toml";
 pub fn release_plz_check() -> Result<()> {
     let src = std::fs::read_to_string(RELEASE_PLZ_CONFIG)
         .with_context(|| format!("reading {RELEASE_PLZ_CONFIG}"))?;
-    let overrides = release_plz_override_names(&src);
-    let members = workspace_member_names()?;
 
-    validate_release_plz_overrides(&overrides, &members)
+    validate_release_plz_overrides(&release_plz_overrides(&src), &workspace_release_members()?)
 }
 
-/// Check release-plz overrides against the provided workspace member names.
+/// release-plz's own default for a `[[package]]` override that omits `publish`.
+///
+/// An override is a full package configuration, not a patch: leaving `publish`
+/// out asserts the crate is publishable. That default is what reddened the
+/// trunk when `xtask` gained `publish = false` in its manifest.
+const RELEASE_PLZ_DEFAULT_PUBLISH: bool = true;
+
+/// A `[[package]]` override declared in `release-plz.toml`.
+#[derive(Debug, PartialEq, Eq)]
+struct ReleasePlzOverride {
+    name: String,
+    publish: bool,
+}
+
+/// A workspace member as release automation sees it: its name and whether its
+/// manifest permits publishing.
+#[derive(Debug, PartialEq, Eq)]
+struct WorkspaceReleaseMember {
+    name: String,
+    publish: bool,
+}
+
+/// Check release-plz overrides against the provided workspace members.
 ///
 /// Keeping this validation independent of filesystem and Cargo access makes the
-/// release policy's two failure paths directly testable.
-fn validate_release_plz_overrides(overrides: &[String], members: &[String]) -> Result<()> {
-    let unknown = missing_names(overrides, members);
+/// release policy's failure paths directly testable.
+fn validate_release_plz_overrides(
+    overrides: &[ReleasePlzOverride],
+    members: &[WorkspaceReleaseMember],
+) -> Result<()> {
+    let override_names: Vec<String> = overrides.iter().map(|o| o.name.clone()).collect();
+    let member_names: Vec<String> = members.iter().map(|m| m.name.clone()).collect();
+
+    let unknown = missing_names(&override_names, &member_names);
     if !unknown.is_empty() {
         anyhow::bail!(
             "{RELEASE_PLZ_CONFIG} has [[package]] overrides not present in the workspace: {}. \
@@ -954,8 +980,18 @@ fn validate_release_plz_overrides(overrides: &[String], members: &[String]) -> R
         );
     }
 
-    let analyzer_packages = analyzer_release_package_names(members);
-    let unregistered = missing_names(&analyzer_packages, overrides);
+    let drifted = publish_mismatches(overrides, members);
+    if !drifted.is_empty() {
+        anyhow::bail!(
+            "{RELEASE_PLZ_CONFIG} [[package]] overrides disagree with the crates' Cargo.toml \
+             `publish` field: {}. release-plz rejects the mismatch at runtime, so leaving it \
+             reddens every push to main.",
+            drifted.join("; ")
+        );
+    }
+
+    let analyzer_packages = analyzer_release_package_names(&member_names);
+    let unregistered = missing_names(&analyzer_packages, &override_names);
     if !unregistered.is_empty() {
         anyhow::bail!(
             "{RELEASE_PLZ_CONFIG} is missing [[package]] overrides for analyzer workspace crates: {}. \
@@ -967,45 +1003,78 @@ fn validate_release_plz_overrides(overrides: &[String], members: &[String]) -> R
     Ok(())
 }
 
-/// Extract the `name` of every `[[package]]` table in a release-plz config.
+/// Overrides whose `publish` value contradicts the member's manifest, rendered
+/// as `name (release-plz.toml: publish = x, Cargo.toml: publish = y)`.
 ///
-/// A hand scan rather than a TOML dependency: the only key we need is the
-/// override name, and the array-of-tables shape release-plz uses is trivial to
-/// walk line by line.
-fn release_plz_override_names(toml_src: &str) -> Vec<String> {
-    let mut names = Vec::new();
-    let mut in_package = false;
+/// Members without an override are not compared: release-plz only enforces the
+/// field on packages the config actually configures.
+fn publish_mismatches(
+    overrides: &[ReleasePlzOverride],
+    members: &[WorkspaceReleaseMember],
+) -> Vec<String> {
+    overrides
+        .iter()
+        .filter_map(|configured| {
+            let member = members.iter().find(|m| m.name == configured.name)?;
+            (member.publish != configured.publish).then(|| {
+                format!(
+                    "{} (release-plz.toml: publish = {}, Cargo.toml: publish = {})",
+                    configured.name, configured.publish, member.publish
+                )
+            })
+        })
+        .collect()
+}
+
+/// Extract every `[[package]]` override from a release-plz config.
+///
+/// A hand scan rather than a TOML dependency: the two keys we need are simple
+/// scalars in an array of tables that is trivial to walk line by line. Keys are
+/// collected per table and flushed at the next header, so `publish` is read
+/// whether it precedes or follows `name`.
+fn release_plz_overrides(toml_src: &str) -> Vec<ReleasePlzOverride> {
+    let mut overrides = Vec::new();
+    let mut pending: Option<(Option<String>, Option<bool>)> = None;
+
+    fn flush(
+        pending: Option<(Option<String>, Option<bool>)>,
+        overrides: &mut Vec<ReleasePlzOverride>,
+    ) {
+        if let Some((Some(name), publish)) = pending {
+            overrides.push(ReleasePlzOverride {
+                name,
+                publish: publish.unwrap_or(RELEASE_PLZ_DEFAULT_PUBLISH),
+            });
+        }
+    }
+
     for line in toml_src.lines() {
         let trimmed = line.trim();
         if trimmed.starts_with('[') {
-            in_package = trimmed == "[[package]]";
-            continue;
-        }
-        if !in_package {
-            continue;
-        }
-        if let Some(rest) = trimmed.strip_prefix("name")
-            && let Some(value) = rest.trim_start().strip_prefix('=')
-        {
-            // Take only the first quoted token, so a trailing inline comment
-            // (`name = "domain" # note`) doesn't leak into the parsed name.
-            if let Some(name) = value
-                .trim()
-                .strip_prefix('"')
-                .and_then(|v| v.split('"').next())
-            {
-                names.push(name.to_string());
+            flush(pending.take(), &mut overrides);
+            if trimmed == "[[package]]" {
+                pending = Some((None, None));
             }
+            continue;
+        }
+        let Some((name, publish)) = pending.as_mut() else {
+            continue;
+        };
+        if let Some(value) = line_value_token("name", trimmed) {
+            *name = parse_string_token(&value);
+        } else if let Some(value) = line_value_token("publish", trimmed) {
+            *publish = parse_bool_token(&value);
         }
     }
-    names
+    flush(pending, &mut overrides);
+    overrides
 }
 
-/// Names of every workspace-member package, via `cargo metadata`. With
-/// `--no-deps` the reported packages are exactly the workspace members (the set
-/// release-plz resolves overrides against), so excluded crates like `lints` are
-/// correctly absent.
-fn workspace_member_names() -> Result<Vec<String>> {
+/// Every workspace member's name and manifest publish permission, via `cargo
+/// metadata`. With `--no-deps` the reported packages are exactly the workspace
+/// members (the set release-plz resolves overrides against), so excluded crates
+/// like `lints` are correctly absent.
+fn workspace_release_members() -> Result<Vec<WorkspaceReleaseMember>> {
     let json = run_stdout("cargo", &["metadata", "--no-deps", "--format-version", "1"])?;
     let meta: serde_json::Value =
         serde_json::from_str(&json).context("parsing `cargo metadata` output")?;
@@ -1014,8 +1083,25 @@ fn workspace_member_names() -> Result<Vec<String>> {
         .context("`cargo metadata` has no packages array")?;
     Ok(packages
         .iter()
-        .filter_map(|p| p["name"].as_str().map(str::to_string))
+        .filter_map(|p| {
+            Some(WorkspaceReleaseMember {
+                name: p["name"].as_str()?.to_string(),
+                publish: metadata_allows_publish(&p["publish"]),
+            })
+        })
         .collect())
+}
+
+/// Whether `cargo metadata`'s normalized `publish` field permits publishing.
+///
+/// Cargo normalizes the manifest field: unrestricted publishing (the key absent,
+/// or `publish = true`) is reported as `null`, while any restriction is a list of
+/// allowed registries — `publish = false` becomes `[]`. So an empty list is the
+/// only shape that blocks publishing outright.
+fn metadata_allows_publish(publish: &serde_json::Value) -> bool {
+    publish
+        .as_array()
+        .is_none_or(|registries| !registries.is_empty())
 }
 
 /// Analyzer-product crates that must have an explicit release-plz override.
@@ -2455,22 +2541,14 @@ fn inherits_workspace_lints(toml_src: &str) -> bool {
 
 /// Read a bare-string value (`key = "value"`) from a named table, ignoring a
 /// trailing inline comment. A hand scan rather than a TOML dependency, matching
-/// [`release_plz_override_names`]; the keys we need are simple scalars.
+/// [`release_plz_overrides`]; the keys we need are simple scalars.
 fn table_string_value(table: &str, key: &str, toml_src: &str) -> Option<String> {
-    table_value_token(table, key, toml_src)?
-        .trim()
-        .strip_prefix('"')
-        .and_then(|v| v.split('"').next())
-        .map(str::to_string)
+    parse_string_token(&table_value_token(table, key, toml_src)?)
 }
 
 /// Read a boolean value (`key = true`) from a named table.
 fn table_bool_value(table: &str, key: &str, toml_src: &str) -> Option<bool> {
-    match table_value_token(table, key, toml_src)?.trim() {
-        "true" => Some(true),
-        "false" => Some(false),
-        _ => None,
-    }
+    parse_bool_token(&table_value_token(table, key, toml_src)?)
 }
 
 /// Raw right-hand-side token for `key` within `[table]`, with any trailing
@@ -2484,17 +2562,36 @@ fn table_value_token(table: &str, key: &str, toml_src: &str) -> Option<String> {
             in_table = trimmed == header;
             continue;
         }
-        if !in_table {
-            continue;
-        }
-        if let Some(rest) = trimmed.strip_prefix(key)
-            && let Some(value) = rest.trim_start().strip_prefix('=')
-        {
-            let token = value.split('#').next().unwrap_or(value).trim();
-            return Some(token.to_string());
+        if in_table && let Some(token) = line_value_token(key, trimmed) {
+            return Some(token);
         }
     }
     None
+}
+
+/// Raw right-hand-side token for `key` on a single `key = value` line, with any
+/// trailing inline comment stripped. `None` if the line assigns another key.
+fn line_value_token(key: &str, line: &str) -> Option<String> {
+    let value = line.strip_prefix(key)?.trim_start().strip_prefix('=')?;
+    Some(value.split('#').next().unwrap_or(value).trim().to_string())
+}
+
+/// Unquote a bare-string TOML token (`"value"`).
+fn parse_string_token(token: &str) -> Option<String> {
+    token
+        .trim()
+        .strip_prefix('"')
+        .and_then(|v| v.split('"').next())
+        .map(str::to_string)
+}
+
+/// Read a boolean TOML token.
+fn parse_bool_token(token: &str) -> Option<bool> {
+    match token.trim() {
+        "true" => Some(true),
+        "false" => Some(false),
+        _ => None,
+    }
 }
 
 /// `(name, manifest_path)` for every workspace-member package, via `cargo
@@ -2941,8 +3038,22 @@ intro\n\n### 3.2 Crate layout\n\n```\npurecard/\n  vocab.rs   the vocab\n  sessi
         assert!(validate_name("..", "spec").is_err());
     }
 
+    fn override_of(name: &str, publish: bool) -> ReleasePlzOverride {
+        ReleasePlzOverride {
+            name: name.to_string(),
+            publish,
+        }
+    }
+
+    fn member_of(name: &str, publish: bool) -> WorkspaceReleaseMember {
+        WorkspaceReleaseMember {
+            name: name.to_string(),
+            publish,
+        }
+    }
+
     #[test]
-    fn release_plz_override_names_extracts_package_names() {
+    fn release_plz_overrides_extracts_names_and_publish() {
         let src = "\
 [workspace]
 changelog_update = true
@@ -2958,22 +3069,47 @@ publish = false
 name=\"xtask\"
 release = false
 ";
-        assert_eq!(release_plz_override_names(src), ["domain", "xtask"]);
+        assert_eq!(
+            release_plz_overrides(src),
+            [override_of("domain", false), override_of("xtask", true)]
+        );
     }
 
     #[test]
-    fn release_plz_override_names_ignores_non_package_name_keys() {
+    fn release_plz_overrides_reads_publish_declared_before_name() {
+        // Key order inside a table is not significant in TOML, so the scan must
+        // not depend on `name` coming first.
+        let src = "[[package]]\npublish = false\nname = \"domain\"\n";
+        assert_eq!(release_plz_overrides(src), [override_of("domain", false)]);
+    }
+
+    #[test]
+    fn release_plz_overrides_ignores_non_package_name_keys() {
         // A `name = ` under a non-`[[package]]` table must not be collected.
         let src = "[workspace]\nname = \"not-a-package\"\n";
-        assert!(release_plz_override_names(src).is_empty());
+        assert!(release_plz_overrides(src).is_empty());
     }
 
     #[test]
-    fn release_plz_override_names_strips_trailing_inline_comment() {
+    fn release_plz_overrides_strips_trailing_inline_comment() {
         // A trailing comment must not leak into the parsed name, or a valid
         // config would falsely trip the drift gate.
-        let src = "[[package]]\nname = \"domain\" # keep in sync\n";
-        assert_eq!(release_plz_override_names(src), ["domain"]);
+        let src = "[[package]]\nname = \"domain\" # keep in sync\npublish = false # ditto\n";
+        assert_eq!(release_plz_overrides(src), [override_of("domain", false)]);
+    }
+
+    #[test]
+    fn metadata_allows_publish_reads_cargos_normalized_shapes() {
+        // `cargo metadata` reports unrestricted publishing as null and any
+        // restriction as a registry list; `publish = false` becomes `[]`.
+        let registry = serde_json::Value::String("custom".to_string());
+        assert!(metadata_allows_publish(&serde_json::Value::Null));
+        assert!(metadata_allows_publish(&serde_json::Value::Array(vec![
+            registry
+        ])));
+        assert!(!metadata_allows_publish(&serde_json::Value::Array(
+            Vec::new()
+        )));
     }
 
     #[test]
@@ -2993,14 +3129,17 @@ release = false
     #[test]
     fn release_plz_validation_rejects_missing_analyzer_package_overrides() {
         let members = [
-            "libpure".to_string(),
-            "pure-analyzer-analysis".to_string(),
-            "pure-analyzer-render".to_string(),
-            PURECARD_PACKAGE.to_string(),
-            "purecard-schema-walker".to_string(),
-            "xtask".to_string(),
+            member_of("libpure", false),
+            member_of("pure-analyzer-analysis", false),
+            member_of("pure-analyzer-render", false),
+            member_of(PURECARD_PACKAGE, false),
+            member_of("purecard-schema-walker", false),
+            member_of("xtask", false),
         ];
-        let overrides = ["libpure".to_string(), "pure-analyzer-analysis".to_string()];
+        let overrides = [
+            override_of("libpure", false),
+            override_of("pure-analyzer-analysis", false),
+        ];
 
         let error = validate_release_plz_overrides(&overrides, &members)
             .expect_err("a missing analyzer package must fail release validation");
@@ -3010,6 +3149,68 @@ release = false
              pure-analyzer-render. Add the package configuration before release automation reaches \
              main."
         );
+    }
+
+    /// Regression pin for issue #277: `xtask` gained `publish = false` in its
+    /// manifest while its override kept release-plz's `publish = true` default,
+    /// and the name-only gate waved it through for six merges.
+    #[test]
+    fn release_plz_validation_rejects_publish_drift() {
+        let members = [member_of("libpure", false), member_of("xtask", false)];
+        let overrides = [override_of("libpure", false), override_of("xtask", true)];
+
+        let error = validate_release_plz_overrides(&overrides, &members)
+            .expect_err("a publish mismatch must fail release validation");
+        assert_eq!(
+            error.to_string(),
+            "release-plz.toml [[package]] overrides disagree with the crates' Cargo.toml \
+             `publish` field: xtask (release-plz.toml: publish = true, Cargo.toml: publish = \
+             false). release-plz rejects the mismatch at runtime, so leaving it reddens every \
+             push to main."
+        );
+    }
+
+    #[test]
+    fn release_plz_validation_rejects_publish_drift_in_either_direction() {
+        // A config that promises to publish less than the manifest allows is
+        // drift too — the two files are one policy, stated twice.
+        let members = [member_of("libpure", true)];
+        let overrides = [override_of("libpure", false)];
+
+        let error = validate_release_plz_overrides(&overrides, &members)
+            .expect_err("a reversed publish mismatch must fail release validation");
+        assert!(
+            error.to_string().contains(
+                "libpure (release-plz.toml: publish = false, Cargo.toml: publish = true)"
+            ),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn release_plz_validation_ignores_members_without_an_override() {
+        // release-plz only enforces `publish` on packages the config configures;
+        // `purecard-schema-walker` has no override and has never reddened a run.
+        let members = [
+            member_of("libpure", false),
+            member_of("purecard-schema-walker", false),
+        ];
+        let overrides = [override_of("libpure", false)];
+
+        assert!(validate_release_plz_overrides(&overrides, &members).is_ok());
+    }
+
+    /// The committed `release-plz.toml` must agree with the real workspace.
+    /// This is the pre-merge counterpart (constitution §2) to the post-merge
+    /// `release-plz` workflow that issue #277 left red.
+    #[test]
+    fn committed_release_plz_config_matches_the_workspace() {
+        let config = std::fs::read_to_string(workspace_root().join(RELEASE_PLZ_CONFIG))
+            .expect("read release-plz.toml");
+        let members = workspace_release_members().expect("read workspace metadata");
+
+        validate_release_plz_overrides(&release_plz_overrides(&config), &members)
+            .expect("committed release-plz.toml must match the workspace");
     }
 
     #[test]
