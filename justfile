@@ -219,8 +219,10 @@ purecard-fuzz target time="60" triple="":
 purecard-fuzz-build triple="":
     cargo +nightly fuzz build --fuzz-dir crates/pure-analyzer-purecard/fuzz {{ if triple == "" { "" } else { "--target " + triple } }}
 
-# Time-box all three PureCARD fuzz targets. The per-target loop and nested fuzz
-# manifest selection live in xtask rather than shell control flow here.
+# Time-box all five PureCARD fuzz targets — `PURECARD_FUZZ_TARGETS` (xtask) owns
+# that list and `cargo xtask check-doc-facts` holds this count to it. The
+# per-target loop and nested fuzz manifest selection live in xtask rather than
+# shell control flow here.
 purecard-fuzz-ci time="60":
     cargo xtask purecard-fuzz-ci {{ time }}
 
@@ -414,6 +416,13 @@ test-ffi:
 [working-directory('crates/pure-analyzer-purecard')]
 wheel:
     maturin build --release --features python
+
+# Install the wheel `just wheel` produced into a throwaway environment and touch
+# its exported surface: building a cdylib proves it links, not that CPython can
+# load and use it. `--no-index`/`--find-links` resolve `purecard` from the local
+# artifact, never PyPI, so this stays a test of the wheel actually built here.
+wheel-smoke:
+    uv run --no-project --isolated --python 3.12 --no-managed-python --no-index --find-links target/wheels --with purecard python -c "import purecard; purecard.Grammar; purecard.Session; purecard.compile_grammar"
 
 # Build/install the extension in uv's project-local environment, then run the
 # pinned hermetic Python tests. No pre-activated virtualenv is required.

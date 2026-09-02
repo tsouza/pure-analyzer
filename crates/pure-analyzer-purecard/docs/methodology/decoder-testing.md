@@ -123,9 +123,12 @@ then replays each string through a fresh decoder session. It proves the generato
 and recognizer agree; it cannot prove Legend compilation.
 
 `mask_properties.rs` and `l2_properties.rs` cover stateful invariants under
-generated inputs. The workspace-excluded nightly fuzz crate has three targets:
-`accept_token`, `allowed_mask`, and `schema_from_json`. Failing fuzz and
-property inputs become committed regressions.
+generated inputs. The workspace-excluded nightly fuzz crate has five fuzz
+targets: `accept_token`, `allowed_mask`, `schema_from_json`,
+`schema_walk_generation`, and `spec_equivalence`. The authoritative list is
+`PURECARD_FUZZ_TARGETS` (`xtask/src/tasks.rs`); `cargo xtask check-doc-facts`
+holds this prose to it. Failing fuzz and property inputs become committed
+regressions.
 
 ## Implemented test locations
 
@@ -159,12 +162,16 @@ property inputs become committed regressions.
   tests without Docker or tokenizer downloads.
 - `just coverage` and `just test-mutation` run the root workspace coverage
   and mutation jobs separately from the fast loop.
-- `just purecard-fuzz-ci` time-boxes the three decoder fuzz targets; the
+- `just purecard-fuzz-ci` time-boxes the five decoder fuzz targets; the
   dedicated workflow also guards build rot and scheduled fuzzing.
 - `just qwen-oracle` runs actual Qwen token-ID replay. Its workflow is scheduled
   and manually dispatchable, not a per-PR network dependency.
-- `just wheel` builds the unpublished verification wheel; the wheel workflow
-  smoke-tests supported Python/platform combinations.
+- `just wheel` builds the unpublished verification wheel; `just wheel-smoke`
+  installs that wheel into a throwaway environment and imports its exported
+  surface. The wheel workflow runs both on `ubuntu-latest` under CPython 3.12,
+  producing and smoke-importing a single manylinux abi3 wheel. The wheel's abi3
+  floor (`requires-python >=3.9`) and every non-Linux platform are declared, not
+  exercised — no matrix covers them.
 - `just test-legend` owns compose startup, health wait, package-scoped Legend
   tests, and teardown. It runs nightly (`purecard-legend.yml`, plus dispatch)
   and on demand locally, never per PR — the stack is too heavy for that lane.
