@@ -1004,3 +1004,42 @@ fn unknown_higher_order_flows_emit_typed_under_resolution() {
     );
     assert_eq!(failure.step().name(), &name("name"));
 }
+
+#[test]
+fn an_unknown_target_stereotype_under_resolves_generated_point_navigation() {
+    let graph = load_pure_documents(&[PureDocument::new(
+        "uncertain-temporal.pure",
+        r#"
+Class <<temporal.somethingNew>> model::Target
+{
+  name: String[1];
+}
+
+Class model::Source
+{
+  <<milestoning.generatedmilestoningproperty>>
+  target(): model::Target[0..1] {};
+}
+"#,
+    )])
+    .expect("fixture must load");
+    let resolver = NavigationResolver::new(&graph);
+    let source = class_value(&resolver, "Source");
+
+    let outcome = resolver.resolve(
+        &source,
+        &[NavigationStep::call(name("target"), ONE_ARGUMENT)],
+    );
+
+    let NavigationResolution::UnderResolved(under_resolution) = outcome else {
+        panic!("an unrecognized target stereotype must not decide arity, got {outcome:#?}");
+    };
+    let NavigationUnderResolution::AtStep { failure, reason } = under_resolution else {
+        panic!("under-resolution must retain its failed step");
+    };
+    assert!(matches!(
+        reason.as_ref(),
+        NavigationUnderResolutionReason::TemporalArity(_)
+    ));
+    assert_eq!(failure.step().name(), &name("target"));
+}
