@@ -262,6 +262,11 @@ jobs:
       # run (release-plz.yml only fires on push to main).
       - name: release-plz config check
         run: just release-plz-check
+      # `purecard` is the one publishable crate. Verify the tarball crates.io
+      # would receive still compiles standalone, so a dropped source asset or a
+      # stripped path dependency fails here rather than mid-release.
+      - name: crates.io package verification
+        run: just package
 
   # --- API stability: semver-checks + public-api snapshot ------------------
   api-stability:

@@ -63,11 +63,11 @@ legend-engine = { max-threads = 1 }
 # generous override here is not loosening that budget, just scoping it to
 # the lane it was never meant to bound.
 [[profile.default.overrides]]
-filter = 'binary_id(pure-analyzer-purecard::legend_completeness) or binary_id(pure-analyzer-purecard::live_legend_schema_walk_compile) or binary_id(pure-analyzer-purecard::real_model_legend_compile)'
+filter = 'binary_id(purecard::legend_completeness) or binary_id(purecard::live_legend_schema_walk_compile) or binary_id(purecard::real_model_legend_compile)'
 test-group = 'legend-engine'
 slow-timeout = { period = "60s", terminate-after = 5 }
 
 [[profile.ci.overrides]]
-filter = 'binary_id(pure-analyzer-purecard::legend_completeness) or binary_id(pure-analyzer-purecard::live_legend_schema_walk_compile) or binary_id(pure-analyzer-purecard::real_model_legend_compile)'
+filter = 'binary_id(purecard::legend_completeness) or binary_id(purecard::live_legend_schema_walk_compile) or binary_id(purecard::real_model_legend_compile)'
 test-group = 'legend-engine'
 slow-timeout = { period = "60s", terminate-after = 5 }

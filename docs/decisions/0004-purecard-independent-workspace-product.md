@@ -1,6 +1,7 @@
 # 0004. Keep PureCARD as an independent workspace product
 
-- **Status:** Accepted
+- **Status:** Accepted; rule 6 superseded by
+  [ADR-0006](0006-purecard-resumes-publication.md)
 - **Date:** 2026-08-26
 - **Deciders:** Project maintainer and agent
 

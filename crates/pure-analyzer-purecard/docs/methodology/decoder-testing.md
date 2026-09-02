@@ -166,12 +166,23 @@ regressions.
   dedicated workflow also guards build rot and scheduled fuzzing.
 - `just qwen-oracle` runs actual Qwen token-ID replay. Its workflow is scheduled
   and manually dispatchable, not a per-PR network dependency.
-- `just wheel` builds the unpublished verification wheel; `just wheel-smoke`
-  installs that wheel into a throwaway environment and imports its exported
-  surface. The wheel workflow runs both on `ubuntu-latest` under CPython 3.12,
-  producing and smoke-importing a single manylinux abi3 wheel. The wheel's abi3
-  floor (`requires-python >=3.9`) and every non-Linux platform are declared, not
-  exercised — no matrix covers them.
+- `just wheel` builds a wheel locally; `just wheel-smoke` installs one into a
+  throwaway environment and imports its exported surface. The wheel workflow
+  runs `wheel-smoke` across five platforms — manylinux x86_64 and aarch64, macOS
+  x86_64 and arm64, and Windows x64 — under CPython 3.12. It does not call
+  `just wheel`: released wheels are built by `PyO3/maturin-action`, which owns
+  the manylinux containers and `--strip`, so the local recipe and the released
+  artifact are deliberately not the same build. Every leg builds natively on its
+  own architecture, so each smoke-import genuinely loads the wheel that leg
+  produced rather than only proving the cdylib linked. The functional Python
+  suite (`just test-python`) runs once, on the Linux x86_64 leg: it exercises
+  PyO3 marshaling, which is platform-independent, not packaging.
+  `purecard-publish.yml` reuses this same matrix and uploads its wheels to PyPI
+  on a published GitHub Release.
+
+  What remains declared rather than exercised is the abi3 floor: wheels are
+  built and imported only under CPython 3.12, so `requires-python >=3.9`
+  asserts forward compatibility that no interpreter matrix checks.
 - `just test-legend` owns compose startup, health wait, package-scoped Legend
   tests, and teardown. It runs nightly (`purecard-legend.yml`, plus dispatch)
   and on demand locally, never per PR — the stack is too heavy for that lane.

@@ -40,6 +40,26 @@ describe("findWarnings — benign allowlisted matches", () => {
     expect(findWarnings(log)).toEqual([]);
   });
 
+  test("the install-action partner-runner-images bash-startup retry is NOT an offender (regression)", () => {
+    // `taiki-e/install-action` prints this annotation and retries when a
+    // GitHub-hosted partner runner image's bash startup transiently fails
+    // (actions/partner-runner-images#169) — self-healing, and reproduced
+    // against this repo's own 5-platform wheel matrix (PR #329) three separate
+    // times before being allowlisted.
+    const log = line(
+      '    Write-Output "::warning::install-action: installation failed due to bash startup failure (<https://github.com/actions/partner-runner-images/issues/169>); retrying..."',
+    );
+    expect(findWarnings(log)).toEqual([]);
+  });
+
+  test("a bash-startup warning from an unrelated tool still fails the sweep", () => {
+    // The install-action allowlist entry is matched on its exact wording and
+    // issue citation, not just "bash startup failure" — a different tool
+    // hitting a similar-sounding problem must still be caught.
+    const log = line("::warning::some-other-action: installation failed due to bash startup failure; giving up");
+    expect(findWarnings(log)).toEqual([log]);
+  });
+
   test("every ALLOWLIST entry is a documented, non-empty exception", () => {
     for (const entry of ALLOWLIST) {
       expect(entry.re).toBeInstanceOf(RegExp);

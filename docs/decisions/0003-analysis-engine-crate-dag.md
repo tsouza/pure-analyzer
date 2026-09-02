@@ -23,7 +23,7 @@ reverse edge. This ratification corrects that ordering and distinguishes the
 processing pipeline from Cargo's dependency-arrow direction.
 
 This ADR governs **only the `pure-analyzer` product**. The later-migrated
-`pure-analyzer-purecard` crate is an independent sibling product governed by
+`purecard` crate is an independent sibling product governed by
 [ADR-0004](0004-purecard-independent-workspace-product.md) and PureCARD's nested
 [ADR-0009](../../crates/pure-analyzer-purecard/docs/decisions/0009-monorepo-placement.md).
 

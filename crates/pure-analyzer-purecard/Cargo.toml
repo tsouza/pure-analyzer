@@ -1,5 +1,10 @@
 [package]
-name = "pure-analyzer-purecard"
+# The crates.io package identity, deliberately NOT the
+# `crates/pure-analyzer-purecard/` directory it lives in: this crate was
+# published standalone as `purecard` before migrating here, and resuming under
+# any other name would strand that listing and mint a confusing second one. The
+# workspace-member path stays as-is; only the package identity is `purecard`.
+name = "purecard"
 description = "Emitted-subset grammar decoder for Legend Pure with a partial schema-aware token-mask overlay."
 edition.workspace = true
 version.workspace = true
@@ -7,12 +12,33 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 rust-version.workspace = true
-# Formerly published standalone (crates.io `purecard` v0.1.0); unpublished as
-# part of migrating into this workspace (docs/decisions — migrate-purecard).
-# The publish-oriented metadata (keywords/categories/readme/include
-# allowlist) that only mattered for that standalone publish is dropped along
-# with it, rather than left as dead weight implying a publish that won't happen.
-publish = false
+# The one publishable crate in a workspace that is otherwise uniformly
+# `publish = false`; stated explicitly rather than omitted so the exception is
+# visible at the same line every sibling manifest states the rule, and so
+# `cargo xtask release-plz-check` compares two explicit values.
+publish = true
+# Restored alongside `publish`, since these only ever mattered for a real
+# listing: crates.io renders `readme` and indexes `keywords`/`categories`. No
+# `license-file`: the only LICENSE copy is at the repository root, outside this
+# package root and therefore unreachable, so the SPDX `license` field inherited
+# from `[workspace.package]` is the authoritative declaration.
+readme = "README.md"
+keywords = ["grammar", "constrained-decoding", "llm", "parser", "legend-pure"]
+categories = ["parsing", "text-processing"]
+# No `include`/`exclude`: Cargo's defaults ship the crate directory (minus the
+# nested `fuzz`/`lints`/`schema-walker` packages, which it drops on its own) for
+# 850 KiB compressed — unremarkable for crates.io, and the simplest thing that
+# is correct.
+#
+# An `include` allowlist was tried and rejected. It silently dropped
+# `src/grammar/emitted_subset.json`, which reaches the build only through
+# `include_str!`, so the packaged crate did not compile; any future source asset
+# would reintroduce that failure. Narrowing it to skip the gold corpus also
+# excluded the auto-discovered `tests/*.rs` targets, making Cargo warn once per
+# test on every run — rot that constitution §2 says to fix at the source rather
+# than allowlist away. Shipping the corpus costs 341 KiB and keeps the shipped
+# tests able to find the fixtures they read. `just package` verify-builds this
+# tarball on every PR.
 
 # The core's dependency allowlist — `{ thiserror, serde, serde_json }` — is
 # enforced by `cargo xtask check-core-deplight`, scoped to this crate only
@@ -26,12 +52,11 @@ publish = false
 # as an ordinary library. The default build produces both without pyo3 (the
 # `python` feature is off).
 [lib]
-# The package/workspace-member name is `pure-analyzer-purecard` (matches this
-# workspace's crate-naming convention), but the actual Rust/Python-facing
-# library identifier stays `purecard` — every `use purecard::...` in
+# Pinned, not inferred. It currently matches Cargo's default (the package is
+# also `purecard`), but this is the identifier every `use purecard::...` in
 # tests/benches, the PyO3 `#[pymodule]`, and `import purecard` on the Python
-# side are unaffected by the package rename. Without this, Cargo's default
-# (package name with `-` -> `_`) would silently rename the library too.
+# side binds to — and the Python wheel's module name must equal it. Stating it
+# means a future package rename cannot silently rename the library with it.
 name = "purecard"
 crate-type = ["cdylib", "rlib"]
 

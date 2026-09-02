@@ -1,7 +1,7 @@
 # Vetting: self_cell 1.3.0
 
 - Purpose: co-locates the `Rc<CompiledGrammar>` owner and the borrowing
-  `DecoderSession` in `pure-analyzer-purecard`'s PyO3 boundary (`src/ffi.rs`)
+  `DecoderSession` in `purecard`'s PyO3 boundary (`src/ffi.rs`)
   without hand-written `unsafe` self-referential-struct code — the safe,
   audited crate for exactly this pattern. Optional, feature-gated (`python`),
   off in the default build.
@@ -19,7 +19,7 @@
   migration.
 - Supply chain: `cargo audit` clean. Its own internal unsafe (the
   self-referential-struct trick) is encapsulated inside `self_cell`'s crate,
-  verified not to leak into `pure-analyzer-purecard`'s own
+  verified not to leak into `purecard`'s own
   `#![forbid(unsafe_code)]` (the crate compiles clean under it — see PR
   verification).
 - Fit / adaptation cost: exact match, zero adaptation — purpose-built for

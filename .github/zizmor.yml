@@ -1,6 +1,5 @@
-# zizmor runs with its strict default posture. This is the sole accepted
-# exception and is scoped to the workflow that must retain Git credentials to
-# push release-plz's branch and tags.
+# zizmor runs with its strict default posture. Every entry below is an accepted
+# exception, each scoped to the single workflow that needs it.
 rules:
   # actions/labeler uses the base branch's pinned action and label config; it
   # never checks out or executes pull-request code. pull_request_target is
@@ -9,6 +8,21 @@ rules:
     ignore:
       - labeler.yml
 
+  # release-plz must retain Git credentials to push its release branch and tags.
   artipacked:
     ignore:
       - release-plz.yml
+
+  # PyPI uploads authenticate with a project-scoped API token held as a
+  # repository secret. A deliberate choice over OIDC Trusted Publishing, weighed
+  # and recorded in ADR-0006: Trusted Publishing would move half the credential
+  # into PyPI-side project settings this repository cannot verify, review, or
+  # reproduce, so a drift there would surface only as a failed release. One
+  # secret, rotatable from one place, is the trade we want.
+  #
+  # Scoped to the PyPI workflow alone. The only other registry credential is
+  # release-plz's CARGO_REGISTRY_TOKEN, which this rule does not cover — it
+  # audits PyPI publishing actions specifically.
+  use-trusted-publishing:
+    ignore:
+      - purecard-publish.yml

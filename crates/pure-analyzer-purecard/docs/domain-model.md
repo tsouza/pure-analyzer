@@ -47,9 +47,11 @@ apply.
 ### RepositoryBoundary
 
 **What it is.** PureCARD is an independent sibling product colocated in the Pure
-Analyzer monorepo. Its Cargo package is `pure-analyzer-purecard`; its Rust
-library and Python module are `purecard`. The package is unpublished
-(`publish = false`), and wheels are verification artifacts rather than releases.
+Analyzer monorepo. Its Cargo package, Rust library, and Python module are all
+named `purecard`; only its workspace directory is `crates/pure-analyzer-purecard/`.
+The package has `publish = true` — alone in this workspace — and releases to
+crates.io, with its abi3 wheels going to PyPI from the same GitHub Release
+(ADR-0011).
 
 **Invariants.** PureCARD and the analyzer have zero dependency edges in either
 direction. Root `just` recipes, CI, the constitution, and the canonical

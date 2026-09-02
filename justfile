@@ -250,7 +250,7 @@ qwen-oracle: qwen-tokenizer-fetch
 # Run the Qwen oracle from an already-populated cache (the CI-friendly entry
 # point). `-p` prevents Cargo from applying the feature to another member.
 qwen-oracle-run:
-    QWEN_TOKENIZER_JSON={{ quote(purecard_qwen_tokenizer) }} cargo test -p pure-analyzer-purecard --features qwen-oracle --test qwen_soundness -- --nocapture
+    QWEN_TOKENIZER_JSON={{ quote(purecard_qwen_tokenizer) }} cargo test -p purecard --features qwen-oracle --test qwen_soundness -- --nocapture
 
 # Fetch both immutable byte-level BPE tokenizers used to verify the committed
 # fused-navigation fixture. Each recipe uses `curl -z` to preserve fresh caches.
@@ -263,12 +263,12 @@ fused-tokenizers: fused-tokenizers-fetch
 
 # Run the fused-tokenizer comparison from already-populated caches.
 fused-tokenizers-run:
-    QWEN_TOKENIZER_JSON={{ quote(purecard_qwen_tokenizer) }} GPT4_TOKENIZER_JSON={{ quote(purecard_gpt4_tokenizer) }} cargo test -p pure-analyzer-purecard --features fused-extract --test fused_tokenizer_extract -- --nocapture
+    QWEN_TOKENIZER_JSON={{ quote(purecard_qwen_tokenizer) }} GPT4_TOKENIZER_JSON={{ quote(purecard_gpt4_tokenizer) }} cargo test -p purecard --features fused-extract --test fused_tokenizer_extract -- --nocapture
 
 # Intentionally regenerate the committed fixture after a reviewed tokenizer or
 # extractor change. The resulting diff must be inspected before commit.
 fused-tokenizers-write: fused-tokenizers-fetch
-    QWEN_TOKENIZER_JSON={{ quote(purecard_qwen_tokenizer) }} GPT4_TOKENIZER_JSON={{ quote(purecard_gpt4_tokenizer) }} WRITE_FUSED_FIXTURE=1 cargo test -p pure-analyzer-purecard --features fused-extract --test fused_tokenizer_extract -- --nocapture
+    QWEN_TOKENIZER_JSON={{ quote(purecard_qwen_tokenizer) }} GPT4_TOKENIZER_JSON={{ quote(purecard_gpt4_tokenizer) }} WRITE_FUSED_FIXTURE=1 cargo test -p purecard --features fused-extract --test fused_tokenizer_extract -- --nocapture
 
 # ---------------------------------------------------------------------------
 # PureCARD real-model inference (issue #58)
@@ -346,8 +346,8 @@ machete:
     cargo machete
 
 # Assert that PureCARD's non-optional shipped dependency set remains the three
-# ADR-approved runtime crates. The migrated crate is unpublished, so this does
-# not restore the standalone repository's obsolete package-content allowlist.
+# ADR-approved runtime crates. Scoped to the dependency surface only; that the
+# published tarball is complete and compiles is `just package`'s job.
 check-core-deplight:
     cargo xtask check-core-deplight
 
@@ -374,6 +374,25 @@ check-doc-links:
 # instead of the post-merge trunk run. Delegates to xtask.
 release-plz-check:
     cargo xtask release-plz-check
+
+# Verify the `.crate` tarball crates.io would actually receive. `cargo package`
+# assembles the tarball, extracts it, and builds it standalone -- the same
+# verification `cargo publish` runs, but at a point where failing is free. It
+# catches a source asset that packaging rules dropped
+# (`src/grammar/emitted_subset.json` reaches the build only via `include_str!`)
+# and a path dependency Cargo strips on publish. Nothing is uploaded.
+#
+# Scope, precisely: the verify step builds lib and bins only, never tests or
+# benches. So this proves the *library* a consumer gets compiles, not that the
+# test files shipped alongside it would run -- they read corpus fixtures by
+# relative path and are not a published contract.
+#
+# `--allow-dirty` drops Cargo's working-tree-cleanliness assertion, which CI
+# always satisfies and a local pre-PR run generally does not; without it the
+# gate would fail for a reason CI can never reproduce (constitution section 2).
+# Tarball contents are unaffected by the flag.
+package:
+    cargo package --package purecard --allow-dirty
 
 # Semantic-versioning check for the public API of the libraries.
 semver:
@@ -404,12 +423,12 @@ docs:
 
 # Type-check only PureCARD's feature-gated PyO3 boundary.
 check-ffi:
-    cargo check -p pure-analyzer-purecard --features python
+    cargo check -p purecard --features python
 
 # Exercise the Rust side of the PyO3 boundary so mutation testing can observe
 # its marshaling delegates without rebuilding a wheel for every mutant.
 test-ffi:
-    cargo test -p pure-analyzer-purecard --features python-test --lib
+    cargo test -p purecard --features python-test --lib
 
 # Build PureCARD's abi3 wheel. Run from the nested crate so maturin discovers
 # its pyproject.toml rather than looking for one at the workspace root.
@@ -521,7 +540,7 @@ ci: no-work-ledger generated-paths-gated
 # cargo-fuzz's sanitizers) — so they are only enforced in CI. Run the relevant fuzz-smoke directly with `just fuzz <target>
 # 60` if you have nightly. Use before a PR when a change touches what the fast
 # gate skips.
-ci-full: ci coverage test-mutation deny audit vet machete release-plz-check semver public-api sweep no-shell-scripts postponed-markers lint-purecard-stale gates-run-in-ci docs test-scripts lint-actions zizmor
+ci-full: ci coverage test-mutation deny audit vet machete release-plz-check package semver public-api sweep no-shell-scripts postponed-markers lint-purecard-stale gates-run-in-ci docs test-scripts lint-actions zizmor
     @echo "ci-full: ran every locally reproducible PR gate; the no-warnings log sweep and fuzz-smoke are enforced only in CI"
 
 # Install git hooks (managed by lefthook.yml). Also run automatically by the

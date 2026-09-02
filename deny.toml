@@ -19,7 +19,7 @@ yanked = "deny"
 ignore = [
     # `paste` is unmaintained (informational advisory, no known vulnerability). It
     # is a transitive dep of `tokenizers`, which is itself an OPTIONAL, feature-gated
-    # (`qwen-oracle`/`fused-extract`), test-only dependency of `pure-analyzer-purecard`
+    # (`qwen-oracle`/`fused-extract`), test-only dependency of `purecard`
     # that never ships in a default build. tokenizers still pulls it, so no upstream
     # fix is available; the advisory is accepted only for that isolated, on-demand
     # real-tokenizer oracle tree (ported from purecard's own pre-migration exception).

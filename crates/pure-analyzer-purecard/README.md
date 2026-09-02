@@ -9,8 +9,10 @@ of [PICARD](https://arxiv.org/abs/2109.05093), implemented as a byte-level Rust
 decoder with an optional Python boundary.
 
 PureCARD is an **independent sibling product** colocated with Pure Analyzer in
-this monorepo. The Cargo package is `pure-analyzer-purecard`; its Rust library
-and Python module remain `purecard`. Neither product depends on the other's
+this monorepo. One name covers everything a consumer names it by: the Cargo
+package, the Rust library, and the Python module are all `purecard`, and only
+the workspace directory is `crates/pure-analyzer-purecard/`. The crate publishes
+to crates.io and its abi3 wheels to PyPI. Neither product depends on the other's
 internals. They share repository governance and automation, not a runtime
 architecture.
 
@@ -76,9 +78,10 @@ The `python` Cargo feature exposes the Rust library through a thin PyO3 module
 named `purecard`. Python owns model inference, tokenization orchestration, and
 sampling; the boundary constrains only the final-query span.
 
-The Cargo package has `publish = false`. Maturin wheels are CI and integration
-verification artifacts only; the monorepo does not publish this package or its
-wheels as a release product.
+The Cargo package has `publish = true` — alone in this workspace — and releases
+to crates.io as `purecard`; its maturin wheels release to PyPI under the same
+name. Both are cut from release-plz's release PR, on a published GitHub Release,
+so no ordinary merge to `main` ships anything.
 
 ## Development and governance
 

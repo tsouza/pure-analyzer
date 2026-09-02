@@ -5,9 +5,8 @@
 //! The type is **pure data** — no I/O, no network, no Legend call. The host
 //! populates it once at session init (§6.3) and hands it to
 //! [`DecoderSession::with_schema`](crate::DecoderSession::with_schema). Ingress
-//! is JSON ([`Schema::from_json`], §9); `serde` is the sole reason the unpublished
-//! migrated core carries `serde`/`serde_json` (the `check-core-deplight` allowlist
-//! widen).
+//! is JSON ([`Schema::from_json`], §9); `serde` is the sole reason the core
+//! carries `serde`/`serde_json` (the `check-core-deplight` allowlist widen).
 
 use std::collections::HashMap;
 

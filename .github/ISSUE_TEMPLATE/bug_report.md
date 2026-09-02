@@ -28,7 +28,7 @@ Minimal steps or a failing test. The more deterministic, the faster the fix.
 
 ## Environment
 
-- Product (`pure-analyzer` or `pure-analyzer-purecard`):
+- Product (`pure-analyzer` or `purecard`):
 - Version / commit:
 - OS + arch:
 - `rustc --version`:

@@ -5,9 +5,10 @@ constrained-decoding library).**
 
 - **OSS project name:** `PureCARD` — _Pure_ + _PICARD_ lineage; reads as the
   "reference **card** of legal moves" for Pure generation.
-- **Package / modules:** the Cargo package is `pure-analyzer-purecard`; the Rust
-  library and Python `#[pymodule]` remain `purecard`. There is no `picard_pure`
-  identifier in the code.
+- **Package / modules:** `purecard` names the Cargo package, the Rust library,
+  and the Python `#[pymodule]` alike; only the workspace directory differs
+  (`crates/pure-analyzer-purecard/`). There is no `picard_pure` identifier in
+  the code.
 - **Repository placement:** an independent sibling product colocated in the Pure
   Analyzer monorepo, with zero dependency edges in either direction
   ([ADR-0009](../decisions/0009-monorepo-placement.md)).

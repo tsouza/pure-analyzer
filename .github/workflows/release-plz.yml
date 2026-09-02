@@ -3,6 +3,20 @@ name: release-plz
 # PR-based releases: on push to main, release-plz opens/updates a release PR
 # (version bumps + changelog). Merging that PR triggers the tag/publish run.
 # Nothing publishes off a normal feature merge.
+#
+# TOKEN — this workflow runs on the default GITHUB_TOKEN, and that has one
+# consequence worth knowing before you rely on it: GitHub deliberately does not
+# start workflow runs from events created with GITHUB_TOKEN. release-plz creates
+# the GitHub Release, so under this token that release fires no `on: release`
+# workflow. crates.io publishing is unaffected (release-plz uploads directly,
+# below), but PyPI publishing is not — `purecard-publish.yml` is release-
+# triggered, so it has to be started from its own `workflow_dispatch` after a
+# release, and it is written to expect exactly that.
+#
+# To make the PyPI half automatic, add a RELEASE_PLZ_TOKEN secret (a PAT or
+# GitHub App token with contents + pull-requests write) and use it for both the
+# checkout `token:` and the action's `GITHUB_TOKEN:` below. That is a
+# credential change, so it is left to the maintainer rather than made here.
 
 on:
   push:
@@ -34,9 +48,12 @@ jobs:
         uses: release-plz/action@2eb1d8bcb770b4c48ccfaad919734b38b51958c9 # v0.5.131
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # No CARGO_REGISTRY_TOKEN: crates are `publish = false` (deployable
-          # server, not published libraries). If you later publish a crate, add
-          # `CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}` here.
+          # Publishes `purecard`, the one crate whose manifest sets
+          # `publish = true`. Every analyzer crate is `publish = false`, so
+          # release-plz skips them regardless of this token being present;
+          # `just release-plz-check` keeps that manifest/config agreement
+          # honest pre-merge.
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
   # Warnings-are-errors net (constitution §2): sweep this run's job log for a
   # tool warning that exited 0 (e.g. a release-plz deprecation notice). Same

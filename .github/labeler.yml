@@ -32,6 +32,8 @@ python:
           - 'crates/pure-analyzer-purecard/pyproject.toml'
           - 'crates/pure-analyzer-purecard/uv.lock'
           - '.github/workflows/purecard-wheels.yml'
+          - '.github/workflows/purecard-wheels-build.yml'
+          - '.github/workflows/purecard-publish.yml'
 security:
   - changed-files:
       - any-glob-to-any-file:

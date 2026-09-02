@@ -27,7 +27,7 @@ Every rule is tagged. If a rule is untagged, treat it as PROTECTED.
 - `#![deny(missing_docs)]` on every public crate (`pure-analyzer-lexer`,
   `pure-analyzer-syntax`, `pure-analyzer-parser`, `pure-analyzer-model`,
   `pure-analyzer-resolve`, `pure-analyzer-analysis`, `pure-analyzer-diagnostics`,
-  `libpure`, `pure-analyzer-cli`, `pure-analyzer-purecard`). Public items are
+  `libpure`, `pure-analyzer-cli`, `purecard`). Public items are
   documented or they do not merge.
 - The analyzer product follows the processing pipeline in ADR-0003: `lexer →
   syntax → parser → model → resolve → analysis → libpure → cli`,
@@ -36,8 +36,8 @@ Every rule is tagged. If a rule is untagged, treat it as PROTECTED.
   `pure-analyzer-model`, and the reverse edge is forbidden. Only analyzer front
   ends may depend on a renderer (`ariadne`, `codespan-reporting`) or protocol
   crate (`clap`, `tower-lsp`/`lsp-types`).
-- The umbrella contains a second, independent product,
-  `pure-analyzer-purecard`
+- The umbrella contains a second, independent product, the `purecard` crate
+  (at `crates/pure-analyzer-purecard/`)
   ([ADR-0004](docs/decisions/0004-purecard-independent-workspace-product.md) and
   its nested
   [ADR-0009](crates/pure-analyzer-purecard/docs/decisions/0009-monorepo-placement.md)).
@@ -185,10 +185,12 @@ This repository is an umbrella for two Legend Pure products:
 - **`pure-analyzer`** is a deterministic, standalone static-analysis toolchain
   for the modern `Relation<>` dialect. Its crates follow the analyzer dependency
   direction defined by ADR-0003.
-- **`pure-analyzer-purecard` (PureCARD)** is a grammar-constrained decoder with
-  a fixed emitted-subset recognizer and an optional schema overlay. It is an
-  independently owned, unpublished product (`publish = false`; wheels are CI
-  verification artifacts, not releases).
+- **`purecard` (PureCARD)** is a grammar-constrained decoder with a fixed
+  emitted-subset recognizer and an optional schema overlay. It is an
+  independently owned and independently released product: the crate publishes to
+  crates.io and its abi3 wheels to PyPI, both cut from release-plz's release PR
+  and never from a bare merge to `main`. Release authority over it is its own,
+  not the analyzer's.
 
 Both products are mechanical and domain-agnostic: no customer data or private
 domain content belongs in either. Their independent-product boundary is a

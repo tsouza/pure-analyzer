@@ -6,8 +6,9 @@ _[Spec index](README.md) · [domain model](../domain-model.md)_
 
 PureCARD is an independent sibling product inside the Pure Analyzer monorepo.
 The root workspace, `just`, CI, constitution, and methodology orchestrate it,
-but neither product may depend on the other's internals. The Cargo package is
-`pure-analyzer-purecard`; the Rust library and Python module are `purecard`
+but neither product may depend on the other's internals. The Cargo package, the
+Rust library, and the Python module are all `purecard`; only the workspace
+directory is `crates/pure-analyzer-purecard/`
 ([ADR-0009](../decisions/0009-monorepo-placement.md)).
 
 ### 3.1 CFG skeleton (L1) + semantic narrowing (L2)
@@ -29,8 +30,8 @@ adds the partial L2 overlay.
 
 ### 3.2 Crate layout
 
-Single Cargo package, `pure-analyzer-purecard`, whose Rust library is named
-`purecard`, with an optional PyO3 feature exposing bindings. Internal modules
+Single Cargo package, `purecard`, whose Rust library carries that same name,
+with an optional PyO3 feature exposing bindings. Internal modules
 (the shipped layout):
 
 ```
@@ -212,8 +213,9 @@ sess.accept_token(tok_id)         # advance; raises on illegal token
 sess.is_complete()                # bool
 ```
 
-Maturin packages this module into a wheel to verify the boundary. The Cargo
-package has `publish = false`, and the wheel is not a published release artifact.
+Maturin packages this module into the abi3 wheel that releases to PyPI as
+`purecard`, built and smoke-imported natively on Linux x86_64/aarch64, macOS
+x86_64/arm64, and Windows x64.
 
 ### 9.3 Integration boundary (host code lives elsewhere, stated so the API is right)
 

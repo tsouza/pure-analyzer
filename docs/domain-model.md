@@ -1,8 +1,8 @@
 # Domain Model
 
 The durable domain model of the `pure-analyzer` umbrella. The repository holds
-two independent products: `pure-analyzer`, a static analyzer, and
-`pure-analyzer-purecard`, a constrained decoder. PureCARD's product contract
+two independent products: `pure-analyzer`, a static analyzer, and `purecard`,
+a constrained decoder. PureCARD's product contract
 lives in its [nested documentation](../crates/pure-analyzer-purecard/docs/).
 
 This document is **EVOLVABLE**. It is the elaboration of the domain section of
@@ -87,9 +87,9 @@ reject during language-model decoding.
 emitted-subset PDA and, when given a schema, narrows tokens only at the positions
 covered by its N/T rules. These constraints are not a general Pure syntax or
 schema-validity guarantee, and they do not establish semantic faithfulness. The
-migrated Cargo package remains
-unpublished (`publish = false`); Python wheels built by CI are verification
-artifacts only.
+Cargo package is published to crates.io as `purecard` and its abi3 wheels to
+PyPI, both released from release-plz's release PR and never from a bare merge
+to `main`.
 
 **Relationships.** PureCARD is a sibling product, not an analyzer front end or
 a node in ADR-0003's crate DAG. It owns its decoder implementation, nested docs,
