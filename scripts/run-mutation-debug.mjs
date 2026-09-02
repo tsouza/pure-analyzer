@@ -27,6 +27,7 @@ export const SNAPSHOT_TAIL_LINES = 80;
 export const SNAPSHOT_LINE_LIMIT = 1_000;
 export const MEMORY_MAX_BYTES = 6 * 1024 * 1024 * 1024;
 export const PIDS_MAX = 2_048;
+export const MUTATION_CARGO_BUILD_JOBS = "1";
 export const INNER_WALL_LIMIT = "25m";
 export const INNER_KILL_GRACE = "30s";
 export const OUTER_WALL_LIMIT_MS = 26 * 60 * 1_000;
@@ -230,6 +231,11 @@ export function containedCommand({ wallLimit, killGrace, mutationCommand }) {
   ];
 }
 
+/** Apply the fixed build parallelism policy to the contained mutation child. */
+export function mutationEnvironment(environment) {
+  return { ...environment, CARGO_BUILD_JOBS: MUTATION_CARGO_BUILD_JOBS };
+}
+
 /** Write to an inherited stream without buffering excess child output here. */
 export function writeWithBackpressure(output, value) {
   return new Promise((resolve, reject) => {
@@ -265,8 +271,9 @@ async function runChecked(command, options) {
   return result;
 }
 
-async function runWithInheritedStdio(command) {
+async function runWithInheritedStdio(command, environment = process.env) {
   const child = Bun.spawn(command, {
+    env: environment,
     stdin: "inherit",
     stdout: "inherit",
     stderr: "inherit",
@@ -1081,7 +1088,10 @@ async function runContainedChild(argv) {
     stdout: "inherit",
     stderr: "inherit",
   });
-  const status = await runWithInheritedStdio(containedCommand(invocation));
+  const status = await runWithInheritedStdio(
+    containedCommand(invocation),
+    mutationEnvironment(process.env),
+  );
   await runWithInheritedStdio(["sccache", "--show-stats"]).catch(() => {});
   await runWithInheritedStdio(["sccache", "--stop-server"]).catch(() => {});
   return status;

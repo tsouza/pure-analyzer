@@ -6,6 +6,7 @@ import {
   INNER_KILL_GRACE,
   INNER_WALL_LIMIT,
   MEMORY_MAX_BYTES,
+  MUTATION_CARGO_BUILD_JOBS,
   OUTER_FINALIZATION_RESERVE_MS,
   OUTER_TERMINATION_START_MS,
   OUTER_WALL_LIMIT_MS,
@@ -13,6 +14,7 @@ import {
   MutationRunner,
   SnapshotCoordinator,
   containedCommand,
+  mutationEnvironment,
   parseInvocation,
   runCommand,
   writeWithBackpressure,
@@ -95,6 +97,13 @@ test("the contained command retains the hard timeout contract", () => {
   ]);
   expect(MEMORY_MAX_BYTES).toBe(6 * 1024 * 1024 * 1024);
   expect(PIDS_MAX).toBe(2_048);
+  expect(MUTATION_CARGO_BUILD_JOBS).toBe("1");
+});
+
+test("pins Cargo build parallelism inside the contained mutation process", () => {
+  expect(
+    mutationEnvironment({ CARGO_BUILD_JOBS: "8", PATH: "/test/bin" }),
+  ).toEqual({ CARGO_BUILD_JOBS: "1", PATH: "/test/bin" });
 });
 
 test("reserves cleanup time inside the immutable outer wall limit", () => {
