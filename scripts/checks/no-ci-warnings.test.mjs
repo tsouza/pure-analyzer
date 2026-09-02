@@ -60,6 +60,32 @@ describe("findWarnings — benign allowlisted matches", () => {
     expect(findWarnings(log)).toEqual([log]);
   });
 
+  test("the pypa/gh-action-pypi-publish Trusted Publishing advocacy is NOT an offender (regression)", () => {
+    // Exact rendered form from purecard 0.2.1's own real publish run
+    // (github.com/tsouza/pure-analyzer/actions, purecard-publish.yml) — the
+    // form `gh api …/logs` returns, not the raw `::warning title=…::`
+    // workflow-command syntax an earlier version of this entry matched
+    // instead, which meant it never actually matched a real run.
+    const log = [
+      line(
+        "##[warning]Trusted Publishers allows publishing packages to PyPI from automated environments like GitHub Actions without needing to use username/password combinations or API tokens to authenticate with PyPI. Read more: https://docs.pypi.org/trusted-publishers",
+      ),
+      line(
+        "##[warning]A new Trusted Publisher for the currently running publishing workflow can be created by accessing the following link(s) while logged-in as an owner of the package(s):",
+      ),
+    ].join("\n");
+
+    expect(findWarnings(log)).toEqual([]);
+  });
+
+  test("an unrelated ##[warning] annotation still fails the sweep", () => {
+    // The Trusted Publishing allowlist entry is matched on each annotation's
+    // distinctive opening clause, not bare "##[warning]" — any other
+    // annotation must still be caught.
+    const log = line("##[warning]Some other tool's annotation about something unrelated");
+    expect(findWarnings(log)).toEqual([log]);
+  });
+
   test("every ALLOWLIST entry is a documented, non-empty exception", () => {
     for (const entry of ALLOWLIST) {
       expect(entry.re).toBeInstanceOf(RegExp);

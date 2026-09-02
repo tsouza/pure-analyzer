@@ -56,26 +56,8 @@ pub(crate) fn handle<W: Write>(
             state::update_configuration(server, params, writer)?;
             Ok(None)
         }
-        Some("textDocument/definition") => {
-            if let Some(id) = id {
-                if let Some(work) = state::definition_work(server, params) {
-                    schedule(server, id, work, writer, scheduler)?;
-                } else {
-                    send_result(writer, id, Value::Null)?;
-                }
-            }
-            Ok(None)
-        }
-        Some("textDocument/codeAction") => {
-            if let Some(id) = id {
-                if let Some(work) = state::code_actions_work(server, params) {
-                    schedule(server, id, work, writer, scheduler)?;
-                } else {
-                    send_result(writer, id, Value::Array(Vec::new()))?;
-                }
-            }
-            Ok(None)
-        }
+        Some("textDocument/definition") => definition(server, id, params, writer, scheduler),
+        Some("textDocument/codeAction") => code_action(server, id, params, writer, scheduler),
         Some(_) if let Some(id) = id => {
             send_error(writer, id, METHOD_NOT_FOUND_CODE, "method not found")?;
             Ok(None)
@@ -140,12 +122,65 @@ fn hover<W: Write>(
     writer: &mut W,
     scheduler: &mut RequestScheduler,
 ) -> io::Result<Option<ServerExit>> {
+    dispatch_work(
+        server,
+        id,
+        state::hover_work(server, params),
+        writer,
+        scheduler,
+    )
+}
+
+fn definition<W: Write>(
+    server: &Server,
+    id: Option<Value>,
+    params: Option<&Value>,
+    writer: &mut W,
+    scheduler: &mut RequestScheduler,
+) -> io::Result<Option<ServerExit>> {
+    dispatch_work(
+        server,
+        id,
+        state::definition_work(server, params),
+        writer,
+        scheduler,
+    )
+}
+
+fn code_action<W: Write>(
+    server: &Server,
+    id: Option<Value>,
+    params: Option<&Value>,
+    writer: &mut W,
+    scheduler: &mut RequestScheduler,
+) -> io::Result<Option<ServerExit>> {
+    dispatch_work(
+        server,
+        id,
+        state::code_actions_work(server, params),
+        writer,
+        scheduler,
+    )
+}
+
+/// Schedules `work`, or replies with `-32602 invalid params` when the
+/// request's parameters could not be turned into work in the first place.
+///
+/// Shared by every request kind so a malformed request yields the same
+/// protocol error regardless of which handler received it.
+fn dispatch_work<W: Write>(
+    server: &Server,
+    id: Option<Value>,
+    work: Result<RequestWork, state::RequestParamsError>,
+    writer: &mut W,
+    scheduler: &mut RequestScheduler,
+) -> io::Result<Option<ServerExit>> {
     let Some(id) = id else {
         return Ok(None);
     };
-    match state::hover_work(server, params) {
+    match work {
         Ok(work) => schedule(server, id, work, writer, scheduler)?,
-        Err(state::HoverError::InvalidParams) => {
+        Err(state::RequestParamsError::InvalidParams) => {
             send_error(writer, id, INVALID_PARAMS_CODE, "invalid params")?;
         }
     }

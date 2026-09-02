@@ -109,8 +109,8 @@ impl RequestCompletion {
 pub(crate) fn hover_work(
     server: &Server,
     params: Option<&Value>,
-) -> Result<RequestWork, HoverError> {
-    let request = hover_request(params).ok_or(HoverError::InvalidParams)?;
+) -> Result<RequestWork, RequestParamsError> {
+    let request = hover_request(params).ok_or(RequestParamsError::InvalidParams)?;
     Ok(RequestWork::Hover {
         snapshot: AnalysisSnapshot::capture(server),
         uri: request.uri.to_owned(),
@@ -214,18 +214,24 @@ pub(crate) fn update_configuration<W: Write>(
     publish_current_diagnostics(server, writer)
 }
 
-pub(crate) fn definition_work(server: &Server, params: Option<&Value>) -> Option<RequestWork> {
-    let (uri, position) = definition_params(params)?;
-    Some(RequestWork::Definition {
+pub(crate) fn definition_work(
+    server: &Server,
+    params: Option<&Value>,
+) -> Result<RequestWork, RequestParamsError> {
+    let (uri, position) = definition_params(params).ok_or(RequestParamsError::InvalidParams)?;
+    Ok(RequestWork::Definition {
         snapshot: AnalysisSnapshot::capture(server),
         uri: uri.to_owned(),
         position,
     })
 }
 
-pub(crate) fn code_actions_work(server: &Server, params: Option<&Value>) -> Option<RequestWork> {
-    let uri = code_action_uri(params)?;
-    Some(RequestWork::CodeActions {
+pub(crate) fn code_actions_work(
+    server: &Server,
+    params: Option<&Value>,
+) -> Result<RequestWork, RequestParamsError> {
+    let uri = code_action_uri(params).ok_or(RequestParamsError::InvalidParams)?;
+    Ok(RequestWork::CodeActions {
         snapshot: AnalysisSnapshot::capture(server),
         uri: uri.to_owned(),
     })
@@ -331,8 +337,14 @@ struct HoverRequest<'a> {
     position: ProtocolPosition,
 }
 
+/// The reason a request's parameters could not be turned into `RequestWork`.
+///
+/// Shared by every request kind (hover, definition, code actions) so a
+/// malformed request surfaces the same `-32602 invalid params` protocol error
+/// regardless of which handler received it.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum HoverError {
+pub(crate) enum RequestParamsError {
+    /// The request's `params` were missing or did not match the expected shape.
     InvalidParams,
 }
 
