@@ -1,8 +1,18 @@
 name: release-plz
 
-# PR-based releases: on push to main, release-plz opens/updates a release PR
-# (version bumps + changelog). Merging that PR triggers the tag/publish run.
-# Nothing publishes off a normal feature merge.
+# On every push to main: (1) best-effort open/update a release PR proposing
+# the next version bump + changelog, and (2) release — tag and publish to
+# crates.io — any package whose Cargo.toml version isn't tagged/published
+# yet, regardless of whether it got there through that PR or another route
+# (e.g. a hand-opened PR, when (1) can't run — see below). These are two
+# independent `release-plz/action` invocations, deliberately not the
+# single combined-`command` step release-plz/action defaults to: that
+# composite runs `release-pr` then `release` in one `set -e` bash step, so a
+# `release-pr` failure aborts before `release` ever runs — release-pr needs
+# `pull-requests: write`, which a repo can have disabled independently of
+# `release`, which only needs `contents: write` (for the tag) and the
+# registry token. Splitting them means a PR-creation outage degrades this
+# workflow to "no auto-proposed next-version PR", not "no releases publish."
 #
 # TOKEN — this workflow runs on the default GITHUB_TOKEN, and that has one
 # consequence worth knowing before you rely on it: GitHub deliberately does not
@@ -44,8 +54,23 @@ jobs:
       # and rustup auto-installs it when release-plz's action first calls cargo.
       # A second `rustup default` from the action would fight the file over which
       # pin wins (see the same note in ci.yml).
-      - name: Run release-plz
+      # Best-effort: proposes the next version bump. `continue-on-error`
+      # because a disabled "Allow GitHub Actions to create pull requests"
+      # repo setting makes this fail with a 403 independently of anything
+      # this workflow controls, and that must never block the release step
+      # below, which is what actually needs to run on every push.
+      - name: Propose the next release PR
+        id: release-pr
+        continue-on-error: true
         uses: release-plz/action@2eb1d8bcb770b4c48ccfaad919734b38b51958c9 # v0.5.131
+        with:
+          command: release-pr
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Release published packages
+        uses: release-plz/action@2eb1d8bcb770b4c48ccfaad919734b38b51958c9 # v0.5.131
+        with:
+          command: release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Publishes `purecard`, the one crate whose manifest sets
