@@ -67,18 +67,24 @@ export const ALLOWLIST = [
   },
   {
     // pypa/gh-action-pypi-publish prints two annotations on every token-
-    // authenticated upload, advocating OIDC Trusted Publishing: "Upgrade to
-    // Trusted Publishing" and a "Create a Trusted Publisher" magic link. They
-    // are editorial advice about an architecture choice, not a defect report —
-    // nothing in the run is wrong, and the upload succeeds. There is no input
-    // that suppresses them; the only way to stop them is to adopt Trusted
-    // Publishing, which ADR-0006 weighed and rejected (the credential would
-    // move half into PyPI-side settings this repository cannot verify or
-    // reproduce). The action's third annotation, about `attestations` being
-    // ignored, IS suppressible and is fixed at the source in
-    // purecard-publish.yml rather than matched here. Matched on the two exact
-    // annotation titles so a real upload warning still fails the sweep.
-    re: /::warning title=(Upgrade to Trusted Publishing|Create a Trusted Publisher)::/,
+    // authenticated upload, advocating OIDC Trusted Publishing. They are
+    // editorial advice about an architecture choice, not a defect report —
+    // nothing in the run is wrong, and the upload succeeds (confirmed live on
+    // PyPI, purecard 0.2.1). There is no input that suppresses them; the only
+    // way to stop them is to adopt Trusted Publishing, which ADR-0006 weighed
+    // and rejected (the credential would move half into PyPI-side settings
+    // this repository cannot verify or reproduce). The action's third
+    // annotation, about `attestations` being ignored, IS suppressible and is
+    // fixed at the source in purecard-publish.yml rather than matched here.
+    //
+    // Matched on the rendered `##[warning]…` form `gh api …/logs` actually
+    // returns, not the raw `::warning title=…::` workflow-command syntax the
+    // action emits — those differ, and an earlier version of this entry only
+    // matched the latter, so it silently never matched a real run (caught
+    // when purecard 0.2.1's own publish failed the sweep on this exact
+    // warning). Matched on each annotation's distinctive opening clause so a
+    // real upload warning still fails the sweep.
+    re: /##\[warning\](Trusted Publishers allows publishing packages to PyPI from automated environments|A new Trusted Publisher for the currently running publishing workflow can be created)/,
     why: "pypa/gh-action-pypi-publish Trusted Publishing advocacy on token auth (unsuppressible; architecture choice recorded in ADR-0006)",
   },
   {
