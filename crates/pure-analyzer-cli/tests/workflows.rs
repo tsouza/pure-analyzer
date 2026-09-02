@@ -21,7 +21,7 @@ const FORMATTER_VALID_SOURCE: &str = "model::Person . all ( )";
 const FORMATTER_BROKEN_SOURCE: &str = "\0";
 
 #[test]
-fn command_surface_completion_and_config_independence_are_stable() {
+fn top_level_help_lists_every_command_and_the_formatter_write_contract() {
     let fixture = Fixture::new("help");
     let help = run(&fixture.root, &["--help"]);
     assert!(help.status.success());
@@ -42,6 +42,11 @@ fn command_surface_completion_and_config_independence_are_stable() {
         help.contains("transactional in-place file updates"),
         "fmt help omitted its write contract: {help}"
     );
+}
+
+#[test]
+fn comparison_and_canonical_help_document_their_exit_codes() {
+    let fixture = Fixture::new("help-exit-codes");
     let comparison_help = run(&fixture.root, &["eq", "--help"]);
     assert!(comparison_help.status.success());
     assert!(comparison_help.stderr.is_empty());
@@ -50,6 +55,7 @@ fn command_surface_completion_and_config_independence_are_stable() {
             .contains("Exit status: 0 equivalent; 1 structurally not equivalent; 2 indecisive."),
         "comparison help must document the unified result codes"
     );
+
     let canonical_help = run(&fixture.root, &["fmt", "--help"]);
     assert!(canonical_help.status.success());
     assert!(canonical_help.stderr.is_empty());
@@ -57,7 +63,11 @@ fn command_surface_completion_and_config_independence_are_stable() {
     assert!(canonical_help.contains("--canonical"));
     assert!(canonical_help.contains("does not preserve source layout or comments"));
     assert!(canonical_help.contains("Exit status: 0 emitted; 2 indecisive."));
+}
 
+#[test]
+fn bash_completion_matches_the_golden_independently_of_configuration() {
+    let fixture = Fixture::new("completions");
     let mut command = analyzer(&fixture.root);
     command
         .args(["completions", "bash"])
@@ -875,7 +885,10 @@ fn canonical_formatter_requires_one_input_and_rejects_layout_and_sarif_modes() {
     );
     assert_eq!(layout_mode.status.code(), Some(EXIT_USAGE));
     assert!(layout_mode.stdout.is_empty());
-    assert!(utf8(&layout_mode.stderr).contains("cannot be used with '--canonical'"));
+    assert!(
+        utf8(&layout_mode.stderr)
+            .contains("the argument '--canonical' cannot be used with '--check'")
+    );
     assert_eq!(fixture.read("first.pure"), source);
     assert_eq!(fixture.read("second.pure"), source);
 }

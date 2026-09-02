@@ -49,7 +49,7 @@ struct JsonReason {
 
 fn json_envelope<'a>(emission: &'a PreparedCanonicalEmission<'a>) -> JsonEnvelope<'a> {
     let result = match emission {
-        PreparedCanonicalEmission::Emitted(text) => JsonResult::Emitted { text: *text },
+        PreparedCanonicalEmission::Emitted(text) => JsonResult::Emitted { text },
         PreparedCanonicalEmission::Indecisive(indecision) => JsonResult::Indecisive {
             reason: JsonReason {
                 id: indecision.reason_id,
