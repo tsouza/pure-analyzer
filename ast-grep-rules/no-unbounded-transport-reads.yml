@@ -1,0 +1,30 @@
+# Transport guardrail: never read an unbounded amount from the LSP stream.
+#
+# The stream on the other side of this crate is an editor — or anything else
+# that speaks to the server's stdin — so every read is attacker-controlled. A
+# `read_until`/`read_line`/`read_to_end`/`read_to_string` straight off the
+# reader grows a buffer until the peer stops sending, which is an allocation
+# failure and a process *abort*, not a recoverable `io::Error`
+# (https://github.com/tsouza/pure-analyzer/issues/272). Bound the read with
+# `.take(<cap>)` first and turn hitting the cap into a typed error.
+#
+# The sibling half of the class — allocating a body buffer from the claimed
+# `Content-Length` — is bounded in `frame.rs` by `content_length_value`, which
+# parses and range-checks in one step so no caller can size an allocation from
+# an unchecked header.
+id: no-unbounded-transport-reads
+message: "Bound reads from the LSP transport with `.take(<cap>)` — an unbounded read from an untrusted peer aborts the process instead of erroring."
+severity: error
+language: rust
+rule:
+  any:
+    - pattern: $READER.read_until($$$)
+    - pattern: $READER.read_line($$$)
+    - pattern: $READER.read_to_end($$$)
+    - pattern: $READER.read_to_string($$$)
+constraints:
+  READER:
+    not:
+      regex: '\.take\('
+files:
+  - "crates/pure-analyzer-lsp/**/*.rs"
