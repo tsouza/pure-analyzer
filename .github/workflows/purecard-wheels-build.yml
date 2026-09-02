@@ -58,7 +58,15 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.12.14"
+          # A floating minor, not an exact patch: `3.12.14` is cached for
+          # `ubuntu-latest` but unpublished for `macos-15-intel`/`macos-latest`/
+          # `windows-latest` at the same point in time ("version … was not
+          # found"), so an exact pin makes the matrix's availability platform-
+          # dependent — the portability failure constitution.md §2 calls out.
+          # The abi3 wheel this job builds is ABI-stable across every CPython
+          # >=3.9 (`pyproject.toml`'s floor), so the exact patch used to build
+          # it is not part of the compatibility contract; only the minor matters.
+          python-version: "3.12"
       - name: Set up uv
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
