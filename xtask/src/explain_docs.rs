@@ -4,7 +4,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use pure_analyzer_diagnostics::{ALL_DIAG_CODES, ALL_REASON_CODES, ExplainContent, ExplainKind};
+use pure_analyzer_diagnostics::{
+    ALL_DIAG_CODES, ALL_REASON_CODES, ExplainClassification, ExplainContent, ExplainKind,
+};
 
 use crate::process::run_stdout;
 
@@ -121,7 +123,7 @@ fn repository_root() -> Result<PathBuf> {
 /// Render the complete expected set, keyed by repository-relative path.
 fn expected_documents(root: &Path) -> Result<BTreeMap<PathBuf, String>> {
     let contents = catalog();
-    validate_m4a_example_identifiers(&contents)?;
+    validate_m4a_example_identifiers(&contents, M4A_EXPLAIN_EXAMPLES)?;
     let m4a_examples = resolve_m4a_explain_examples(root)?;
     let mut documents = BTreeMap::new();
     documents.insert(
@@ -229,27 +231,69 @@ fn render_page(content: &ExplainContent, m4a_examples: &[ResolvedM4aExplainExamp
             example.example.expected_outcome,
         ));
     }
-    if content.identifier == "IND_MISSING_REWRITE" {
-        output.push_str(
-            "\nThis `recoverable` reason identifies engineering backlog: a missing sound \
-             normalization rule. A `fundamental` reason instead records a deliberate soundness \
-             boundary. Both retain an indecisive result and neither makes the input invalid.\n",
-        );
+    if let Some(sentence) = reason_classification_sentence(content) {
+        output.push_str(sentence);
     }
     output
 }
 
+/// The classification sentence for a reason page, keyed by catalog data.
+///
+/// Diagnostics carry no such sentence; a reason page states which side of the
+/// soundness boundary it sits on so an indecisive result is never read as an
+/// input error.
+fn reason_classification_sentence(content: &ExplainContent) -> Option<&'static str> {
+    if content.kind != ExplainKind::Reason {
+        return None;
+    }
+    match content.classification {
+        ExplainClassification::Recoverable => Some(
+            "\nThis `recoverable` reason records engineering backlog: a conservative \
+             implementation limitation. The result stays indecisive and the input stays valid.\n",
+        ),
+        ExplainClassification::Fundamental => Some(
+            "\nThis `fundamental` reason records a deliberate soundness boundary rather than \
+             engineering backlog. The result stays indecisive and the input stays valid.\n",
+        ),
+        _ => None,
+    }
+}
+
 /// Check that each M4a example targets an identifier in the explain catalog.
-fn validate_m4a_example_identifiers(contents: &[&ExplainContent]) -> Result<()> {
-    let identifiers: BTreeSet<_> = contents.iter().map(|content| content.identifier).collect();
-    for example in M4A_EXPLAIN_EXAMPLES {
+fn validate_m4a_example_identifiers(
+    contents: &[&ExplainContent],
+    examples: &[M4aExplainExample],
+) -> Result<()> {
+    let kinds: BTreeMap<_, _> = contents
+        .iter()
+        .map(|content| (content.identifier, content.kind))
+        .collect();
+    for example in examples {
         for identifier in example.explain_identifiers {
-            if !identifiers.contains(identifier) {
+            let Some(kind) = kinds.get(identifier) else {
                 anyhow::bail!(
                     "M4a explain example {:?} targets unknown explain identifier {identifier:?}",
                     example.corpus_id
                 );
+            };
+            // A reason page may only advertise an example whose verified reason
+            // is that same reason; otherwise the page documents a result it did
+            // not produce.
+            if *kind == ExplainKind::Reason && example.expected_reason != Some(*identifier) {
+                anyhow::bail!(
+                    "M4a explain example {:?} links reason page {identifier:?} but its verified reason is {:?}",
+                    example.corpus_id,
+                    example.expected_reason
+                );
             }
+        }
+        if let Some(reason) = example.expected_reason
+            && !example.explain_identifiers.contains(&reason)
+        {
+            anyhow::bail!(
+                "M4a explain example {:?} has verified reason {reason:?} but does not link its page",
+                example.corpus_id
+            );
         }
     }
     Ok(())
@@ -475,10 +519,37 @@ mod tests {
         let missing_rewrite_page = documents
             .get(&Path::new(EXPLAIN_DIRECTORY).join("IND_MISSING_REWRITE.md"))
             .expect("missing rewrite page exists");
-        assert!(
-            missing_rewrite_page.contains("recoverable` reason identifies engineering backlog")
-        );
-        assert!(missing_rewrite_page.contains("fundamental` reason instead records"));
+        assert!(missing_rewrite_page.contains("recoverable` reason records engineering backlog"));
+        assert!(!missing_rewrite_page.contains("fundamental` reason records"));
+    }
+
+    #[test]
+    fn verified_m4a_mapping_rejects_a_reason_page_that_did_not_produce_the_result() {
+        let contents = catalog();
+
+        let foreign_reason = [M4aExplainExample {
+            corpus_id: "different-literal-filters-remain-indecisive",
+            expected_outcome: "indecisive",
+            expected_reason: Some("IND_MISSING_REWRITE"),
+            explain_identifiers: &["PUR3001", "IND_MISSING_REWRITE", "IND_UNMODELED_OP"],
+        }];
+        let error = validate_m4a_example_identifiers(&contents, &foreign_reason)
+            .expect_err("a reason page must not advertise another reason's result");
+        assert!(error.to_string().contains("IND_UNMODELED_OP"));
+        assert!(error.to_string().contains("IND_MISSING_REWRITE"));
+
+        let unlinked_reason = [M4aExplainExample {
+            corpus_id: "different-literal-filters-remain-indecisive",
+            expected_outcome: "indecisive",
+            expected_reason: Some("IND_MISSING_REWRITE"),
+            explain_identifiers: &["PUR3001"],
+        }];
+        let error = validate_m4a_example_identifiers(&contents, &unlinked_reason)
+            .expect_err("a verified reason must link its own page");
+        assert!(error.to_string().contains("does not link its page"));
+
+        validate_m4a_example_identifiers(&contents, M4A_EXPLAIN_EXAMPLES)
+            .expect("the committed mapping stays consistent");
     }
 
     #[test]

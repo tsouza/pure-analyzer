@@ -23,4 +23,4 @@ These links are generated from the verified comparison corpus; query, model, and
 
 - [`different-literal-filters-remain-indecisive`](../../crates/pure-analyzer-analysis/corpus/legend-4.113.0/comparison.jsonl#L3): verified `indecisive` verdict with reason `IND_MISSING_REWRITE`.
 
-This `recoverable` reason identifies engineering backlog: a missing sound normalization rule. A `fundamental` reason instead records a deliberate soundness boundary. Both retain an indecisive result and neither makes the input invalid.
+This `recoverable` reason records engineering backlog: a conservative implementation limitation. The result stays indecisive and the input stays valid.
