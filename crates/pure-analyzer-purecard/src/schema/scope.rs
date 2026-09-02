@@ -1097,6 +1097,27 @@ pub(crate) struct ScopeTracker {
     /// identifier at the `ExpectValue` key position of the innermost open delimiter
     /// is a column name exactly when the top flag is set.
     tilde_open: Vec<bool>,
+    /// Per-open-delimiter flag: is this delimiter a `{`-opened brace lambda whose
+    /// binder list is still open (its own closing `|` not yet seen)? Pushed and
+    /// popped in lockstep with [`paren_receiver`](Self::paren_receiver); cleared to
+    /// `false` by [`on_pipe`](Self::on_pipe) once that binder-closing `|` fires, so
+    /// it reads `true` for exactly a brace lambda's 2nd-and-on untyped binder
+    /// (`{x,y,z|…}`'s `y`, `z`) and `false` again once its body starts.
+    ///
+    /// The byte-PDA cannot see a brace lambda's binder pipe from its frame alone
+    /// (`separates_elements`'s doc comment, `grammar/pda.rs`): every binder past
+    /// the first reaches the exact same `ExpectValueReq` anchor
+    /// [`value_opening_position`](Self::value_opening_position) stamps
+    /// [`L2Position::ValueIdent`] (N7) at for an ordinary value. N7's own
+    /// continuation set has no reading for a binder list's `,` — a real N7 value
+    /// position that ends on one is a standalone bare word resolving to nothing,
+    /// while a binder name ending one is the grammar's own separator
+    /// (`docs/spec/schema.md` §6's `L2 ⊆ L1` invariant: grammar-only structure L2
+    /// has no rule for). This flag is what lets
+    /// [`opening_position`](Self::opening_position) tell the two apart and pass a
+    /// binder-list position through unconstrained, exactly as the first binder
+    /// already is (issue #351).
+    brace_binder_open: Vec<bool>,
     /// Lambda variables bound to an arm-R **relation row** (a post-establishing-op
     /// row over the emitted-column universe), so `$row.<Col>` is a bare-ident column
     /// access (N6), not a class member navigation.
@@ -1496,7 +1517,11 @@ impl ScopeTracker {
                 }
             }
             Lexeme::Pipe => self.on_pipe(pre_state),
-            Lexeme::Open => self.on_open(pre_state),
+            // `Lexeme::Open` is always exactly the one opener byte (`flush_gap`
+            // never fuses a delimiter with a neighbour), so `bytes[0]` is the
+            // opener `on_open` needs to tell a brace lambda's `{` apart from
+            // every other opener (issue #351).
+            Lexeme::Open => self.on_open(pre_state, bytes[0]),
             Lexeme::Close => self.on_close(),
             Lexeme::Comma => {
                 self.lambda_first_ident = None;
@@ -1850,6 +1875,14 @@ impl ScopeTracker {
         if matches!(pre_state, State::Start | State::ExpectSource) {
             return;
         }
+        // This pipe closes the innermost open delimiter's own binder list, if it
+        // has one open at all — a brace lambda's (`{x,y,z|…}`'s own `|`) or an
+        // ordinary lambda's single binder (a no-op past the first pipe, and a
+        // no-op whenever the innermost delimiter never opened one, since the
+        // pushed flag is already `false`).
+        if let Some(open) = self.brace_binder_open.last_mut() {
+            *open = false;
+        }
         // Snapshot the enclosing pipeline's class and arm/relation state as the lambda
         // body begins — before a nested pipeline in the body (`Class.all()` or a
         // navigation-headed subquery) can change them — so the body's delimiter close
@@ -1913,7 +1946,7 @@ impl ScopeTracker {
         }
     }
 
-    fn on_open(&mut self, pre_state: State) {
+    fn on_open(&mut self, pre_state: State, opener: u8) {
         let method = self.last_ident.take();
         self.depth += 1;
         // N3's grammar production constrains `all()`'s argument slot regardless
@@ -1945,6 +1978,10 @@ impl ScopeTracker {
         let is_tilde_bracket = pre_state == State::SawTilde;
         self.saw_tilde_bracket |= is_tilde_bracket;
         self.tilde_open.push(is_tilde_bracket);
+        // A `{` opens a brace lambda with its binder list not yet closed by its
+        // own `|` (issue #351); every other opener never has one, so the flag is
+        // pushed `false` and `on_pipe` never has anything to flip.
+        self.brace_binder_open.push(opener == b'{');
         if let Some(name) = &method {
             if ESTABLISHING_METHODS.contains(&name.as_str()) {
                 self.est_stack.push(self.depth);
@@ -2053,6 +2090,7 @@ impl ScopeTracker {
             self.saw_tilde_bracket = save.prev_saw_tilde_bracket;
         }
         self.tilde_open.pop();
+        self.brace_binder_open.pop();
         if self.ref_stack.last() == Some(&self.depth) {
             self.ref_stack.pop();
         }
@@ -2085,6 +2123,19 @@ impl ScopeTracker {
     fn in_tilde_key(&self, state: State) -> bool {
         matches!(state, State::ExpectValue | State::ExpectValueReq)
             && self.tilde_open.last() == Some(&true)
+    }
+
+    /// Whether the innermost open delimiter is a brace lambda whose binder list
+    /// is still open — its own closing `|` (`{x,y,z|…}`'s) not yet seen.
+    ///
+    /// True at exactly the anchor a brace lambda's 2nd-and-on untyped binder
+    /// opens at (`y`, `z` in `{x,y,z|…}`; the first, `x`, opens at
+    /// `ExpectBraceBinder`/`ExpectBinder` instead, already unconstrained — see
+    /// [`opening_position`](Self::opening_position)). [`value_opening_position`](Self::value_opening_position)
+    /// reads it to keep N7 out of a binder-list value position it was never
+    /// written for (issue #351).
+    fn in_open_brace_binder_list(&self) -> bool {
+        self.brace_binder_open.last() == Some(&true)
     }
 
     /// N3h's slot, when `state` is the **first** argument position of an open
@@ -2345,6 +2396,18 @@ impl ScopeTracker {
             // (`schema_walk_rule_coverage.rs`'s `EXPECTED_UNFIRED`), so there is
             // no evidence here for what may follow one — and §4's rule is to
             // invent no constraint the corpus does not exercise.
+            L2Position::None
+        } else if self.in_open_brace_binder_list() {
+            // A brace lambda's 2nd-and-on untyped binder (`{x,y,z|…}`'s `y`,
+            // `z`) reaches this exact anchor too, byte-PDA-indistinguishable
+            // from an ordinary value (the automaton cannot see the binder's own
+            // pipe from the frame alone — `separates_elements`'s doc comment,
+            // `grammar/pda.rs`). N7's "a dangling bare word resolves to
+            // nothing" premise does not hold for a binder name: it is declared,
+            // never resolved, so it needs no continuation to mean something —
+            // exactly as the first binder is already unconstrained. A
+            // parameter-list comma is grammar-only structure L2 has no rule for
+            // (`docs/spec/schema.md` §6, `L2 ⊆ L1`; issue #351).
             L2Position::None
         } else {
             L2Position::ValueIdent
@@ -2846,7 +2909,7 @@ mod tests {
         // `SourceMethodArg` instead of the armed `ReValue` comparison.
         let mut tracker = ScopeTracker::new();
         tracker.last_ident = Some(SOURCE_METHOD.to_owned());
-        tracker.on_open(State::AfterDot);
+        tracker.on_open(State::AfterDot, b'(');
         assert_eq!(
             tracker.opening_position(State::ExpectValue),
             L2Position::SourceMethodArg,
