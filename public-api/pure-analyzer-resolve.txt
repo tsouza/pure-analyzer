@@ -342,6 +342,9 @@ pub unsafe fn pure_analyzer_resolve::ResolvedMemberKind::clone_to_uninit(&self, 
 impl<T> core::convert::From<T> for pure_analyzer_resolve::ResolvedMemberKind
 pub fn pure_analyzer_resolve::ResolvedMemberKind::from(T) -> T
 pub enum pure_analyzer_resolve::UnderResolution
+pub pure_analyzer_resolve::UnderResolution::GeneralizationDepth
+pub pure_analyzer_resolve::UnderResolution::GeneralizationDepth::class: pure_analyzer_model::types::QName
+pub pure_analyzer_resolve::UnderResolution::GeneralizationDepth::limit: usize
 pub pure_analyzer_resolve::UnderResolution::GraphInvariant
 pub pure_analyzer_resolve::UnderResolution::GraphInvariant::class: pure_analyzer_model::types::QName
 pub pure_analyzer_resolve::UnderResolution::MissingSupertype

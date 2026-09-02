@@ -165,10 +165,13 @@ impl ResolvedMember {
 
     /// Return the effective temporal argument arity of the member's target, when known.
     ///
-    /// A missing value means that the target is non-temporal, outside the loaded
-    /// graph, or has conflicting temporal facts through generalization. Without
-    /// an association temporal overlay, a broken target hierarchy produces an
-    /// under-resolved or cycle lookup outcome.
+    /// A target whose whole reachable hierarchy is present, claims complete
+    /// coverage, and carries no temporal stereotype is conclusively zero-arity.
+    /// A missing value means instead that the target is outside the loaded
+    /// graph, has conflicting temporal facts through generalization, or sits in
+    /// a hierarchy whose coverage is open, leaving its stereotype undetermined.
+    /// Without an association temporal overlay, a broken target hierarchy
+    /// produces an under-resolved or cycle lookup outcome.
     #[must_use]
     pub const fn target_temporal_arity(&self) -> Option<u8> {
         self.target_temporal_arity
@@ -206,6 +209,13 @@ pub enum UnderResolution {
     GraphInvariant {
         /// Class whose graph index entry is missing.
         class: QName,
+    },
+    /// The generalization graph is deeper than the resolver's bounded walk.
+    GeneralizationDepth {
+        /// Class reached once the depth budget was exhausted.
+        class: QName,
+        /// Longest generalization chain the resolver walks.
+        limit: usize,
     },
 }
 
@@ -418,6 +428,14 @@ impl<'model> Resolver<'model> {
         visited: &mut BTreeSet<QName>,
         stack: &mut Vec<QName>,
     ) -> Result<(), HierarchyFault> {
+        if stack.len() >= MAX_GENERALIZATION_DEPTH {
+            return Err(HierarchyFault::UnderResolved(
+                UnderResolution::GeneralizationDepth {
+                    class: current.clone(),
+                    limit: MAX_GENERALIZATION_DEPTH,
+                },
+            ));
+        }
         if let Some(start) = stack.iter().position(|path| path == current) {
             let mut cycle = stack[start..].to_vec();
             cycle.push(current.clone());
@@ -617,13 +635,22 @@ impl<'model> Resolver<'model> {
         }
         let levels = self.hierarchy_levels(target)?;
         for level in levels {
-            let temporal = level
+            let classes = level
                 .iter()
-                .filter_map(|path| {
-                    self.graph
-                        .class(path.as_str())
-                        .and_then(ClassInfo::temporal)
-                })
+                .filter_map(|path| self.graph.class(path.as_str()))
+                .collect::<Vec<_>>();
+            // `coverage_gap` is a coarse union: a stereotype the loader could
+            // not read is indistinguishable here from one a parse gap swallowed
+            // or from a merely incomplete member list. Telling them apart needs
+            // a fact the model layer does not yet expose (#320), so this
+            // withholds an answer for all of them and knowingly loses true
+            // positives on gapped targets.
+            if classes.iter().any(|class| class.coverage_gap()) {
+                return Ok(None);
+            }
+            let temporal = classes
+                .iter()
+                .filter_map(|class| class.temporal())
                 .collect::<BTreeSet<_>>();
             match temporal.len() {
                 0 => {}
@@ -631,13 +658,20 @@ impl<'model> Resolver<'model> {
                 _ => return Ok(None),
             }
         }
-        // The entire reachable hierarchy is present and carries no temporal
-        // stereotype. That is a conclusive zero-date answer, not an absence
-        // of facts: generated point navigation to this target accepts no
-        // explicit temporal arguments.
+        // The entire reachable hierarchy is present, claims complete member
+        // coverage, and carries no temporal stereotype. That is a conclusive
+        // zero-date answer, not an absence of facts: generated point
+        // navigation to this target accepts no explicit temporal arguments.
         Ok(Some(0))
     }
 }
+
+/// Longest generalization chain the resolver walks before reporting an
+/// under-resolution. Real Legend hierarchies are orders of magnitude shallower;
+/// the budget exists so an untrusted model file cannot drive the depth-first
+/// walk in `Resolver::validate_node` into a stack overflow. The parsers carry
+/// their own budgets for the same hazard class; nothing couples the values.
+const MAX_GENERALIZATION_DEPTH: usize = 256;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum MemberPriority {
