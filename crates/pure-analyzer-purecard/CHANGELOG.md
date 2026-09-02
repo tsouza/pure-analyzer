@@ -4,7 +4,15 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/) and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
-## [0.2.0](https://github.com/tsouza/pure-analyzer/compare/purecard-v0.1.0...purecard-v0.2.0) - 2026-09-02
+## [0.2.0](https://github.com/tsouza/pure-analyzer/releases/tag/purecard-v0.2.0) - 2026-09-02
+
+<!--
+The usual release-plz `compare/purecard-v0.1.0...purecard-v0.2.0` link 404s:
+0.1.0 was published from the standalone pre-migration repo (see
+docs/decisions/0006-purecard-resumes-publication.md), so no
+`purecard-v0.1.0` tag exists here to compare against. Linked to the tag this
+release creates instead.
+-->
 
 ### Added
 
