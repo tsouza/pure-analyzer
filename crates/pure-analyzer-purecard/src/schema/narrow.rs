@@ -152,6 +152,9 @@ enum CacheKey {
     /// is monotonic within a stream (see `ScopeTracker::bound_vars`), so — exactly
     /// as for [`Column`](CacheKey::Column) — the count pins the set.
     RefVar(usize),
+    /// S2's sigil half: the set that clears a `$` opening a variable reference no
+    /// binder could satisfy — a whole-vocab constant, so one key suffices.
+    UnboundSigil,
     /// N1/N2 member set of a class narrowed over a *fused* nav-dot token (`.<member>`
     /// in one BPE token). Same trie as [`Member`](CacheKey::Member), but the
     /// candidate/keep rule differs (it strips a leading `.`), so the per-node mask
@@ -549,6 +552,23 @@ impl<'a> TrieRule<'a> {
                 TrieKind::Ident,
                 Names::RelationColumn(columns),
             ),
+            // S2 is the one trie rule whose candidate set covers *everything* its
+            // anchor admits: `AfterDollar` takes an identifier byte and nothing
+            // else, and every identifier token is an `Ident` candidate. So with no
+            // name to keep, this rule alone clears the whole mask and the EOS bit
+            // with it — a decoder deadlock even over a vocabulary that can spell
+            // every continuation (issue #275). The sibling name rules do not need
+            // the guard and do not get it: N1/N2's `AfterDot` and N6's value
+            // anchor both admit shapes their tries treat as non-candidates
+            // (whitespace, and a `(`/`$`/digit at a value position), which
+            // `fill_trie` keeps at the anchor — so a memberless class and an
+            // as-yet-columnless relation still mask their phantoms.
+            //
+            // Reached despite the sigil pass because that pass is first-byte
+            // discriminated (`fill_unbound_sigil`) and so cannot see a vocabulary
+            // token that *ends* on the sigil (`($`). This is the backstop for
+            // exactly that shape.
+            L2Position::RefVar if vars.is_empty() => return None,
             L2Position::RefVar => (
                 CacheKey::RefVar(vars.len()),
                 TrieKind::Ident,
@@ -838,6 +858,54 @@ fn fused_post_dot(bytes: &[u8]) -> Option<&[u8]> {
     }
 }
 
+/// Refill `dst` with S2's **sigil** set: every token that does not open a `$`
+/// variable reference, plus EOS (`docs/spec/schema.md` §6.5 S2).
+///
+/// Applied by the session as a third, purely subtractive pass — like the fused
+/// nav-dot pass, and for the mirror-image reason. That one narrows a token the
+/// anchor-read rule cannot see *into*; this one narrows the token the rule's own
+/// position is reached *through*. S2 states that a `$<IDENT>` names a variable the
+/// stream has bound, and before the first binder there is no such name: read at
+/// the identifier, the rule clears every token the byte-PDA offers at
+/// `AfterDollar` and leaves the decoder deadlocked, so it is read at the sigil,
+/// where a live alternative still exists (issue #275).
+///
+/// Discriminated on the token's **first byte**, for the reason
+/// [`fill_store_method_arg`] gives: under byte-level BPE the sigil arrives fused
+/// to the name it opens (`$code` is one token over the gold vocabulary), and a
+/// whole-token [`classify`] would read that as an identifier and let it through.
+/// A `$` anywhere but the first byte is not a sigil at this anchor — the session
+/// gates the pass on [`State::opens_refvar_sigil`], so a `$` inside a string
+/// literal is never reached.
+fn fill_unbound_sigil(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32) {
+    dst.clear_all();
+    for id in 0..vocab.len() as u32 {
+        if !opens_with(vocab.bytes(id).unwrap_or(&[]), |byte| byte == REFVAR_SIGIL) {
+            dst.set(id);
+        }
+    }
+    dst.set(eos_bit);
+}
+
+/// The byte that opens a variable reference.
+const REFVAR_SIGIL: u8 = b'$';
+
+/// Refill the caller's `dst` with S2's sigil set — the session's entry point to
+/// [`fill_unbound_sigil`], memoized like every other whole-vocab constant.
+/// Always returns `true`: the caller only reaches it where
+/// [`ScopeTracker::masks_unbound_sigil`](crate::schema::scope::ScopeTracker) has
+/// already decided the rule applies.
+pub(crate) fn narrow_sigil_into(
+    dst: &mut BitMask,
+    cache: &mut NarrowCache,
+    vocab: &Vocab,
+    eos_bit: u32,
+) -> bool {
+    with_cache(dst, cache, CacheKey::UnboundSigil, |dst| {
+        fill_unbound_sigil(dst, vocab, eos_bit);
+    })
+}
+
 /// Narrow `dst` by a trie rule: build (or reuse) the rule's trie, walk `prefix` to
 /// its cursor node, then copy the memoized mask for that cursor or fill and
 /// memoize it. The trie is cursor-independent, so it is built once per key; only
@@ -962,12 +1030,43 @@ fn keeps_operand(lex: &Lexeme, lhs: TypeClass) -> bool {
     }
 }
 
+/// The two bytes that open a **numeric literal** without classifying as one: the
+/// `.` of a leading-dot float (`.5`) and the `-` of a sign (`-3`).
+///
+/// [`classify`] reads a whole token, so these arrive as [`Lexeme::Dot`] and
+/// [`Lexeme::Other`] — never [`Lexeme::Number`] — and slip through a slot that
+/// masks numeric literals. The byte-PDA state each one opens (`NeedFracDigit`,
+/// `SawNumSign`) then admits nothing but the rest of that number — digits, and for
+/// a sign the `.` of `-.5` — which is exactly the class the slot masks: the
+/// position is left with no legal token and no EOS, a decoder deadlock (issue
+/// #275). At a value anchor neither byte opens anything else — a `-` there
+/// is a sign, never a step arrow (the `>` after it is a dead state) — so clearing
+/// them wherever the numbers they open are cleared masks nothing legal.
+const NUMBER_OPENERS: &[u8] = b".-";
+
+/// Whether an operand token survives a slot that accepts numeric literals iff
+/// `accepts_number` — the half of the literal-class test a whole-token
+/// [`classify`] cannot see (see [`NUMBER_OPENERS`]). Kept beside the three
+/// class predicates rather than folded into each, so the three literal-operand
+/// rules (T1, N4b, N3h) apply one rule about numeric openers, not three.
+///
+/// Every caller derives `accepts_number` by asking its **own** class predicate
+/// about a [`Lexeme::Number`], never by restating the answer: an opener is masked
+/// exactly where the number it opens is, so if a predicate's `Number` arm ever
+/// changes, this half cannot silently drift out of step with it and hand the
+/// deadlock back.
+fn keeps_number_opener(bytes: &[u8], accepts_number: bool) -> bool {
+    accepts_number || !opens_with(bytes, |byte| NUMBER_OPENERS.contains(&byte))
+}
+
 /// Refill `dst` with the T1 operand set for LHS class `masked_by`, plus EOS.
 fn fill_operand(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32, masked_by: TypeClass) {
+    let accepts_number = keeps_operand(&Lexeme::Number, masked_by);
     dst.clear_all();
     for id in 0..vocab.len() as u32 {
         let bytes = vocab.bytes(id).unwrap_or(&[]);
-        if keeps_operand(&classify(bytes), masked_by) {
+        if keeps_operand(&classify(bytes), masked_by) && keeps_number_opener(bytes, accepts_number)
+        {
             dst.set(id);
         }
     }
@@ -996,6 +1095,7 @@ fn fill_logical_operand(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32) {
     for id in 0..vocab.len() as u32 {
         let bytes = vocab.bytes(id).unwrap_or(&[]);
         if keeps_operand(&classify(bytes), TypeClass::Boolean)
+            && keeps_number_opener(bytes, keeps_operand(&Lexeme::Number, TypeClass::Boolean))
             && !opens_with(bytes, |byte| byte == LAMBDA_PIPE)
         {
             dst.set(id);
@@ -1034,10 +1134,13 @@ fn keeps_extent_method_arg(lex: &Lexeme, arg: ExtentArg) -> bool {
 /// two compiles for a class with nothing to kill. A mask is bought with an
 /// attested walk, not with a probe; this one is left to the compiler oracle.
 fn fill_extent_method_arg(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32, arg: ExtentArg) {
+    let accepts_number = keeps_extent_method_arg(&Lexeme::Number, arg);
     dst.clear_all();
     for id in 0..vocab.len() as u32 {
         let bytes = vocab.bytes(id).unwrap_or(&[]);
-        if keeps_extent_method_arg(&classify(bytes), arg) {
+        if keeps_extent_method_arg(&classify(bytes), arg)
+            && keeps_number_opener(bytes, accepts_number)
+        {
             dst.set(id);
         }
     }
@@ -1706,9 +1809,79 @@ mod tests {
         (applied, mask)
     }
 
+    /// A schema whose one class declares no members at all — the shape that makes
+    /// N1/N2's legal-name set empty, which (unlike S2's) still narrows.
+    const MEMBERLESS: &str = r#"{
+      "db_id": "d", "db_path": "spider::d::Db",
+      "classes": { "E": { "simple_name": "E", "properties": [] } },
+      "associations": [], "enums": {}
+    }"#;
+
     #[test]
     fn none_position_yields_no_mask() {
         assert!(!run(&L2Position::None, &[], vocab(&[b"x"])).0);
+    }
+
+    /// Narrow for `pos` against `schema` with the bound-variable set `vars`.
+    fn run_vars(schema: &Schema, pos: &L2Position, vars: &[String], v: Vocab) -> (bool, BitMask) {
+        let grammar = CompiledGrammar::compile(v);
+        let mut mask = BitMask::with_len(grammar.mask_len());
+        let applied = narrow_into(
+            &mut mask,
+            &mut NarrowCache::new(),
+            schema,
+            pos,
+            &[],
+            &[],
+            vars,
+            grammar.vocab(),
+            grammar.eos_bit(),
+        );
+        (applied, mask)
+    }
+
+    #[test]
+    fn s2_alone_stops_narrowing_when_it_has_no_name_to_keep() {
+        // S2's candidate set covers everything its anchor admits (`AfterDollar`
+        // takes an identifier byte and nothing else), so with no bound name it
+        // would clear the whole mask and the EOS bit with it — issue #275. It is
+        // the only trie rule that gets the fail-open...
+        let v = vocab(&[b"x", b"y"]);
+        assert!(!run_vars(&schema(), &L2Position::RefVar, &[], v.clone()).0);
+        // ...and it is a statement about emptiness, not a blanket pass-through:
+        // one bound name and the rule narrows again.
+        let bound = [String::from("x")];
+        let (applied, mask) = run_vars(&schema(), &L2Position::RefVar, &bound, v);
+        assert!(
+            applied && bit(&mask, 0) && !bit(&mask, 1),
+            "only `x` is bound"
+        );
+    }
+
+    #[test]
+    fn the_sibling_name_rules_keep_masking_on_an_empty_name_set() {
+        // The guard above is deliberately *not* generalized to every empty legal
+        // set. These two anchors admit shapes their tries treat as non-candidates,
+        // which `fill_trie` keeps, so neither can empty the mask — and both still
+        // mask their phantoms, which a blanket "empty set narrows nothing" rule
+        // would have given away for a deadlock that cannot happen here.
+        let memberless = Schema::from_json(MEMBERLESS).expect("parses");
+        // N1/N2 on a class with no member at all: the phantom is cleared, the
+        // whitespace the byte-PDA also admits after the dot survives.
+        let v = vocab(&[b"name", b" "]);
+        let (applied, mask) = run_vars(&memberless, &L2Position::Member("E".to_owned()), &[], v);
+        assert!(applied, "a memberless class still narrows");
+        assert!(!bit(&mask, 0), "a phantom member is masked");
+        assert!(
+            bit(&mask, 1),
+            "the anchor keeps the non-candidate whitespace"
+        );
+        // N6 before the stream has emitted any column: the phantom column string
+        // is cleared, the closer the value position also admits survives.
+        let (applied, mask) = run(&L2Position::Column, &[], vocab(&[b"'c'", b")"]));
+        assert!(applied, "an as-yet-columnless relation still narrows");
+        assert!(!bit(&mask, 0), "a phantom column is masked");
+        assert!(bit(&mask, 1), "the anchor keeps the non-candidate closer");
     }
 
     #[test]

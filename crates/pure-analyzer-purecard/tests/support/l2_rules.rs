@@ -1,10 +1,13 @@
 //! The shipped L2 rule/scope-transition kinds, as stable display names.
 //!
-//! Shared via `#[path]` by the two lanes that reason about *which* rule is
-//! active at a position rather than what it masks: `schema_walk_rule_coverage.rs`
-//! (every reachable rule fires somewhere in the generated corpus) and
-//! `l2_precision.rs` (every rule is the recorded closer of at least one frozen
-//! fixture). Both use both symbols, so nothing here is a partial reuse.
+//! Shared via `#[path]` by the lanes that reason about *which* rule is active at
+//! a position rather than what it masks: `schema_walk_rule_coverage.rs` (every
+//! reachable rule fires somewhere in the generated corpus), `l2_precision.rs`
+//! (every rule is the recorded closer of at least one frozen fixture), and
+//! `l2_liveness.rs` (the liveness walk actually reached the two rules issue #275
+//! deadlocked on). The first two drive both symbols; the liveness lane names its
+//! two rules directly and reads only `rule_kind`, so the registry carries an
+//! `allow(dead_code)` for that target rather than being duplicated per lane.
 
 use purecard::schema::L2Position;
 
@@ -12,6 +15,7 @@ use purecard::schema::L2Position;
 /// display name — the source of truth [`rule_kind`] must stay in lockstep
 /// with (an exhaustive match with no wildcard arm makes a dropped variant a
 /// compile error here, not a silent coverage hole).
+#[allow(dead_code)]
 pub const ALL_RULE_KINDS: &[&str] = &[
     "SourceIdent",
     "SourceMethod",

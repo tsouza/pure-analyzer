@@ -2341,6 +2341,28 @@ impl ScopeTracker {
         }
     }
 
+    /// Whether S2 masks the **`$` sigil itself** here: the byte-PDA is at an anchor
+    /// where a `$` opens a refVar ([`State::opens_refvar_sigil`]) and the stream has
+    /// bound no variable at all.
+    ///
+    /// S2's legal-name set is the names the stream has bound, and before the first
+    /// binder that set is empty — so narrowing the identifier *after* the sigil
+    /// masks every token the byte-PDA offers at `AfterDollar` (which admits nothing
+    /// but an identifier) and the EOS bit with them: no token to sample and no way
+    /// to stop (issue #275). The rule therefore reads one token earlier, where it
+    /// still has a live alternative to offer. It is the same claim, made where it
+    /// can be acted on: `$` cannot open a variable reference when nothing is bound,
+    /// so the sigil is what is illegal — and, because
+    /// [`bound_vars`](Self::bound_vars) is a deliberate **superset** of the real
+    /// bindings (§6.5 S2), an empty record means no binder candidate has been seen
+    /// anywhere in the stream, never merely that one went unrecorded.
+    ///
+    /// Gated on the anchor state rather than on the byte alone so a `$` *inside* a
+    /// string literal (`'a$b'`) is untouched.
+    pub(crate) fn masks_unbound_sigil(&self, state: State) -> bool {
+        state.opens_refvar_sigil() && self.bound_vars.is_empty()
+    }
+
     /// The **post-dot** L2 target a fused nav-dot token (`.<member>` / `.<col>` in
     /// one BPE token) should be narrowed against here, or [`None`] where a following
     /// `.` would open no class-member / relation-column navigation.
@@ -2427,7 +2449,22 @@ impl ScopeTracker {
     /// Record `name` as a bound variable. Deduplicated so the length stays a
     /// faithful identity for [`L2Position::RefVar`]'s cache key — a re-recorded
     /// name must not churn the memo for a set that did not change.
+    ///
+    /// A name the byte-PDA could never spell after a `$` is **not** recorded, and
+    /// that guard is load-bearing rather than tidiness. `bound_vars` is a
+    /// deliberate superset, so an extra *plain* name only lets more through; a
+    /// `::`-joined one is different in kind. S2's trie walks its names with
+    /// [`NameShape::Plain`](crate::schema::trie::NameShape), which ends a lexeme at
+    /// the first `:` — so such a name is a branch no `$<IDENT>` can ever complete,
+    /// and a stream that walks onto its live prefix has every continuation cleared
+    /// as a divergence *and* every boundary token cleared as a mid-name token: an
+    /// empty mask, a decoder deadlock (issue #275, live: a join lambda's
+    /// `row: meta::pure::tds::TDSRow[1]|$meta`, where the binder's *type* path
+    /// reached this recorder).
     fn bind_var(&mut self, name: &str) {
+        if !name.bytes().all(is_ident_tail) {
+            return;
+        }
         if !self.bound_vars.iter().any(|bound| bound == name) {
             self.bound_vars.push(name.to_owned());
         }

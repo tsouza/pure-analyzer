@@ -124,6 +124,7 @@ const PURECARD_FUZZ_MANIFEST: &str = "crates/pure-analyzer-purecard/fuzz/Cargo.t
 const PURECARD_FUZZ_TARGETS: &[&str] = &[
     "accept_token",
     "allowed_mask",
+    "l2_mask_liveness",
     "schema_from_json",
     "schema_walk_generation",
     "spec_equivalence",

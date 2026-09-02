@@ -48,6 +48,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "l2_mask_liveness"
+path = "fuzz_targets/l2_mask_liveness.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "schema_from_json"
 path = "fuzz_targets/schema_from_json.rs"
 test = false

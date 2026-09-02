@@ -561,6 +561,34 @@ impl State {
         )
     }
 
+    /// Whether a `$` read here opens a **refVar sigil** — the states whose
+    /// transition on `$` is [`State::AfterDollar`].
+    ///
+    /// An L1 fact the L2 overlay needs, so it lives beside the transition
+    /// function that decides it rather than being restated in `schema/`: S2 can
+    /// only mask an unbindable `$` at the anchor *before* the sigil is committed,
+    /// and it must not mask a `$` that is merely a byte inside a string literal
+    /// (`'a$b'`). The list is not just the two value hubs: a lambda body, a block
+    /// statement, and the four operator states that may still grow into a longer
+    /// operator (`- < > |`) all open a value on `$` too.
+    /// `refvar_sigil_states_match_the_transition_function` recomputes the whole
+    /// set from the transition function, so the two cannot drift.
+    #[must_use]
+    pub(crate) const fn opens_refvar_sigil(self) -> bool {
+        matches!(
+            self,
+            State::ExpectValue
+                | State::ExpectValueReq
+                | State::ExpectLambdaBody
+                | State::BlockStmt
+                | State::BlockStmtClose
+                | State::SawDash
+                | State::SawPipe
+                | State::SawLt
+                | State::SawGt
+        )
+    }
+
     /// The lexeme class this state is *inside*, if any (`None` = an inter-lexeme
     /// or structural position).
     ///
@@ -2305,6 +2333,26 @@ mod tests {
             black_holes.is_empty(),
             "reached configs without a live in-bound successor: {black_holes:?}",
         );
+    }
+
+    #[test]
+    fn refvar_sigil_states_match_the_transition_function() {
+        // `opens_refvar_sigil` is a hand-written list; this recomputes it from the
+        // transition function over every (state, stack top) pair, so adding a `$`
+        // transition anywhere without listing the state here reddens the gate
+        // instead of silently taking S2's sigil mask dark at that position.
+        for state in ALL_STATES {
+            let opens = ALL_FRAMES
+                .iter()
+                .map(|frame| Some(*frame))
+                .chain(std::iter::once(None))
+                .any(|top| matches!(step(state, top, b'$'), Step::Next(State::AfterDollar)));
+            assert_eq!(
+                opens,
+                state.opens_refvar_sigil(),
+                "opens_refvar_sigil disagrees with the transition function at {state:?}"
+            );
+        }
     }
 
     #[test]

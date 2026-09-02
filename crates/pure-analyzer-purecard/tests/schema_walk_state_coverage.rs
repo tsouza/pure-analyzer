@@ -90,15 +90,6 @@ const STRUCTURAL_BYTES: &[u8] = b"abXY1_ |{}()[].,;:$%'-><=!&+*/";
 ///   restriction — so unlike the entries above it would disappear the moment a
 ///   path-prefix token entered the corpus.
 ///
-/// - `InMultiplicity`: the generic `[*]` multiplicity slot. This state and
-///   `InDateLit` were both *off* this list between issue #117 and issue #55's
-///   Phase 7, reached not through any intentional multiplicity/date construct
-///   but incidentally — a long walk occasionally strings `STRUCTURAL_BYTES`'
-///   `[`/`*` or `%`/digit tokens adjacently by chance. Phase 7 reshuffled the
-///   exploration stream off this one again: a typed binder's `[…]` is now its
-///   own `ExpectBinderMult` chain, leaving only that incidental value-position
-///   route. `InDateLit` stays reached. Nothing about either state's grammar
-///   changed, and this entry would disappear again on the next reshuffle.
 /// - `MilestoneL`…`MilestoneLates`/`InMilestoneLit`: the `%latest` keyword chain
 ///   (issue #55 Phase 7). `InMilestoneLit` *was* reached — through `%a`,
 ///   `%filter`, `%limit` and friends, every one of which the pinned engine
@@ -126,14 +117,73 @@ const EXPECTED_UNREACHABLE: &[&str] = &[
     "MilestoneLate",
     "MilestoneLates",
     "InMilestoneLit",
-    "InMultiplicity",
+];
+
+/// Hand-written walks replayed **alongside** the generated corpus, pinning states
+/// the random walker reaches only by chance.
+///
+/// The generator samples from the L2 mask at every step, so any change to the
+/// overlay reshuffles every draw it makes: a state can drop out of the sampled
+/// corpus without becoming unreachable. `DateFrac` (the `.` that opens a date
+/// literal's fractional seconds, inside `.all(…)`'s argument list, which N3b's
+/// argument rule admits as a milestone date) was covered that way until issue
+/// #275's S2 sigil mask removed the `$`-before-any-binder branches the sampler
+/// used to spend draws on. It is still reachable — this walk reaches it — so it is
+/// pinned here rather than moved into [`EXPECTED_UNREACHABLE`], which may only
+/// ever shrink (constitution §7: a gate is never self-lowered).
+///
+/// `InMultiplicity` is here for exactly the same reason, and its own
+/// [`EXPECTED_UNREACHABLE`] entry is retired by it: that entry said in as many
+/// words that the state was reached "incidentally" and that "this entry would
+/// disappear again on the next reshuffle". It is reachable through a lambda body's
+/// `[*]` — this walk reaches it — so a pin is the better remedy than a residue
+/// note, and the list shrinks by one.
+///
+/// Each walk is a token list over the db's own vocabulary, and every token must be
+/// admissible where it sits: a stale probe reddens the lane instead of quietly
+/// covering nothing.
+const PROBE_WALKS: &[(&str, &[&[u8]])] = &[
+    (
+        "battle_death",
+        &[
+            b"|",
+            b"spider::battle_death::model::default::Battle",
+            b".",
+            b"all",
+            b"(",
+            b"%",
+            b"1",
+            b":",
+            b"1",
+            b".",
+        ],
+    ),
+    (
+        "battle_death",
+        &[
+            b"|",
+            b"spider::battle_death::model::default::Battle",
+            b".",
+            b"all",
+            b"(",
+            b")",
+            b"-",
+            b">",
+            b"filter",
+            b"(",
+            b"a",
+            b"|",
+            b"[",
+            b"*",
+        ],
+    ),
 ];
 
 fn corpus_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("corpus/gold_queries.jsonl")
 }
 
-fn grammar_and_schema(db_id: &str) -> (CompiledGrammar, purecard::Schema) {
+fn grammar_and_schema(db_id: &str) -> (CompiledGrammar, purecard::Schema, TokenVocab) {
     let extra: Vec<Vec<u8>> = STRUCTURAL_BYTES.iter().map(|&byte| vec![byte]).collect();
     let queries: Vec<String> = load_gold(&corpus_path())
         .expect("open the committed gold corpus")
@@ -150,7 +200,7 @@ fn grammar_and_schema(db_id: &str) -> (CompiledGrammar, purecard::Schema) {
     let vocab = TokenVocab::build(&refs, &extra);
     let grammar = CompiledGrammar::compile(vocab.vocab());
     let schema = load_schema(db_id);
-    (grammar, schema)
+    (grammar, schema, vocab)
 }
 
 /// Every [`State`] reachable through the schema-walk generator's own
@@ -165,7 +215,7 @@ fn grammar_and_schema(db_id: &str) -> (CompiledGrammar, purecard::Schema) {
 fn every_reachable_pda_state_is_visited_at_least_once() {
     let mut visited: HashSet<State> = HashSet::new();
     for &db_id in FIXTURE_DBS {
-        let (grammar, schema) = grammar_and_schema(db_id);
+        let (grammar, schema, _vocab) = grammar_and_schema(db_id);
         let walks = generate_schema_walks(&grammar, &schema);
         for walk in &walks {
             let mut session = DecoderSession::with_schema(&grammar, schema.clone())
@@ -187,6 +237,30 @@ fn every_reachable_pda_state_is_visited_at_least_once() {
                         .state(),
                 );
             }
+        }
+    }
+
+    for (db_id, walk) in PROBE_WALKS {
+        let (grammar, schema, vocab) = grammar_and_schema(db_id);
+        let mut session =
+            DecoderSession::with_schema(&grammar, schema.clone()).expect("grammar is fixed-engine");
+        for token in *walk {
+            let id = vocab
+                .id_of(token)
+                .unwrap_or_else(|| panic!("probe token not in the {db_id} vocabulary: {token:?}"));
+            assert!(
+                session.allowed_mask().test(id),
+                "probe walk token {token:?} is masked in {db_id} — the probe is stale"
+            );
+            session
+                .accept_token(id)
+                .expect("a probe walk's own token is admissible");
+            visited.insert(
+                session
+                    .pda()
+                    .expect("fixed-engine grammar always exposes its Pda")
+                    .state(),
+            );
         }
     }
 

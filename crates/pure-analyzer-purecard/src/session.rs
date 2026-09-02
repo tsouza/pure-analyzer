@@ -26,7 +26,9 @@ use crate::grammar::pda::{Frame, Pda};
 use crate::mask::BitMask;
 use crate::recognizer::ByteRecognizer;
 use crate::schema::Schema;
-use crate::schema::narrow::{NarrowCache, admits_eos, narrow_fused_into, narrow_into};
+use crate::schema::narrow::{
+    NarrowCache, admits_eos, narrow_fused_into, narrow_into, narrow_sigil_into,
+};
 use crate::schema::scope::{L2Position, ScopeTracker};
 
 /// Which automaton a [`DecoderSession`] drives.
@@ -307,8 +309,7 @@ impl<'g> DecoderSession<'g> {
         }
         // L2 (§6): narrow the syntactic mask to the schema-legal set at exactly
         // this point. A pure `intersect` can only clear bits, so `L2 ⊆ L1` is
-        // structural; the narrow set always keeps EOS so a complete query stays
-        // completable. The set is built into the reused `narrow_buf` (no per-step
+        // structural. The set is built into the reused `narrow_buf` (no per-step
         // alloc); when `schema` is `None` the block is skipped entirely, so the
         // L1-only path keeps its zero added per-step cost. `with_schema` already
         // refused a spec-compiled grammar, so `schema.is_some()` implies `Fixed` —
@@ -327,6 +328,20 @@ impl<'g> DecoderSession<'g> {
                 self.grammar.vocab(),
                 self.grammar.eos_bit(),
             ) {
+                self.mask.intersect(&self.narrow_buf);
+            }
+            // S2's sigil half: before the stream has bound anything, a `$` opens a
+            // variable reference no name can satisfy. Read here rather than at the
+            // identifier the sigil opens, where the rule would clear every token
+            // `AfterDollar` admits and deadlock the decoder (§6.5 S2, issue #275).
+            if self.tracker.masks_unbound_sigil(pda.state())
+                && narrow_sigil_into(
+                    &mut self.narrow_buf,
+                    &mut self.narrow_cache,
+                    self.grammar.vocab(),
+                    self.grammar.eos_bit(),
+                )
+            {
                 self.mask.intersect(&self.narrow_buf);
             }
             // Byte-level BPE fuses the navigation `.` with the property/column's first
