@@ -76,11 +76,12 @@ schema_walker = { package = "purecard-schema-walker", path = "schema-walker" }
 ureq = { version = "3.3.0", default-features = false, features = ["json"] }
 # M2 mask testing (dev-only, so `check-core-deplight`'s `[dependencies] ⊆
 # {thiserror, serde, serde_json}` gate is untouched). `proptest` drives the
-# §8.5 rollback/equivalence properties from committed seeds
-# (`proptest-regressions/`); `criterion` measures `allowed_mask` latency
-# (`benches/allowed_mask.rs`) — the workspace pin already has default
-# features off (root Cargo.toml), just add the harness feature this crate's
-# `harness = false` bench needs.
+# §8.5 rollback/equivalence properties; its default failure persistence pins a
+# failing case's seed under `tests/proptest-regressions/` to be committed with
+# the fix (nothing has failed, so no seed file is tracked yet). `criterion`
+# measures `allowed_mask` latency (`benches/allowed_mask.rs`) — the workspace
+# pin already has default features off (root Cargo.toml), just add the harness
+# feature this crate's `harness = false` bench needs.
 proptest.workspace = true
 criterion = { workspace = true, features = ["cargo_bench_support"] }
 

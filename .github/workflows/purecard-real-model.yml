@@ -4,11 +4,23 @@ name: PureCARD real-model inference
 # sample, accept, EOS-map) and compiles every completed constrained output
 # with the pinned Legend stack. Needs a real model forward pass and a local
 # Docker Legend engine, neither available on hosted `ubuntu-latest` runners,
-# so this runs on a self-hosted runner carrying the `purecard-real-model`
-# label. If no such runner is registered, the job sits queued rather than
-# running — visible as "Queued" in the Actions tab, never a silent pass (the
-# acceptance criterion this satisfies explicitly forbids a silent skip). See
-# the PR that introduced this workflow for how to register one.
+# so the inference job runs on a self-hosted runner carrying the
+# `purecard-real-model` label.
+#
+# No such runner is registered, so this lane has never executed. A job that
+# targets an absent self-hosted label does not fail — it queues until GitHub's
+# own ~24h expiry cancels it, and a `cancelled` conclusion reads as a
+# deliberate stop rather than a missing runner, alerting nobody (issues #293,
+# #303). The hosted `runner-preflight` job below therefore fails the run in
+# under a minute unless the repository variable `PURECARD_REAL_MODEL_RUNNER`
+# is set to `registered`, so the lane's unavailability is a red, alertable
+# failure instead of a nightly cancellation that reads as benign.
+#
+# Whoever registers the runner sets that variable to `registered`; clearing it
+# parks the lane again. The declaration is a repository variable rather than a
+# live query of the runner registry because `administration` is not a
+# GITHUB_TOKEN permission, and a PAT carrying it would be a standing
+# credential held for a lane that cannot currently run.
 on:
   schedule:
     - cron: "41 5 * * *"
@@ -16,7 +28,10 @@ on:
 
 concurrency:
   group: purecard-real-model-${{ github.ref }}
-  cancel-in-progress: true
+  # Never cancel an in-flight run: `cancelled` is the ambiguous terminal state
+  # this lane exists to stop manufacturing, and a real inference run is long
+  # enough that the next nightly trigger would routinely kill it.
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -25,10 +40,25 @@ env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: "1"
   QWEN_INFER_REVISION: ea3f2471cf1b1f0db85067f1ef93848e38e88c25
+  # The value `PURECARD_REAL_MODEL_RUNNER` must carry before the inference job
+  # is dispatched to a self-hosted label at all.
+  RUNNER_REGISTERED: registered
 
 jobs:
+  runner-preflight:
+    name: Real-model runner preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Assert a purecard-real-model runner is declared registered
+        if: vars.PURECARD_REAL_MODEL_RUNNER != env.RUNNER_REGISTERED
+        run: |
+          echo "::error title=PureCARD real-model lane is parked::No self-hosted runner carries the purecard-real-model label, so the inference job cannot run. Register one, then set the repository variable PURECARD_REAL_MODEL_RUNNER=registered. This failure is the lane's honest terminal state (issues #293, #303), not a regression in the code under test."
+          exit 1
+
   real-model-inference:
     name: Real-model inference + Legend compile-check
+    needs: [runner-preflight]
     runs-on: [self-hosted, macos, purecard-real-model]
     timeout-minutes: 45
     steps:
@@ -74,7 +104,7 @@ jobs:
 
   no-warnings:
     name: no-warnings (log sweep)
-    needs: [real-model-inference]
+    needs: [runner-preflight, real-model-inference]
     if: always()
     permissions:
       actions: read # reusable sweep reads this workflow run's completed logs

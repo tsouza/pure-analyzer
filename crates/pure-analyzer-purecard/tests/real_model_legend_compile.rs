@@ -100,11 +100,14 @@ struct ModeTally {
 /// only type-checks — execution-equivalence over real data is a distinct,
 /// larger scope this proof does not claim.
 ///
-/// Live-verified against the pinned model/fixtures before this was written
-/// (see the PR description); the 100% floor is pinned as a regression gate,
-/// matching `live_legend_schema_walk_compile.rs`'s own 269/269 precedent — a
-/// future model/fixture change that regresses this is a real finding, not
-/// noise to retune away.
+/// Live-verified locally against the pinned model/fixtures before this was
+/// written (see the PR description); the 100% floor is pinned as a regression
+/// gate, matching `live_legend_schema_walk_compile.rs`'s own 269/269 precedent
+/// — a future model/fixture change that regresses this is a real finding, not
+/// noise to retune away. No CI run has re-executed it: the scheduled lane that
+/// owns it (`.github/workflows/purecard-real-model.yml`) dispatches to a
+/// self-hosted runner that is not registered, so the floor is a local
+/// observation pinned for the next local run, not a continuously enforced gate.
 #[test]
 fn real_model_constrained_outputs_compile_and_are_return_type_faithful() {
     let path = generated_queries_path();
