@@ -964,6 +964,24 @@ fn step_expect_value_req(stack_top: Option<Frame>, byte: u8) -> Step {
     value_position(stack_top, byte, false)
 }
 
+/// The bytes that **end** a completed term rather than extend it: an element
+/// separator, a block statement's `;`, and the three frame closers — every
+/// non-whitespace byte [`step_after_value`] below routes on the open *frame*
+/// instead of on the expression. Everything else it takes (an operator, the
+/// navigation `.`, the step arrow's `-`, a typed binder's `:`) makes the
+/// completed term an operand of something longer.
+///
+/// Exposed to L2 (`schema::narrow`) exactly as [`is_ident_tail`] is, and for the
+/// same reason: an overlay rule that permits only what may follow a completed
+/// term has to know which bytes end one, and re-deriving that list away from the
+/// automaton is how the two drift (constitution §4). Each byte stays
+/// frame-guarded *here* — a `,` needs an element list, a `;` a block query, a
+/// closer its own opener — so which of them is legal at a given position remains
+/// the byte-PDA's decision alone. Ascending byte order, which is the order
+/// `term_end_bytes_are_the_frame_decided_bytes_of_the_after_value_hub` derives
+/// from the hub itself.
+pub(crate) const TERM_END_BYTES: &[u8] = b"),;]}";
+
 fn step_after_value(stack_top: Option<Frame>, byte: u8) -> Step {
     match byte {
         b if is_ws(b) => Step::Next(State::AfterValue),
@@ -2092,8 +2110,8 @@ mod tests {
     use std::collections::{HashMap, VecDeque, hash_map::Entry};
 
     use super::{
-        ALL_FRAMES, ALL_STATES, Frame, LexKind, MILESTONE_LATEST, Pda, State, Step, WS,
-        is_ident_start, is_ident_tail, step,
+        ALL_FRAMES, ALL_STATES, Frame, LexKind, MILESTONE_LATEST, Pda, State, Step, TERM_END_BYTES,
+        WS, is_ident_start, is_ident_tail, step,
     };
 
     /// The deepest stack included in the bounded reachability regression.
@@ -2819,6 +2837,31 @@ mod tests {
         assert!(accepts(
             "|db::Db->tableReference('default', 'T')->tableToTDS()->limit(5)"
         ));
+    }
+
+    /// The one byte the [`State::AfterValue`] hub decides on the open frame that
+    /// nonetheless *continues* the term: a typed binder's `:`, which annotates
+    /// the name it follows instead of ending it.
+    const TERM_CONTINUING_FRAME_BYTE: u8 = b':';
+
+    /// [`TERM_END_BYTES`] is derived from the hub, not maintained beside it: a
+    /// byte ends a completed term exactly when [`State::AfterValue`] refuses it
+    /// on an empty stack (it needs a frame to mean anything) but takes it under
+    /// some open frame — the typed-binder colon aside. A closer, separator or
+    /// statement `;` added to the hub later therefore has to be classified here
+    /// rather than silently missed by the L2 rule that reads the list.
+    #[test]
+    fn term_end_bytes_are_the_frame_decided_bytes_of_the_after_value_hub() {
+        let derived: Vec<u8> = (0..=u8::MAX)
+            .filter(|&byte| byte != TERM_CONTINUING_FRAME_BYTE)
+            .filter(|&byte| matches!(step(State::AfterValue, None, byte), Step::Dead))
+            .filter(|&byte| {
+                ALL_FRAMES
+                    .iter()
+                    .any(|&frame| !matches!(step(State::AfterValue, Some(frame), byte), Step::Dead))
+            })
+            .collect();
+        assert_eq!(derived, TERM_END_BYTES);
     }
 
     #[test]

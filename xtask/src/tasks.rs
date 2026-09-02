@@ -1403,6 +1403,13 @@ const GRAMMAR_DOC: &str = "docs/spec/grammar.md";
 const OVERVIEW_DOC: &str = "docs/spec/overview.md";
 /// PureCARD decoder-testing guide relative to [`PURECARD_ROOT`].
 const DECODER_TESTING_DOC: &str = "docs/methodology/decoder-testing.md";
+/// PureCARD L2 schema spec relative to [`PURECARD_ROOT`].
+const SCHEMA_DOC: &str = "docs/spec/schema.md";
+/// The closed source-method call whose corpus continuations N3e cites as its
+/// evidence (`docs/spec/schema.md` §6.6).
+const CLOSED_EXTENT: &str = ".all()";
+/// The JSONL field holding a gold record's query text.
+const GOLD_TEXT_FIELD: &str = "pure_text";
 /// Enum literals whose combined corpus occurrence count is documented.
 const SORT_DIRECTION_LITERALS: [&str; 2] = ["SortDirection.ASC", "SortDirection.DESC"];
 /// Pipeline step whose per-record gold count is documented.
@@ -1437,6 +1444,7 @@ pub fn check_doc_facts() -> Result<()> {
     let docs = collect_docs()?;
     check_doc_enumerations(&docs, gold, &mut errors);
     check_grammar_and_usage_facts(&mut errors)?;
+    check_extent_continuation_facts(&mut errors)?;
     check_fuzz_target_count_facts(&docs, &mut errors)?;
 
     if !errors.is_empty() {
@@ -1665,6 +1673,100 @@ fn check_grammar_and_usage_facts(errors: &mut Vec<String>) -> Result<()> {
                 gold_corpus.display()
             ));
         }
+    }
+    Ok(())
+}
+
+/// What follows every closed `Class.all()` in the gold corpus.
+#[derive(Default)]
+struct ExtentContinuations {
+    /// A pipeline step's `->`.
+    arrow: usize,
+    /// A property navigation that maps over the extent.
+    dot: usize,
+    /// The end of the query text.
+    end: usize,
+    /// Anything else — the continuation N3e's "and by nothing else" denies.
+    other: usize,
+}
+
+/// How N3e's continuation counts are spelled in prose, so the one source of the
+/// numbers is the corpus scan rather than a maintainer's memory.
+fn extent_citation(counts: &ExtentContinuations) -> String {
+    let end = if counts.end == 0 {
+        "never by the end of a query".to_owned()
+    } else {
+        format!("by the end of a query {} times", counts.end)
+    };
+    format!(
+        "`->` {} times, by a `.` property {} times, and {end}",
+        counts.arrow, counts.dot
+    )
+}
+
+/// Classify what follows each closed `Class.all()` across the gold corpus.
+///
+/// Parsed per record rather than matched against the raw JSONL, because the
+/// bytes that decide the classification — the whitespace and the `\n` between an
+/// extent and its continuation — are JSON *escapes* in the file and real
+/// characters only once decoded.
+fn count_extent_continuations(path: &Path) -> Result<ExtentContinuations> {
+    let content =
+        std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+    let mut counts = ExtentContinuations::default();
+    for line in content.lines().filter(|line| !line.trim().is_empty()) {
+        let record: serde_json::Value = serde_json::from_str(line)
+            .with_context(|| format!("parsing a record of {}", path.display()))?;
+        let text = record
+            .get(GOLD_TEXT_FIELD)
+            .and_then(serde_json::Value::as_str)
+            .with_context(|| format!("a record of {} has no {GOLD_TEXT_FIELD}", path.display()))?;
+        let mut from = 0;
+        while let Some(at) = text[from..].find(CLOSED_EXTENT) {
+            let after = from + at + CLOSED_EXTENT.len();
+            let rest = text[after..].trim_start();
+            if rest.is_empty() {
+                counts.end += 1;
+            } else if rest.starts_with("->") {
+                counts.arrow += 1;
+            } else if rest.starts_with('.') {
+                counts.dot += 1;
+            } else {
+                counts.other += 1;
+            }
+            from = after;
+        }
+    }
+    Ok(counts)
+}
+
+/// Check N3e's cited continuation counts against the corpus they are read from.
+///
+/// The numbers this rule's evidence rests on drifted from the corpus once
+/// already (issue #296's review: a documented 438/37/25 split against an actual
+/// 463/38/0), and nothing recomputed them. This does.
+fn check_extent_continuation_facts(errors: &mut Vec<String>) -> Result<()> {
+    let gold_corpus = purecard_path(GOLD_CORPUS);
+    let schema_doc_path = purecard_path(SCHEMA_DOC);
+    let counts = count_extent_continuations(&gold_corpus)?;
+    if counts.other > 0 {
+        errors.push(format!(
+            "{} holds {} closed `{CLOSED_EXTENT}` continuations that are neither a step \
+             arrow, a property navigation nor the end of a query, so N3e's \"and by \
+             nothing else\" no longer holds",
+            gold_corpus.display(),
+            counts.other
+        ));
+    }
+    let schema_doc = std::fs::read_to_string(&schema_doc_path)
+        .with_context(|| format!("reading {}", schema_doc_path.display()))?;
+    let citation = extent_citation(&counts);
+    if !schema_doc.contains(&citation) {
+        errors.push(format!(
+            "{} does not cite N3e's continuation counts from {}: expected \"{citation}\"",
+            schema_doc_path.display(),
+            gold_corpus.display()
+        ));
     }
     Ok(())
 }

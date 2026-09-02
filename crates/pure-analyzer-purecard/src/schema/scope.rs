@@ -300,11 +300,20 @@ pub enum L2Position {
     /// function 'and(ModelList[*],String[1])'"; `{|…::CarMakers.all()*'Accelerate_T2'}`
     /// → "Collection element must have a multiplicity [1]"). What an extent *does*
     /// take is a pipeline step, a property navigation that maps over it, or
-    /// nothing at all — and that is exactly what the corpus shows: across the 5034
-    /// gold queries a closed `.all()` is followed by `->` 438 times, by a `.`
-    /// property 37 times, and by end-of-query 25 times, and by nothing else. The
-    /// same three, and only those three, in the modern-dialect seeds and the
-    /// engine-labelled differential corpus.
+    /// nothing at all. The corpus attests the first two and is **silent** on the
+    /// third: no gold query, modern-dialect seed or differential record ends a
+    /// pipeline on its extent, so the third continuation rests on the grammar and
+    /// not on a count. The split itself is cited once, in `docs/spec/schema.md`
+    /// §6.6, where `cargo xtask check-doc-facts` recomputes it from the corpus.
+    ///
+    /// "Nothing at all" is not only the end of the *stream*: `pipeline = source ,
+    /// { "->" step }` (`docs/spec/grammar.md` §5.2) permits zero steps, so a closed
+    /// extent already is a whole pipeline, and one enclosed in a frame is ended by
+    /// that frame's own closer or separator (`{|Class.all()}`, `{|let c =
+    /// Class.all(); …}`). The permit set therefore admits the terminator family
+    /// wholesale and leaves the byte-PDA to decide which of them the open frame
+    /// really takes — reading only the EOS bit made the rule accept the top-level
+    /// `|Class.all()` and refuse the identical enclosed form (issue #296).
     ///
     /// The direct successor of [`StoreMethod`](L2Position::StoreMethod)'s own
     /// rule: N3c stops a method being arrowed off the bare `Class<T>[1]` metatype,
@@ -342,11 +351,12 @@ pub enum L2Position {
     /// `divide(Table[1],String[1])`, `plus(Any[2])`, `minus(Any[2])`,
     /// `times(Any[2])`).
     ///
-    /// Deliberately **subtractive**, unlike `SourceExtent`'s permit set: a bare
+    /// **Subtractive** where `SourceExtent` is a permit set: a bare
     /// `|…::Db->tableReference('T','S')` compiles live and returns `Table`, and
     /// `=='x'` / `!='x'` compile through `equal(Any[1],Any[1])`, so this rule
-    /// clears the attested operators and leaves every closer, separator, `.`
-    /// navigation and equality comparison alone.
+    /// clears the attested operators and nothing else. The terminators it leaves
+    /// alone `SourceExtent` leaves alone too; what separates the two rules is the
+    /// `.` navigation and the equality comparisons a `Table[1]` also takes.
     StoreResult {
         /// Whether the `-` that opens the step arrow has already been emitted, so
         /// only the `>` that completes it may follow — the same reassembly guard
