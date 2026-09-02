@@ -117,6 +117,15 @@ analysis-semantic-corpus-verify:
 analysis-semantic-corpus-refresh:
     cargo xtask analysis-semantic-corpus --refresh
 
+# Replay frozen M4a comparison evidence through the real lowering and comparison API.
+analysis-comparison-corpus-verify:
+    cargo xtask analysis-comparison-corpus
+
+# Verify decisive M4a evidence against an exactly pinned running Legend engine,
+# then replay the frozen source pairs locally. Indecisive rows remain result-free.
+analysis-comparison-corpus-refresh:
+    cargo xtask analysis-comparison-corpus --refresh
+
 # Run doctests explicitly: nextest does not execute them. All features remain
 # compile-checked here; PureCARD's environment-bound feature tests are separate
 # integration-test binaries, so they are not executed by this doc-only command.

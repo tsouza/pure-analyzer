@@ -3,6 +3,22 @@
 // engine that produced it. Ordinary corpus replay is hermetic and runs in Rust.
 
 import { die, notice } from "./lib/ci.mjs";
+import {
+  assertEngineVersion,
+  canonicalJson,
+  checkedEngineVersion,
+  executeEvidence,
+  jsonEqual,
+  legendEngineBaseUrl,
+} from "./lib/legend-engine.mjs";
+
+export {
+  EngineUnavailableError,
+  PinnedEngineError,
+  assertEngineVersion,
+  canonicalJson,
+  jsonEqual,
+} from "./lib/legend-engine.mjs";
 
 export const CORPUS_DIRECTORY = "crates/pure-analyzer-analysis/corpus/legend-4.113.0";
 export const METADATA_PATH = `${CORPUS_DIRECTORY}/metadata.json`;
@@ -11,9 +27,6 @@ export const SCHEMA_VERSION = 1;
 export const EQUAL = "equal";
 export const DIFFERENT = "different";
 export const INDECISIVE = "indecisive";
-export const INFO_ENDPOINT = "/api/server/v1/info";
-export const HTTP_OK = 200;
-export const REQUEST_TIMEOUT_MS = 8_000;
 // Required semantic classes live in code so a corpus-only change cannot
 // silently remove the evidence needed to guard a future rewrite.
 export const CANONICAL_FAMILIES = Object.freeze([
@@ -21,12 +34,6 @@ export const CANONICAL_FAMILIES = Object.freeze([
   "bag-semantics",
   "three-valued-logic",
 ]);
-
-/** A connection or timeout prevented an engine request from completing. */
-export class EngineUnavailableError extends Error {}
-
-/** The live engine is not the exact immutable corpus pin. */
-export class PinnedEngineError extends Error {}
 
 function isObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -60,21 +67,6 @@ function assertEvidence(value, path, decisive) {
     throw new Error(`${path}: decisive evidence must include a result`);
   }
   return value;
-}
-
-/** Canonical JSON used only for exact frozen-result comparisons. */
-export function canonicalJson(value) {
-  if (value === null || typeof value !== "object") return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-  return `{${Object.keys(value)
-    .sort()
-    .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
-    .join(",")}}`;
-}
-
-/** Return whether two JSON values are structurally equal, independent of object key order. */
-export function jsonEqual(left, right) {
-  return canonicalJson(left) === canonicalJson(right);
 }
 
 /** Validate and return the immutable engine-pinned corpus metadata. */
@@ -211,24 +203,6 @@ export function assertCorpus(metadata, fixtures) {
   return fixtures;
 }
 
-function baseUrl() {
-  const raw = process.env.LEGEND_ENGINE_URL ?? "http://localhost:6300";
-  let url;
-  try {
-    url = new URL(raw);
-  } catch (error) {
-    throw new Error(`invalid LEGEND_ENGINE_URL ${JSON.stringify(raw)}: ${error.message}`);
-  }
-  if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new Error("LEGEND_ENGINE_URL must use http or https");
-  }
-  return raw.replace(/\/+$/, "");
-}
-
-function endpointUrl(base, endpoint) {
-  return `${base}${endpoint}`;
-}
-
 async function readJson(path) {
   try {
     return JSON.parse(await Bun.file(path).text());
@@ -248,86 +222,10 @@ async function loadCorpus() {
   return { metadata, fixtures: assertCorpus(metadata, parseFixtures(text, CASES_PATH)) };
 }
 
-/** Reject a missing or version-different engine before asking it to execute anything. */
-export function assertEngineVersion(version, expectedVersion) {
-  if (!nonEmptyString(version)) {
-    throw new Error("Legend engine info did not contain git.build.version");
-  }
-  if (version !== expectedVersion) {
-    throw new PinnedEngineError(
-      `Legend engine version ${version} does not match pinned ${expectedVersion}. ` +
-        "The frozen corpus is immutable; create a new versioned corpus for a deliberate re-pin.",
-    );
-  }
-  return version;
-}
-
-async function requestJson(base, endpoint, method, body, contentType, label) {
-  let response;
-  try {
-    response = await fetch(endpointUrl(base, endpoint), {
-      method,
-      headers: { "content-type": contentType },
-      body,
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    });
-  } catch (error) {
-    throw new EngineUnavailableError(`${label}: request failed: ${error.message}`);
-  }
-  const text = await response.text();
-  if (response.status !== HTTP_OK) {
-    throw new Error(`${label}: expected HTTP ${HTTP_OK}, got ${response.status}: ${text}`);
-  }
-  try {
-    return JSON.parse(text);
-  } catch (error) {
-    throw new Error(`${label}: response was not JSON: ${error.message}`);
-  }
-}
-
-async function checkedEngineVersion(base, expectedVersion) {
-  const info = await requestJson(base, INFO_ENDPOINT, "GET", undefined, "application/json", "engine info");
-  assertEngineVersion(info?.info?.legendSDLC?.["git.build.version"], expectedVersion);
-}
-
-async function executionResult(base, metadata, fixture, side) {
-  const model = await requestJson(
-    base,
-    metadata.model_endpoint,
-    "POST",
-    fixture.model,
-    "text/plain",
-    `${fixture.id}: model`,
-  );
-  const lambda = await requestJson(
-    base,
-    metadata.lambda_endpoint,
-    "POST",
-    fixture[side].lambda,
-    "text/plain",
-    `${fixture.id}: ${side} lambda`,
-  );
-  return requestJson(
-    base,
-    metadata.execution_endpoint,
-    "POST",
-    JSON.stringify({
-      model,
-      function: lambda,
-      mapping: null,
-      runtime: null,
-      context: { _type: "BaseExecutionContext" },
-      parameterValues: [],
-    }),
-    "application/json",
-    `${fixture.id}: ${side} execution`,
-  );
-}
-
 async function verifyFixture(base, metadata, fixture) {
   if (fixture.outcome === INDECISIVE) return;
-  const left = await executionResult(base, metadata, fixture, "left");
-  const right = await executionResult(base, metadata, fixture, "right");
+  const left = await executeEvidence(base, metadata, fixture, "left");
+  const right = await executeEvidence(base, metadata, fixture, "right");
   for (const [side, observed] of [["left", left], ["right", right]]) {
     if (!jsonEqual(observed, fixture[side].result)) {
       throw new Error(
@@ -357,7 +255,7 @@ async function main() {
     die(`invalid analysis semantic corpus: ${error.message}`);
   }
   try {
-    const base = baseUrl();
+    const base = legendEngineBaseUrl();
     await checkedEngineVersion(base, corpus.metadata.engine_version);
     for (const fixture of corpus.fixtures) {
       await verifyFixture(base, corpus.metadata, fixture);

@@ -430,6 +430,39 @@ pub fn analysis_semantic_corpus(refresh: bool) -> Result<()> {
     )
 }
 
+/// Replay frozen Legend evidence against the real M4a comparison API.
+///
+/// With `refresh`, first ask the explicit Bun tool to verify decisive oracle
+/// observations against a running, exactly pinned Legend engine. The normal
+/// path is hermetic: it lowers the committed source pairs and compares their
+/// typed relational IR without starting or contacting an engine. Indecisive
+/// fixtures deliberately remain result-free.
+///
+/// # Errors
+///
+/// Returns an error when the optional oracle replay cannot validate the pin,
+/// when frozen evidence contradicts a committed M4a outcome, or when a source
+/// pair stops lowering to the supported relational subset.
+pub fn analysis_comparison_corpus(refresh: bool) -> Result<()> {
+    if refresh {
+        run(
+            "bun",
+            &["scripts/analysis-comparison-corpus.mjs", "--refresh"],
+        )?;
+    }
+    run(
+        "cargo",
+        &[
+            "nextest",
+            "run",
+            "-p",
+            "pure-analyzer-analysis",
+            "--test",
+            "comparison_corpus",
+        ],
+    )
+}
+
 /// Run the default workspace-wide mutation pass, excluding PureCARD's
 /// feature-gated FFI source (covered separately by [`test_mutation_ffi`]).
 ///
