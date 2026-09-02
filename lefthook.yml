@@ -24,6 +24,8 @@ pre-commit:
       run: bun scripts/checks/postponed-markers.mjs
     no-work-ledger:
       run: bun scripts/checks/no-work-ledger.mjs
+    generated-paths-gated:
+      run: bun scripts/checks/generated-paths-gated.mjs
     stale-selfdescription:
       glob: "crates/pure-analyzer-purecard/src/**/*.rs"
       run: bun scripts/checks/stale-selfdescription.mjs
