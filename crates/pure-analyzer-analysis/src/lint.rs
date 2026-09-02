@@ -228,10 +228,12 @@ mod tests {
             .expect("fixture model must load")
     }
 
-    fn pure_milestoning_graph(temporal: &str) -> ModelGraph {
+    fn pure_milestoning_graph(temporal: Option<&str>) -> ModelGraph {
+        let stereotype =
+            temporal.map_or_else(String::new, |value| format!("<<temporal.{value}>> "));
         let source = format!(
             r#"
-Class <<temporal.{temporal}>> model::TemporalTarget
+Class {stereotype}model::TemporalTarget
 {{
 }}
 
@@ -651,7 +653,8 @@ Class model::Source
 
         for temporal in ["businesstemporal", "processingtemporal"] {
             let pmcd = milestoning_diagnostics(source, Some(&milestoning_graph(Some(temporal))));
-            let pure = milestoning_diagnostics(source, Some(&pure_milestoning_graph(temporal)));
+            let pure =
+                milestoning_diagnostics(source, Some(&pure_milestoning_graph(Some(temporal))));
 
             assert_eq!(pmcd, pure, "loader parity for {temporal}");
             assert_eq!(pmcd.len(), 1);
@@ -713,7 +716,7 @@ Class model::Source
 
         for (temporal, expected_findings) in cases {
             let pmcd = milestoning_graph(temporal);
-            let pure = pure_milestoning_graph(temporal.unwrap_or(""));
+            let pure = pure_milestoning_graph(temporal);
             for (source, expected_finding) in sources.iter().zip(expected_findings) {
                 let pmcd_findings = milestoning_diagnostics(source, Some(&pmcd))
                     .into_iter()
@@ -730,6 +733,22 @@ Class model::Source
                     "temporal={temporal:?}: {source}"
                 );
             }
+        }
+    }
+
+    #[test]
+    fn an_unreadable_temporal_stereotype_never_settles_generated_arity() {
+        let model = pure_milestoning_graph(Some("somethingNew"));
+
+        for source in [
+            "model::Source.all()->filter(x| $x.point())",
+            "model::Source.all()->filter(x| $x.point(%latest))",
+            "model::Source.all()->filter(x| $x.point(%latest, %2020-01-01))",
+        ] {
+            assert!(
+                milestoning_diagnostics(source, Some(&model)).is_empty(),
+                "a stereotype the loader could not read cannot settle arity: {source}"
+            );
         }
     }
 

@@ -981,6 +981,174 @@ fn nearest_conflicting_temporal_ancestors_mask_a_distant_temporal_stereotype() {
     assert_eq!(member.target_temporal_arity(), None);
 }
 
+#[test]
+fn an_unresolved_target_temporal_stereotype_is_not_a_conclusive_zero_arity() {
+    let graph = load_pure_documents(&[PureDocument::new(
+        "resolver-fixture.pure",
+        r#"
+Class <<temporal.somethingNew>> model::Target
+{
+  name: String[1];
+}
+
+Class model::Holder
+{
+  target: model::Target[1];
+}
+"#,
+    )])
+    .expect("fixture must load");
+    let target = graph.class(&path("Target")).expect("target class");
+
+    assert_eq!(target.temporal(), None);
+    assert!(target.coverage_gap());
+    assert_eq!(
+        found_member(&Resolver::new(&graph), "Holder", "target").target_temporal_arity(),
+        None
+    );
+}
+
+#[test]
+fn a_recorded_stereotype_stays_conclusive_beneath_a_deeper_coverage_gap() {
+    let graph = load_pure_documents(&[PureDocument::new(
+        "resolver-fixture.pure",
+        r#"
+Class <<temporal.somethingNew>> model::UncertainRoot
+{
+  name: String[1];
+}
+
+Class <<temporal.businesstemporal>> model::Target extends model::UncertainRoot
+{
+  label: String[1];
+}
+
+Class model::Holder
+{
+  target: model::Target[1];
+}
+"#,
+    )])
+    .expect("fixture must load");
+
+    assert_eq!(
+        found_member(&Resolver::new(&graph), "Holder", "target").target_temporal_arity(),
+        Some(Temporal::BusinessTemporal.arity())
+    );
+}
+
+#[test]
+fn an_unrelated_coverage_gap_still_withholds_a_readable_target_stereotype() {
+    let graph = load_pure_documents(&[PureDocument::new(
+        "resolver-fixture.pure",
+        r#"
+Class <<temporal.businesstemporal>> model::Target
+{
+  bad: Foo;
+  good: String[1];
+}
+
+Class model::Holder
+{
+  target: model::Target[1];
+}
+"#,
+    )])
+    .expect("fixture must load");
+    let target = graph.class(&path("Target")).expect("target class");
+
+    assert_eq!(target.temporal(), Some(Temporal::BusinessTemporal));
+    assert!(target.coverage_gap());
+    assert_eq!(
+        found_member(&Resolver::new(&graph), "Holder", "target").target_temporal_arity(),
+        None
+    );
+}
+
+#[test]
+fn a_supertype_chain_past_the_depth_budget_is_a_typed_under_resolution() {
+    const CHAIN_LENGTH: usize = 10_000;
+    // Pinned exactly, in both directions. Lowering the budget silently rejects
+    // legitimate hierarchies; raising it past the frames `on_a_small_stack`
+    // affords turns that helper into a process abort. Either move must surface
+    // in this diff rather than in production.
+    const EXPECTED_DEPTH_BUDGET: usize = 256;
+
+    let (member, walk) = on_a_small_stack(chain_graph(CHAIN_LENGTH), |resolver| {
+        (
+            resolver.resolve_member(&chain_qname(0), &member_name("absent")),
+            resolver.generalizations(&chain_qname(0)),
+        )
+    });
+
+    let Resolution::UnderResolved(UnderResolution::GeneralizationDepth { class, limit }) = member
+    else {
+        panic!("a chain of {CHAIN_LENGTH} supertypes must report a depth budget, got {member:#?}");
+    };
+    assert_eq!(limit, EXPECTED_DEPTH_BUDGET);
+    assert_eq!(class, chain_qname(limit));
+    assert_eq!(
+        walk,
+        Resolution::UnderResolved(UnderResolution::GeneralizationDepth {
+            class: chain_qname(limit),
+            limit,
+        })
+    );
+
+    let exact = on_a_small_stack(chain_graph(limit), |resolver| {
+        resolver.generalizations(&chain_qname(0))
+    });
+
+    let Resolution::Found(generalizations) = exact else {
+        panic!("a chain of exactly {limit} classes must stay inside the budget, got {exact:#?}");
+    };
+    assert_eq!(generalizations.len(), limit - 1);
+}
+
+fn chain_graph(length: usize) -> ModelGraph {
+    let elements = (0..length)
+        .map(|index| {
+            let supertypes = if index + 1 == length {
+                Vec::new()
+            } else {
+                vec![path(&chain_name(index + 1))]
+            };
+            let supertypes = supertypes.iter().map(String::as_str).collect::<Vec<_>>();
+            class(&chain_name(index), &supertypes, Vec::new(), Vec::new())
+        })
+        .collect::<Vec<_>>();
+    graph(elements)
+}
+
+fn chain_name(index: usize) -> String {
+    format!("Chain{index}")
+}
+
+fn chain_qname(index: usize) -> QName {
+    qname(&chain_name(index))
+}
+
+/// Run resolver lookups on a thread whose stack is smaller than any default, so
+/// a hierarchy walk that outgrows its depth budget aborts here instead of in
+/// production. A debug build is the worst case for frame size -- a full-budget
+/// walk measures under 384 KiB here and less once optimized -- so this gate
+/// covers the release profile a fortiori. The margin is roughly 2.7x, which
+/// couples the two constants: a depth budget raised far past 256 overflows this
+/// stack and aborts the run instead of failing an assertion.
+fn on_a_small_stack<T: Send + 'static>(
+    graph: ModelGraph,
+    lookup: impl FnOnce(&Resolver<'_>) -> T + Send + 'static,
+) -> T {
+    const WORKER_STACK_BYTES: usize = 1024 * 1024;
+
+    std::thread::Builder::new()
+        .stack_size(WORKER_STACK_BYTES)
+        .spawn(move || lookup(&Resolver::new(&graph)))
+        .expect("worker thread must spawn")
+        .join()
+        .expect("a bounded hierarchy walk must not abort its thread")
+}
+
 proptest! {
     #[test]
     fn property_multiplicity_survives_resolution(lower in 0_u32..5, width in 0_u32..5) {
