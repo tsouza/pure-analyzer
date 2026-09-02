@@ -11,9 +11,18 @@ build-backend = "maturin"
 [project]
 name = "purecard"
 requires-python = ">=3.9"
-# `version` is sourced from Cargo.toml (the single version of truth, workspace
-# `[workspace.package] version`); everything else maturin lifts from Cargo.toml.
-dynamic = ["version"]
+# Cargo.toml (`crates/pure-analyzer-purecard/Cargo.toml`'s `[package]`, plus
+# `[workspace.package]` for the fields it inherits) is the single source of
+# truth for all of these; maturin lifts them at build time, but only for
+# fields actually listed here — per maturin's own contract, `[project]`
+# being present at all means it "is not allowed to populate fields that are
+# not present in `project.dynamic`". Leaving one off doesn't inherit a
+# Cargo.toml default, it ships an empty METADATA field: this list omitted all
+# but `version` for purecard 0.2.0/0.2.1, so the PyPI listing had no
+# description, README, license, authors, or project links at all — verified
+# empty (curl https://pypi.org/pypi/purecard/json) and reproduced locally
+# (the wheel's dist-info/METADATA had only Name/Version/Requires-Python).
+dynamic = ["version", "description", "readme", "license", "authors", "keywords", "urls"]
 
 [dependency-groups]
 # Python tests run on the explicit 3.12 toolchain in `just test-python`. Keep
