@@ -261,6 +261,107 @@ fn a_non_scalar_projection_lambda_body_compiles_so_t7_stays_retired() {
     );
 }
 
+/// The live attestation issue #325 asked for: a **zero-step pipeline**
+/// (`docs/spec/grammar.md` §5.2, `pipeline = source , { "->" step }` — zero
+/// steps permitted) compiles where N3e's fix (issue #296) newly admits `}`
+/// after a closed `.all()`. No corpus record (gold, modern-dialect seeds, or
+/// the differential corpus) ends a pipeline on a closed `.all()`, so this was
+/// reasoning from the grammar production and a layering argument, not an
+/// engine quote — unlike every neighbouring §6.6 fact.
+///
+/// #325 also asked to probe `{|let c = Class.all(); Class.all()}` — a
+/// zero-step pipeline as the block's *final* statement, after a let-binding —
+/// to attest the `;`-vs-`}` split for the multi-statement case. That
+/// construct is not valid Legend syntax: the engine rejects it with a parser
+/// error, and the rejection is not about the pipeline being zero-step. Once a
+/// block has a second statement, the *last* one needs its own trailing `;`
+/// too, whatever it is — `{|let c = Class.all(); $c}` (bare variable, no
+/// pipeline at all) fails identically, and both compile once `;` is added
+/// before `}`. `docs/spec/grammar.md` §5.2's stated production
+/// (`{ letBinding ";" } pipeline "}"`, no trailing `;` on the final pipeline)
+/// does not capture this; every real corpus example with a `let` already
+/// carries the trailing `;` this attestation now explains.
+///
+/// So `}` immediately after a zero-step pipeline is reachable only as a
+/// block's **sole** statement — this test's one probe — and the
+/// let-binding-preceded case N3e's permit set also admits at `}` is not
+/// reachable via valid Legend syntax at all, only via the layering argument
+/// #296 already stated as the rule's own justification for its unattested
+/// members (`docs/spec/schema.md` §6.6: "the family is admitted wholesale,
+/// and the asymmetry in its evidence is deliberate"). That argument holds
+/// regardless of reachability: L2 only ever narrows what L1 already permits,
+/// so a schema rule agreeing with L1 on an unreachable position is inert, not
+/// unsound. No further change to #296 is warranted by this finding.
+///
+/// Pinned as a regression gate for the same reason as this file's other
+/// probes: an evidence claim that only ran once during a PR review is not a
+/// gate. If a future engine pin ever rejects it, this reddens and #296's
+/// direction can be reopened on real evidence.
+#[test]
+fn a_sole_zero_step_pipeline_compiles_so_n3e_carries_engine_attestation_at_the_block_closer() {
+    let client = LegendClient::new(ENGINE_BASE);
+    client
+        .health_wait(HEALTH_TIMEOUT)
+        .expect("Legend engine must become healthy");
+
+    const WORLD_COUNTRY: &str = "spider::world_1::model::default::Country";
+
+    let pmcd = client
+        .grammar_to_json_model(&full_model_text(CRITERION_DB))
+        .unwrap_or_else(|err| panic!("{CRITERION_DB}: assembled model must parse: {err}"));
+
+    let text = format!("{{|{WORLD_COUNTRY}.all()}}");
+    let lambda_json = client
+        .grammar_to_json_lambda(&text)
+        .unwrap_or_else(|err| panic!("PARSE: {err}\n  {text}"));
+    match client
+        .lambda_return_type(&lambda_json, &pmcd)
+        .unwrap_or_else(|err| panic!("request failed: {err}\n  {text}"))
+    {
+        ReturnTypeOutcome::ReturnType(actual) if actual == WORLD_COUNTRY => {}
+        ReturnTypeOutcome::ReturnType(actual) => panic!(
+            "{text}: returned {actual}, expected {WORLD_COUNTRY} — issue #296's direction \
+             needs revisiting"
+        ),
+        ReturnTypeOutcome::CompileError(message) => {
+            panic!("{text}: COMPILE: {message} — issue #296's direction needs revisiting")
+        }
+    }
+}
+
+/// The multi-statement-block trailing-`;` requirement
+/// [`a_sole_zero_step_pipeline_compiles_so_n3e_carries_engine_attestation_at_the_block_closer`]'s
+/// doc comment describes, pinned independently of N3e/#296: once a block has
+/// a second statement, the engine rejects the block unless the *last*
+/// statement also ends in `;`, and this holds even when that last statement
+/// is a bare variable reference rather than a pipeline of any shape. If a
+/// future engine pin drops this requirement, this reddens rather than
+/// silently leaving `docs/spec/grammar.md` §5.2's production wrong.
+#[test]
+fn a_multi_statement_block_requires_its_final_statement_to_carry_its_own_semicolon() {
+    let client = LegendClient::new(ENGINE_BASE);
+    client
+        .health_wait(HEALTH_TIMEOUT)
+        .expect("Legend engine must become healthy");
+
+    const WORLD_COUNTRY: &str = "spider::world_1::model::default::Country";
+
+    let rejected = format!("{{|let c = {WORLD_COUNTRY}.all(); $c}}");
+    match client.grammar_to_json_lambda(&rejected) {
+        Err(_) => {}
+        Ok(_) => panic!(
+            "{rejected}: parsed without a trailing `;` on its final statement — the \
+             multi-statement semicolon requirement no longer holds; §5.2's production and \
+             this test's sibling's doc comment need revisiting"
+        ),
+    }
+
+    let accepted = format!("{{|let c = {WORLD_COUNTRY}.all(); $c;}}");
+    client
+        .grammar_to_json_lambda(&accepted)
+        .unwrap_or_else(|err| panic!("PARSE: {err}\n  {accepted}"));
+}
+
 /// Every seed in the modern-dialect corpus **parses against the pinned engine**.
 ///
 /// The seed corpus (ADR-0007) is a soundness oracle: `modern_dialect_soundness`
