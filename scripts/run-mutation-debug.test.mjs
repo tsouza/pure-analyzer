@@ -12,6 +12,7 @@ import {
   PIDS_MAX,
   MutationRunner,
   SnapshotCoordinator,
+  PROCESS_HEAP_MAX_BYTES,
   containedCommand,
   parseInvocation,
   runCommand,
@@ -87,6 +88,8 @@ test("the contained command retains the hard timeout contract", () => {
     "--signal=TERM",
     "--kill-after=30s",
     "25m",
+    "prlimit",
+    `--data=${2 * 1024 * 1024 * 1024}`,
     "stdbuf",
     "-oL",
     "-eL",
@@ -95,6 +98,32 @@ test("the contained command retains the hard timeout contract", () => {
   ]);
   expect(MEMORY_MAX_BYTES).toBe(6 * 1024 * 1024 * 1024);
   expect(PIDS_MAX).toBe(2_048);
+});
+
+test("a runaway process is bounded before it can kill the shard", () => {
+  // Run 33577273491 shard 2: one test binary reached 5.91 GiB while the
+  // largest legitimate process was a 422 MiB rustc. The per-process ceiling
+  // has to sit between those, so the mutant fails alone and the cgroup limit
+  // is never reached.
+  const observedRunawayBytes = 6_198_624 * 1024;
+  const observedLegitimatePeakBytes = 431_888 * 1024;
+  expect(PROCESS_HEAP_MAX_BYTES).toBeLessThan(observedRunawayBytes);
+  expect(PROCESS_HEAP_MAX_BYTES).toBeGreaterThan(observedLegitimatePeakBytes * 2);
+  expect(PROCESS_HEAP_MAX_BYTES).toBeLessThan(MEMORY_MAX_BYTES);
+});
+
+test("the per-process bound applies to the whole contained tree", () => {
+  const command = containedCommand({
+    wallLimit: INNER_WALL_LIMIT,
+    killGrace: INNER_KILL_GRACE,
+    mutationCommand: ["just", "test-mutation-shard", "2", "12"],
+  });
+  // prlimit must wrap the mutation command, not sit after it, so cargo,
+  // rustc, and every test binary inherit the limit.
+  const limitIndex = command.indexOf("prlimit");
+  expect(limitIndex).toBeGreaterThan(-1);
+  expect(command[limitIndex + 1]).toBe(`--data=${PROCESS_HEAP_MAX_BYTES}`);
+  expect(limitIndex).toBeLessThan(command.indexOf("just"));
 });
 
 test("reserves cleanup time inside the immutable outer wall limit", () => {
