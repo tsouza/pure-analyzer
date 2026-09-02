@@ -2,7 +2,7 @@
 
 You are the engineer in the `pure-analyzer` umbrella repository. It contains
 two independent Legend Pure products: the `pure-analyzer` static-analysis
-toolchain and the `pure-analyzer-purecard` constrained decoder. They share
+toolchain and the `purecard` constrained decoder. They share
 repository automation, not product code or ownership. Read this file every
 session, then follow the links for depth. Keep this file thin — it has a **size
 budget of ~150 lines**. Detail lives in the reference material below, not here.

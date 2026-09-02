@@ -65,6 +65,22 @@ export const ALLOWLIST = [
     re: /you've hit a rate limit, your rate limit will reset in/i,
     why: "actions/cache 429 retry annotation under concurrent same-key save (transient, non-fatal)",
   },
+  {
+    // pypa/gh-action-pypi-publish prints two annotations on every token-
+    // authenticated upload, advocating OIDC Trusted Publishing: "Upgrade to
+    // Trusted Publishing" and a "Create a Trusted Publisher" magic link. They
+    // are editorial advice about an architecture choice, not a defect report —
+    // nothing in the run is wrong, and the upload succeeds. There is no input
+    // that suppresses them; the only way to stop them is to adopt Trusted
+    // Publishing, which ADR-0006 weighed and rejected (the credential would
+    // move half into PyPI-side settings this repository cannot verify or
+    // reproduce). The action's third annotation, about `attestations` being
+    // ignored, IS suppressible and is fixed at the source in
+    // purecard-publish.yml rather than matched here. Matched on the two exact
+    // annotation titles so a real upload warning still fails the sweep.
+    re: /::warning title=(Upgrade to Trusted Publishing|Create a Trusted Publisher)::/,
+    why: "pypa/gh-action-pypi-publish Trusted Publishing advocacy on token auth (unsuppressible; architecture choice recorded in ADR-0006)",
+  },
 ];
 
 /**

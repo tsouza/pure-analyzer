@@ -1,6 +1,6 @@
 # Vetting: proptest 1.11.0
 
-- Purpose: property-based testing — drives `pure-analyzer-purecard`'s §8.5
+- Purpose: property-based testing — drives `purecard`'s §8.5
   rollback/equivalence properties, pinning any failing case's seed under
   `tests/proptest-regressions/` to be committed with its fix (no property has
   failed, so no seed file is tracked yet). Dev-only dependency, newly added

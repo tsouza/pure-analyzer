@@ -3,7 +3,7 @@
 //! [`BitMask`] is a bespoke `Vec<u64>` bitset: `ceil(len / 64)` words, bit `id`
 //! living in word `id / 64` at position `id % 64`. It is deliberately *not* a
 //! `bitvec`/`roaring` dependency — a word-wise newtype is a few dozen lines, needs
-//! no vetting rubric, and keeps the unpublished migrated core's `[dependencies]` at
+//! no vetting rubric, and keeps the core's `[dependencies]` at
 //! `⊆ { thiserror, serde, serde_json }` (constitution §1, `check-core-deplight`).
 //!
 //! The mask spans `V + 1` bits over a `V`-token vocabulary: bit `V` is the

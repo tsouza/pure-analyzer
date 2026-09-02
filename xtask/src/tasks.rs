@@ -63,7 +63,7 @@ pub fn ci() -> Result<()> {
             "warnings",
         ],
         // No --all-features here, unlike clippy above: this *executes* tests,
-        // and pure-analyzer-purecard's optional legend/qwen-oracle/fused-extract
+        // and purecard's optional legend/qwen-oracle/fused-extract
         // features gate heavy, network-/env-dependent tests that must stay out
         // of the hermetic per-PR gate (each has its own on-demand `just`
         // target instead) — matching the pattern purecard's own CI already
@@ -90,7 +90,14 @@ pub fn sweep() -> Result<()> {
 /// Root of the migrated PureCARD workspace member.
 const PURECARD_ROOT: &str = "crates/pure-analyzer-purecard";
 /// Cargo package name of the migrated PureCARD workspace member.
-const PURECARD_PACKAGE: &str = "pure-analyzer-purecard";
+///
+/// Deliberately not derived from [`PURECARD_ROOT`]: the package publishes to
+/// crates.io as `purecard` (its pre-migration identity) while its
+/// workspace-member directory stays `crates/pure-analyzer-purecard`. Every
+/// package-addressed call below must use this constant, and every
+/// path-addressed one a `PURECARD_*` path constant; the two are not
+/// interchangeable.
+const PURECARD_PACKAGE: &str = "purecard";
 
 /// The `legend`-featured test binary that belongs to the **real-model** lane,
 /// not the completeness lane: it additionally needs
@@ -691,8 +698,8 @@ fn disallowed_core_deps(dependencies: &BTreeSet<String>) -> Vec<String> {
 /// Reads Cargo metadata for the nested package and rejects every non-optional
 /// normal dependency outside [`CORE_DEP_ALLOWLIST`]. Optional Python/tokenizer
 /// boundaries and dev/build-only oracle dependencies are intentionally outside
-/// this default runtime surface. Unlike standalone PureCARD's former gate, this
-/// performs no `cargo package --list` check: the migrated crate is unpublished.
+/// this default runtime surface. Scoped to the dependency surface alone: that
+/// the published tarball is complete and compiles is `just package`'s job.
 ///
 /// # Errors
 ///
@@ -2885,7 +2892,7 @@ mod tests {
     fn public_api_inventory_fails_closed_for_missing_and_stale_baselines() {
         let expected = BTreeSet::from([
             "pure-analyzer-lexer.txt".to_string(),
-            "pure-analyzer-purecard.txt".to_string(),
+            "purecard.txt".to_string(),
         ]);
         let actual = BTreeSet::from([
             "pure-analyzer-lexer.txt".to_string(),
@@ -2895,7 +2902,7 @@ mod tests {
             .expect_err("missing and stale baselines must fail");
         assert_eq!(
             error.to_string(),
-            "public API baseline inventory is not exact (missing: pure-analyzer-purecard.txt; \
+            "public API baseline inventory is not exact (missing: purecard.txt; \
              unexpected: removed-package.txt); run `just public-api-bless` for intended API changes"
         );
     }
@@ -3672,13 +3679,19 @@ missing_docs = \"warn\"
                 vec![dependency("pure-analyzer-parser", None, false, None)],
             ),
         ];
+        // The expected strings interpolate PURECARD_PACKAGE rather than restating
+        // it: what this test pins is the rendering (`--(kind)-->`, the ordering,
+        // the optional/renamed suffixes), not the package's name. That is not
+        // self-fulfilling, because the constant is independently checked against
+        // real `cargo metadata` by `check_core_deplight`, which fails if no
+        // package by that name resolves to PURECARD_MANIFEST.
         let expected = [
-            "pure-analyzer-parser --(build)--> pure-analyzer-purecard",
-            "pure-analyzer-parser --(dev)--> pure-analyzer-purecard",
-            "pure-analyzer-parser --(normal)--> pure-analyzer-purecard",
-            "pure-analyzer-parser --(normal, optional)--> pure-analyzer-purecard",
-            "pure-analyzer-parser --(normal, renamed as decoder)--> pure-analyzer-purecard",
-            "pure-analyzer-purecard --(normal)--> pure-analyzer-parser",
+            format!("pure-analyzer-parser --(build)--> {PURECARD_PACKAGE}"),
+            format!("pure-analyzer-parser --(dev)--> {PURECARD_PACKAGE}"),
+            format!("pure-analyzer-parser --(normal)--> {PURECARD_PACKAGE}"),
+            format!("pure-analyzer-parser --(normal, optional)--> {PURECARD_PACKAGE}"),
+            format!("pure-analyzer-parser --(normal, renamed as decoder)--> {PURECARD_PACKAGE}"),
+            format!("{PURECARD_PACKAGE} --(normal)--> pure-analyzer-parser"),
         ];
         assert_eq!(cross_product_violations(&packages), expected);
 

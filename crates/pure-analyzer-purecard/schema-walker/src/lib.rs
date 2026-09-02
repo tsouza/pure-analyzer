@@ -5,7 +5,7 @@
 //!
 //! Not part of the published `purecard` crate: this is test/fuzz support
 //! code, `publish = false`, kept as its own crate rather than a
-//! `tests/support/*.rs` file so both `pure-analyzer-purecard`'s integration
+//! `tests/support/*.rs` file so both `purecard`'s integration
 //! tests (`tests/schema_walk_*.rs`, `tests/live_legend_schema_walk_compile.rs`)
 //! and its separate, workspace-excluded `fuzz/` crate can depend on it — a
 //! loose `#[path]`-included test file cannot cross that boundary, since
@@ -39,7 +39,7 @@ use purecard::grammar::pda::{Pda, State};
 use purecard::{CompiledGrammar, DecoderSession, Schema, Vocab};
 
 /// The single name a pipeline-source dot is ever narrowed to (`SOURCE_METHOD`
-/// in `pure-analyzer-purecard`'s `src/schema/scope.rs`) — kept as its own
+/// in `purecard`'s `src/schema/scope.rs`) — kept as its own
 /// literal since that constant is `pub(crate)` to that crate and this is a
 /// separate crate.
 const SOURCE_METHOD: &str = "all";
@@ -622,7 +622,7 @@ fn walk_is_done(pending: &PendingCall, session: &DecoderSession, out_len: usize)
 // guard, and the two binder-tracking signals issue #117 added); bundling
 // them into a context struct would add indirection to the hot path for no
 // clarity gain, so the count is accepted here rather than silenced globally
-// (mirrors `pure-analyzer-purecard::schema::narrow::narrow_into`'s identical
+// (mirrors `purecard::schema::narrow::narrow_into`'s identical
 // precedent).
 #[allow(clippy::too_many_arguments)]
 fn build_candidates(
@@ -724,7 +724,7 @@ const PRIM_TYPE_NAMES: &[&str] = &[
 
 /// Reducer names T3 never masks regardless of the reduce-lambda's declared
 /// element type (`min`/`max`/`count` — see [`ARROW_METHOD_NAMES`]'s own
-/// reducer entries and `pure-analyzer-purecard::schema::narrow::keeps_reducer`'s
+/// reducer entries and `purecard::schema::narrow::keeps_reducer`'s
 /// corpus evidence) — the only names `recipe_reducer` can pair with an
 /// arbitrarily-found [`PRIM_TYPE_NAMES`] entry without risking rejection by
 /// T3's own mask (`sum`/`average` are legal only for a numeric element type).

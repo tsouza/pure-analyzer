@@ -23,8 +23,11 @@ before any public disclosure.
 
 This is a pre-1.0 umbrella repository under active development. Security fixes
 for both the analyzer scaffold and PureCARD are applied to `main`. There is no
-long-term-support branch. PureCARD's migrated Rust package and CI-built Python
-wheels are not published from this repository.
+long-term-support branch. PureCARD is the only crate configured to publish:
+fixes reach users as a new `purecard` release on crates.io, and as wheels on
+PyPI once the first release is cut. Older releases are not patched in place. The
+analyzer crates are unpublished, so `main` is the only place their fixes
+exist.
 
 ## Our own guardrails
 

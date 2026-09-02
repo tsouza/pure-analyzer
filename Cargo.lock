@@ -1204,23 +1204,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pure-analyzer-purecard"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "criterion",
- "proptest",
- "purecard-schema-walker",
- "pyo3",
- "self_cell",
- "serde",
- "serde_json",
- "thiserror",
- "tokenizers",
- "ureq",
-]
-
-[[package]]
 name = "pure-analyzer-render"
 version = "0.1.0"
 dependencies = [
@@ -1253,10 +1236,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "purecard"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "criterion",
+ "proptest",
+ "purecard-schema-walker",
+ "pyo3",
+ "self_cell",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokenizers",
+ "ureq",
+]
+
+[[package]]
 name = "purecard-schema-walker"
 version = "0.1.0"
 dependencies = [
- "pure-analyzer-purecard",
+ "purecard",
 ]
 
 [[package]]

@@ -15,7 +15,7 @@
 - Supply chain: `cargo audit` clean for `pyo3` and its transitive tree.
   `pyo3`'s own codegen can emit `unsafe` — but that unsafe is generated and
   encapsulated *inside pyo3's own crate*, not inlined into
-  `pure-analyzer-purecard`'s compilation unit the way `logos`'s codegen is
+  `purecard`'s compilation unit the way `logos`'s codegen is
   (see `docs/dependencies/logos.md` for that contrast) — so it does not
   threaten this crate's own `#![forbid(unsafe_code)]`. `self_cell` (see its
   own vetting note) exists specifically to keep the one unsafe-adjacent

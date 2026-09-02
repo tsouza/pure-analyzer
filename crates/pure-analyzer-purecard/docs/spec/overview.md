@@ -100,8 +100,8 @@ runs only on the opt-in self-hosted lane described there — never per PR.
 
 ## 2. Scope and non-goals
 
-**In scope:** the independent `pure-analyzer-purecard` Cargo package, whose
-`purecard` Rust library selects the emitted-Pure byte-level pushdown automaton,
+**In scope:** the independent `purecard` Cargo package, whose Rust library
+selects the emitted-Pure byte-level pushdown automaton,
 computes per-step logits masks efficiently, optionally narrows those masks with
 the implemented schema-consistency overlay, and exposes the surface to Python
 over a thin PyO3 boundary — plus the oracle-driven test harness that measures it.

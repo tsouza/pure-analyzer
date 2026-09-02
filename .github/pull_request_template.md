@@ -25,7 +25,7 @@ Closes #
 - [ ] libpure
 - [ ] pure-analyzer-cli
 - [ ] pure-analyzer-lsp
-- [ ] pure-analyzer-purecard
+- [ ] purecard
 - [ ] PureCARD corpus / oracle fixtures
 - [ ] PureCARD Python wheel / FFI
 - [ ] tooling / CI
@@ -43,7 +43,8 @@ fix into this PR or BRANCHED it out, and justify the choice.
 - [ ] No `unwrap`/`expect`/`todo!`/`unimplemented!` outside tests.
 - [ ] Public API / diagnostic-code changes are intentional; stability gates pass
       or are accompanied by a justified version bump.
-- [ ] PureCARD remains unpublished and independent from analyzer internals; any
-      parser/corpus sharing has a dedicated ADR.
+- [ ] PureCARD remains independent from analyzer internals; any parser/corpus
+      sharing has a dedicated ADR. If its packaging changed, `just package`
+      still verifies the crates.io tarball.
 - [ ] Docs updated (`#![deny(missing_docs)]` on public items) and `just docs` passes.
 - [ ] Conventional-commit title (feat/fix/chore/...); breaking changes marked `!`.

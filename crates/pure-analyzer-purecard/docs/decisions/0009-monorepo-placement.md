@@ -1,6 +1,7 @@
 # 0009. Colocate PureCARD as an independent monorepo product
 
-- **Status:** Accepted
+- **Status:** Accepted; the unpublished-package posture is superseded by
+  [ADR-0011](0011-resume-publication.md)
 - **Date:** 2026-08-26
 - **Deciders:** Thiago Souza; Codex
 

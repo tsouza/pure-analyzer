@@ -15,16 +15,19 @@ Its analyzer crates follow the dependency direction described in the
 For command use, configuration, output, and safe file-update behavior, see the
 [Pure Analyzer user guide](docs/pure-analyzer.md).
 
-### pure-analyzer-purecard
+### purecard
 
-[`pure-analyzer-purecard`](crates/pure-analyzer-purecard/) is the PureCARD
+[`purecard`](crates/pure-analyzer-purecard/) is the PureCARD
 constrained decoder. It masks language-model tokens against its fixed
 emitted-subset grammar and, at covered L2 positions, an optional schema. Its
 [product reference](crates/pure-analyzer-purecard/docs/spec/README.md) defines
 the decoder boundary and operating limits.
 
-PureCARD remains unpublished here: its Rust package has `publish = false`, and
-CI builds Python wheels only as verification artifacts. See the
+PureCARD is the one publishable product in this repository: the crate is
+configured to ship to crates.io as `purecard`, with its abi3 wheels going to
+PyPI, both cut from release-plz's release PR
+([ADR-0006](docs/decisions/0006-purecard-resumes-publication.md)). Every
+analyzer crate stays `publish = false`. See the
 [`PureCARD README`](crates/pure-analyzer-purecard/README.md) for its API,
 guarantee boundary, and specialized development lanes.
 
@@ -67,6 +70,11 @@ crates/
 xtask/                       shared repository automation
 docs/                        root governance and methodology
 ```
+
+One crate's directory and package name differ:
+`crates/pure-analyzer-purecard/` holds the package published as `purecard`, the
+name it held before moving into this repository
+([ADR-0006](docs/decisions/0006-purecard-resumes-publication.md)).
 
 ## Building
 

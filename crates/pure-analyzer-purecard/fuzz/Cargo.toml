@@ -28,9 +28,9 @@ unsafe_code = "deny"
 [dependencies]
 libfuzzer-sys = "0.4.13"
 arbitrary = { version = "1.4.2", features = ["derive"] }
-purecard = { package = "pure-analyzer-purecard", path = ".." }
+purecard = { path = ".." }
 # The schema-aware accepting-walk generator (issue #59) — shared with
-# `pure-analyzer-purecard`'s own integration tests via the same crate.
+# `purecard`'s own integration tests via the same crate.
 schema_walker = { package = "purecard-schema-walker", path = "../schema-walker" }
 
 [[bin]]

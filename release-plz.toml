@@ -25,12 +25,18 @@ All notable changes to this project are documented here. The format is based on
 [Semantic Versioning](https://semver.org/).
 """
 
-# Nothing is published to crates.io yet — v0.1 is a moving target and none of
-# these crates have a stable public API to promise semver on. release-plz
-# still bumps versions, writes changelogs, and cuts GitHub releases/tags. Flip
-# a crate's `publish` to true (and add CARGO_REGISTRY_TOKEN to the release
-# workflow) once its API is ready to promise stability on — `libpure` and
-# `pure-analyzer-cli` are the likely first candidates.
+# `purecard` is the only crate published to crates.io; it resumes a listing it
+# held before migrating here. The analyzer crates stay unpublished — v0.1 is a
+# moving target and none of them has a stable public API to promise semver on —
+# so release-plz only bumps their versions, writes changelogs, and cuts GitHub
+# releases/tags. `libpure` and `pure-analyzer-cli` are the likely next
+# candidates.
+#
+# Every `publish` value below must equal the crate's own Cargo.toml `publish`
+# field: an override is a full package configuration, not a patch, and
+# release-plz rejects a mismatch at runtime — on `main`, after merge. `cargo
+# xtask release-plz-check` (`just release-plz-check`) reproduces that check
+# against `cargo metadata` so the drift fails a PR instead of the trunk.
 [[package]]
 name = "pure-analyzer-diagnostics"
 publish = false
@@ -76,8 +82,14 @@ name = "pure-analyzer-lsp"
 publish = false
 
 [[package]]
-name = "pure-analyzer-purecard"
-publish = false
+name = "purecard"
+publish = true
+# Pinned rather than left to release-plz's default, because
+# `purecard-publish.yml` filters the `release: [published]` event on this exact
+# prefix: a workspace release cuts one GitHub Release per crate, and only this
+# one may start a PyPI upload. The workspace default happens to be the same
+# template today, but a default is not a contract and that guard depends on it.
+git_tag_name = "purecard-v{{ version }}"
 
 [[package]]
 name = "xtask"

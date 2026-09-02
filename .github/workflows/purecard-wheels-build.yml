@@ -1,0 +1,102 @@
+name: PureCARD wheel build
+
+# The single definition of the wheel build matrix, called by both lanes that
+# need it: `purecard-wheels.yml` (the per-PR proof that the Python boundary and
+# abi3 packaging still work) and `purecard-publish.yml` (the release that ships
+# those wheels to PyPI). Reusable rather than copied, so a PR can never go green
+# against a matrix the release does not actually use.
+on:
+  workflow_call:
+
+permissions: {}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: ${{ matrix.runner }} (${{ matrix.target }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    strategy:
+      # One platform's toolchain breaking must not hide the state of the other
+      # four: a release needs to know every gap at once, not one per rerun.
+      fail-fast: false
+      matrix:
+        # Every entry builds natively — the runner's own architecture is
+        # `target`. That is what lets the smoke-import below actually load the
+        # wheel it just built, rather than only proving the cdylib linked; a
+        # cross-compiled wheel could not be imported on the runner that produced
+        # it. arm64 Linux runners are free for public repositories, and GitHub's
+        # macos-latest image is arm64-only. One abi3 wheel per platform covers
+        # CPython >= 3.9, so there is deliberately no interpreter dimension.
+        #
+        # The Intel macOS leg is the one runner carrying an explicit image
+        # version, because it is the one with no floating alias: GitHub is
+        # winding Intel macOS down and retired the old `macos-13` label
+        # outright. It has to be bumped by hand when `macos-15-intel` is retired
+        # in turn; actionlint fails on an unknown label, so that lands as a red
+        # PR rather than a silently skipped platform.
+        include:
+          - runner: ubuntu-latest
+            target: x86_64
+          - runner: ubuntu-24.04-arm
+            target: aarch64
+          - runner: macos-15-intel
+            target: x86_64
+          - runner: macos-latest
+            target: aarch64
+          - runner: windows-latest
+            target: x64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12.14"
+      - name: Set up uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.12.5"
+          enable-cache: true
+          cache-dependency-glob: crates/pure-analyzer-purecard/uv.lock
+      - name: Install just
+        uses: taiki-e/install-action@b6ff580856c41316412a0b9b60540fbc6f8c82cc # v2.86.7
+        with:
+          tool: just@1.55.1
+      # The functional Python test suite is platform-independent: it exercises
+      # the PyO3 marshaling, not the packaging. Running it once, on the
+      # canonical Linux x86_64 leg, is the whole signal — repeating it five
+      # times would only buy runner minutes. The per-platform signal this matrix
+      # exists for is the build-and-import below, which does run everywhere.
+      - name: Test the Python boundary
+        if: runner.os == 'Linux' && runner.arch == 'X64'
+        run: just test-python
+      - name: Build abi3 wheel
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          working-directory: crates/pure-analyzer-purecard
+          maturin-version: v1.15.0
+          command: build
+          args: --release --features python --strip --out ../../target/wheels
+          target: ${{ matrix.target }}
+          # Linux-only input, ignored on the macOS and Windows legs.
+          manylinux: auto
+          # maturin-action installs cffi as root inside its manylinux container.
+          docker-options: -e PIP_ROOT_USER_ACTION=ignore
+          sccache: true
+      - name: Smoke-import the built wheel
+        run: just wheel-smoke
+      # One artifact per leg: upload-artifact rejects a name collision, and the
+      # publish job re-merges them by prefix.
+      - name: Upload wheel
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: purecard-wheels-${{ matrix.runner }}-${{ matrix.target }}
+          path: target/wheels/*.whl
+          if-no-files-found: error

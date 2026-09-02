@@ -1,0 +1,102 @@
+name: PureCARD publish
+
+# Ships PureCARD's abi3 wheels to PyPI as `purecard`. The crates.io half of the
+# same release belongs to release-plz (`release-plz.yml`, via
+# CARGO_REGISTRY_TOKEN); this workflow owns only PyPI.
+#
+# TRIGGERS — read `release-plz.yml`'s TOKEN note before relying on the automatic
+# one. GitHub does not start workflow runs from events created with the default
+# GITHUB_TOKEN, and release-plz creates the GitHub Release with exactly that
+# token. So as the repository is configured today, `release: [published]` does
+# NOT fire on a release-plz release, and `workflow_dispatch` is the path that
+# actually runs: after a release lands, dispatch this workflow with the
+# release's tag selected as the ref. Once a RELEASE_PLZ_TOKEN is configured the
+# release trigger starts working on its own and the dispatch becomes a fallback.
+#
+# Either way, this never fires on a bare push to `main`.
+#
+# The wheels are rebuilt here rather than pulled from the PR run that preceded
+# them: artifacts expire, and a release must ship bits built from the released
+# tag, not from whatever commit last touched the wheel paths.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  # Keyed per release ref. Not cancellable: uploads are not resumable (a rerun
+  # re-uploads from scratch and PyPI rejects files it already holds), so letting
+  # a run finish is strictly better than interrupting it mid-upload.
+  group: purecard-publish-${{ github.event.release.tag_name || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build release wheels
+    # release-plz tags every releasable package, so one workspace release cuts a
+    # GitHub Release per crate — around a dozen, all matching
+    # `release: [published]`. Without this guard each would start a PyPI upload
+    # and all but the first would fail on files that already exist. The prefix is
+    # pinned by `git_tag_name` in release-plz.toml; the two must agree.
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || startsWith(github.event.release.tag_name, 'purecard-v')
+    permissions:
+      contents: read
+    uses: ./.github/workflows/purecard-wheels-build.yml
+
+  publish:
+    name: Publish wheels to PyPI
+    # The whole called workflow must succeed, which means every platform in its
+    # matrix succeeded. A partial platform set is not a release.
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Download every platform's wheel
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: purecard-wheels-*
+          merge-multiple: true
+          path: dist
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          packages-dir: dist
+          # Project-scoped API token, chosen over OIDC Trusted Publishing so the
+          # credential is one repository secret rather than a PyPI-side identity
+          # this repo would also have to keep in sync. `user` stays at its
+          # `__token__` default, which is what keeps this on the action's token
+          # path rather than its username+password path (that one hard-errors).
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          # PEP 740 attestations require Trusted Publishing. Left at its `true`
+          # default the action warns, on every run, that it is ignoring the input
+          # because a password was supplied. Declaring the value we actually get
+          # silences that at the source instead of in the log sweep.
+          attestations: false
+
+  # Warnings-are-errors net (constitution §2). Every workflow that runs tools
+  # wires in the same reusable sweep; without it this lane's tool warnings would
+  # go unswept.
+  no-warnings:
+    name: no-warnings (log sweep)
+    needs: [build, publish]
+    if: always()
+    permissions:
+      actions: read
+      contents: read
+    uses: ./.github/workflows/no-warnings.yml
+
+  purecard-publish-gate:
+    name: purecard-publish-gate
+    needs: [build, publish, no-warnings]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if any PureCARD publish job failed
+        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+        run: exit 1
