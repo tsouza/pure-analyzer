@@ -439,7 +439,7 @@ The set is deliberately **monotonic and a superset**: a name is recorded whereve
     engine pin ever rejects one, it reddens and T7 reopens on real evidence —
     the trigger it always needed.
 
-### 6.7 Rule count
+### 6.7 Rule count, completion, and liveness
 
 The scope state machine of §6.4 has **6 scope-transition rules** (S1/source,
 S2/lambda-bind, S3/nav-advance, plus project/groupBy/agg/sort re-typing,
@@ -469,6 +469,74 @@ the reserved EOS bit is cleared at a trie cursor that has reached only a strict
 prefix of a legal name, after a whole name whose call is still owed, and at an
 N7-constrained bare word — and `DecoderSession::is_complete` reads that same
 verdict, so it and `allowed_mask`'s published EOS bit agree by construction.
+
+**Liveness — the overlay never empties a mask the host's vocabulary can fill.** A
+published mask with no vocabulary bit *and* no EOS bit is not a constraint on the
+host, it is a **deadlock**: there is no token to sample and no way to stop, and a
+host loop that masks logits to `-inf` degenerates to whatever `argmax` returns over
+an all-`-inf` row.
+
+The guarantee carries a precondition, and it is not a formality: the vocabulary
+must be able to **spell** the continuations the overlay leaves legal. Every rule
+here narrows to a *set of names*, and a name is only reachable if some token
+carries its next bytes. A vocabulary **complete over the grammar's alphabet** —
+printable ASCII plus `WS` (`b" \t\n\r"`), which every real BPE vocabulary covers
+many times over — satisfies this always. A
+vocabulary that does not can be emptied by a rule that is behaving exactly as
+specified: an identifier trie parked on a strict prefix of a legal name admits only
+that name's continuation bytes, and if no token spells them, nothing is left. That
+is the host's vocabulary failing to express the grammar, not the overlay
+overreaching, and it is deliberately *not* papered over — `tests/l2_precision.rs`
+builds a throwaway vocabulary per frozen walk (just that walk's own lexemes), so
+several of its fixtures die on exactly such a mask, and that is the masking those
+fixtures exist to freeze. Falling open there instead would surrender the
+`NamePoint::Partial` narrowing wholesale.
+
+Under that precondition the invariant holds, and where a rule broke it the fix is
+never to loosen the rule: it is to read the rule where it still has a live
+alternative to offer, or to stop it from stating a contradiction. Three shapes are
+handled, and each is the rule made *more* precise, not less (issue #275):
+
+- **S2 reads at the sigil, not the name.** Before the first binder the legal-name
+  set is empty, so narrowing the identifier after `$` clears everything
+  `AfterDollar` admits (`{|$`). The same claim — nothing is bound, so no `$` can
+  open a variable reference — is made one token earlier, as a subtractive pass over
+  the `$`-led tokens at every anchor where a `$` opens a refVar. It is the mirror
+  image of the fused nav-dot pass above: that one narrows a token the anchor-read
+  rule cannot see *into*, this one narrows the token the rule's position is reached
+  *through*.
+- **A binder's *type* path is not a bindable name.** S2 walks its names as plain
+  identifiers, so a `::`-joined name is a branch no `$<IDENT>` can ever finish: a
+  stream on its live prefix has every continuation cleared as a divergence and
+  every boundary token cleared as mid-name (`row: meta::pure::tds::TDSRow[1]|$meta`,
+  a join lambda in the gold corpus). Only plain identifiers are recorded.
+- **A literal-class rule masks the openers of the class it masks.** `classify`
+  reads whole tokens, so a leading-dot float's `.` and a sign's `-` are not
+  `Number`s and slip past a slot that masks numeric literals; the state each opens
+  (`NeedFracDigit`, `SawNumSign`) then admits nothing but the rest of that number —
+  digits, and for a sign the `.` of `-.5` — which is exactly what the slot masks
+  (`…||.`). T1, N4b and N3h clear the two openers wherever they clear the
+  numbers those openers begin, which is also the right answer on the merits: `&&
+  .5` is a `Float` operand to `and`, refused live like every other non-Boolean.
+
+S2 additionally stops narrowing altogether while it has no bound name, and it is
+the **only** name rule that does. Its candidate set covers everything its anchor
+admits — `AfterDollar` takes an identifier byte and nothing else, and every
+identifier token is a candidate — so an empty legal set clears the whole mask even
+over a vocabulary complete over the grammar's alphabet. The sibling name rules
+are not in that position
+(N1/N2's `AfterDot` also admits whitespace and a quoted member, N6's value anchor a
+`(`, a `$`, a digit), so they keep masking their phantoms on an empty set rather
+than trading that away for a deadlock that cannot happen there. S2 needs the
+backstop because the sigil pass above is first-byte discriminated and so cannot see
+a vocabulary token that *ends* on the sigil (`($`).
+
+`tests/l2_liveness.rs` pins the invariant — over the gold corpus, and over seeded
+walks that only ever accept a token the overlay itself admits, across all 8 fixture
+schemas — and `fuzz/fuzz_targets/l2_mask_liveness.rs` lets the fuzzer choose each
+step. Both drive a vocabulary complete over that alphabet, which is what makes
+their
+non-emptiness assertion the invariant above rather than a weaker one.
 
 The schema overlay constrains **N3** (source class/store, including its `::`
 continuation, its class-vs-store continuation split, and the store-method set),

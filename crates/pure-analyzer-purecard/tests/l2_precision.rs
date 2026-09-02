@@ -798,6 +798,12 @@ enum Closer {
     /// `RelationColumn` rule whose *narrowing* rejects them. That is the honest
     /// reading of the mechanism, not a mislabel: at the pre-dot anchor the
     /// fused pass is what the mask depends on.
+    ///
+    /// S2's **sigil** half reads the same way. It clears a `$` that no binder
+    /// could satisfy at the anchor *before* the sigil (issue #275 — read at the
+    /// name instead, the rule would clear everything `AfterDollar` admits and
+    /// deadlock the decoder), so a `{|$…}` fixture records the block-statement
+    /// anchor's `SourceIdent`, not `RefVar`.
     L2(&'static str),
     /// The byte-PDA refuses it too, so the fixture pins a shape the decoder
     /// must never emit and names the rule that governs the position — but it is
@@ -1095,22 +1101,26 @@ static FROZEN_KILLS: &[FrozenKill] = &[
              ::spider::world_1::model::default::Countrylanguage::pair::groupBy",
         },
     },
+    // S2's sigil half (issue #275): with nothing bound, the `$` itself is what is
+    // illegal, so the walk is closed one token *earlier* than it used to be — at
+    // the sigil rather than at the name it opens. The rule active where that mask
+    // is read is the block-statement anchor's own `SourceIdent`; see `Closer::L2`.
     FrozenKill {
         fixture: "s2-refvar",
         db: "world_1",
-        closer: Closer::L2("RefVar"),
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "{|\n        $code\n      /'IsOfficial_t2'}",
-            closed_by: "code",
+            closed_by: "$",
         },
     },
     FrozenKill {
         fixture: "s2-refvar",
         db: "world_1",
-        closer: Closer::L2("RefVar"),
+        closer: Closer::L2("SourceIdent"),
         kill: Kill::Walk {
             walk: "{\n|      $name}",
-            closed_by: "name",
+            closed_by: "$",
         },
     },
     FrozenKill {
@@ -2832,6 +2842,15 @@ fn assert_frozen(fixture: &'static str) {
 /// still admits the offending token there — the second half being what separates
 /// "the overlay refuses this" from "the byte-PDA already did".
 fn walk_closer(db_id: &str, walk: &str, closed_by: &str) -> (Option<&'static str>, bool) {
+    // The vocabulary is built from this walk's own lexemes and nothing else, which
+    // is what makes a fixture a *closed* experiment — but it also means the
+    // vocabulary usually cannot spell the continuation a name rule leaves legal.
+    // Several of these masks are therefore empty, and legitimately so: that is the
+    // documented precondition of §6.7's liveness invariant (`tests/l2_liveness.rs`
+    // asserts it over a vocabulary complete over the grammar's alphabet, the
+    // shipping case), not a
+    // violation of it. Falling open here instead would surrender exactly the
+    // `NamePoint::Partial` masking these fixtures exist to freeze.
     let vocab = TokenVocab::build(&[walk], &[]);
     let grammar = CompiledGrammar::compile(vocab.vocab());
     let schema = load_schema(db_id);

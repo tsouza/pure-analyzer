@@ -219,7 +219,7 @@ purecard-fuzz target time="60" triple="":
 purecard-fuzz-build triple="":
     cargo +nightly fuzz build --fuzz-dir crates/pure-analyzer-purecard/fuzz {{ if triple == "" { "" } else { "--target " + triple } }}
 
-# Time-box all five PureCARD fuzz targets — `PURECARD_FUZZ_TARGETS` (xtask) owns
+# Time-box all six PureCARD fuzz targets — `PURECARD_FUZZ_TARGETS` (xtask) owns
 # that list and `cargo xtask check-doc-facts` holds this count to it. The
 # per-target loop and nested fuzz manifest selection live in xtask rather than
 # shell control flow here.

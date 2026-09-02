@@ -13,17 +13,15 @@ use libfuzzer_sys::fuzz_target;
 use purecard::{ByteRecognizer, CompiledGrammar, DecoderSession, Vocab};
 
 fuzz_target!(|data: &[u8]| {
-    let vocab = Vocab::from_byte_tokens(
-        vec![
-            b"|X.all()".to_vec(),
-            b"->take(".to_vec(),
-            b"1".to_vec(),
-            b")".to_vec(),
-            b"]".to_vec(),
-            b",".to_vec(),
-            b"".to_vec(),
-        ]
-    );
+    let vocab = Vocab::from_byte_tokens(vec![
+        b"|X.all()".to_vec(),
+        b"->take(".to_vec(),
+        b"1".to_vec(),
+        b")".to_vec(),
+        b"]".to_vec(),
+        b",".to_vec(),
+        b"".to_vec(),
+    ]);
     let vocab_len = vocab.len();
     let eos = vocab_len as u32;
     let grammar = CompiledGrammar::compile(vocab);
