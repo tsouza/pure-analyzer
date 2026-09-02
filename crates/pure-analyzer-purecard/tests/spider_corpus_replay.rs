@@ -56,10 +56,9 @@ impl CaseVocab {
         for extra in extras {
             add(extra.clone());
         }
-        let eos = tokens.len() as u32;
         Self {
             ids,
-            vocab: Vocab::from_byte_tokens(tokens, eos),
+            vocab: Vocab::from_byte_tokens(tokens),
         }
     }
 

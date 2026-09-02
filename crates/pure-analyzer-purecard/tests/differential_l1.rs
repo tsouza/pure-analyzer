@@ -95,8 +95,7 @@ fn vocab_for(query: &str) -> Vocab {
             tokens.push(tok);
         }
     }
-    let eos = tokens.len() as u32;
-    Vocab::from_byte_tokens(tokens, eos)
+    Vocab::from_byte_tokens(tokens)
 }
 
 /// Does L1 accept `query` as a complete stream (grammar-only, no schema)?

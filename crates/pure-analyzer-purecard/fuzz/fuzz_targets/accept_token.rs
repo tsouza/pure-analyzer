@@ -21,7 +21,7 @@ struct Input {
 fuzz_target!(|input: Input| {
     let vocab_len = input.vocab_bytes.len();
     let eos = vocab_len as u32;
-    let vocab = Vocab::from_byte_tokens(input.vocab_bytes, eos);
+    let vocab = Vocab::from_byte_tokens(input.vocab_bytes);
     let grammar = CompiledGrammar::compile(vocab);
     let mut session = DecoderSession::new(&grammar);
 

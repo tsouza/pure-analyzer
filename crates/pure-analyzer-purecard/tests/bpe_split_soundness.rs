@@ -129,8 +129,7 @@ fn build_split_vocab(queries: &[&str]) -> (Vocab, BTreeMap<Vec<u8>, u32>) {
             }
         }
     }
-    let eos = tokens.len() as u32;
-    (Vocab::from_byte_tokens(tokens, eos), ids)
+    (Vocab::from_byte_tokens(tokens), ids)
 }
 
 /// Group the in-scope gold `pure_text` by database (so each db's split vocab and
@@ -360,8 +359,7 @@ fn build_merged_vocab(queries: &[&str], merges: &[Merge]) -> (Vocab, BTreeMap<Ve
             }
         }
     }
-    let eos = tokens.len() as u32;
-    (Vocab::from_byte_tokens(tokens, eos), ids)
+    (Vocab::from_byte_tokens(tokens), ids)
 }
 
 /// The merged token-id stream of `query`.

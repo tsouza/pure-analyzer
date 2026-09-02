@@ -150,8 +150,7 @@ fn real_tokenizer_fused_nav_dots_are_precisely_masked() {
         );
 
         let tokens = decode_row(case);
-        let eos = tokens.len() as u32;
-        let vocab = Vocab::from_byte_tokens(tokens.clone(), eos);
+        let vocab = Vocab::from_byte_tokens(tokens.clone());
         let grammar = CompiledGrammar::compile(vocab);
         let schema = load_schema(&case.db);
         let mut session = drive_to_fused(&grammar, schema, &tokens, case.fused_index, &case.note);

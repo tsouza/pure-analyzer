@@ -467,6 +467,10 @@ no-shell-scripts:
 lint-purecard-stale:
     bun scripts/checks/stale-selfdescription.mjs --all
 
+# Reject a scripts/checks gate no workflow runs: a local hook is not a gate.
+gates-run-in-ci:
+    bun scripts/checks/gates-run-in-ci.mjs
+
 # Re-label PureCARD's frozen differential corpus against a running Legend
 # engine. The script owns the nested paths and verifies the engine version pin.
 label-differential:
@@ -517,7 +521,7 @@ ci: no-work-ledger generated-paths-gated
 # cargo-fuzz's sanitizers) — so they are only enforced in CI. Run the relevant fuzz-smoke directly with `just fuzz <target>
 # 60` if you have nightly. Use before a PR when a change touches what the fast
 # gate skips.
-ci-full: ci coverage test-mutation deny audit vet machete release-plz-check semver public-api sweep no-shell-scripts postponed-markers docs test-scripts lint-actions zizmor
+ci-full: ci coverage test-mutation deny audit vet machete release-plz-check semver public-api sweep no-shell-scripts postponed-markers lint-purecard-stale gates-run-in-ci docs test-scripts lint-actions zizmor
     @echo "ci-full: ran every locally reproducible PR gate; the no-warnings log sweep and fuzz-smoke are enforced only in CI"
 
 # Install git hooks (managed by lefthook.yml). Also run automatically by the

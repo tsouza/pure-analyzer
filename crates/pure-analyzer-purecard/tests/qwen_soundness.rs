@@ -84,8 +84,7 @@ fn build_qwen_vocab(tok: &Tokenizer) -> Vocab {
             })
         })
         .collect();
-    let eos = size as u32;
-    Vocab::from_byte_tokens(tokens, eos)
+    Vocab::from_byte_tokens(tokens)
 }
 
 /// Tokenize one query with the real tokenizer (no chat-template specials).
@@ -106,8 +105,8 @@ fn load_tokenizer() -> Tokenizer {
 fn l1_streams_every_real_qwen_gold_soundly() {
     let tok = load_tokenizer();
     let vocab = build_qwen_vocab(&tok);
-    let eos = vocab.eos();
     let grammar = CompiledGrammar::compile(vocab);
+    let eos = grammar.vocab().len() as u32;
 
     let mut total = 0usize;
     let mut failures = Vec::new();
@@ -224,8 +223,8 @@ fn qwen_specials_are_never_admissible_mid_query() {
     // literal `<|...|>` bytes dead-end the byte-PDA, so their vocab bit stays clear.
     let tok = load_tokenizer();
     let vocab = build_qwen_vocab(&tok);
-    let eos = vocab.eos();
     let grammar = CompiledGrammar::compile(vocab);
+    let eos = grammar.vocab().len() as u32;
 
     // Drive a real gold query a couple of steps in, then probe.
     let sample = load_gold(&corpus_path())

@@ -558,7 +558,7 @@ mod tests {
     /// An L1-only grammar over an empty vocabulary — enough to drive the
     /// byte-recognizer surface, which does not consult the vocab.
     fn l1_grammar() -> CompiledGrammar {
-        CompiledGrammar::compile(Vocab::from_byte_tokens(Vec::new(), 0))
+        CompiledGrammar::compile(Vocab::from_byte_tokens(Vec::new()))
     }
 
     #[test]
@@ -584,8 +584,7 @@ mod tests {
     /// (`accept_token`/`allowed_mask`) byte-by-byte under a schema.
     fn byte_grammar() -> CompiledGrammar {
         let tokens: Vec<Vec<u8>> = (0..=u8::MAX).map(|b| vec![b]).collect();
-        let eos = tokens.len() as u32;
-        CompiledGrammar::compile(Vocab::from_byte_tokens(tokens, eos))
+        CompiledGrammar::compile(Vocab::from_byte_tokens(tokens))
     }
 
     #[test]
@@ -695,16 +694,13 @@ mod tests {
     /// A vocabulary of whole tokens for the token-level surface: an opener/source
     /// prefix, a step, closers, and the empty token.
     fn token_vocab() -> Vocab {
-        Vocab::from_byte_tokens(
-            vec![
-                b"|X.all()".to_vec(), // 0: a complete source expression
-                b"->take(".to_vec(),  // 1: a step opening a Paren
-                b"1".to_vec(),        // 2: a digit
-                b")".to_vec(),        // 3: a closer
-                b"".to_vec(),         // 4: the empty token
-            ],
-            4,
-        )
+        Vocab::from_byte_tokens(vec![
+            b"|X.all()".to_vec(), // 0: a complete source expression
+            b"->take(".to_vec(),  // 1: a step opening a Paren
+            b"1".to_vec(),        // 2: a digit
+            b")".to_vec(),        // 3: a closer
+            b"".to_vec(),         // 4: the empty token
+        ])
     }
 
     #[test]
@@ -882,7 +878,7 @@ mod tests {
     fn spec_vocab() -> Vocab {
         // 0: the whole valid literal; 1: a token that dies on its second byte
         // (alive on `o`, dead on `x` — never reaching `saw_o`'s `k` rule).
-        Vocab::from_byte_tokens(vec![b"ok".to_vec(), b"ox".to_vec()], 2)
+        Vocab::from_byte_tokens(vec![b"ok".to_vec(), b"ox".to_vec()])
     }
 
     #[test]

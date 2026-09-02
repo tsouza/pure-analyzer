@@ -218,10 +218,12 @@ mod tests {
         // A closer (context-dependent), an identifier (independent survivor from
         // a value position), and a bare `,` (dead in a value position — a
         // separator is not a value — regardless of any enclosing frame).
-        Vocab::from_byte_tokens(
-            vec![b")".to_vec(), b"name".to_vec(), b",".to_vec(), b"".to_vec()],
-            3,
-        )
+        Vocab::from_byte_tokens(vec![
+            b")".to_vec(),
+            b"name".to_vec(),
+            b",".to_vec(),
+            b"".to_vec(),
+        ])
     }
 
     #[test]

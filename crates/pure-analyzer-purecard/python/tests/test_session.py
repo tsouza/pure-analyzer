@@ -15,10 +15,9 @@ from support.mask_bits import bit_set as _bit_set
 
 # A whole-token vocabulary mirroring the Rust `token_vocab` fixture: a complete
 # source expression, a step opener, a digit, a closer, and the empty token. Token
-# id == list index. The reserved EOS bit lives at index ``VOCAB_LEN`` (one past
-# the last token), independent of this ``eos_id`` field.
+# id == list index; the reserved EOS bit lives at index ``VOCAB_LEN``, one past
+# the last token.
 VOCAB = [b"|X.all()", b"->take(", b"1", b")", b""]
-EOS_ID = 4
 VOCAB_LEN = len(VOCAB)
 # "|X.all()->take(1)" as a token-id stream: source, step, digit, closer.
 GOLD_QUERY = [0, 1, 2, 3]
@@ -26,7 +25,7 @@ GOLD_QUERY = [0, 1, 2, 3]
 
 @pytest.fixture
 def grammar():
-    return purecard.compile_grammar("", VOCAB, EOS_ID)
+    return purecard.compile_grammar("", VOCAB)
 
 
 def test_compile_grammar_reports_vocab_len(grammar):
@@ -113,7 +112,6 @@ LATEST_VOCAB = [
     b")",
     b"",
 ]
-LATEST_EOS_ID = 6
 LATEST_GOLD = [0, 1, 2, 3, 4, 5]
 
 
@@ -121,7 +119,7 @@ def test_a_latest_milestoning_query_streams_end_to_end():
     """A `%latest` milestoning query marshals through the PyO3 boundary end to
     end — the symbolic literal is admissible at each step and the stream completes
     (gap report G2)."""
-    grammar = purecard.compile_grammar("", LATEST_VOCAB, LATEST_EOS_ID)
+    grammar = purecard.compile_grammar("", LATEST_VOCAB)
     session = purecard.Session(grammar)
     assert not session.is_complete()
     for token_id in LATEST_GOLD:
@@ -129,9 +127,9 @@ def test_a_latest_milestoning_query_streams_end_to_end():
         assert _bit_set(mask, token_id), f"gold token {token_id} must be admissible"
         session.accept_token(token_id)
     assert session.is_complete()
-    # The completed stream sets the reserved EOS bit — at index `len(vocab)` (one
-    # past the last token id), exactly as the base fixture asserts, not at the
-    # `eos_id` field — and EOS is then acceptable.
+    # The completed stream sets the reserved EOS bit — at index `len(vocab)`, one
+    # past the last token id, exactly as the base fixture asserts — and EOS is
+    # then acceptable.
     assert _bit_set(session.allowed_mask(), len(LATEST_VOCAB))
     session.accept_token(len(LATEST_VOCAB))
 
@@ -146,7 +144,6 @@ ARM_R_VOCAB = [
     b"])",
     b"",
 ]
-ARM_R_EOS_ID = 4
 ARM_R_GOLD = [0, 1, 2, 3]
 
 
@@ -154,7 +151,7 @@ def test_an_arm_r_relation_api_query_streams_end_to_end():
     """An arm-R `project(~[…])` relation query marshals through the PyO3 boundary
     end to end — the `~` column-set sigil and its column lambda are admissible at
     each step and the stream completes (gap report G1)."""
-    grammar = purecard.compile_grammar("", ARM_R_VOCAB, ARM_R_EOS_ID)
+    grammar = purecard.compile_grammar("", ARM_R_VOCAB)
     session = purecard.Session(grammar)
     assert not session.is_complete()
     for token_id in ARM_R_GOLD:

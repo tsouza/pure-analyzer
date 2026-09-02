@@ -299,9 +299,9 @@ jobs:
       - name: public API snapshot
         run: just public-api
 
-  # --- Structural rules + work-ledger + shell + postponed-marker gates ------
+  # --- Structural rules + every scripts/checks hygiene gate ----------------
   structural:
-    name: ast-grep / work-ledger / shell / postponed-markers
+    name: ast-grep / structural gates
     needs: changes
     runs-on: ubuntu-latest
     steps:
@@ -322,6 +322,12 @@ jobs:
         run: just no-shell-scripts
       - name: Postponed-marker gate
         run: just postponed-markers
+      - name: Generated-paths gate
+        run: just generated-paths-gated
+      - name: PureCARD stale self-description gate
+        run: just lint-purecard-stale
+      - name: Every gate reaches CI
+        run: just gates-run-in-ci
 
   # --- Docs build (missing-docs is a hard error) ---------------------------
   docs:

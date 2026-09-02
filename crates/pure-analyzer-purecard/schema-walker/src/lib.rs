@@ -1886,8 +1886,7 @@ mod tests {
             .iter()
             .map(|s| s.as_bytes().to_vec())
             .collect();
-        let eos = tokens.len() as u32;
-        Vocab::from_byte_tokens(tokens, eos)
+        Vocab::from_byte_tokens(tokens)
     }
 
     /// Decode a walk's token ids to text via `grammar`'s vocabulary.
@@ -2008,8 +2007,7 @@ mod tests {
             .iter()
             .map(|s| s.as_bytes().to_vec())
             .collect();
-        let eos = tokens.len() as u32;
-        Vocab::from_byte_tokens(tokens, eos)
+        Vocab::from_byte_tokens(tokens)
     }
 
     #[test]
@@ -2059,8 +2057,7 @@ mod tests {
         .iter()
         .map(|s| s.as_bytes().to_vec())
         .collect();
-        let eos = tokens.len() as u32;
-        Vocab::from_byte_tokens(tokens, eos)
+        Vocab::from_byte_tokens(tokens)
     }
 
     #[test]
@@ -2146,8 +2143,7 @@ mod tests {
         .iter()
         .map(|s| s.as_bytes().to_vec())
         .collect();
-        let eos = tokens.len() as u32;
-        Vocab::from_byte_tokens(tokens, eos)
+        Vocab::from_byte_tokens(tokens)
     }
 
     /// The binder bias must single out the *current* binder among the variables
@@ -2311,8 +2307,7 @@ mod tests {
         .iter()
         .map(|s| s.as_bytes().to_vec())
         .collect();
-        let eos = tokens.len() as u32;
-        Vocab::from_byte_tokens(tokens, eos)
+        Vocab::from_byte_tokens(tokens)
     }
 
     #[test]
@@ -2408,8 +2403,7 @@ mod tests {
             .iter()
             .map(|s| s.as_bytes().to_vec())
             .collect();
-        let eos = tokens.len() as u32;
-        Vocab::from_byte_tokens(tokens, eos)
+        Vocab::from_byte_tokens(tokens)
     }
 
     #[test]
@@ -2765,8 +2759,7 @@ mod tests {
         .iter()
         .map(|s| s.as_bytes().to_vec())
         .collect();
-        let eos = tokens.len() as u32;
-        Vocab::from_byte_tokens(tokens, eos)
+        Vocab::from_byte_tokens(tokens)
     }
 
     fn id_of(vocab: &Vocab, text: &str) -> u32 {
@@ -2784,7 +2777,7 @@ mod tests {
     fn find_digit_token_locates_a_single_ascii_digit_or_none() {
         let vocab = vocab_for_recipes();
         assert_eq!(find_digit_token(&vocab), Some(id_of(&vocab, "1")));
-        let no_digits = Vocab::from_byte_tokens(vec![b"a".to_vec(), b"ab".to_vec()], 2);
+        let no_digits = Vocab::from_byte_tokens(vec![b"a".to_vec(), b"ab".to_vec()]);
         assert_eq!(find_digit_token(&no_digits), None);
     }
 
@@ -2792,7 +2785,7 @@ mod tests {
     fn find_whitespace_token_locates_a_single_byte_whitespace_or_none() {
         let vocab = vocab_for_recipes();
         assert_eq!(find_whitespace_token(&vocab), Some(id_of(&vocab, " ")));
-        let no_ws = Vocab::from_byte_tokens(vec![b"a".to_vec(), b"ab".to_vec()], 2);
+        let no_ws = Vocab::from_byte_tokens(vec![b"a".to_vec(), b"ab".to_vec()]);
         assert_eq!(find_whitespace_token(&no_ws), None);
     }
 
@@ -2805,18 +2798,18 @@ mod tests {
         );
         // Only one quoted-string token exists: asking for two fails entirely,
         // even though one alone would succeed.
-        let one_quote = Vocab::from_byte_tokens(vec![b"'x'".to_vec()], 1);
+        let one_quote = Vocab::from_byte_tokens(vec![b"'x'".to_vec()]);
         assert_eq!(find_quoted_string_tokens(&one_quote, 2), None);
         assert_eq!(
             find_quoted_string_tokens(&one_quote, 1),
             Some(vec![id_of(&one_quote, "'x'")])
         );
         // A single quote byte alone isn't a *complete* string literal shape.
-        let bare_quote = Vocab::from_byte_tokens(vec![b"'".to_vec()], 1);
+        let bare_quote = Vocab::from_byte_tokens(vec![b"'".to_vec()]);
         assert_eq!(find_quoted_string_tokens(&bare_quote, 1), None);
         // An empty quoted string (exactly the two quote bytes) is the
         // shortest *complete* shape and does count.
-        let empty_quote = Vocab::from_byte_tokens(vec![b"''".to_vec()], 1);
+        let empty_quote = Vocab::from_byte_tokens(vec![b"''".to_vec()]);
         assert_eq!(
             find_quoted_string_tokens(&empty_quote, 1),
             Some(vec![id_of(&empty_quote, "''")])
@@ -2849,14 +2842,14 @@ mod tests {
     #[test]
     fn class_member_candidates_is_empty_when_no_class_name_is_a_vocab_token() {
         // "year" is a real member name, but no real class name appears.
-        let vocab = Vocab::from_byte_tokens(vec![b"year".to_vec()], 1);
+        let vocab = Vocab::from_byte_tokens(vec![b"year".to_vec()]);
         assert!(class_member_candidates(&recipe_schema(), &vocab, false).is_empty());
     }
 
     #[test]
     fn class_member_candidates_skips_a_member_absent_from_the_vocab() {
         // "A" is a real class, but its only member ("year") has no token.
-        let vocab = Vocab::from_byte_tokens(vec![b"A".to_vec()], 1);
+        let vocab = Vocab::from_byte_tokens(vec![b"A".to_vec()]);
         assert!(class_member_candidates(&recipe_schema(), &vocab, false).is_empty());
     }
 
@@ -2890,7 +2883,7 @@ mod tests {
         // L2-inadmissible token through, caught only by
         // `schema_walk_completeness.rs`'s separate L1/L2 subset proof. This
         // pins the mask-check as a real defense, not vestigial.
-        let vocab = Vocab::from_byte_tokens(vec![b"|".to_vec(), b"Nope".to_vec()], 2);
+        let vocab = Vocab::from_byte_tokens(vec![b"|".to_vec(), b"Nope".to_vec()]);
         let grammar = CompiledGrammar::compile(vocab);
         assert_eq!(try_walk(&grammar, &recipe_schema(), &[0, 1]), None);
     }
@@ -2922,8 +2915,7 @@ mod tests {
         .iter()
         .map(|s| s.as_bytes().to_vec())
         .collect();
-        let eos = tokens.len() as u32;
-        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens, eos));
+        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens));
         assert_eq!(
             recipe_navigation_predicate(&grammar, &recipe_schema(), grammar.vocab()),
             None
@@ -2939,8 +2931,7 @@ mod tests {
         .iter()
         .map(|s| s.as_bytes().to_vec())
         .collect();
-        let eos = tokens.len() as u32;
-        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens, eos));
+        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens));
         assert_eq!(
             recipe_navigation_predicate(&grammar, &recipe_schema(), grammar.vocab()),
             None
@@ -2975,8 +2966,7 @@ mod tests {
         .iter()
         .map(|s| s.as_bytes().to_vec())
         .collect();
-        let eos = tokens.len() as u32;
-        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens, eos));
+        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens));
         assert!(recipe_navigation_predicate(&grammar, &recipe_schema(), grammar.vocab()).is_some());
         assert_eq!(
             recipe_collapsed_navigation_predicate(&grammar, &recipe_schema(), grammar.vocab()),
@@ -3033,8 +3023,7 @@ mod tests {
             .iter()
             .map(|s| s.as_bytes().to_vec())
             .collect();
-        let eos = tokens.len() as u32;
-        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens, eos));
+        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens));
         assert_eq!(
             recipe_reducer(&grammar, &recipe_schema(), grammar.vocab()),
             None
@@ -3068,8 +3057,7 @@ mod tests {
         .iter()
         .map(|s| s.as_bytes().to_vec())
         .collect();
-        let eos = tokens.len() as u32;
-        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens, eos));
+        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens));
         assert_eq!(
             recipe_groupby(&grammar, &recipe_schema(), grammar.vocab()),
             None
@@ -3085,8 +3073,7 @@ mod tests {
         .iter()
         .map(|s| s.as_bytes().to_vec())
         .collect();
-        let eos = tokens.len() as u32;
-        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens, eos));
+        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens));
         assert_eq!(
             recipe_groupby(&grammar, &recipe_schema(), grammar.vocab()),
             None
@@ -3132,8 +3119,7 @@ mod tests {
         .iter()
         .map(|s| s.as_bytes().to_vec())
         .collect();
-        let eos = tokens.len() as u32;
-        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens, eos));
+        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens));
         assert_eq!(
             recipe_groupby_scalar_multi_agg(&grammar, &recipe_schema(), grammar.vocab()),
             None
@@ -3149,8 +3135,7 @@ mod tests {
         .iter()
         .map(|s| s.as_bytes().to_vec())
         .collect();
-        let eos = tokens.len() as u32;
-        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens, eos));
+        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens));
         assert_eq!(
             recipe_groupby_scalar_multi_agg(&grammar, &recipe_schema(), grammar.vocab()),
             None
@@ -3166,8 +3151,7 @@ mod tests {
         .iter()
         .map(|s| s.as_bytes().to_vec())
         .collect();
-        let eos = tokens.len() as u32;
-        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens, eos));
+        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens));
         assert_eq!(
             recipe_groupby_scalar_multi_agg(&grammar, &recipe_schema(), grammar.vocab()),
             None
@@ -3185,8 +3169,7 @@ mod tests {
         .iter()
         .map(|s| s.as_bytes().to_vec())
         .collect();
-        let eos = tokens.len() as u32;
-        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens, eos));
+        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens));
         assert_eq!(
             recipe_groupby_scalar_multi_agg(&grammar, &recipe_schema(), grammar.vocab()),
             None
@@ -3224,8 +3207,7 @@ mod tests {
         .iter()
         .map(|s| s.as_bytes().to_vec())
         .collect();
-        let eos = tokens.len() as u32;
-        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens, eos));
+        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens));
         let vocab = grammar.vocab();
         assert!(recipe_groupby(&grammar, &recipe_schema(), vocab).is_some());
         assert_eq!(
@@ -3243,8 +3225,7 @@ mod tests {
         .iter()
         .map(|s| s.as_bytes().to_vec())
         .collect();
-        let eos = tokens.len() as u32;
-        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens, eos));
+        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens));
         assert_eq!(
             recipe_groupby_restrict(&grammar, &recipe_schema(), grammar.vocab()),
             None
@@ -3369,8 +3350,7 @@ mod tests {
         .iter()
         .map(|s| s.as_bytes().to_vec())
         .collect();
-        let eos = tokens.len() as u32;
-        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens, eos));
+        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens));
         assert_eq!(
             recipe_groupby_having_restrict(&grammar, &recipe_schema(), grammar.vocab()),
             None
@@ -3409,8 +3389,7 @@ mod tests {
         .iter()
         .map(|s| s.as_bytes().to_vec())
         .collect();
-        let eos = tokens.len() as u32;
-        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens, eos));
+        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens));
         assert_eq!(
             recipe_groupby_having_restrict(&grammar, &recipe_schema(), grammar.vocab()),
             None
@@ -3453,8 +3432,7 @@ mod tests {
         .iter()
         .map(|s| s.as_bytes().to_vec())
         .collect();
-        let eos = tokens.len() as u32;
-        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens, eos));
+        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens));
         assert_eq!(
             recipe_filter_project(&grammar, &recipe_schema(), grammar.vocab()),
             None
@@ -3473,8 +3451,7 @@ mod tests {
         .iter()
         .map(|s| s.as_bytes().to_vec())
         .collect();
-        let eos = tokens.len() as u32;
-        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens, eos));
+        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens));
         assert_eq!(
             recipe_filter_project(&grammar, &recipe_schema(), grammar.vocab()),
             None
@@ -3497,8 +3474,7 @@ mod tests {
         .iter()
         .map(|s| s.as_bytes().to_vec())
         .collect();
-        let eos = tokens.len() as u32;
-        let partial = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens, eos));
+        let partial = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens));
         let one = recipe_walks(&partial, &recipe_schema(), partial.vocab(), true);
         assert_eq!(one.len(), 1);
     }

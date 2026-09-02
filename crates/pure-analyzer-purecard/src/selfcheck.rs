@@ -218,8 +218,7 @@ mod tests {
                 }
             }
         }
-        let eos = tokens.len() as u32;
-        Vocab::from_byte_tokens(tokens, eos)
+        Vocab::from_byte_tokens(tokens)
     }
 
     #[test]
@@ -249,8 +248,7 @@ mod tests {
                 seen.push(t);
             }
         }
-        let eos = seen.len() as u32;
-        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(seen, eos));
+        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(seen));
         // The first `)` is inside `all()`, at byte offset 7.
         let expected_pos = sample.iter().position(|&b| b == b')').expect("a paren");
         assert_eq!(
@@ -273,7 +271,7 @@ mod tests {
         // exactly the sample's own bytes, which stream soundly, so an inadmissible
         // segment requires the sample itself to be grammar-illegal.)
         let sample: &[u8] = b"|X.all()]";
-        let vocab = Vocab::from_byte_tokens(vec![b"|X.all()".to_vec(), b"]".to_vec()], 2);
+        let vocab = Vocab::from_byte_tokens(vec![b"|X.all()".to_vec(), b"]".to_vec()]);
         let closer_id = 1;
         let grammar = CompiledGrammar::compile(vocab);
         assert_eq!(
@@ -356,8 +354,7 @@ mod tests {
     fn longest_match_prefers_the_longest_token_and_skips_empty() {
         // `->take` must win over `->` at a shared prefix, and an empty token is
         // never selected (it would stall segmentation).
-        let vocab =
-            Vocab::from_byte_tokens(vec![b"->".to_vec(), b"->take".to_vec(), b"".to_vec()], 3);
+        let vocab = Vocab::from_byte_tokens(vec![b"->".to_vec(), b"->take".to_vec(), b"".to_vec()]);
         assert_eq!(longest_match(&vocab, b"->take(1)"), Some(1));
         assert_eq!(longest_match(&vocab, b"->x"), Some(0));
         assert_eq!(longest_match(&vocab, b"zzz"), None);
@@ -367,7 +364,7 @@ mod tests {
     fn longest_match_breaks_length_ties_toward_the_first_id() {
         // Two distinct ids carrying identical bytes both match; the first-seen id
         // wins (the `>` keeps the earlier one on a tie, never replacing it).
-        let vocab = Vocab::from_byte_tokens(vec![b"ab".to_vec(), b"ab".to_vec()], 2);
+        let vocab = Vocab::from_byte_tokens(vec![b"ab".to_vec(), b"ab".to_vec()]);
         assert_eq!(longest_match(&vocab, b"abc"), Some(0));
     }
 
@@ -376,7 +373,7 @@ mod tests {
         // An empty vocabulary cannot segment the first smoke query's very first
         // byte, so `self_check_smoke` must return an error — pinning that it
         // actually runs the check rather than trivially succeeding.
-        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(Vec::new(), 0));
+        let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(Vec::new()));
         assert_eq!(
             self_check_smoke(&grammar),
             Err(SelfCheckError::Unsegmentable {
