@@ -1,14 +1,12 @@
 //! Terminal-oriented rendering for M4a comparison outcomes.
 
-use libpure::{LineColumn, OutputSchemaField, SourceFile, StructuralDifferenceKind};
+use libpure::{OutputSchemaField, StructuralDifferenceKind};
 
 use crate::{
     ComparisonRenderInput, HumanOptions, RenderError,
-    comparison::{
-        PreparedComparison, PreparedDifference, PreparedIndecision, PreparedModelAnchor,
-        PreparedOrigin,
-    },
+    comparison::{PreparedComparison, PreparedDifference, PreparedIndecision},
     human::append_terminal_text,
+    origin::append_origin,
 };
 
 const EQUIVALENT_COLOR: &str = "32";
@@ -90,56 +88,6 @@ fn append_usize(output: &mut String, name: &str, value: usize) {
     output.push_str(name);
     output.push_str(": ");
     output.push_str(&value.to_string());
-    output.push('\n');
-}
-
-fn append_origin(output: &mut String, name: &str, origin: &PreparedOrigin<'_>) {
-    output.push_str("  ");
-    output.push_str(name);
-    output.push_str(":\n");
-    append_location(
-        output,
-        "    source",
-        origin.source,
-        &origin.start,
-        &origin.end,
-    );
-    if origin.model_origins.is_empty() {
-        return;
-    }
-    output.push_str("    model_origins:\n");
-    for anchor in &origin.model_origins {
-        match anchor {
-            PreparedModelAnchor::Document { source } => {
-                output.push_str("      - ");
-                append_terminal_text(output, source.name());
-                output.push_str(" (document)\n");
-            }
-            PreparedModelAnchor::Span {
-                source, start, end, ..
-            } => append_location(output, "      -", source, start, end),
-        }
-    }
-}
-
-fn append_location(
-    output: &mut String,
-    prefix: &str,
-    source: &SourceFile,
-    start: &LineColumn,
-    end: &LineColumn,
-) {
-    output.push_str(prefix);
-    output.push_str(": ");
-    append_terminal_text(output, source.name());
-    output.push(':');
-    output.push_str(&start.line.to_string());
-    output.push(':');
-    output.push_str(&start.column.to_string());
-    output.push_str("..");
-    output.push_str(&end.line.to_string());
-    output.push(':');
-    output.push_str(&end.column.to_string());
     output.push('\n');
 }
 

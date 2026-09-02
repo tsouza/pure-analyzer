@@ -7,15 +7,15 @@ diagnostic and reason identifiers.
 
 ## Commands
 
-| Command                                                  | Purpose                                                                                                     |
-| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `pure-analyzer validate <input>...`                      | Check grammar and shallow well-formedness. No model is required.                                            |
-| `pure-analyzer lint <input>... [--model <model>]...`     | Check model-aware milestoning arity, unknown properties, and cardinality misuse when models are supplied.   |
-| `pure-analyzer fmt <input>...`                           | Canonically format input. File input is updated by default; standard input is formatted to standard output. |
-| `pure-analyzer eq <left> <right> [--model <model>]...`   | Sound, fail-closed M4a relational comparison.                                                               |
-| `pure-analyzer diff <left> <right> [--model <model>]...` | The same M4a comparison, reporting a structural schema distinction when one is proven.                      |
-| `pure-analyzer explain <identifier>`                     | Explain one exact registered diagnostic or reason identifier.                                               |
-| `pure-analyzer completions bash`                         | Print Bash completion code to standard output.                                                              |
+| Command                                                  | Purpose                                                                                                                                |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `pure-analyzer validate <input>...`                      | Check grammar and shallow well-formedness. No model is required.                                                                       |
+| `pure-analyzer lint <input>... [--model <model>]...`     | Check model-aware milestoning arity, unknown properties, and cardinality misuse when models are supplied.                              |
+| `pure-analyzer fmt <input>...`                           | Format input, preserving source layout and comments. File input is updated by default; standard input is formatted to standard output. |
+| `pure-analyzer eq <left> <right> [--model <model>]...`   | Sound, fail-closed M4a relational comparison.                                                                                          |
+| `pure-analyzer diff <left> <right> [--model <model>]...` | The same M4a comparison, reporting a structural schema distinction when one is proven.                                                 |
+| `pure-analyzer explain <identifier>`                     | Explain one exact registered diagnostic or reason identifier.                                                                          |
+| `pure-analyzer completions bash`                         | Print Bash completion code to standard output.                                                                                         |
 
 Use `pure-analyzer <command> --help` for the complete flag syntax.
 
@@ -103,6 +103,32 @@ or automating changes:
 
 `--line-width <positive-integer>` overrides the configured layout width for
 one invocation.
+
+### Canonical emission
+
+`fmt --canonical` is a separate mode from the layout formatter above. It does
+not rewrite a source file; it emits the proven relational normal form of one
+query to standard output, and it never writes input.
+
+| Invocation                                       | Result                                                                |
+| ------------------------------------------------ | --------------------------------------------------------------------- |
+| `fmt <input> --canonical [--model <model>]...`   | Emit the proven normal form, or report an indecisive result.          |
+
+Because a normal form is derived from the lowered query rather than from the
+source text, canonical mode **discards comments and all source layout**. It
+never re-attaches them, and it never claims to have preserved them. Use the
+default `fmt` mode when comment and layout preservation matter; the two modes
+are mutually exclusive, and `--canonical` is rejected together with `--check`,
+`--stdout`, `--diff`, and `--line-width`.
+
+Canonical mode is fail-closed. When the query lies outside the sound canonical
+subset, it emits no text and reports the exact reason with the source origin
+that produced it.
+
+| Exit status | Meaning                                                       |
+| ----------- | ------------------------------------------------------------- |
+| `0`         | A proven normal form was emitted.                             |
+| `2`         | The request was indecisive; no normal form was emitted.       |
 
 ## Compare and diff
 

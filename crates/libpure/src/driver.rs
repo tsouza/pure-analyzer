@@ -1,9 +1,10 @@
 //! Renderer-independent orchestration over retained source snapshots.
 
 use pure_analyzer_analysis::{
-    AnalysisEngine, AnalysisInput, AnalysisPass, ComparisonOutcome, FindingPolicy, LocalResolution,
-    MilestoningArityLintPass, NavigationLintPass, NormalizationBudget, RelationalOutcome,
-    ValidatePass, analyze_m3_locals, compare_lowered_queries_with_budget, format_query,
+    AnalysisEngine, AnalysisInput, AnalysisPass, CanonicalEmissionOutcome, ComparisonOutcome,
+    FindingPolicy, LocalResolution, MilestoningArityLintPass, NavigationLintPass,
+    NormalizationBudget, RelationalOutcome, ValidatePass, analyze_m3_locals,
+    compare_lowered_queries_with_budget, emit_canonical_lowered_query_with_budget, format_query,
     format_query_with_width, lower_m3_query,
 };
 use std::collections::{BTreeMap, BTreeSet};
@@ -229,6 +230,55 @@ pub struct ComparisonRequest {
     right: SourceInput,
     models: Vec<ModelInput>,
     normalization_budget: NormalizationBudget,
+}
+
+/// The query and optional models required for fail-closed canonical emission.
+///
+/// This request deliberately owns one query snapshot rather than using the
+/// lossless layout-formatting request. The result is a proven relational normal
+/// form or a typed indecision, never a source-layout rewrite.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CanonicalEmissionRequest {
+    source: SourceInput,
+    models: Vec<ModelInput>,
+    normalization_budget: NormalizationBudget,
+}
+
+impl CanonicalEmissionRequest {
+    /// Construct a canonical-emission request using the default finite normalization budget.
+    #[must_use]
+    pub fn new(source: SourceInput, models: impl IntoIterator<Item = ModelInput>) -> Self {
+        Self {
+            source,
+            models: models.into_iter().collect(),
+            normalization_budget: NormalizationBudget::default(),
+        }
+    }
+
+    /// Return the single query input whose relational normal form may be emitted.
+    #[must_use]
+    pub const fn source(&self) -> &SourceInput {
+        &self.source
+    }
+
+    /// Return model inputs in their deterministic loading order.
+    #[must_use]
+    pub fn models(&self) -> &[ModelInput] {
+        &self.models
+    }
+
+    /// Set the finite normalization budget applied before canonical emission.
+    #[must_use]
+    pub const fn with_normalization_budget(mut self, budget: NormalizationBudget) -> Self {
+        self.normalization_budget = budget;
+        self
+    }
+
+    /// Return the finite normalization budget applied before canonical emission.
+    #[must_use]
+    pub const fn normalization_budget(&self) -> NormalizationBudget {
+        self.normalization_budget
+    }
 }
 
 impl ComparisonRequest {
@@ -515,6 +565,33 @@ pub struct ComparisonOutput {
     outcome: ComparisonOutcome,
 }
 
+/// A canonical-emission result retaining the exact query and model snapshots used for lowering.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CanonicalEmissionOutput {
+    sources: SourceStore,
+    outcome: CanonicalEmissionOutcome,
+}
+
+impl CanonicalEmissionOutput {
+    /// Return source snapshots referenced by the emitted result or typed indecision origin.
+    #[must_use]
+    pub const fn sources(&self) -> &SourceStore {
+        &self.sources
+    }
+
+    /// Return the exact fail-closed canonical-emission outcome.
+    #[must_use]
+    pub const fn outcome(&self) -> &CanonicalEmissionOutcome {
+        &self.outcome
+    }
+
+    /// Consume this output into its source snapshots and typed emission outcome.
+    #[must_use]
+    pub fn into_parts(self) -> (SourceStore, CanonicalEmissionOutcome) {
+        (self.sources, self.outcome)
+    }
+}
+
 impl ComparisonOutput {
     /// Return source snapshots referenced by the outcome's structural origins.
     #[must_use]
@@ -738,13 +815,13 @@ impl AnalysisDriver {
     /// be loaded, or the parser cannot construct its lossless tree.
     pub fn compare(&self, request: &ComparisonRequest) -> Result<ComparisonOutput, DriverError> {
         let (sources, [left, right], model) = load_comparison_request(request)?;
-        let left = lower_comparison_source(
+        let left = lower_relational_source(
             sources
                 .get(left)
                 .ok_or(DriverError::MissingSource { file: left })?,
             model.as_ref(),
         )?;
-        let right = lower_comparison_source(
+        let right = lower_relational_source(
             sources
                 .get(right)
                 .ok_or(DriverError::MissingSource { file: right })?,
@@ -753,6 +830,34 @@ impl AnalysisDriver {
         let outcome =
             compare_lowered_queries_with_budget(&left, &right, request.normalization_budget());
         Ok(ComparisonOutput { sources, outcome })
+    }
+
+    /// Load, lower, normalize, and emit one query through the fail-closed canonical boundary.
+    ///
+    /// The returned text is intentionally unrelated to the lossless source
+    /// layout formatter: it contains only a proven supported relational normal
+    /// form. Parser recovery, unsupported syntax, absent model facts, and
+    /// normalization limits are returned as the exact typed indecision.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DriverError`] when the query or model source cannot be
+    /// retained, a model cannot be loaded, or the parser cannot construct its
+    /// lossless tree.
+    pub fn emit_canonical(
+        &self,
+        request: &CanonicalEmissionRequest,
+    ) -> Result<CanonicalEmissionOutput, DriverError> {
+        let (sources, query, model) = load_canonical_emission_request(request)?;
+        let lowered = lower_relational_source(
+            sources
+                .get(query)
+                .ok_or(DriverError::MissingSource { file: query })?,
+            model.as_ref(),
+        )?;
+        let outcome =
+            emit_canonical_lowered_query_with_budget(&lowered, request.normalization_budget());
+        Ok(CanonicalEmissionOutput { sources, outcome })
     }
 
     /// Load and validate model inputs without requiring a query source.
@@ -954,6 +1059,20 @@ fn load_comparison_request(
     let sources = model_sources.append(query_sources);
     let model = load_model(&sources, &request.models)?;
     Ok((sources, [first_query, second_query], model))
+}
+
+fn load_canonical_emission_request(
+    request: &CanonicalEmissionRequest,
+) -> Result<(SourceStore, FileId, Option<ModelGraph>), DriverError> {
+    let model_sources = SourceStore::load(request.models.iter().map(ModelInput::source).cloned())
+        .map_err(DriverError::model_source_load)?;
+    let query = request_file_id(model_sources.len())
+        .ok_or_else(|| DriverError::model_source_load(SourceStoreError::TooManySources))?;
+    let query_sources = SourceStore::load_from(query.index(), [request.source.clone()])
+        .map_err(DriverError::source_load)?;
+    let sources = model_sources.append(query_sources);
+    let model = load_model(&sources, &request.models)?;
+    Ok((sources, query, model))
 }
 
 fn request_file_id(index: usize) -> Option<FileId> {
@@ -1195,7 +1314,7 @@ fn parse_source(source: &SourceFile) -> Result<ParsedSource, DriverError> {
         .map_err(|error| DriverError::parse(source.id(), error))
 }
 
-fn lower_comparison_source(
+fn lower_relational_source(
     source: &SourceFile,
     model: Option<&ModelGraph>,
 ) -> Result<RelationalOutcome, DriverError> {
@@ -1379,6 +1498,16 @@ Class model::Person
         )
     }
 
+    fn canonical_emission_request(source: &str) -> CanonicalEmissionRequest {
+        CanonicalEmissionRequest::new(
+            SourceInput::in_memory("query.pure", source),
+            [ModelInput::pmcd(SourceInput::in_memory(
+                "model.json",
+                MODEL,
+            ))],
+        )
+    }
+
     #[test]
     fn comparison_preserves_exact_typed_m4a_outcomes_and_source_order() {
         let driver = AnalysisDriver;
@@ -1496,6 +1625,100 @@ Class model::Person
         assert!(matches!(
             output.outcome(),
             ComparisonOutcome::Indecisive(indecision)
+                if indecision.reason() == ReasonCode::IndMissingRewrite
+        ));
+    }
+
+    #[test]
+    fn canonical_emission_preserves_the_exact_outcome_and_snapshot_order() {
+        let request = canonical_emission_request(
+            "/* source layout is not canonical */ model::Person.all()->project(~[label: person | $person.name])",
+        );
+        assert!(matches!(request.source(), SourceInput::InMemory { .. }));
+        assert_eq!(request.models().len(), 1);
+
+        let output = AnalysisDriver
+            .emit_canonical(&request)
+            .expect("supported query emits through the canonical facade");
+        assert!(matches!(
+            output.outcome(),
+            CanonicalEmissionOutcome::Emitted(emitted)
+                if emitted.as_str()
+                    == "model::Person.all()->project(~[label: v0 | $v0.name])"
+        ));
+        assert_eq!(
+            output
+                .sources()
+                .files()
+                .map(SourceFile::name)
+                .collect::<Vec<_>>(),
+            ["model.json", "query.pure"],
+            "models must precede the independently retained query snapshot"
+        );
+        assert_eq!(
+            output
+                .sources()
+                .files()
+                .map(SourceFile::id)
+                .collect::<Vec<_>>(),
+            [FileId::new(0), FileId::new(1)]
+        );
+    }
+
+    #[test]
+    fn canonical_emission_keeps_malformed_and_unresolved_queries_indecisive() {
+        let malformed = AnalysisDriver
+            .emit_canonical(&canonical_emission_request(
+                "model::Person.all()->filter(person| $person.name ==)",
+            ))
+            .expect("malformed source remains a canonical-emission outcome");
+        assert!(matches!(
+            malformed.outcome(),
+            CanonicalEmissionOutcome::Indecisive(indecision)
+                if indecision.reason() == ReasonCode::IndUnparseable
+        ));
+
+        let unresolved = AnalysisDriver
+            .emit_canonical(&CanonicalEmissionRequest::new(
+                SourceInput::in_memory("query.pure", "model::Person.all()"),
+                [],
+            ))
+            .expect("missing model remains a canonical-emission outcome");
+        assert!(matches!(
+            unresolved.outcome(),
+            CanonicalEmissionOutcome::Indecisive(indecision)
+                if indecision.reason() == ReasonCode::ModelIncomplete
+        ));
+    }
+
+    #[test]
+    fn canonical_emission_keeps_model_load_failures_at_the_driver_boundary() {
+        let error = AnalysisDriver
+            .emit_canonical(&CanonicalEmissionRequest::new(
+                SourceInput::in_memory("query.pure", "model::Person.all()"),
+                [ModelInput::pmcd(SourceInput::in_memory("broken.json", "{"))],
+            ))
+            .expect_err("malformed model must not become semantic indecision");
+        assert!(matches!(
+            error,
+            DriverError::ModelLoad {
+                source: ModelError::Json { source_name, .. }
+            } if source_name == "broken.json"
+        ));
+    }
+
+    #[test]
+    fn canonical_emission_request_passes_its_explicit_normalization_budget_through() {
+        let request = canonical_emission_request("model::Person.all()")
+            .with_normalization_budget(NormalizationBudget::new(0));
+        assert_eq!(request.normalization_budget(), NormalizationBudget::new(0));
+
+        let output = AnalysisDriver
+            .emit_canonical(&request)
+            .expect("zero budget must fail closed through the canonical facade");
+        assert!(matches!(
+            output.outcome(),
+            CanonicalEmissionOutcome::Indecisive(indecision)
                 if indecision.reason() == ReasonCode::IndMissingRewrite
         ));
     }

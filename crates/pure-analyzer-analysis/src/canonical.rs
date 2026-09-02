@@ -9,9 +9,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use pure_analyzer_diagnostics::ReasonCode;
 
 use crate::{
-    ColumnId, IrOrigin, Knowledge, NormalizationOutcome, NormalizedQuery, RelationExpression,
-    RelationFacts, RelationOperator, RelationSchema, RelationSource, RowSemantics,
-    ScalarExpression, ScalarLiteral, ScalarOperator, SortDirection,
+    ColumnId, IrOrigin, Knowledge, NormalizationBudget, NormalizationOutcome, NormalizedQuery,
+    RelationExpression, RelationFacts, RelationOperator, RelationSchema, RelationSource,
+    RelationalOutcome, RowSemantics, ScalarExpression, ScalarLiteral, ScalarOperator,
+    SortDirection, normalize_relational_query_with_budget,
 };
 
 const MAP_OUTPUT_NAME: &str = "value";
@@ -124,6 +125,36 @@ pub fn emit_canonical_normalization(
         NormalizationOutcome::Normalized(normalized) => emit_canonical_normal_form(normalized),
         NormalizationOutcome::Indecisive(failure) => CanonicalEmissionOutcome::Indecisive(
             CanonicalEmissionIndecision::new(failure.reason(), failure.origin().clone()),
+        ),
+    }
+}
+
+/// Emit deterministic Pure from a lowered query using the default finite normalization budget.
+///
+/// Opaque lowering is preserved as the original typed indecision. A supported
+/// lowering is normalized before emission, so this helper never emits text
+/// from an unproven relational representation.
+#[must_use]
+pub fn emit_canonical_lowered_query(lowered: &RelationalOutcome) -> CanonicalEmissionOutcome {
+    emit_canonical_lowered_query_with_budget(lowered, NormalizationBudget::default())
+}
+
+/// Emit deterministic Pure from a lowered query with an explicit finite normalization budget.
+///
+/// This is the single-query counterpart to the guarded comparison boundary:
+/// opaque lowering, exhausted normalization, and unsupported normal forms all
+/// remain typed indecisions rather than becoming partial emitted text.
+#[must_use]
+pub fn emit_canonical_lowered_query_with_budget(
+    lowered: &RelationalOutcome,
+    budget: NormalizationBudget,
+) -> CanonicalEmissionOutcome {
+    match lowered {
+        RelationalOutcome::Supported(query) => {
+            emit_canonical_normalization(&normalize_relational_query_with_budget(query, budget))
+        }
+        RelationalOutcome::Opaque(opaque) => CanonicalEmissionOutcome::Indecisive(
+            CanonicalEmissionIndecision::new(opaque.reason(), opaque.origin().clone()),
         ),
     }
 }

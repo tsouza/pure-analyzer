@@ -5,8 +5,10 @@ use pure_analyzer_analysis::{
     AnalysisInput, CandidateKey, CanonicalEmissionOutcome, Column, ColumnId, Knowledge,
     NormalizationBudget, NormalizationOutcome, Nullability, Projection, RelationExpression,
     RelationFacts, RelationOperator, RelationSchema, RelationalOutcome, ScalarExpression,
-    ScalarLiteral, ScalarOperator, emit_canonical_normal_form, emit_canonical_normalization,
-    lower_m3_query, normalize_relational_query, normalize_relational_query_with_budget,
+    ScalarLiteral, ScalarOperator, emit_canonical_lowered_query,
+    emit_canonical_lowered_query_with_budget, emit_canonical_normal_form,
+    emit_canonical_normalization, lower_m3_query, normalize_relational_query,
+    normalize_relational_query_with_budget,
 };
 use pure_analyzer_diagnostics::{FileId, ReasonCode};
 use pure_analyzer_model::{ModelGraph, Name, PmcdDocument, load_pmcd_documents};
@@ -171,6 +173,51 @@ fn normalization_failure_is_preserved_without_partial_text() {
         panic!("zero budget must return a normalization failure");
     };
     assert_eq!(indecision.origin(), failure.origin());
+}
+
+#[test]
+fn lowered_query_boundary_normalizes_supported_inputs_and_preserves_opaque_refusals() {
+    let model = model();
+    let source = "model::Person.all()->project(~[label: person | $person.name])";
+    let parsed = parse_query(source, FileId::new(TEST_FILE)).expect("fixture source must parse");
+    let lowered = lower_m3_query(AnalysisInput::new(
+        FileId::new(TEST_FILE),
+        source,
+        &parsed.green,
+        &parsed.diagnostics,
+        Some(&model),
+    ));
+
+    assert_eq!(
+        emitted_text(emit_canonical_lowered_query(&lowered)),
+        "model::Person.all()->project(~[label: v0 | $v0.name])"
+    );
+    let CanonicalEmissionOutcome::Indecisive(exhausted) =
+        emit_canonical_lowered_query_with_budget(&lowered, NormalizationBudget::new(0))
+    else {
+        panic!("zero normalization budget must refuse emission");
+    };
+    assert_eq!(exhausted.reason(), ReasonCode::IndMissingRewrite);
+
+    let malformed_source = "model::Person.all()->filter(person| $person.name ==)";
+    let parsed = parse_query(malformed_source, FileId::new(TEST_FILE))
+        .expect("recovery fixture must retain a syntax tree");
+    let opaque = lower_m3_query(AnalysisInput::new(
+        FileId::new(TEST_FILE),
+        malformed_source,
+        &parsed.green,
+        &parsed.diagnostics,
+        Some(&model),
+    ));
+    let RelationalOutcome::Opaque(opaque_reason) = &opaque else {
+        panic!("recovery fixture must stay opaque");
+    };
+    let CanonicalEmissionOutcome::Indecisive(indecision) = emit_canonical_lowered_query(&opaque)
+    else {
+        panic!("opaque lowering must refuse canonical emission");
+    };
+    assert_eq!(indecision.reason(), opaque_reason.reason());
+    assert_eq!(indecision.origin(), opaque_reason.origin());
 }
 
 #[test]

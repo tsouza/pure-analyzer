@@ -21,7 +21,7 @@ const FORMATTER_VALID_SOURCE: &str = "model::Person . all ( )";
 const FORMATTER_BROKEN_SOURCE: &str = "\0";
 
 #[test]
-fn command_surface_completion_and_config_independence_are_stable() {
+fn top_level_help_lists_every_command_and_the_formatter_write_contract() {
     let fixture = Fixture::new("help");
     let help = run(&fixture.root, &["--help"]);
     assert!(help.status.success());
@@ -42,6 +42,11 @@ fn command_surface_completion_and_config_independence_are_stable() {
         help.contains("transactional in-place file updates"),
         "fmt help omitted its write contract: {help}"
     );
+}
+
+#[test]
+fn comparison_and_canonical_help_document_their_exit_codes() {
+    let fixture = Fixture::new("help-exit-codes");
     let comparison_help = run(&fixture.root, &["eq", "--help"]);
     assert!(comparison_help.status.success());
     assert!(comparison_help.stderr.is_empty());
@@ -51,6 +56,18 @@ fn command_surface_completion_and_config_independence_are_stable() {
         "comparison help must document the unified result codes"
     );
 
+    let canonical_help = run(&fixture.root, &["fmt", "--help"]);
+    assert!(canonical_help.status.success());
+    assert!(canonical_help.stderr.is_empty());
+    let canonical_help = utf8(&canonical_help.stdout);
+    assert!(canonical_help.contains("--canonical"));
+    assert!(canonical_help.contains("does not preserve source layout or comments"));
+    assert!(canonical_help.contains("Exit status: 0 emitted; 2 indecisive."));
+}
+
+#[test]
+fn bash_completion_matches_the_golden_independently_of_configuration() {
+    let fixture = Fixture::new("completions");
     let mut command = analyzer(&fixture.root);
     command
         .args(["completions", "bash"])
@@ -714,6 +731,185 @@ fn formatter_read_only_modes_and_transactional_write_have_distinct_behavior() {
         assert_eq!(fixture.read("query.pure"), original);
         fixture.assert_no_writer_artifacts();
     }
+}
+
+#[test]
+fn canonical_formatter_emits_a_proven_normal_form_without_changing_source() {
+    let fixture = Fixture::new("canonical-format-emitted");
+    let source = "/* source layout and comments are intentionally not preserved */ model::Person.all()->project(~[label: person | $person.name])";
+    fixture.write("query.pure", source);
+    fixture.write("model.json", &person_model());
+    let expected = "model::Person.all()->project(~[label: v0 | $v0.name])";
+
+    let human = run(
+        &fixture.root,
+        &[
+            "fmt",
+            "query.pure",
+            "--canonical",
+            "--model",
+            "model.json",
+            "--no-config",
+        ],
+    );
+    assert!(human.status.success());
+    assert!(human.stderr.is_empty());
+    assert_eq!(
+        utf8(&human.stdout),
+        format!("emitted\n  text: {expected}\n")
+    );
+    assert_eq!(fixture.read("query.pure"), source);
+
+    let json = run(
+        &fixture.root,
+        &[
+            "fmt",
+            "query.pure",
+            "--canonical",
+            "--model",
+            "model.json",
+            "--format",
+            "json",
+            "--no-config",
+        ],
+    );
+    assert!(json.status.success());
+    assert!(json.stderr.is_empty());
+    let document: Value = serde_json::from_slice(&json.stdout).expect("valid canonical JSON");
+    assert_eq!(document["version"], "1.0");
+    assert_eq!(document["outcome"], "emitted");
+    assert_eq!(document["text"], expected);
+    assert!(document.get("reason").is_none());
+    assert_eq!(fixture.read("query.pure"), source);
+}
+
+#[test]
+fn canonical_formatter_refuses_unproven_input_with_exit_two() {
+    let fixture = Fixture::new("canonical-format-indecisive");
+    fixture.write("query.pure", "model::Person.all()");
+
+    let no_model = run(
+        &fixture.root,
+        &[
+            "fmt",
+            "query.pure",
+            "--canonical",
+            "--format",
+            "json",
+            "--no-config",
+        ],
+    );
+    assert_eq!(no_model.status.code(), Some(EXIT_INDECISIVE));
+    assert!(no_model.stderr.is_empty());
+    let document: Value = serde_json::from_slice(&no_model.stdout).expect("valid refusal JSON");
+    assert_eq!(document["outcome"], "indecisive");
+    assert_eq!(document["reason"]["id"], "MODEL_INCOMPLETE");
+
+    fixture.write("model.json", &person_model());
+    fixture.write(
+        "unresolved.pure",
+        "model::Person.all()->project(~[label: person | $person.missing])",
+    );
+    let unresolved = run(
+        &fixture.root,
+        &[
+            "fmt",
+            "unresolved.pure",
+            "--canonical",
+            "--model",
+            "model.json",
+            "--format",
+            "json",
+            "--no-config",
+        ],
+    );
+    assert_eq!(unresolved.status.code(), Some(EXIT_INDECISIVE));
+    assert!(unresolved.stderr.is_empty());
+    let document: Value =
+        serde_json::from_slice(&unresolved.stdout).expect("valid unresolved canonical JSON");
+    assert_eq!(document["outcome"], "indecisive");
+    assert_eq!(document["reason"]["id"], "IND_UNRESOLVED_SCHEMA");
+    assert_eq!(
+        document["origin"]["source"]["file"]["name"],
+        "unresolved.pure"
+    );
+
+    let quiet = run(
+        &fixture.root,
+        &["fmt", "query.pure", "--canonical", "--quiet", "--no-config"],
+    );
+    assert_eq!(quiet.status.code(), Some(EXIT_INDECISIVE));
+    assert!(quiet.stdout.is_empty());
+    assert!(quiet.stderr.is_empty());
+}
+
+#[test]
+fn canonical_formatter_requires_one_input_and_rejects_layout_and_sarif_modes() {
+    let fixture = Fixture::new("canonical-format-usage");
+    let source = "model::Person.all()";
+    fixture.write("first.pure", source);
+    fixture.write("second.pure", source);
+
+    let multiple = run(
+        &fixture.root,
+        &["fmt", "*.pure", "--canonical", "--no-config"],
+    );
+    assert_eq!(multiple.status.code(), Some(EXIT_USAGE));
+    assert!(multiple.stdout.is_empty());
+    assert_eq!(
+        utf8(&multiple.stderr),
+        "error: fmt --canonical requires exactly one resolved input\n"
+    );
+
+    let sarif = run(
+        &fixture.root,
+        &[
+            "fmt",
+            "first.pure",
+            "--canonical",
+            "--format",
+            "sarif",
+            "--no-config",
+        ],
+    );
+    assert_eq!(sarif.status.code(), Some(EXIT_USAGE));
+    assert!(sarif.stdout.is_empty());
+    assert_eq!(
+        utf8(&sarif.stderr),
+        "error: fmt --canonical supports only --format human or --format json\n"
+    );
+
+    let layout_mode = run(
+        &fixture.root,
+        &["fmt", "first.pure", "--canonical", "--check", "--no-config"],
+    );
+    assert_eq!(layout_mode.status.code(), Some(EXIT_USAGE));
+    assert!(layout_mode.stdout.is_empty());
+    assert!(
+        utf8(&layout_mode.stderr)
+            .contains("the argument '--canonical' cannot be used with '--check'")
+    );
+    assert_eq!(fixture.read("first.pure"), source);
+    assert_eq!(fixture.read("second.pure"), source);
+}
+
+#[test]
+fn canonical_formatter_uses_configured_model_paths() {
+    let fixture = Fixture::new("canonical-format-config-model");
+    fixture.write("query.pure", "model::Person.all()");
+    fixture.write("model.json", &person_model());
+    fixture.write(
+        ".pure-analyzer.toml",
+        "version = 1\n\n[model]\npaths = [\"model.json\"]\n",
+    );
+
+    let output = run(&fixture.root, &["fmt", "query.pure", "--canonical"]);
+    assert!(output.status.success());
+    assert!(output.stderr.is_empty());
+    assert_eq!(
+        utf8(&output.stdout),
+        "emitted\n  text: model::Person.all()\n"
+    );
 }
 
 #[cfg(any(target_os = "linux", target_vendor = "apple"))]
