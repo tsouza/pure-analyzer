@@ -11,9 +11,11 @@ use pure_analyzer_analysis::{
 use pure_analyzer_diagnostics::{FileId, ReasonCode, TextRange, TextSize};
 use pure_analyzer_model::{Multiplicity, PmcdDocument, QName, TypeRef, load_pmcd_documents};
 use pure_analyzer_resolve::{Resolution, ResolvedClass, Resolver};
+use serde_json::Value;
 
 const FILE: u32 = 31;
 const EXACTLY_ONE: u32 = 1;
+const SEMANTIC_CORPUS_CASES: &str = include_str!("../corpus/legend-4.113.0/cases.jsonl");
 
 fn origin(file: u32, start: u32, end: u32, model_origins: Vec<ModelOrigin>) -> IrOrigin {
     IrOrigin::new(
@@ -195,6 +197,36 @@ fn filter(
         source,
     )
     .expect("filter fixture is valid")
+}
+
+fn distinct(
+    input: RelationExpression,
+    facts: RelationFacts,
+    source: IrOrigin,
+) -> RelationExpression {
+    let schema = input.schema().clone();
+    RelationExpression::new(
+        RelationOperator::Distinct {
+            input: Box::new(input),
+        },
+        schema,
+        facts,
+        source,
+    )
+    .expect("distinct fixture is valid")
+}
+
+fn repeated_distinct(
+    input: RelationExpression,
+    facts: RelationFacts,
+    inner_source: IrOrigin,
+    outer_source: IrOrigin,
+) -> RelationExpression {
+    distinct(
+        distinct(input, facts.clone(), inner_source),
+        facts,
+        outer_source,
+    )
 }
 
 fn normalized(query: &RelationalQuery) -> pure_analyzer_analysis::NormalizedQuery {
@@ -551,9 +583,159 @@ fn aliases_and_output_column_order_are_not_identity_projects() {
 }
 
 #[test]
-fn sort_and_nested_distinct_remain_frozen() {
+fn pinned_repeated_distinct_witness_drives_normalization() {
+    let witness = SEMANTIC_CORPUS_CASES
+        .lines()
+        .map(|line| {
+            serde_json::from_str::<Value>(line)
+                .unwrap_or_else(|error| panic!("semantic corpus row is invalid: {error}"))
+        })
+        .find(|case| {
+            case.get("id").and_then(Value::as_str) == Some("repeated-distinct-is-idempotent")
+        })
+        .unwrap_or_else(|| panic!("semantic corpus lacks repeated distinct witness"));
+    assert_eq!(
+        witness.get("candidate").and_then(Value::as_str),
+        Some("collapse-repeated-distinct")
+    );
+    assert_eq!(
+        witness.get("outcome").and_then(Value::as_str),
+        Some("equal")
+    );
+    assert_eq!(
+        witness.pointer("/left/lambda").and_then(Value::as_str),
+        Some("|[1, 1, 2]->removeDuplicates()->removeDuplicates()")
+    );
+    assert_eq!(
+        witness.pointer("/right/lambda").and_then(Value::as_str),
+        Some("|[1, 1, 2]->removeDuplicates()")
+    );
+    assert_eq!(
+        witness.pointer("/left/result"),
+        witness.pointer("/right/result")
+    );
+
     let source = origin(FILE, 1, 20, Vec::new());
     let base = query(&[3, 8], &["left", "right"], source.clone());
+    let single = distinct(
+        base.root().clone(),
+        RelationFacts::unknown(),
+        origin(FILE, 21, 25, Vec::new()),
+    );
+    let nested = RelationalQuery::new(distinct(
+        single.clone(),
+        RelationFacts::unknown(),
+        origin(FILE, 26, 30, Vec::new()),
+    ));
+
+    let normalized = normalized(&nested);
+    assert!(matches!(
+        normalized.root().operator(),
+        RelationOperator::Distinct { input } if matches!(input.operator(), RelationOperator::Scan(_))
+    ));
+    assert_eq!(
+        normalized.equivalence_key(),
+        &key(&RelationalQuery::new(single))
+    );
+}
+
+#[test]
+fn repeated_distinct_preserves_matching_facts_and_full_input_provenance() {
+    let source = origin(FILE, 1, 20, Vec::new());
+    let base = query(&[3, 8], &["left", "right"], source.clone());
+    let fact_origin = origin(FILE, 21, 24, Vec::new());
+    let facts = RelationFacts::new(
+        Knowledge::proven(
+            vec![CandidateKey::new(vec![base.output().columns()[0].id()])],
+            fact_origin.clone(),
+        ),
+        Knowledge::proven(RowSemantics::Set, fact_origin),
+    );
+    let inner = distinct(
+        base.root().clone(),
+        facts.clone(),
+        origin(FILE, 25, 29, Vec::new()),
+    );
+    let first = RelationalQuery::new(distinct(
+        inner.clone(),
+        facts.clone(),
+        origin(FILE, 30, 34, Vec::new()),
+    ));
+    let second = RelationalQuery::new(distinct(
+        inner,
+        facts.clone(),
+        origin(FILE, 35, 39, Vec::new()),
+    ));
+
+    let first_normalized = normalized(&first);
+    let second_normalized = normalized(&second);
+    assert!(matches!(
+        first_normalized.root().operator(),
+        RelationOperator::Distinct { input } if matches!(input.operator(), RelationOperator::Scan(_))
+    ));
+    assert_eq!(first_normalized.root().schema(), first.output());
+    assert_eq!(first_normalized.root().facts(), &facts);
+    assert_eq!(
+        first_normalized.equivalence_key(),
+        second_normalized.equivalence_key()
+    );
+    assert_ne!(
+        first_normalized.structural_key(),
+        second_normalized.structural_key(),
+        "the structural key must retain the eliminated outer distinct provenance"
+    );
+
+    let twice = normalized(&RelationalQuery::new(first_normalized.root().clone()));
+    assert_eq!(first_normalized.equivalence_key(), twice.equivalence_key());
+    assert_eq!(first_normalized.root(), twice.root());
+}
+
+#[test]
+fn repeated_distinct_requires_exact_relation_facts() {
+    let source = origin(FILE, 1, 20, Vec::new());
+    let base = query(&[3, 8], &["left", "right"], source.clone());
+    let inner_facts = RelationFacts::new(
+        Knowledge::unknown(),
+        Knowledge::proven(RowSemantics::Set, origin(FILE, 21, 25, Vec::new())),
+    );
+    let outer_facts = RelationFacts::new(
+        Knowledge::unknown(),
+        Knowledge::proven(RowSemantics::Set, origin(FILE, 26, 30, Vec::new())),
+    );
+    let inner = distinct(
+        base.root().clone(),
+        inner_facts,
+        origin(FILE, 31, 35, Vec::new()),
+    );
+    let guarded = RelationalQuery::new(distinct(
+        inner,
+        outer_facts.clone(),
+        origin(FILE, 36, 40, Vec::new()),
+    ));
+
+    let normalized = normalized(&guarded);
+    assert!(matches!(
+        normalized.root().operator(),
+        RelationOperator::Distinct { input }
+            if matches!(input.operator(), RelationOperator::Distinct { .. })
+    ));
+    assert_eq!(normalized.root().facts(), &outer_facts);
+}
+
+#[test]
+fn single_and_nonconsecutive_distinct_forms_remain_frozen() {
+    let source = origin(FILE, 1, 20, Vec::new());
+    let base = query(&[3, 8], &["left", "right"], source.clone());
+    let single = distinct(
+        base.root().clone(),
+        RelationFacts::unknown(),
+        origin(FILE, 21, 25, Vec::new()),
+    );
+    assert!(matches!(
+        normalized(&RelationalQuery::new(single)).root().operator(),
+        RelationOperator::Distinct { input } if matches!(input.operator(), RelationOperator::Scan(_))
+    ));
+
     let sort = RelationExpression::new(
         RelationOperator::Sort {
             input: Box::new(base.root().clone()),
@@ -573,29 +755,38 @@ fn sort_and_nested_distinct_remain_frozen() {
         RelationOperator::Sort { .. }
     ));
 
-    let inner = RelationExpression::new(
-        RelationOperator::Distinct {
-            input: Box::new(base.root().clone()),
-        },
-        base.output().clone(),
+    let inner = distinct(
+        base.root().clone(),
         RelationFacts::unknown(),
-        source.clone(),
-    )
-    .expect("inner distinct is valid");
-    let outer = RelationExpression::new(
-        RelationOperator::Distinct {
+        origin(FILE, 26, 30, Vec::new()),
+    );
+    let sorted = RelationExpression::new(
+        RelationOperator::Sort {
             input: Box::new(inner),
+            keys: vec![SortKey::new(
+                base.output().columns()[0].id(),
+                SortDirection::Descending,
+                origin(FILE, 31, 35, Vec::new()),
+            )],
         },
         base.output().clone(),
         RelationFacts::unknown(),
-        source,
+        origin(FILE, 30, 36, Vec::new()),
     )
-    .expect("outer distinct is valid");
-    let normalized = normalized(&RelationalQuery::new(outer));
+    .expect("sorted distinct fixture is valid");
+    let normalized = normalized(&RelationalQuery::new(distinct(
+        sorted,
+        RelationFacts::unknown(),
+        origin(FILE, 36, 40, Vec::new()),
+    )));
     assert!(matches!(
         normalized.root().operator(),
         RelationOperator::Distinct { input }
-            if matches!(input.operator(), RelationOperator::Distinct { .. })
+            if matches!(
+                input.operator(),
+                RelationOperator::Sort { input: sorted_input, .. }
+                    if matches!(sorted_input.operator(), RelationOperator::Distinct { .. })
+            )
     ));
 }
 
@@ -614,11 +805,20 @@ fn selected_distinct_and_join_schema_order_remain_observable() {
         source.clone(),
     )
     .expect("selected distinct is valid");
+    let selected = RelationalQuery::new(selected);
     assert!(matches!(
-        normalized(&RelationalQuery::new(selected))
-            .root()
-            .operator(),
+        normalized(&selected).root().operator(),
         RelationOperator::DistinctOn { .. }
+    ));
+    let neighboring = RelationalQuery::new(distinct(
+        selected.root().clone(),
+        RelationFacts::unknown(),
+        origin(FILE, 21, 25, Vec::new()),
+    ));
+    assert!(matches!(
+        normalized(&neighboring).root().operator(),
+        RelationOperator::Distinct { input }
+            if matches!(input.operator(), RelationOperator::DistinctOn { .. })
     ));
 
     let (left_class, right_class) = classes();
@@ -676,7 +876,7 @@ proptest! {
     #![proptest_config(ProptestConfig::with_cases(32))]
 
     #[test]
-    fn arbitrary_distinct_column_allocations_alpha_normalize(
+    fn arbitrary_repeated_distinct_column_allocations_alpha_normalize(
         first in any::<u16>(),
         second in any::<u16>(),
         other_first in any::<u16>(),
@@ -689,11 +889,23 @@ proptest! {
             &["left", "right"],
             origin(FILE, 1, 9, Vec::new()),
         );
+        let left = RelationalQuery::new(repeated_distinct(
+            left.root().clone(),
+            RelationFacts::unknown(),
+            origin(FILE, 10, 14, Vec::new()),
+            origin(FILE, 15, 19, Vec::new()),
+        ));
         let right = query(
             &[u32::from(other_first), u32::from(other_second)],
             &["left", "right"],
-            origin(FILE + 1, 10, 19, Vec::new()),
+            origin(FILE + 1, 20, 29, Vec::new()),
         );
+        let right = RelationalQuery::new(repeated_distinct(
+            right.root().clone(),
+            RelationFacts::unknown(),
+            origin(FILE + 1, 30, 34, Vec::new()),
+            origin(FILE + 1, 35, 39, Vec::new()),
+        ));
         prop_assert_eq!(key(&left), key(&right));
     }
 

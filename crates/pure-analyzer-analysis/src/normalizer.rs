@@ -3,10 +3,11 @@
 //! The current public IR accepts caller-constructed facts. Its constructors
 //! validate shape, but those facts are not an analyzer-issued proof boundary.
 //! This module therefore applies only intrinsic rewrites: an identity
-//! projection made solely of direct input-column reads and a filter with an
-//! exact Boolean `true` literal. All rewrites that could alter bag, order,
-//! null, partiality, or output-schema behavior remain frozen until their
-//! required proof producer is private and trustworthy.
+//! projection made solely of direct input-column reads, a filter with an exact
+//! Boolean `true` literal, and immediately repeated `Distinct` operators with
+//! identical ordered schemas and relation facts. All rewrites that could alter
+//! bag, order, null, partiality, or output-schema behavior remain frozen until
+//! their required proof producer is private and trustworthy.
 
 use std::collections::BTreeMap;
 use std::fmt::Write;
@@ -299,14 +300,20 @@ impl Normalizer {
                 expression.facts().clone(),
                 origin,
             ),
-            RelationOperator::Distinct { input } => Self::rebuild(
-                RelationOperator::Distinct {
-                    input: Box::new(self.relation(input)?),
-                },
-                expression.schema().clone(),
-                expression.facts().clone(),
-                origin,
-            ),
+            RelationOperator::Distinct { input } => {
+                let input = self.relation(input)?;
+                if is_repeated_distinct(&input, expression.schema(), expression.facts()) {
+                    return Ok(input);
+                }
+                Self::rebuild(
+                    RelationOperator::Distinct {
+                        input: Box::new(input),
+                    },
+                    expression.schema().clone(),
+                    expression.facts().clone(),
+                    origin,
+                )
+            }
             RelationOperator::DistinctOn { input, columns } => Self::rebuild(
                 RelationOperator::DistinctOn {
                     input: Box::new(self.relation(input)?),
@@ -407,6 +414,16 @@ fn is_literal_true_filter(
             predicate.operator(),
             ScalarOperator::Literal(ScalarLiteral::Boolean(true))
         )
+}
+
+fn is_repeated_distinct(
+    input: &RelationExpression,
+    schema: &RelationSchema,
+    facts: &RelationFacts,
+) -> bool {
+    schema == input.schema()
+        && facts == input.facts()
+        && matches!(input.operator(), RelationOperator::Distinct { .. })
 }
 
 struct KeyEncoder {
