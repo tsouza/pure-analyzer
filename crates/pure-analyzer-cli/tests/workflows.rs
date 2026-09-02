@@ -235,6 +235,46 @@ fn glob_order_and_parallel_output_are_deterministic() {
     assert_eq!(document["files"][1]["name"], "b.pure");
 }
 
+#[cfg(unix)]
+#[test]
+fn glob_pattern_rejects_a_symlink_that_escapes_the_working_directory() {
+    use std::os::unix::fs::symlink;
+
+    let outside = Fixture::new("glob-symlink-outside");
+    outside.write("secret.pure", "\0");
+
+    let fixture = Fixture::new("glob-symlink-inside");
+    symlink(
+        outside.root.join("secret.pure"),
+        fixture.root.join("leak.pure"),
+    )
+    .expect("create escaping symlink fixture");
+
+    let literal = run(
+        &fixture.root,
+        &["validate", "../*.pure", "--format", "json", "--no-config"],
+    );
+    let escaping_glob = run(
+        &fixture.root,
+        &["validate", "*.pure", "--format", "json", "--no-config"],
+    );
+
+    assert_eq!(literal.status.code(), Some(EXIT_USAGE));
+    assert_eq!(escaping_glob.status.code(), Some(EXIT_USAGE));
+    assert!(literal.stdout.is_empty());
+    assert!(escaping_glob.stdout.is_empty());
+    let literal_message = utf8(&literal.stderr);
+    let escaping_message = utf8(&escaping_glob.stderr);
+    assert!(
+        literal_message.contains("must not traverse above the working directory"),
+        "unexpected literal-pattern message: {literal_message}"
+    );
+    assert!(
+        escaping_message.contains("must not traverse above the working directory"),
+        "symlink escape was not rejected: {escaping_message}"
+    );
+}
+
 #[test]
 fn configuration_environment_and_cli_precedence_crosses_the_process_boundary() {
     let fixture = Fixture::new("config-precedence");
