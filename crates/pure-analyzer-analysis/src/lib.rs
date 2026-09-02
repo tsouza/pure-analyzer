@@ -3,6 +3,7 @@
 
 //! Conservative analysis passes over Pure syntax and model facts.
 
+mod canonical;
 mod column_selectors;
 mod comparison;
 mod format;
@@ -13,6 +14,10 @@ mod normalizer;
 mod pass;
 mod relational;
 mod validate;
+pub use canonical::{
+    CanonicalEmissionIndecision, CanonicalEmissionOutcome, CanonicalPure,
+    emit_canonical_normal_form, emit_canonical_normalization,
+};
 pub use column_selectors::{
     ColumnSelector, ColumnSelectorName, ColumnSelectorOpaque, ColumnSelectorOpaqueReason,
     ColumnSelectorOutcome, ColumnSelectors, ResolvedColumnSelector, ResolvedColumnSelectors,
