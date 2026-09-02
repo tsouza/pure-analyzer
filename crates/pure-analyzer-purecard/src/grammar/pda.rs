@@ -106,8 +106,29 @@ pub enum State {
     /// Inside a `let` binder name identifier.
     InBinder,
     /// After a completed binder name: whitespace then the single `=` that opens the
-    /// binding's right-hand-side pipeline (`let m = …`). A second name is dead.
+    /// binding's right-hand-side value (`let m = …`). A second name is dead.
     AfterBinder,
+    /// After a `let` binder's `=`: its value begins here. `letBinding`'s value is
+    /// `pipeline | scalarExpr` (`docs/spec/grammar.md` §5.1) — unlike
+    /// [`ExpectSource`](State::ExpectSource), which only ever opens a bare
+    /// `pipeline` — so this hub admits the identifier a source classpath opens on
+    /// *and* the `%` a date literal or `%latest` opens on.
+    ExpectBinderValue,
+    /// Inside the identifier a `let` binder's value opens on. Identical to
+    /// [`InSourceIdent`](State::InSourceIdent) except that a `(` may also follow
+    /// the name directly, opening `scalarExpr`'s other admitted shape — a
+    /// *zero-argument* scalar call (`today()`, `now()`). The two shapes share
+    /// every byte up to that point, so the machine reads the identifier once and
+    /// lets the next byte disambiguate: a `.`/`::`/`-` continues a pipeline
+    /// `source`, a `(` opens the call — no look-ahead needed.
+    InBinderValueIdent,
+    /// A `let` binder value's scalar call has just opened its `(`; only
+    /// whitespace then the closing `)` may follow — the call is nullary, so
+    /// `today(1)`/`today(x)` are dead states here. (A milestoning *argument*
+    /// position, e.g. `.all(today())`, is the unrelated generic value hub and
+    /// stays fully permissive — only this scalarExpr call position is
+    /// arity-restricted.)
+    ExpectBinderCallClose,
     /// Right after a `[` that holds a `*` multiplicity token: only the closing `]`
     /// may follow, so `[*]` is the only shape `*` reaches (never `take(*)`).
     InMultiplicity,
@@ -388,6 +409,9 @@ impl State {
             State::ExpectBinder => "ExpectBinder",
             State::InBinder => "InBinder",
             State::AfterBinder => "AfterBinder",
+            State::ExpectBinderValue => "ExpectBinderValue",
+            State::InBinderValueIdent => "InBinderValueIdent",
+            State::ExpectBinderCallClose => "ExpectBinderCallClose",
             State::InMultiplicity => "InMultiplicity",
             State::ExpectBraceBinder => "ExpectBraceBinder",
             State::AfterColonWs => "AfterColonWs",
@@ -536,13 +560,16 @@ impl State {
             State::InBinderTypePath => 71,
             State::AfterBinderTypePath => 72,
             State::AfterValueColon => 73,
+            State::ExpectBinderValue => 74,
+            State::InBinderValueIdent => 75,
+            State::ExpectBinderCallClose => 76,
         }
     }
 
     /// The number of distinct automaton states — the length a per-state cache
     /// (`Vec<_>` keyed by [`index`](State::index)) must have. One more than the
     /// largest [`index`](State::index).
-    pub const COUNT: usize = 74;
+    pub const COUNT: usize = 77;
 
     /// Whether this state is a **completed-term hub** — an inter-lexeme position
     /// the automaton reaches by finishing a term, whichever kind of term it was.
@@ -609,6 +636,7 @@ impl State {
             State::InIdent
             | State::InMemberIdent
             | State::InSourceIdent
+            | State::InBinderValueIdent
             | State::InBinder
             | State::InBinderType
             | State::SourceColon
@@ -922,12 +950,14 @@ fn step_start(byte: u8) -> Step {
     }
 }
 
-// After a top-level `|` (a simple query's source) or a `let name =` binding's
-// `=` (its right-hand-side pipeline source): the source is always an
+// After a top-level `|` (a simple query's source): the source is always an
 // identifier classpath. Whitespace is skipped; anything but an identifier
 // start is a dead state (`|42`, `|*`, `|( )`, `|$x` all die here). The
 // identifier lands in [`InSourceIdent`], not the generic [`InIdent`], so a
-// bare classpath without a `.all()`/`->` production (`|X `) cannot accept.
+// bare classpath without a `.all()`/`->` production (`|X `) cannot accept. A
+// `let` binder's `=` opens the distinct [`State::ExpectBinderValue`] instead —
+// its value additionally admits `scalarExpr` (§5.1), which a *whole query*
+// never does.
 fn step_expect_source(byte: u8) -> Step {
     match byte {
         b if is_ws(b) => Step::Next(State::ExpectSource),
@@ -1090,6 +1120,37 @@ fn step_after_str_lit(stack_top: Option<Frame>, byte: u8) -> Step {
     }
 }
 
+// The shared body of the two "identifier read as a `let`-value candidate
+// source" states. `allow_call` distinguishes
+// [`State::InBinderValueIdent`] (a `let` binder's value, whose grammar is
+// `pipeline | scalarExpr` — §5.1 — so a `(` directly off the name opens
+// scalarExpr's zero-argument-call shape, `today()`/`now()`) from
+// [`State::InSourceIdent`] (every other source position, where only a bare
+// `pipeline` is legal and a call is not a `source`). The two are otherwise
+// byte-for-byte identical, so keeping one body honours DRY (constitution §4).
+fn source_ident(byte: u8, allow_call: bool) -> Step {
+    let self_state = if allow_call {
+        State::InBinderValueIdent
+    } else {
+        State::InSourceIdent
+    };
+    match byte {
+        b if is_ident_tail(b) => Step::Next(self_state),
+        // A source dot (`X.all()`, `X.'name'`) admits the same set as a value
+        // navigation dot (ws / identifier / quoted string), so it shares
+        // `AfterDot` — the Legend grammar draws no distinction.
+        b'.' => Step::Next(State::AfterDot),
+        b'-' => Step::Next(State::SourceDash),
+        b':' => Step::Next(State::SourceColon),
+        // scalarExpr's other admitted shape: a zero-argument call directly off
+        // the name. The call is nullary, so its `(` opens at
+        // `ExpectBinderCallClose`, not the generic (fully permissive)
+        // `ExpectValue` an argument position or a `.member(...)` call opens at.
+        b'(' if allow_call => Step::Push(Frame::Paren, State::ExpectBinderCallClose),
+        _ => Step::Dead,
+    }
+}
+
 // A pipeline source classpath. Unlike [`InIdent`], a source is not yet a
 // completed value: it must be navigated by a `.` (routing into `AfterDot` —
 // `.all()`, a property/getter, or a quoted member `X.'name'`), produced by an
@@ -1097,16 +1158,14 @@ fn step_after_str_lit(stack_top: Option<Frame>, byte: u8) -> Step {
 // classpath separator. Anything else — whitespace, a closer, an operator — is
 // a dead state, so a bare `|X ` never reaches an accepting configuration.
 fn step_in_source_ident(byte: u8) -> Step {
-    match byte {
-        b if is_ident_tail(b) => Step::Next(State::InSourceIdent),
-        // A source dot (`X.all()`, `X.'name'`) admits the same set as a value
-        // navigation dot (ws / identifier / quoted string), so it shares
-        // `AfterDot` — the Legend grammar draws no distinction.
-        b'.' => Step::Next(State::AfterDot),
-        b'-' => Step::Next(State::SourceDash),
-        b':' => Step::Next(State::SourceColon),
-        _ => Step::Dead,
-    }
+    source_ident(byte, false)
+}
+
+// A `let` binder value's identifier — everything [`step_in_source_ident`]
+// admits (the value may still be a full `pipeline`), plus a `(` directly off
+// the name for scalarExpr's zero-argument-call shape. See [`source_ident`].
+fn step_in_binder_value_ident(byte: u8) -> Step {
+    source_ident(byte, true)
 }
 
 // A source-classpath `::` separator: the second `:` must follow immediately,
@@ -1168,7 +1227,7 @@ fn step_let_let(stack_top: Option<Frame>, byte: u8) -> Step {
 }
 
 // `let` seen: the binder name identifier, then the single `=` that opens the
-// right-hand-side pipeline. A second bare name (`let m n =`) is a dead state.
+// right-hand-side value. A second bare name (`let m n =`) is a dead state.
 fn step_expect_binder(byte: u8) -> Step {
     match byte {
         b if is_ws(b) => Step::Next(State::ExpectBinder),
@@ -1181,7 +1240,7 @@ fn step_in_binder(byte: u8) -> Step {
     match byte {
         b if is_ident_tail(b) => Step::Next(State::InBinder),
         b if is_ws(b) => Step::Next(State::AfterBinder),
-        b'=' => Step::Next(State::ExpectSource),
+        b'=' => Step::Next(State::ExpectBinderValue),
         _ => Step::Dead,
     }
 }
@@ -1189,7 +1248,30 @@ fn step_in_binder(byte: u8) -> Step {
 fn step_after_binder(byte: u8) -> Step {
     match byte {
         b if is_ws(b) => Step::Next(State::AfterBinder),
-        b'=' => Step::Next(State::ExpectSource),
+        b'=' => Step::Next(State::ExpectBinderValue),
+        _ => Step::Dead,
+    }
+}
+
+// A `let` binder's `=`: its value is `pipeline | scalarExpr` (§5.1). A source
+// classpath and a date/`%latest` literal are the two term-start shapes; unlike
+// [`step_expect_source`], `%` is live here.
+fn step_expect_binder_value(byte: u8) -> Step {
+    match byte {
+        b if is_ws(b) => Step::Next(State::ExpectBinderValue),
+        b if is_ident_start(b) => Step::Next(State::InBinderValueIdent),
+        b'%' => Step::Next(State::SawPercent),
+        _ => Step::Dead,
+    }
+}
+
+// A `let` binder value's zero-argument scalar call has just opened its `(`
+// (`today(`); the call is nullary, so only whitespace then the closing `)` may
+// follow — an argument of any shape is a dead state here.
+fn step_expect_binder_call_close(stack_top: Option<Frame>, byte: u8) -> Step {
+    match byte {
+        b if is_ws(b) => Step::Next(State::ExpectBinderCallClose),
+        b')' => close(stack_top, byte),
         _ => Step::Dead,
     }
 }
@@ -1728,6 +1810,9 @@ pub fn step(state: State, stack_top: Option<Frame>, byte: u8) -> Step {
         State::ExpectBinder => step_expect_binder(byte),
         State::InBinder => step_in_binder(byte),
         State::AfterBinder => step_after_binder(byte),
+        State::ExpectBinderValue => step_expect_binder_value(byte),
+        State::InBinderValueIdent => step_in_binder_value_ident(byte),
+        State::ExpectBinderCallClose => step_expect_binder_call_close(stack_top, byte),
         State::InMultiplicity => step_in_multiplicity(stack_top, byte),
         State::ExpectBraceBinder => step_expect_brace_binder(byte),
         State::AfterColonWs => step_after_colon_ws(byte),
@@ -2044,6 +2129,9 @@ pub const ALL_STATES: [State; State::COUNT] = [
     State::ExpectBinder,
     State::InBinder,
     State::AfterBinder,
+    State::ExpectBinderValue,
+    State::InBinderValueIdent,
+    State::ExpectBinderCallClose,
     State::InMultiplicity,
     State::ExpectBraceBinder,
     State::AfterColonWs,
