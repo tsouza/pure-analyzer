@@ -10,6 +10,8 @@ use pure_analyzer_resolve::{
 };
 use pure_analyzer_syntax::{GreenElement, GreenNode, SyntaxKind, TextRange};
 
+use crate::lowering::contains_error_node;
+
 const NAME_KINDS: [SyntaxKind; 6] = [
     SyntaxKind::IDENT,
     SyntaxKind::ALL_KW,
@@ -672,12 +674,6 @@ fn parse_multiplicity_bound(text: &str) -> Option<u32> {
         .all(|byte| byte.is_ascii_digit())
         .then(|| text.parse().ok())
         .flatten()
-}
-
-fn contains_error_node(node: &GreenNode) -> bool {
-    node.kind() == SyntaxKind::ERROR_NODE
-        || node.tokens().any(|token| token.kind() == SyntaxKind::ERROR)
-        || direct_nodes(node).iter().any(contains_error_node)
 }
 
 fn compact_text(node: &GreenNode) -> String {
