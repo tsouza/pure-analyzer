@@ -356,12 +356,25 @@ fn hover_request(params: Option<&Value>) -> Option<HoverRequest<'_>> {
     })
 }
 
+/// Compute diagnostics for every open document and publish them.
+///
+/// Unlike hover/definition/codeAction, this runs synchronously on the
+/// coordinator thread: every caller (`open_document`, `change_document`,
+/// `save_document`, `close_document`, `update_configuration`) already holds
+/// `&mut Server` and calls this inline, with no worker thread and no
+/// intervening event-loop turn between the snapshot capture below and the
+/// publish that follows. A currency check against `server` here would
+/// therefore always compare a snapshot to the very immutable borrow it was
+/// taken from — it can never observe a later revision, so one is
+/// deliberately not kept (a check that can never fail reads as protection
+/// it does not provide). This is an accepted asymmetry with the read-only
+/// `RequestScheduler` path: keeping the hottest path (a lint on every edit)
+/// simple and synchronous costs blocking the coordinator loop — including
+/// `$/cancelRequest` handling for other in-flight requests — until the lint
+/// completes.
 fn publish_current_diagnostics<W: Write>(server: &Server, writer: &mut W) -> io::Result<()> {
     let snapshot = AnalysisSnapshot::capture(server);
     let diagnostics = snapshot.diagnostics();
-    if !snapshot.is_current(server) {
-        return Ok(());
-    }
     for document in snapshot.documents.values() {
         let findings = diagnostics
             .get(document.uri())
