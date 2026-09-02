@@ -85,6 +85,10 @@ test-analysis:
 test-cli:
     cargo nextest run -p pure-analyzer-cli
 
+# Run the renderer's focused diagnostic and comparison presentation contracts.
+test-render:
+    cargo nextest run -p pure-analyzer-render
+
 # Run the LSP's focused protocol transcript suite.
 test-lsp:
     cargo nextest run -p pure-analyzer-lsp

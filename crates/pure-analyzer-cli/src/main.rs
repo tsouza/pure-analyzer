@@ -87,6 +87,32 @@ enum Command {
         #[arg(long)]
         line_width: Option<usize>,
     },
+    /// Compare two relational queries for proven M4a equivalence.
+    #[command(
+        after_long_help = "Exit status: 0 equivalent; 1 structurally not equivalent; 2 indecisive."
+    )]
+    Eq {
+        /// First query input; a file, glob resolving to one file, or `-` for standard input.
+        left: String,
+        /// Second query input; a file, glob resolving to one file, or `-` for standard input.
+        right: String,
+        /// PMCD JSON and/or Pure-model-file model sources; may repeat.
+        #[arg(long)]
+        model: Vec<String>,
+    },
+    /// Compare two relational queries and report an M4a structural difference when proven.
+    #[command(
+        after_long_help = "Exit status: 0 equivalent; 1 structurally not equivalent; 2 indecisive."
+    )]
+    Diff {
+        /// First query input; a file, glob resolving to one file, or `-` for standard input.
+        left: String,
+        /// Second query input; a file, glob resolving to one file, or `-` for standard input.
+        right: String,
+        /// PMCD JSON and/or Pure-model-file model sources; may repeat.
+        #[arg(long)]
+        model: Vec<String>,
+    },
     /// Explain one exact registered diagnostic or reason identifier.
     Explain {
         /// Exact registered diagnostic (`PUR<nnnn>`) or reason identifier.
@@ -188,6 +214,16 @@ fn run(cli: Cli) -> Result<u8, Failure> {
             workflow::FormatMode::new(check, stdout, diff),
             &resolved,
         ),
+        Command::Eq {
+            left,
+            right,
+            model: _,
+        }
+        | Command::Diff {
+            left,
+            right,
+            model: _,
+        } => workflow::compare(&left, &right, &resolved),
         Command::Explain { identifier } => workflow::explain(&identifier, resolved.output_format()),
         Command::Completions { shell } => workflow::completions(shell, Cli::command()),
     }
@@ -206,7 +242,9 @@ fn command_overrides(command: &Option<Command>, flags: &ConfigFlags) -> ConfigOv
         _ => None,
     };
     let models = match command {
-        Some(Command::Lint { model, .. }) => model.iter().map(PathBuf::from).collect(),
+        Some(
+            Command::Lint { model, .. } | Command::Eq { model, .. } | Command::Diff { model, .. },
+        ) => model.iter().map(PathBuf::from).collect(),
         _ => Vec::new(),
     };
     flags.overrides(strict, line_width, models)
@@ -268,6 +306,32 @@ mod tests {
     }
 
     #[test]
+    fn comparison_commands_parse_two_inputs_and_repeated_model_flags() {
+        for command in ["eq", "diff"] {
+            let cli = Cli::try_parse_from([
+                "pure-analyzer",
+                command,
+                "left.pure",
+                "right.pure",
+                "--model",
+                "model.json",
+                "--model",
+                "domain.pure",
+            ])
+            .expect("parses comparison command");
+            match cli.command {
+                Some(Command::Eq { left, right, model })
+                | Some(Command::Diff { left, right, model }) => {
+                    assert_eq!(left, "left.pure");
+                    assert_eq!(right, "right.pure");
+                    assert_eq!(model, vec!["model.json", "domain.pure"]);
+                }
+                other => panic!("expected comparison command, got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
     fn lint_fix_modes_require_fix_and_are_mutually_exclusive() {
         let cli = Cli::try_parse_from(["pure-analyzer", "lint", "query.pure", "--fix", "--diff"])
             .expect("parses fix diff mode");
@@ -312,7 +376,15 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(
             commands,
-            ["validate", "lint", "fmt", "explain", "completions"]
+            [
+                "validate",
+                "lint",
+                "fmt",
+                "eq",
+                "diff",
+                "explain",
+                "completions"
+            ]
         );
     }
 

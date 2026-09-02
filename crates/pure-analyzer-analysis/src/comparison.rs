@@ -7,7 +7,8 @@ use pure_analyzer_model::Provenance;
 
 use crate::{
     Column, IrOrigin, ModelOrigin, ModelOriginKind, NormalizationBudget, NormalizationFailure,
-    NormalizationOutcome, NormalizedQuery, RelationalQuery, normalize_relational_query_with_budget,
+    NormalizationOutcome, NormalizedQuery, OpaqueOutcome, RelationalOutcome, RelationalQuery,
+    normalize_relational_query_with_budget,
 };
 
 /// A sound, deliberately incomplete comparison of two relational queries.
@@ -185,6 +186,45 @@ pub fn compare_relational_queries_with_budget(
     }
 }
 
+/// Compare two lowering outcomes using the default finite normalization budget.
+///
+/// A lowering outcome that is opaque, unresolved, or malformed is an explicit
+/// semantic limit rather than an error to be guessed through. This helper
+/// preserves that fail-closed boundary before comparing two supported
+/// relational queries.
+#[must_use]
+pub fn compare_lowered_queries(
+    left: &RelationalOutcome,
+    right: &RelationalOutcome,
+) -> ComparisonOutcome {
+    compare_lowered_queries_with_budget(left, right, NormalizationBudget::default())
+}
+
+/// Compare two lowering outcomes with a finite per-query normalization budget.
+///
+/// The only committed results come from two supported queries. If either
+/// lowered input is opaque, the returned outcome is indecisive with the
+/// lowering reason and a deterministic selected origin.
+#[must_use]
+pub fn compare_lowered_queries_with_budget(
+    left: &RelationalOutcome,
+    right: &RelationalOutcome,
+    budget: NormalizationBudget,
+) -> ComparisonOutcome {
+    match (left, right) {
+        (RelationalOutcome::Supported(left), RelationalOutcome::Supported(right)) => {
+            compare_relational_queries_with_budget(left, right, budget)
+        }
+        (RelationalOutcome::Opaque(left), RelationalOutcome::Opaque(right)) => {
+            ComparisonOutcome::Indecisive(canonical_opaque_indecision(left, right))
+        }
+        (RelationalOutcome::Opaque(opaque), RelationalOutcome::Supported(_))
+        | (RelationalOutcome::Supported(_), RelationalOutcome::Opaque(opaque)) => {
+            ComparisonOutcome::Indecisive(indecision_from_opaque(opaque))
+        }
+    }
+}
+
 fn compare_normalized(left: &NormalizedQuery, right: &NormalizedQuery) -> ComparisonOutcome {
     if left.equivalence_key() == right.equivalence_key() {
         return ComparisonOutcome::Equivalent;
@@ -306,6 +346,10 @@ fn indecision_from_failure(failure: &NormalizationFailure) -> ComparisonIndecisi
     ComparisonIndecision::new(failure.reason(), failure.origin().clone())
 }
 
+fn indecision_from_opaque(opaque: &OpaqueOutcome) -> ComparisonIndecision {
+    ComparisonIndecision::new(opaque.reason(), opaque.origin().clone())
+}
+
 fn canonical_failure_indecision(
     left: &NormalizationFailure,
     right: &NormalizationFailure,
@@ -319,6 +363,22 @@ fn canonical_failure_indecision(
         indecision_from_failure(left)
     } else {
         indecision_from_failure(right)
+    }
+}
+
+fn canonical_opaque_indecision(
+    left: &OpaqueOutcome,
+    right: &OpaqueOutcome,
+) -> ComparisonIndecision {
+    let order = left
+        .reason()
+        .id()
+        .cmp(right.reason().id())
+        .then_with(|| compare_origins(left.origin(), right.origin()));
+    if order.is_le() {
+        indecision_from_opaque(left)
+    } else {
+        indecision_from_opaque(right)
     }
 }
 

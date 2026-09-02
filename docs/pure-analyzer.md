@@ -2,27 +2,30 @@
 
 `pure-analyzer` is a deterministic command-line static analyzer for Legend
 Pure. It validates source syntax, lints model-aware queries, formats supported
-source files, and explains registered diagnostic and reason identifiers.
+source files, compares supported relational query pairs, and explains registered
+diagnostic and reason identifiers.
 
 ## Commands
 
-| Command                                              | Purpose                                                                                                     |
-| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `pure-analyzer validate <input>...`                  | Check grammar and shallow well-formedness. No model is required.                                            |
-| `pure-analyzer lint <input>... [--model <model>]...` | Check model-aware milestoning arity, unknown properties, and cardinality misuse when models are supplied.   |
-| `pure-analyzer fmt <input>...`                       | Canonically format input. File input is updated by default; standard input is formatted to standard output. |
-| `pure-analyzer explain <identifier>`                 | Explain one exact registered diagnostic or reason identifier.                                               |
-| `pure-analyzer completions bash`                     | Print Bash completion code to standard output.                                                              |
+| Command                                                  | Purpose                                                                                                     |
+| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `pure-analyzer validate <input>...`                      | Check grammar and shallow well-formedness. No model is required.                                            |
+| `pure-analyzer lint <input>... [--model <model>]...`     | Check model-aware milestoning arity, unknown properties, and cardinality misuse when models are supplied.   |
+| `pure-analyzer fmt <input>...`                           | Canonically format input. File input is updated by default; standard input is formatted to standard output. |
+| `pure-analyzer eq <left> <right> [--model <model>]...`   | Sound, fail-closed M4a relational comparison.                                                               |
+| `pure-analyzer diff <left> <right> [--model <model>]...` | The same M4a comparison, reporting a structural schema distinction when one is proven.                      |
+| `pure-analyzer explain <identifier>`                     | Explain one exact registered diagnostic or reason identifier.                                               |
+| `pure-analyzer completions bash`                         | Print Bash completion code to standard output.                                                              |
 
 Use `pure-analyzer <command> --help` for the complete flag syntax.
 
 ### Inputs
 
-Every analysis command takes one or more input paths, globs, or a single `-`
-for standard input. Globs support `*`, `?`, character classes such as `[ab]`,
-and recursive `**`; matches are processed in deterministic path order and
-duplicate files are analyzed once. Quote globs when the shell would otherwise
-expand them:
+`validate`, `lint`, and `fmt` take one or more input paths, globs, or a single
+`-` for standard input. Globs support `*`, `?`, character classes such as
+`[ab]`, and recursive `**`; matches are processed in deterministic path order
+and duplicate files are analyzed once. Quote globs when the shell would
+otherwise expand them:
 
 ```text
 pure-analyzer validate 'src/**/*.pure'
@@ -32,6 +35,11 @@ pure-analyzer fmt 'queries/*.pure' --check
 Inputs must resolve to regular files. A missing file, a glob with no matches,
 or a second `-` is a usage error. A glob cannot traverse above the current
 working directory.
+
+`eq` and `diff` each take exactly two positional operands. Each file/glob
+operand must resolve to exactly one file; using the same path for both operands
+is valid. At most one operand may be `-`, because standard input is a single
+snapshot.
 
 `fmt -` formats standard input to standard output. In-place formatter writes
 cannot mix file input and standard input. `lint --fix` cannot write standard
@@ -51,9 +59,10 @@ pure-analyzer validate query.pure --strict
 
 ## Lint and fixes
 
-`lint` retains model-free validation without a model. Supply one or more model
-sources for model-aware checks and fixes. Repeat `--model` for a PMCD JSON model
-or a Pure model file; `.json` selects PMCD and `.pure` selects Pure:
+`lint` retains model-free validation without a model. `eq` and `diff` lower
+both inputs against one optional model graph. Supply one or more model sources
+for model-aware checks, fixes, or comparison. Repeat `--model` for a PMCD JSON
+model or a Pure model file; `.json` selects PMCD and `.pure` selects Pure:
 
 ```text
 pure-analyzer lint query.pure --model model.json --format json
@@ -94,6 +103,25 @@ or automating changes:
 
 `--line-width <positive-integer>` overrides the configured layout width for
 one invocation.
+
+## Compare and diff
+
+`eq` and `diff` share the same conservative M4a comparison. They prove
+equivalence only when both lowered queries have the same normal-form identity,
+and prove non-equivalence only for incompatible ordered output schemas. Every
+other case is indecisive; the commands never invoke an engine, synthesize a
+data witness, or guess from partial facts.
+
+```text
+pure-analyzer eq left.pure right.pure --model model.pure
+pure-analyzer diff left.pure right.pure --model model.json --format json
+```
+
+Human and JSON output include the typed outcome. A structural refutation names
+its canonical `primary_origin` and `secondary_origin` and exact schema detail;
+it intentionally contains no M4b witness. Malformed queries, unsupported
+syntax, absent or unresolved model facts, and normalization limits render a
+typed indecision. `--format sarif` is not available for comparison commands.
 
 ## Explain
 
@@ -185,12 +213,12 @@ An unknown `PURE_ANALYZER_*` variable is rejected rather than ignored.
 (`1.0`), or SARIF (`2.1.0`). `--color auto` detects whether the human-output
 destination is a terminal; `always` and `never` force the choice.
 
-Normal `validate` and `lint` diagnostics go to standard output. Formatter
-diagnostics and every `lint --fix` diagnostic go to standard error. `explain`
-writes one requested explanation to standard output. This leaves standard
-output clean for fixed source, diffs, or script-consumable explain JSON.
-`--quiet` suppresses normal diagnostic rendering without changing exit status
-or requested source/diff output.
+Normal `validate`, `lint`, `eq`, and `diff` output goes to standard output.
+Formatter diagnostics and every `lint --fix` diagnostic go to standard error.
+`explain` writes one requested explanation to standard output. This leaves
+standard output clean for fixed source, diffs, or script-consumable JSON.
+`--quiet` suppresses normal rendering without changing exit status or requested
+source/diff output.
 
 This makes it safe to route data and diagnostics independently:
 
@@ -201,13 +229,13 @@ pure-analyzer lint query.pure --model model.json --fix --diff --format sarif \
 
 ## Exit status
 
-| Status | Meaning                                                                         |
-| ------ | ------------------------------------------------------------------------------- |
-| `0`    | Successful execution with no actionable diagnostic or unapplied preview change. |
-| `1`    | Actionable diagnostic, or a change detected by a non-writing check/diff mode.   |
-| `2`    | Reserved for a future indecisive result.                                        |
-| `3`    | Usage, input, model, or configuration failure.                                  |
-| `4`    | Internal failure, including a failed safe-write invariant.                      |
+| Status | Meaning                                                                                                                    |
+| ------ | -------------------------------------------------------------------------------------------------------------------------- |
+| `0`    | Successful execution with no actionable diagnostic or unapplied preview change; `eq`/`diff` proved equivalent.             |
+| `1`    | Actionable diagnostic, a change detected by a non-writing check/diff mode, or `eq`/`diff` proved a structural distinction. |
+| `2`    | `eq`/`diff` could not make a sound M4a commitment.                                                                         |
+| `3`    | Usage, input, model, or configuration failure.                                                                             |
+| `4`    | Internal failure, including a failed safe-write invariant.                                                                 |
 
 Errors in the `3` and `4` classes are written to standard error without normal
 diagnostic output on standard output.

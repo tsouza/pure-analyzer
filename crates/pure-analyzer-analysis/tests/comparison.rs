@@ -2,10 +2,10 @@
 
 use pure_analyzer_analysis::{
     Column, ColumnId, ComparisonOutcome, IrOrigin, Knowledge, NormalizationBudget, Nullability,
-    RelationExpression, RelationFacts, RelationOperator, RelationSchema, RelationSource,
-    RelationalQuery, ScalarExpression, ScalarLiteral, ScalarOperator, SourceSpan,
-    StructuralDifferenceKind, Totality, compare_relational_queries,
-    compare_relational_queries_with_budget,
+    OpaqueOutcome, RelationExpression, RelationFacts, RelationOperator, RelationSchema,
+    RelationSource, RelationalOutcome, RelationalQuery, ScalarExpression, ScalarLiteral,
+    ScalarOperator, SourceSpan, StructuralDifferenceKind, Totality, compare_lowered_queries,
+    compare_relational_queries, compare_relational_queries_with_budget,
 };
 use pure_analyzer_diagnostics::{FileId, ReasonCode, TextRange, TextSize};
 use pure_analyzer_model::{Multiplicity, PmcdDocument, QName, TypeRef, load_pmcd_documents};
@@ -381,4 +381,33 @@ fn one_sided_normalization_failure_never_uses_the_other_query_as_a_proof() {
         panic!("one-sided normalization failure must be indecisive")
     };
     assert_eq!(indecision.reason(), ReasonCode::IndMissingRewrite);
+}
+
+#[test]
+fn opaque_lowering_outcomes_remain_indecisive_before_normalization() {
+    let supported = RelationalOutcome::supported(query(
+        &[(7, "name", "String")],
+        origin(FIRST_FILE, 1, 10),
+        class(),
+    ));
+    let opaque = RelationalOutcome::opaque(OpaqueOutcome::new(
+        ReasonCode::IndUnparseable,
+        origin(FIRST_FILE + 1, 101, 120),
+    ));
+
+    let forward = compare_lowered_queries(&supported, &opaque);
+    let reverse = compare_lowered_queries(&opaque, &supported);
+    assert_eq!(
+        forward, reverse,
+        "opaque lowering must be input-order independent"
+    );
+
+    let ComparisonOutcome::Indecisive(indecision) = forward else {
+        panic!("an opaque input must not produce a committed comparison")
+    };
+    assert_eq!(indecision.reason(), ReasonCode::IndUnparseable);
+    assert_eq!(
+        indecision.origin().source().file(),
+        FileId::new(FIRST_FILE + 1)
+    );
 }

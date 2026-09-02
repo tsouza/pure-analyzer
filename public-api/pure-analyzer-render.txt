@@ -53,7 +53,68 @@ pub unsafe fn pure_analyzer_render::ColorPolicy::deref_mut<'a>(usize) -> &'a mut
 pub unsafe fn pure_analyzer_render::ColorPolicy::drop(usize)
 pub unsafe fn pure_analyzer_render::ColorPolicy::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
 impl<T> either::into_either::IntoEither for pure_analyzer_render::ColorPolicy
+pub enum pure_analyzer_render::ComparisonOriginRole
+pub pure_analyzer_render::ComparisonOriginRole::Indecision
+pub pure_analyzer_render::ComparisonOriginRole::IndecisionModel(usize)
+pub pure_analyzer_render::ComparisonOriginRole::StructuralPrimary
+pub pure_analyzer_render::ComparisonOriginRole::StructuralPrimaryModel(usize)
+pub pure_analyzer_render::ComparisonOriginRole::StructuralSecondary
+pub pure_analyzer_render::ComparisonOriginRole::StructuralSecondaryModel(usize)
+impl core::clone::Clone for pure_analyzer_render::ComparisonOriginRole
+pub fn pure_analyzer_render::ComparisonOriginRole::clone(&self) -> pure_analyzer_render::ComparisonOriginRole
+impl core::cmp::Eq for pure_analyzer_render::ComparisonOriginRole
+impl core::cmp::PartialEq for pure_analyzer_render::ComparisonOriginRole
+pub fn pure_analyzer_render::ComparisonOriginRole::eq(&self, &pure_analyzer_render::ComparisonOriginRole) -> bool
+impl core::fmt::Debug for pure_analyzer_render::ComparisonOriginRole
+pub fn pure_analyzer_render::ComparisonOriginRole::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for pure_analyzer_render::ComparisonOriginRole
+pub fn pure_analyzer_render::ComparisonOriginRole::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_render::ComparisonOriginRole
+impl core::marker::Freeze for pure_analyzer_render::ComparisonOriginRole
+impl core::marker::Send for pure_analyzer_render::ComparisonOriginRole
+impl core::marker::Sync for pure_analyzer_render::ComparisonOriginRole
+impl core::marker::Unpin for pure_analyzer_render::ComparisonOriginRole
+impl core::marker::UnsafeUnpin for pure_analyzer_render::ComparisonOriginRole
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_render::ComparisonOriginRole
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_render::ComparisonOriginRole
+impl<T, U> core::convert::Into<U> for pure_analyzer_render::ComparisonOriginRole where U: core::convert::From<T>
+pub fn pure_analyzer_render::ComparisonOriginRole::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_render::ComparisonOriginRole where U: core::convert::Into<T>
+pub type pure_analyzer_render::ComparisonOriginRole::Error = never
+pub fn pure_analyzer_render::ComparisonOriginRole::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_render::ComparisonOriginRole where U: core::convert::TryFrom<T>
+pub type pure_analyzer_render::ComparisonOriginRole::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_render::ComparisonOriginRole::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_render::ComparisonOriginRole where T: core::clone::Clone
+pub type pure_analyzer_render::ComparisonOriginRole::Owned = T
+pub fn pure_analyzer_render::ComparisonOriginRole::clone_into(&self, &mut T)
+pub fn pure_analyzer_render::ComparisonOriginRole::to_owned(&self) -> T
+impl<T> alloc::string::ToString for pure_analyzer_render::ComparisonOriginRole where T: core::fmt::Display + ?core::marker::Sized
+pub fn pure_analyzer_render::ComparisonOriginRole::to_string(&self) -> alloc::string::String
+impl<T> core::any::Any for pure_analyzer_render::ComparisonOriginRole where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_render::ComparisonOriginRole::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_render::ComparisonOriginRole where T: ?core::marker::Sized
+pub fn pure_analyzer_render::ComparisonOriginRole::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_render::ComparisonOriginRole where T: ?core::marker::Sized
+pub fn pure_analyzer_render::ComparisonOriginRole::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_render::ComparisonOriginRole where T: core::clone::Clone
+pub unsafe fn pure_analyzer_render::ComparisonOriginRole::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_render::ComparisonOriginRole
+pub fn pure_analyzer_render::ComparisonOriginRole::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for pure_analyzer_render::ComparisonOriginRole
+pub type pure_analyzer_render::ComparisonOriginRole::Init = T
+pub const pure_analyzer_render::ComparisonOriginRole::ALIGN: usize
+pub unsafe fn pure_analyzer_render::ComparisonOriginRole::deref<'a>(usize) -> &'a T
+pub unsafe fn pure_analyzer_render::ComparisonOriginRole::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn pure_analyzer_render::ComparisonOriginRole::drop(usize)
+pub unsafe fn pure_analyzer_render::ComparisonOriginRole::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for pure_analyzer_render::ComparisonOriginRole
 pub enum pure_analyzer_render::RenderError
+pub pure_analyzer_render::RenderError::InvalidComparisonSpan
+pub pure_analyzer_render::RenderError::InvalidComparisonSpan::end: u32
+pub pure_analyzer_render::RenderError::InvalidComparisonSpan::file: pure_analyzer_diagnostics::file::FileId
+pub pure_analyzer_render::RenderError::InvalidComparisonSpan::role: pure_analyzer_render::ComparisonOriginRole
+pub pure_analyzer_render::RenderError::InvalidComparisonSpan::start: u32
 pub pure_analyzer_render::RenderError::InvalidSpan
 pub pure_analyzer_render::RenderError::InvalidSpan::diagnostic_index: usize
 pub pure_analyzer_render::RenderError::InvalidSpan::end: u32
@@ -63,6 +124,9 @@ pub pure_analyzer_render::RenderError::InvalidSpan::start: u32
 pub pure_analyzer_render::RenderError::Serialization
 pub pure_analyzer_render::RenderError::Serialization::format: &'static str
 pub pure_analyzer_render::RenderError::Serialization::source: serde_json::error::Error
+pub pure_analyzer_render::RenderError::UnknownComparisonFile
+pub pure_analyzer_render::RenderError::UnknownComparisonFile::file: pure_analyzer_diagnostics::file::FileId
+pub pure_analyzer_render::RenderError::UnknownComparisonFile::role: pure_analyzer_render::ComparisonOriginRole
 pub pure_analyzer_render::RenderError::UnknownFile
 pub pure_analyzer_render::RenderError::UnknownFile::diagnostic_index: usize
 pub pure_analyzer_render::RenderError::UnknownFile::file: pure_analyzer_diagnostics::file::FileId
@@ -159,6 +223,51 @@ pub unsafe fn pure_analyzer_render::SpanKind::deref_mut<'a>(usize) -> &'a mut T
 pub unsafe fn pure_analyzer_render::SpanKind::drop(usize)
 pub unsafe fn pure_analyzer_render::SpanKind::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
 impl<T> either::into_either::IntoEither for pure_analyzer_render::SpanKind
+pub struct pure_analyzer_render::ComparisonRenderInput<'a>
+impl<'a> pure_analyzer_render::ComparisonRenderInput<'a>
+pub const fn pure_analyzer_render::ComparisonRenderInput<'a>::new(&'a libpure::source::SourceStore, &'a pure_analyzer_analysis::comparison::ComparisonOutcome) -> Self
+impl<'a> core::clone::Clone for pure_analyzer_render::ComparisonRenderInput<'a>
+pub fn pure_analyzer_render::ComparisonRenderInput<'a>::clone(&self) -> pure_analyzer_render::ComparisonRenderInput<'a>
+impl<'a> core::fmt::Debug for pure_analyzer_render::ComparisonRenderInput<'a>
+pub fn pure_analyzer_render::ComparisonRenderInput<'a>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl<'a> core::marker::Copy for pure_analyzer_render::ComparisonRenderInput<'a>
+impl<'a> core::marker::Freeze for pure_analyzer_render::ComparisonRenderInput<'a>
+impl<'a> core::marker::Send for pure_analyzer_render::ComparisonRenderInput<'a>
+impl<'a> core::marker::Sync for pure_analyzer_render::ComparisonRenderInput<'a>
+impl<'a> core::marker::Unpin for pure_analyzer_render::ComparisonRenderInput<'a>
+impl<'a> core::marker::UnsafeUnpin for pure_analyzer_render::ComparisonRenderInput<'a>
+impl<'a> core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_render::ComparisonRenderInput<'a>
+impl<'a> core::panic::unwind_safe::UnwindSafe for pure_analyzer_render::ComparisonRenderInput<'a>
+impl<T, U> core::convert::Into<U> for pure_analyzer_render::ComparisonRenderInput<'a> where U: core::convert::From<T>
+pub fn pure_analyzer_render::ComparisonRenderInput<'a>::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_render::ComparisonRenderInput<'a> where U: core::convert::Into<T>
+pub type pure_analyzer_render::ComparisonRenderInput<'a>::Error = never
+pub fn pure_analyzer_render::ComparisonRenderInput<'a>::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_render::ComparisonRenderInput<'a> where U: core::convert::TryFrom<T>
+pub type pure_analyzer_render::ComparisonRenderInput<'a>::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_render::ComparisonRenderInput<'a>::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_render::ComparisonRenderInput<'a> where T: core::clone::Clone
+pub type pure_analyzer_render::ComparisonRenderInput<'a>::Owned = T
+pub fn pure_analyzer_render::ComparisonRenderInput<'a>::clone_into(&self, &mut T)
+pub fn pure_analyzer_render::ComparisonRenderInput<'a>::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_render::ComparisonRenderInput<'a> where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_render::ComparisonRenderInput<'a>::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_render::ComparisonRenderInput<'a> where T: ?core::marker::Sized
+pub fn pure_analyzer_render::ComparisonRenderInput<'a>::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_render::ComparisonRenderInput<'a> where T: ?core::marker::Sized
+pub fn pure_analyzer_render::ComparisonRenderInput<'a>::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_render::ComparisonRenderInput<'a> where T: core::clone::Clone
+pub unsafe fn pure_analyzer_render::ComparisonRenderInput<'a>::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_render::ComparisonRenderInput<'a>
+pub fn pure_analyzer_render::ComparisonRenderInput<'a>::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for pure_analyzer_render::ComparisonRenderInput<'a>
+pub type pure_analyzer_render::ComparisonRenderInput<'a>::Init = T
+pub const pure_analyzer_render::ComparisonRenderInput<'a>::ALIGN: usize
+pub unsafe fn pure_analyzer_render::ComparisonRenderInput<'a>::deref<'a>(usize) -> &'a T
+pub unsafe fn pure_analyzer_render::ComparisonRenderInput<'a>::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn pure_analyzer_render::ComparisonRenderInput<'a>::drop(usize)
+pub unsafe fn pure_analyzer_render::ComparisonRenderInput<'a>::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for pure_analyzer_render::ComparisonRenderInput<'a>
 pub struct pure_analyzer_render::HumanOptions
 pub pure_analyzer_render::HumanOptions::color: bool
 impl core::clone::Clone for pure_analyzer_render::HumanOptions
@@ -254,6 +363,8 @@ pub unsafe fn pure_analyzer_render::RenderInput<'a>::deref_mut<'a>(usize) -> &'a
 pub unsafe fn pure_analyzer_render::RenderInput<'a>::drop(usize)
 pub unsafe fn pure_analyzer_render::RenderInput<'a>::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
 impl<T> either::into_either::IntoEither for pure_analyzer_render::RenderInput<'a>
+pub fn pure_analyzer_render::render_comparison_human(pure_analyzer_render::ComparisonRenderInput<'_>, pure_analyzer_render::HumanOptions) -> core::result::Result<alloc::string::String, pure_analyzer_render::RenderError>
+pub fn pure_analyzer_render::render_comparison_json(pure_analyzer_render::ComparisonRenderInput<'_>) -> core::result::Result<alloc::string::String, pure_analyzer_render::RenderError>
 pub fn pure_analyzer_render::render_human(pure_analyzer_render::RenderInput<'_>, pure_analyzer_render::HumanOptions) -> core::result::Result<alloc::string::String, pure_analyzer_render::RenderError>
 pub fn pure_analyzer_render::render_json(pure_analyzer_render::RenderInput<'_>) -> core::result::Result<alloc::string::String, pure_analyzer_render::RenderError>
 pub fn pure_analyzer_render::render_sarif(pure_analyzer_render::RenderInput<'_>) -> core::result::Result<alloc::string::String, pure_analyzer_render::RenderError>
