@@ -1,11 +1,12 @@
 //! Versioned JSON rendering for M4a comparison outcomes.
 
-use libpure::{LineColumn, OutputSchemaField, SourceFile, SourceOrigin, StructuralDifferenceKind};
+use libpure::{OutputSchemaField, StructuralDifferenceKind};
 use serde::Serialize;
 
 use crate::{
     ComparisonRenderInput, RenderError,
-    comparison::{PreparedComparison, PreparedDifference, PreparedModelAnchor, PreparedOrigin},
+    comparison::{PreparedComparison, PreparedDifference},
+    origin::{JsonOrigin, json_origin},
 };
 
 const JSON_SCHEMA_VERSION: &str = "1.0";
@@ -65,45 +66,6 @@ struct JsonReason {
     blurb: &'static str,
 }
 
-#[derive(Serialize)]
-struct JsonOrigin<'a> {
-    source: JsonAnchor<'a>,
-    model_origins: Vec<JsonModelAnchor<'a>>,
-}
-
-#[derive(Serialize)]
-struct JsonAnchor<'a> {
-    file: JsonFile<'a>,
-    range: JsonRange,
-}
-
-#[derive(Serialize)]
-struct JsonModelAnchor<'a> {
-    file: JsonFile<'a>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    range: Option<JsonRange>,
-}
-
-#[derive(Serialize)]
-struct JsonFile<'a> {
-    id: u32,
-    name: &'a str,
-    origin: &'static str,
-}
-
-#[derive(Serialize)]
-struct JsonRange {
-    start: JsonPosition,
-    end: JsonPosition,
-}
-
-#[derive(Serialize)]
-struct JsonPosition {
-    byte: u32,
-    line: usize,
-    column: usize,
-}
-
 fn json_envelope<'a>(comparison: &'a PreparedComparison<'a>) -> JsonEnvelope<'a> {
     let result = match comparison {
         PreparedComparison::Equivalent => JsonResult::Equivalent,
@@ -143,65 +105,6 @@ fn json_difference<'a>(difference: &'a PreparedDifference<'a>) -> JsonDifference
             primary_origin,
             secondary_origin,
         },
-    }
-}
-
-fn json_origin<'a>(origin: &'a PreparedOrigin<'a>) -> JsonOrigin<'a> {
-    JsonOrigin {
-        source: JsonAnchor {
-            file: json_file(origin.source),
-            range: json_range(origin.span, origin.start, origin.end),
-        },
-        model_origins: origin.model_origins.iter().map(json_model_anchor).collect(),
-    }
-}
-
-fn json_model_anchor<'a>(anchor: &'a PreparedModelAnchor<'a>) -> JsonModelAnchor<'a> {
-    match anchor {
-        PreparedModelAnchor::Document { source } => JsonModelAnchor {
-            file: json_file(source),
-            range: None,
-        },
-        PreparedModelAnchor::Span {
-            source,
-            span,
-            start,
-            end,
-        } => JsonModelAnchor {
-            file: json_file(source),
-            range: Some(json_range(*span, *start, *end)),
-        },
-    }
-}
-
-fn json_file(source: &SourceFile) -> JsonFile<'_> {
-    JsonFile {
-        id: source.id().index(),
-        name: source.name(),
-        origin: source_origin_name(source.origin()),
-    }
-}
-
-fn json_range(range: libpure::TextRange, start: LineColumn, end: LineColumn) -> JsonRange {
-    JsonRange {
-        start: json_position(range.start(), start),
-        end: json_position(range.end(), end),
-    }
-}
-
-fn json_position(byte: libpure::TextSize, location: LineColumn) -> JsonPosition {
-    JsonPosition {
-        byte: u32::from(byte),
-        line: location.line,
-        column: location.column,
-    }
-}
-
-const fn source_origin_name(origin: &SourceOrigin) -> &'static str {
-    match origin {
-        SourceOrigin::File { .. } => "file",
-        SourceOrigin::InMemory => "memory",
-        SourceOrigin::Stdin => "stdin",
     }
 }
 

@@ -8,12 +8,14 @@ use std::fmt::Display;
 use std::io::{IsTerminal, Write};
 
 use libpure::{
-    AnalysisDriver, AnalysisOutput, ComparisonOutcome, ComparisonOutput, ComparisonRequest,
-    Diagnostic, DriverError, ExplainContent, FormatOutput, LintRequest, ModelInput, PlannedChange,
-    Severity, SourceFile, SourceInput, SourceOrigin, SourceRequest, SourceStore,
+    AnalysisDriver, AnalysisOutput, CanonicalEmissionOutcome, CanonicalEmissionOutput,
+    CanonicalEmissionRequest, ComparisonOutcome, ComparisonOutput, ComparisonRequest, Diagnostic,
+    DriverError, ExplainContent, FormatOutput, LintRequest, ModelInput, PlannedChange, Severity,
+    SourceFile, SourceInput, SourceOrigin, SourceRequest, SourceStore,
 };
 use pure_analyzer_render::{
-    ColorPolicy, ComparisonRenderInput, RenderInput, render_comparison_human,
+    CanonicalEmissionRenderInput, ColorPolicy, ComparisonRenderInput, RenderInput,
+    render_canonical_emission_human, render_canonical_emission_json, render_comparison_human,
     render_comparison_json, render_human, render_json, render_sarif,
 };
 use thiserror::Error;
@@ -41,6 +43,9 @@ const FIX_STDIN_WRITE_UNAVAILABLE: &str =
 const EXPLAIN_SARIF_UNSUPPORTED: &str = "explain supports only --format human or --format json";
 const COMPARISON_SARIF_UNSUPPORTED: &str =
     "eq and diff support only --format human or --format json";
+const CANONICAL_EMISSION_SARIF_UNSUPPORTED: &str =
+    "fmt --canonical supports only --format human or --format json";
+const CANONICAL_EMISSION_INPUT_COUNT: &str = "fmt --canonical requires exactly one resolved input";
 
 /// A classified CLI boundary failure with a stable process exit code.
 #[derive(Debug, Error)]
@@ -206,7 +211,24 @@ pub(crate) fn compare(left: &str, right: &str, config: &ResolvedConfig) -> Resul
     Ok(comparison_exit(output.outcome()))
 }
 
-/// Execute canonical formatting, transactionally applying default file inputs.
+/// Emit one proven canonical relational normal form without changing any source file.
+pub(crate) fn canonical_format(files: &[String], config: &ResolvedConfig) -> Result<u8, Failure> {
+    if config.output_format() == OutputFormat::Sarif {
+        return Err(Failure::usage(CANONICAL_EMISSION_SARIF_UNSUPPORTED));
+    }
+    let sources = query_sources(files)?;
+    let [source] = sources.as_slice() else {
+        return Err(Failure::usage(CANONICAL_EMISSION_INPUT_COUNT));
+    };
+    let models = model_sources(config.model_paths())?;
+    let request = CanonicalEmissionRequest::new(source.clone(), models);
+    let driver = AnalysisDriver;
+    let output = driver.emit_canonical(&request).map_err(driver_failure)?;
+    emit_canonical_emission(&output, config)?;
+    Ok(canonical_emission_exit(output.outcome()))
+}
+
+/// Execute lossless layout formatting, transactionally applying default file inputs.
 pub(crate) fn format(
     files: &[String],
     mode: FormatMode,
@@ -397,6 +419,26 @@ fn emit_comparison(output: &ComparisonOutput, config: &ResolvedConfig) -> Result
     write_stdout(&rendered)
 }
 
+fn emit_canonical_emission(
+    output: &CanonicalEmissionOutput,
+    config: &ResolvedConfig,
+) -> Result<(), Failure> {
+    if config.quiet() {
+        return Ok(());
+    }
+    let input = CanonicalEmissionRenderInput::new(output.sources(), output.outcome());
+    let rendered = match config.output_format() {
+        OutputFormat::Human => render_canonical_emission_human(
+            input,
+            color_policy(config.color()).resolve(Destination::Stdout.is_terminal()),
+        ),
+        OutputFormat::Json => render_canonical_emission_json(input),
+        OutputFormat::Sarif => return Err(Failure::usage(CANONICAL_EMISSION_SARIF_UNSUPPORTED)),
+    }
+    .map_err(Failure::internal)?;
+    write_stdout(&rendered)
+}
+
 fn emit_fix_analysis(output: &AnalysisOutput, config: &ResolvedConfig) -> Result<(), Failure> {
     if config.quiet() {
         return Ok(());
@@ -467,6 +509,13 @@ fn comparison_exit(outcome: &ComparisonOutcome) -> u8 {
         ComparisonOutcome::Equivalent => EXIT_SUCCESS,
         ComparisonOutcome::NotEquivalent(_) => EXIT_ACTIONABLE,
         ComparisonOutcome::Indecisive(_) => EXIT_INDECISIVE,
+    }
+}
+
+fn canonical_emission_exit(outcome: &CanonicalEmissionOutcome) -> u8 {
+    match outcome {
+        CanonicalEmissionOutcome::Emitted(_) => EXIT_SUCCESS,
+        CanonicalEmissionOutcome::Indecisive(_) => EXIT_INDECISIVE,
     }
 }
 
