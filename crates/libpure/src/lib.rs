@@ -7,16 +7,21 @@ mod driver;
 mod source;
 
 pub use driver::{
-    AnalysisDriver, AnalysisOutput, DefinitionPosition, DefinitionResult, DefinitionTarget,
-    DefinitionUnavailable, DiagnosticPolicy, DriverError, FormatOutput, FormattedSource,
-    LintRequest, ModelInput, ParseOutput, ParsedSource, RequestError, SourceRequest,
+    AnalysisDriver, AnalysisOutput, ComparisonOutput, ComparisonRequest, DefinitionPosition,
+    DefinitionResult, DefinitionTarget, DefinitionUnavailable, DiagnosticPolicy, DriverError,
+    FormatOutput, FormattedSource, LintRequest, ModelInput, ParseOutput, ParsedSource,
+    RequestError, SourceRequest,
 };
 /// Formatter API exposed to front ends through the workspace facade.
-pub use pure_analyzer_analysis::{FormatResult, format_query, format_query_with_width};
+pub use pure_analyzer_analysis::{
+    ComparisonIndecision, ComparisonOutcome, FormatResult, IrOrigin, NormalizationBudget,
+    OutputSchemaField, SourceSpan, StructuralDifference, StructuralDifferenceKind, format_query,
+    format_query_with_width,
+};
 pub use pure_analyzer_diagnostics::{
     ALL_DIAG_CODES, DiagCode, Diagnostic, EXPLAIN_INDEX_URL, ExplainClassification, ExplainContent,
-    ExplainKind, FileId, FixPlan, FixPlanError, PlannedChange, PlannedFile, Severity, TextRange,
-    TextSize, UnknownExplainIdentifier,
+    ExplainKind, FileId, FixPlan, FixPlanError, PlannedChange, PlannedFile, ReasonCode, Severity,
+    TextRange, TextSize, UnknownExplainIdentifier,
 };
 pub use pure_analyzer_model::ModelError;
 pub use pure_analyzer_syntax::{BuildError, GreenNode};

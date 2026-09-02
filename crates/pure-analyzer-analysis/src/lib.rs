@@ -20,7 +20,8 @@ pub use column_selectors::{
 };
 pub use comparison::{
     ComparisonIndecision, ComparisonOutcome, OutputSchemaField, StructuralDifference,
-    StructuralDifferenceKind, compare_relational_queries, compare_relational_queries_with_budget,
+    StructuralDifferenceKind, compare_lowered_queries, compare_lowered_queries_with_budget,
+    compare_relational_queries, compare_relational_queries_with_budget,
 };
 
 pub use format::{FormatResult, format_query, format_query_with_width};

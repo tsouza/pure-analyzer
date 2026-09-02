@@ -219,7 +219,7 @@ fn append_quoted_terminal_text(output: &mut String, text: &str) {
     output.push('"');
 }
 
-fn append_terminal_text(output: &mut String, text: &str) {
+pub(crate) fn append_terminal_text(output: &mut String, text: &str) {
     for character in text.chars() {
         append_terminal_character(output, character);
     }

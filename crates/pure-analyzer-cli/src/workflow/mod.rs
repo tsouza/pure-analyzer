@@ -8,25 +8,27 @@ use std::fmt::Display;
 use std::io::{IsTerminal, Write};
 
 use libpure::{
-    AnalysisDriver, AnalysisOutput, Diagnostic, DriverError, ExplainContent, FormatOutput,
-    LintRequest, ModelInput, PlannedChange, Severity, SourceFile, SourceInput, SourceOrigin,
-    SourceRequest, SourceStore,
+    AnalysisDriver, AnalysisOutput, ComparisonOutcome, ComparisonOutput, ComparisonRequest,
+    Diagnostic, DriverError, ExplainContent, FormatOutput, LintRequest, ModelInput, PlannedChange,
+    Severity, SourceFile, SourceInput, SourceOrigin, SourceRequest, SourceStore,
 };
-use pure_analyzer_render::{ColorPolicy, RenderInput, render_human, render_json, render_sarif};
+use pure_analyzer_render::{
+    ColorPolicy, ComparisonRenderInput, RenderInput, render_comparison_human,
+    render_comparison_json, render_human, render_json, render_sarif,
+};
 use thiserror::Error;
 
 use crate::CompletionShell;
 use crate::config::{ColorChoice, OutputFormat, ResolvedConfig};
-use input::{model_sources, query_sources};
+use input::{comparison_sources, model_sources, query_sources};
 use write::{Replacement, replace_all};
 
 /// Successful command execution.
 pub(crate) const EXIT_SUCCESS: u8 = 0;
 /// Actionable diagnostics or unapplied formatting changes.
 pub(crate) const EXIT_ACTIONABLE: u8 = 1;
-/// Reserved for future indecisive equivalence results.
+/// Comparison could not make a sound M4a commitment.
 pub(crate) const EXIT_INDECISIVE: u8 = 2;
-const _: u8 = EXIT_INDECISIVE;
 /// Invalid invocation, inaccessible input, or unusable model.
 pub(crate) const EXIT_USAGE: u8 = 3;
 /// Analyzer, renderer, or output-commit invariant failure.
@@ -37,6 +39,8 @@ const FMT_MIXED_INPUT_WRITE_UNAVAILABLE: &str =
 const FIX_STDIN_WRITE_UNAVAILABLE: &str =
     "lint --fix cannot update standard input; use --fix --check, --fix --stdout, or --fix --diff";
 const EXPLAIN_SARIF_UNSUPPORTED: &str = "explain supports only --format human or --format json";
+const COMPARISON_SARIF_UNSUPPORTED: &str =
+    "eq and diff support only --format human or --format json";
 
 /// A classified CLI boundary failure with a stable process exit code.
 #[derive(Debug, Error)]
@@ -186,6 +190,20 @@ pub(crate) fn lint(
     }
 
     finish_lint_fixes(&driver, &request, &output, mode, config)
+}
+
+/// Compare two queries through the fail-closed M4a facade and render its exact outcome.
+pub(crate) fn compare(left: &str, right: &str, config: &ResolvedConfig) -> Result<u8, Failure> {
+    if config.output_format() == OutputFormat::Sarif {
+        return Err(Failure::usage(COMPARISON_SARIF_UNSUPPORTED));
+    }
+    let [left, right] = comparison_sources(left, right)?;
+    let models = model_sources(config.model_paths())?;
+    let request = ComparisonRequest::new(left, right, models);
+    let driver = AnalysisDriver;
+    let output = driver.compare(&request).map_err(driver_failure)?;
+    emit_comparison(&output, config)?;
+    Ok(comparison_exit(output.outcome()))
 }
 
 /// Execute canonical formatting, transactionally applying default file inputs.
@@ -362,6 +380,23 @@ fn emit_analysis(output: &AnalysisOutput, config: &ResolvedConfig) -> Result<(),
     )
 }
 
+fn emit_comparison(output: &ComparisonOutput, config: &ResolvedConfig) -> Result<(), Failure> {
+    if config.quiet() {
+        return Ok(());
+    }
+    let input = ComparisonRenderInput::new(output.sources(), output.outcome());
+    let rendered = match config.output_format() {
+        OutputFormat::Human => render_comparison_human(
+            input,
+            color_policy(config.color()).resolve(Destination::Stdout.is_terminal()),
+        ),
+        OutputFormat::Json => render_comparison_json(input),
+        OutputFormat::Sarif => return Err(Failure::usage(COMPARISON_SARIF_UNSUPPORTED)),
+    }
+    .map_err(Failure::internal)?;
+    write_stdout(&rendered)
+}
+
 fn emit_fix_analysis(output: &AnalysisOutput, config: &ResolvedConfig) -> Result<(), Failure> {
     if config.quiet() {
         return Ok(());
@@ -424,6 +459,14 @@ fn diagnostic_exit(diagnostics: &[Diagnostic]) -> u8 {
         EXIT_ACTIONABLE
     } else {
         EXIT_SUCCESS
+    }
+}
+
+fn comparison_exit(outcome: &ComparisonOutcome) -> u8 {
+    match outcome {
+        ComparisonOutcome::Equivalent => EXIT_SUCCESS,
+        ComparisonOutcome::NotEquivalent(_) => EXIT_ACTIONABLE,
+        ComparisonOutcome::Indecisive(_) => EXIT_INDECISIVE,
     }
 }
 
@@ -720,7 +763,7 @@ mod tests {
     use crate::Cli;
 
     #[test]
-    fn exit_codes_keep_indecisive_reserved() {
+    fn comparison_exit_codes_are_stable() {
         assert_eq!(EXIT_SUCCESS, 0);
         assert_eq!(EXIT_ACTIONABLE, 1);
         assert_eq!(EXIT_INDECISIVE, 2);

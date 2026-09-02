@@ -1,6 +1,8 @@
 pub mod libpure
 pub use libpure::ALL_DIAG_CODES
 pub use libpure::BuildError
+pub use libpure::ComparisonIndecision
+pub use libpure::ComparisonOutcome
 pub use libpure::DiagCode
 pub use libpure::Diagnostic
 pub use libpure::EXPLAIN_INDEX_URL
@@ -12,10 +14,17 @@ pub use libpure::FixPlan
 pub use libpure::FixPlanError
 pub use libpure::FormatResult
 pub use libpure::GreenNode
+pub use libpure::IrOrigin
 pub use libpure::ModelError
+pub use libpure::NormalizationBudget
+pub use libpure::OutputSchemaField
 pub use libpure::PlannedChange
 pub use libpure::PlannedFile
+pub use libpure::ReasonCode
 pub use libpure::Severity
+pub use libpure::SourceSpan
+pub use libpure::StructuralDifference
+pub use libpure::StructuralDifferenceKind
 pub use libpure::TextRange
 pub use libpure::TextSize
 pub use libpure::UnknownExplainIdentifier
@@ -457,6 +466,7 @@ pub unsafe fn libpure::SourceStoreError::init(<T as crossbeam_epoch::atomic::Poi
 impl<T> either::into_either::IntoEither for libpure::SourceStoreError
 pub struct libpure::AnalysisDriver
 impl libpure::AnalysisDriver
+pub fn libpure::AnalysisDriver::compare(&self, &libpure::ComparisonRequest) -> core::result::Result<libpure::ComparisonOutput, libpure::DriverError>
 pub fn libpure::AnalysisDriver::definition(&self, &libpure::LintRequest, libpure::DefinitionPosition) -> core::result::Result<libpure::DefinitionResult, libpure::DriverError>
 pub fn libpure::AnalysisDriver::format(&self, &libpure::SourceRequest) -> core::result::Result<libpure::FormatOutput, libpure::DriverError>
 pub fn libpure::AnalysisDriver::lint(&self, &libpure::LintRequest) -> core::result::Result<libpure::AnalysisOutput, libpure::DriverError>
@@ -558,6 +568,109 @@ pub unsafe fn libpure::AnalysisOutput::deref_mut<'a>(usize) -> &'a mut T
 pub unsafe fn libpure::AnalysisOutput::drop(usize)
 pub unsafe fn libpure::AnalysisOutput::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
 impl<T> either::into_either::IntoEither for libpure::AnalysisOutput
+pub struct libpure::ComparisonOutput
+impl libpure::ComparisonOutput
+pub fn libpure::ComparisonOutput::into_parts(self) -> (libpure::SourceStore, pure_analyzer_analysis::comparison::ComparisonOutcome)
+pub const fn libpure::ComparisonOutput::outcome(&self) -> &pure_analyzer_analysis::comparison::ComparisonOutcome
+pub const fn libpure::ComparisonOutput::sources(&self) -> &libpure::SourceStore
+impl core::clone::Clone for libpure::ComparisonOutput
+pub fn libpure::ComparisonOutput::clone(&self) -> libpure::ComparisonOutput
+impl core::cmp::Eq for libpure::ComparisonOutput
+impl core::cmp::PartialEq for libpure::ComparisonOutput
+pub fn libpure::ComparisonOutput::eq(&self, &libpure::ComparisonOutput) -> bool
+impl core::fmt::Debug for libpure::ComparisonOutput
+pub fn libpure::ComparisonOutput::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for libpure::ComparisonOutput
+impl core::marker::Freeze for libpure::ComparisonOutput
+impl core::marker::Send for libpure::ComparisonOutput
+impl core::marker::Sync for libpure::ComparisonOutput
+impl core::marker::Unpin for libpure::ComparisonOutput
+impl core::marker::UnsafeUnpin for libpure::ComparisonOutput
+impl core::panic::unwind_safe::RefUnwindSafe for libpure::ComparisonOutput
+impl core::panic::unwind_safe::UnwindSafe for libpure::ComparisonOutput
+impl<T, U> core::convert::Into<U> for libpure::ComparisonOutput where U: core::convert::From<T>
+pub fn libpure::ComparisonOutput::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for libpure::ComparisonOutput where U: core::convert::Into<T>
+pub type libpure::ComparisonOutput::Error = never
+pub fn libpure::ComparisonOutput::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for libpure::ComparisonOutput where U: core::convert::TryFrom<T>
+pub type libpure::ComparisonOutput::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn libpure::ComparisonOutput::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for libpure::ComparisonOutput where T: core::clone::Clone
+pub type libpure::ComparisonOutput::Owned = T
+pub fn libpure::ComparisonOutput::clone_into(&self, &mut T)
+pub fn libpure::ComparisonOutput::to_owned(&self) -> T
+impl<T> core::any::Any for libpure::ComparisonOutput where T: 'static + ?core::marker::Sized
+pub fn libpure::ComparisonOutput::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for libpure::ComparisonOutput where T: ?core::marker::Sized
+pub fn libpure::ComparisonOutput::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for libpure::ComparisonOutput where T: ?core::marker::Sized
+pub fn libpure::ComparisonOutput::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for libpure::ComparisonOutput where T: core::clone::Clone
+pub unsafe fn libpure::ComparisonOutput::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for libpure::ComparisonOutput
+pub fn libpure::ComparisonOutput::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for libpure::ComparisonOutput
+pub type libpure::ComparisonOutput::Init = T
+pub const libpure::ComparisonOutput::ALIGN: usize
+pub unsafe fn libpure::ComparisonOutput::deref<'a>(usize) -> &'a T
+pub unsafe fn libpure::ComparisonOutput::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn libpure::ComparisonOutput::drop(usize)
+pub unsafe fn libpure::ComparisonOutput::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for libpure::ComparisonOutput
+pub struct libpure::ComparisonRequest
+impl libpure::ComparisonRequest
+pub const fn libpure::ComparisonRequest::left(&self) -> &libpure::SourceInput
+pub fn libpure::ComparisonRequest::models(&self) -> &[libpure::ModelInput]
+pub fn libpure::ComparisonRequest::new(libpure::SourceInput, libpure::SourceInput, impl core::iter::traits::collect::IntoIterator<Item = libpure::ModelInput>) -> Self
+pub const fn libpure::ComparisonRequest::normalization_budget(&self) -> pure_analyzer_analysis::normalizer::NormalizationBudget
+pub const fn libpure::ComparisonRequest::right(&self) -> &libpure::SourceInput
+pub const fn libpure::ComparisonRequest::with_normalization_budget(self, pure_analyzer_analysis::normalizer::NormalizationBudget) -> Self
+impl core::clone::Clone for libpure::ComparisonRequest
+pub fn libpure::ComparisonRequest::clone(&self) -> libpure::ComparisonRequest
+impl core::cmp::Eq for libpure::ComparisonRequest
+impl core::cmp::PartialEq for libpure::ComparisonRequest
+pub fn libpure::ComparisonRequest::eq(&self, &libpure::ComparisonRequest) -> bool
+impl core::fmt::Debug for libpure::ComparisonRequest
+pub fn libpure::ComparisonRequest::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for libpure::ComparisonRequest
+impl core::marker::Freeze for libpure::ComparisonRequest
+impl core::marker::Send for libpure::ComparisonRequest
+impl core::marker::Sync for libpure::ComparisonRequest
+impl core::marker::Unpin for libpure::ComparisonRequest
+impl core::marker::UnsafeUnpin for libpure::ComparisonRequest
+impl core::panic::unwind_safe::RefUnwindSafe for libpure::ComparisonRequest
+impl core::panic::unwind_safe::UnwindSafe for libpure::ComparisonRequest
+impl<T, U> core::convert::Into<U> for libpure::ComparisonRequest where U: core::convert::From<T>
+pub fn libpure::ComparisonRequest::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for libpure::ComparisonRequest where U: core::convert::Into<T>
+pub type libpure::ComparisonRequest::Error = never
+pub fn libpure::ComparisonRequest::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for libpure::ComparisonRequest where U: core::convert::TryFrom<T>
+pub type libpure::ComparisonRequest::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn libpure::ComparisonRequest::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for libpure::ComparisonRequest where T: core::clone::Clone
+pub type libpure::ComparisonRequest::Owned = T
+pub fn libpure::ComparisonRequest::clone_into(&self, &mut T)
+pub fn libpure::ComparisonRequest::to_owned(&self) -> T
+impl<T> core::any::Any for libpure::ComparisonRequest where T: 'static + ?core::marker::Sized
+pub fn libpure::ComparisonRequest::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for libpure::ComparisonRequest where T: ?core::marker::Sized
+pub fn libpure::ComparisonRequest::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for libpure::ComparisonRequest where T: ?core::marker::Sized
+pub fn libpure::ComparisonRequest::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for libpure::ComparisonRequest where T: core::clone::Clone
+pub unsafe fn libpure::ComparisonRequest::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for libpure::ComparisonRequest
+pub fn libpure::ComparisonRequest::from(T) -> T
+impl<T> crossbeam_epoch::atomic::Pointable for libpure::ComparisonRequest
+pub type libpure::ComparisonRequest::Init = T
+pub const libpure::ComparisonRequest::ALIGN: usize
+pub unsafe fn libpure::ComparisonRequest::deref<'a>(usize) -> &'a T
+pub unsafe fn libpure::ComparisonRequest::deref_mut<'a>(usize) -> &'a mut T
+pub unsafe fn libpure::ComparisonRequest::drop(usize)
+pub unsafe fn libpure::ComparisonRequest::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
+impl<T> either::into_either::IntoEither for libpure::ComparisonRequest
 pub struct libpure::DefinitionPosition
 impl libpure::DefinitionPosition
 pub const fn libpure::DefinitionPosition::file(self) -> pure_analyzer_diagnostics::file::FileId

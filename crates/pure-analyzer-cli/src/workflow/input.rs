@@ -51,6 +51,42 @@ pub(super) fn query_sources(arguments: &[String]) -> Result<Vec<SourceInput>, Fa
     Ok(sources)
 }
 
+/// Resolve exactly two comparison operands without collapsing identical paths.
+///
+/// Each operand may name one file, one matching glob, or standard input. Unlike
+/// [`query_sources`], the two snapshots are positional: comparing a source to
+/// itself is valid, so duplicate paths must remain distinct. Standard input is
+/// a single stream and therefore cannot supply both operands.
+pub(super) fn comparison_sources(left: &str, right: &str) -> Result<[SourceInput; 2], Failure> {
+    if left == "-" && right == "-" {
+        return Err(Failure::usage(
+            "comparison accepts standard input for at most one operand",
+        ));
+    }
+    let cwd = std::env::current_dir().map_err(|error| {
+        Failure::usage(format!("could not determine current directory: {error}"))
+    })?;
+    let left = comparison_source(left, &cwd)?;
+    let right = comparison_source(right, &cwd)?;
+    Ok([left, right])
+}
+
+fn comparison_source(argument: &str, cwd: &Path) -> Result<SourceInput, Failure> {
+    if argument == "-" {
+        let text = std::io::read_to_string(std::io::stdin())
+            .map_err(|error| Failure::usage(format!("could not read standard input: {error}")))?;
+        return Ok(SourceInput::stdin(text));
+    }
+
+    let paths = expand_argument(argument, cwd)?;
+    let [path] = paths.as_slice() else {
+        return Err(Failure::usage(format!(
+            "comparison input {argument:?} must resolve to exactly one file"
+        )));
+    };
+    Ok(SourceInput::file(path.clone()))
+}
+
 /// Convert resolved configuration model paths to typed libpure inputs.
 pub(super) fn model_sources(paths: &[PathBuf]) -> Result<Vec<ModelInput>, Failure> {
     let mut models = Vec::with_capacity(paths.len());

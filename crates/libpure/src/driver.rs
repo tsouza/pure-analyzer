@@ -1,9 +1,10 @@
 //! Renderer-independent orchestration over retained source snapshots.
 
 use pure_analyzer_analysis::{
-    AnalysisEngine, AnalysisInput, AnalysisPass, FindingPolicy, LocalResolution,
-    MilestoningArityLintPass, NavigationLintPass, ValidatePass, analyze_m3_locals, format_query,
-    format_query_with_width,
+    AnalysisEngine, AnalysisInput, AnalysisPass, ComparisonOutcome, FindingPolicy, LocalResolution,
+    MilestoningArityLintPass, NavigationLintPass, NormalizationBudget, RelationalOutcome,
+    ValidatePass, analyze_m3_locals, compare_lowered_queries_with_budget, format_query,
+    format_query_with_width, lower_m3_query,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -215,6 +216,67 @@ impl ModelInput {
 pub struct LintRequest {
     sources: SourceRequest,
     models: Vec<ModelInput>,
+}
+
+/// The two query snapshots and optional model inputs required for M4a comparison.
+///
+/// The driver retains each source exactly once, lowers both query inputs against
+/// the same model graph, and exposes the typed outcome without imposing a CLI
+/// rendering or exit-code policy.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ComparisonRequest {
+    left: SourceInput,
+    right: SourceInput,
+    models: Vec<ModelInput>,
+    normalization_budget: NormalizationBudget,
+}
+
+impl ComparisonRequest {
+    /// Construct a comparison request using the default finite normalization budget.
+    #[must_use]
+    pub fn new(
+        left: SourceInput,
+        right: SourceInput,
+        models: impl IntoIterator<Item = ModelInput>,
+    ) -> Self {
+        Self {
+            left,
+            right,
+            models: models.into_iter().collect(),
+            normalization_budget: NormalizationBudget::default(),
+        }
+    }
+
+    /// Return the first query input in caller order.
+    #[must_use]
+    pub const fn left(&self) -> &SourceInput {
+        &self.left
+    }
+
+    /// Return the second query input in caller order.
+    #[must_use]
+    pub const fn right(&self) -> &SourceInput {
+        &self.right
+    }
+
+    /// Return model inputs in their deterministic loading order.
+    #[must_use]
+    pub fn models(&self) -> &[ModelInput] {
+        &self.models
+    }
+
+    /// Set the finite normalization budget applied independently to both inputs.
+    #[must_use]
+    pub const fn with_normalization_budget(mut self, budget: NormalizationBudget) -> Self {
+        self.normalization_budget = budget;
+        self
+    }
+
+    /// Return the finite normalization budget applied independently to both inputs.
+    #[must_use]
+    pub const fn normalization_budget(&self) -> NormalizationBudget {
+        self.normalization_budget
+    }
 }
 
 impl LintRequest {
@@ -446,6 +508,33 @@ pub struct AnalysisOutput {
     diagnostics: Vec<Diagnostic>,
 }
 
+/// A comparison result retaining the exact source snapshots used for lowering.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ComparisonOutput {
+    sources: SourceStore,
+    outcome: ComparisonOutcome,
+}
+
+impl ComparisonOutput {
+    /// Return source snapshots referenced by the outcome's structural origins.
+    #[must_use]
+    pub const fn sources(&self) -> &SourceStore {
+        &self.sources
+    }
+
+    /// Return the exact fail-closed M4a comparison outcome.
+    #[must_use]
+    pub const fn outcome(&self) -> &ComparisonOutcome {
+        &self.outcome
+    }
+
+    /// Consume this output into its source snapshots and typed M4a outcome.
+    #[must_use]
+    pub fn into_parts(self) -> (SourceStore, ComparisonOutcome) {
+        (self.sources, self.outcome)
+    }
+}
+
 impl AnalysisOutput {
     /// Return every retained source snapshot referenced by this output.
     #[must_use]
@@ -635,6 +724,37 @@ impl AnalysisDriver {
         })
     }
 
+    /// Load, lower, and compare two query inputs through the fail-closed M4a core.
+    ///
+    /// This facade owns source retention and model loading, but leaves output
+    /// formatting and process exit-code policy to front ends. Parser recovery,
+    /// unsupported syntax, and unresolved model facts become typed indecision;
+    /// unreadable sources and malformed model documents remain typed driver
+    /// failures at the existing boundary.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DriverError`] when a source cannot be retained, a model cannot
+    /// be loaded, or the parser cannot construct its lossless tree.
+    pub fn compare(&self, request: &ComparisonRequest) -> Result<ComparisonOutput, DriverError> {
+        let (sources, [left, right], model) = load_comparison_request(request)?;
+        let left = lower_comparison_source(
+            sources
+                .get(left)
+                .ok_or(DriverError::MissingSource { file: left })?,
+            model.as_ref(),
+        )?;
+        let right = lower_comparison_source(
+            sources
+                .get(right)
+                .ok_or(DriverError::MissingSource { file: right })?,
+            model.as_ref(),
+        )?;
+        let outcome =
+            compare_lowered_queries_with_budget(&left, &right, request.normalization_budget());
+        Ok(ComparisonOutput { sources, outcome })
+    }
+
     /// Load and validate model inputs without requiring a query source.
     ///
     /// Protocol front ends use this when only configured model documents are
@@ -811,6 +931,29 @@ fn load_lint_request(
     let sources = model_sources.append(query_sources);
     let model = load_model(&sources, &request.models)?;
     Ok((sources, files, model))
+}
+
+fn load_comparison_request(
+    request: &ComparisonRequest,
+) -> Result<(SourceStore, [FileId; 2], Option<ModelGraph>), DriverError> {
+    let model_sources = SourceStore::load(request.models.iter().map(ModelInput::source).cloned())
+        .map_err(DriverError::model_source_load)?;
+    let first_query = request_file_id(model_sources.len())
+        .ok_or_else(|| DriverError::model_source_load(SourceStoreError::TooManySources))?;
+    let second_query_index = model_sources
+        .len()
+        .checked_add(1)
+        .ok_or_else(|| DriverError::model_source_load(SourceStoreError::TooManySources))?;
+    let second_query = request_file_id(second_query_index)
+        .ok_or_else(|| DriverError::model_source_load(SourceStoreError::TooManySources))?;
+    let query_sources = SourceStore::load_from(
+        first_query.index(),
+        [request.left.clone(), request.right.clone()],
+    )
+    .map_err(DriverError::source_load)?;
+    let sources = model_sources.append(query_sources);
+    let model = load_model(&sources, &request.models)?;
+    Ok((sources, [first_query, second_query], model))
 }
 
 fn request_file_id(index: usize) -> Option<FileId> {
@@ -1052,6 +1195,21 @@ fn parse_source(source: &SourceFile) -> Result<ParsedSource, DriverError> {
         .map_err(|error| DriverError::parse(source.id(), error))
 }
 
+fn lower_comparison_source(
+    source: &SourceFile,
+    model: Option<&ModelGraph>,
+) -> Result<RelationalOutcome, DriverError> {
+    let parsed = parse_query(source.text(), source.id())
+        .map_err(|error| DriverError::parse(source.id(), error))?;
+    Ok(lower_m3_query(AnalysisInput::new(
+        source.id(),
+        source.text(),
+        &parsed.green,
+        &parsed.diagnostics,
+        model,
+    )))
+}
+
 fn analyze_source(
     source: &SourceFile,
     model: Option<&ModelGraph>,
@@ -1142,7 +1300,7 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     use super::*;
-    use pure_analyzer_diagnostics::DiagCode;
+    use pure_analyzer_diagnostics::{DiagCode, ReasonCode};
 
     const PARALLEL_JOBS: usize = 2;
     const MODEL: &str = r#"{
@@ -1208,6 +1366,138 @@ Class model::Person
                 MODEL,
             ))],
         )
+    }
+
+    fn comparison_request(left: &str, right: &str) -> ComparisonRequest {
+        ComparisonRequest::new(
+            SourceInput::in_memory("left.pure", left),
+            SourceInput::in_memory("right.pure", right),
+            [ModelInput::pmcd(SourceInput::in_memory(
+                "model.json",
+                MODEL,
+            ))],
+        )
+    }
+
+    #[test]
+    fn comparison_preserves_exact_typed_m4a_outcomes_and_source_order() {
+        let driver = AnalysisDriver;
+        let query = "model::Person.all()->project(~[label: person | $person.name])";
+        let equivalent = driver
+            .compare(&comparison_request(query, query))
+            .expect("compare equivalent supported queries");
+        assert_eq!(equivalent.outcome(), &ComparisonOutcome::Equivalent);
+        assert_eq!(
+            equivalent
+                .sources()
+                .files()
+                .map(SourceFile::name)
+                .collect::<Vec<_>>(),
+            ["model.json", "left.pure", "right.pure"],
+            "models must precede each independently retained query snapshot"
+        );
+        assert_eq!(
+            equivalent
+                .sources()
+                .files()
+                .map(SourceFile::id)
+                .collect::<Vec<_>>(),
+            [FileId::new(0), FileId::new(1), FileId::new(2)]
+        );
+
+        let different = driver
+            .compare(&comparison_request(
+                query,
+                "model::Person.all()->project(~[other: person | $person.name])",
+            ))
+            .expect("compare structurally different supported queries");
+        assert!(matches!(
+            different.outcome(),
+            ComparisonOutcome::NotEquivalent(difference)
+                if matches!(
+                    difference.kind(),
+                    pure_analyzer_analysis::StructuralDifferenceKind::OutputColumn {
+                        index: 0,
+                        field: pure_analyzer_analysis::OutputSchemaField::Name,
+                    }
+                )
+        ));
+    }
+
+    #[test]
+    fn comparison_keeps_malformed_and_unresolved_queries_indecisive() {
+        let driver = AnalysisDriver;
+        let supported = "model::Person.all()->project(~[label: person | $person.name])";
+        let malformed = driver
+            .compare(&comparison_request(
+                supported,
+                "model::Person.all()->filter(person| $person.name ==)",
+            ))
+            .expect("malformed query remains a comparison outcome");
+        assert!(matches!(
+            malformed.outcome(),
+            ComparisonOutcome::Indecisive(indecision)
+                if indecision.reason() == ReasonCode::IndUnparseable
+        ));
+
+        let unresolved = driver
+            .compare(&ComparisonRequest::new(
+                SourceInput::in_memory("left.pure", "model::Person.all()"),
+                SourceInput::in_memory("right.pure", "model::Person.all()"),
+                [],
+            ))
+            .expect("missing model remains a comparison outcome");
+        assert!(matches!(
+            unresolved.outcome(),
+            ComparisonOutcome::Indecisive(indecision)
+                if indecision.reason() == ReasonCode::ModelIncomplete
+        ));
+
+        let unresolved = driver
+            .compare(&comparison_request(
+                "model::Person.all()->project(~[label: person | $person.missing])",
+                supported,
+            ))
+            .expect("unresolved schema remains a comparison outcome");
+        assert!(matches!(
+            unresolved.outcome(),
+            ComparisonOutcome::Indecisive(indecision)
+                if indecision.reason() == ReasonCode::IndUnresolvedSchema
+        ));
+    }
+
+    #[test]
+    fn comparison_keeps_model_load_failures_at_the_driver_boundary() {
+        let driver = AnalysisDriver;
+        let error = driver
+            .compare(&ComparisonRequest::new(
+                SourceInput::in_memory("left.pure", "model::Person.all()"),
+                SourceInput::in_memory("right.pure", "model::Person.all()"),
+                [ModelInput::pmcd(SourceInput::in_memory("broken.json", "{"))],
+            ))
+            .expect_err("malformed model must not become semantic indecision");
+        assert!(matches!(
+            error,
+            DriverError::ModelLoad {
+                source: ModelError::Json { source_name, .. }
+            } if source_name == "broken.json"
+        ));
+    }
+
+    #[test]
+    fn comparison_request_passes_its_explicit_normalization_budget_through() {
+        let request = comparison_request("model::Person.all()", "model::Person.all()")
+            .with_normalization_budget(NormalizationBudget::new(0));
+        assert_eq!(request.normalization_budget(), NormalizationBudget::new(0));
+
+        let output = AnalysisDriver
+            .compare(&request)
+            .expect("zero budget must fail closed through the comparison facade");
+        assert!(matches!(
+            output.outcome(),
+            ComparisonOutcome::Indecisive(indecision)
+                if indecision.reason() == ReasonCode::IndMissingRewrite
+        ));
     }
 
     #[test]
