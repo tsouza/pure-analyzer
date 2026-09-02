@@ -4,6 +4,23 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/) and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.2](https://github.com/tsouza/pure-analyzer/compare/purecard-v0.2.1...purecard-v0.2.2) - 2026-09-02
+
+No functional changes to `purecard` itself. `pyproject.toml`'s `dynamic`
+list only ever named `version`, so — per maturin's own contract, listing
+`[project]` at all means it "is not allowed to populate fields that are not
+present in `project.dynamic`" — every other field maturin can lift from
+`Cargo.toml` (description, README, license, authors, keywords, project
+URLs) was built into the wheel empty. 0.2.1's PyPI listing had no
+description, no rendered README, nothing (verified via
+`pypi.org/pypi/purecard/json` and reproduced locally: the built wheel's
+`dist-info/METADATA` held only `Name`/`Version`/`Requires-Python`). Fixed
+`dynamic` to include the rest, added a `homepage` pointing at this crate's
+own subtree rather than the two-product monorepo root, and confirmed
+`twine check` passes clean on the rebuilt wheel. crates.io's 0.2.1 listing
+is unaffected (its own metadata was already complete) and stays published,
+in place; PyPI publishes only from this version onward.
+
 ## [0.2.1](https://github.com/tsouza/pure-analyzer/compare/purecard-v0.2.0...purecard-v0.2.1) - 2026-09-02
 
 No functional changes to `purecard` itself. Re-cut purely to carry a release-
