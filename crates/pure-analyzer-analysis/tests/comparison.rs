@@ -317,6 +317,58 @@ fn every_declared_output_column_metadata_mismatch_is_refuted() {
 }
 
 #[test]
+fn unknown_nullability_never_refutes_equivalence() {
+    let class = class();
+    let source = origin(FIRST_FILE, 1, 10);
+    let left = query_with_schema(
+        RelationSchema::new(vec![Column::new(
+            ColumnId::new(7),
+            "name".parse().expect("fixture column name is valid"),
+            type_ref("String"),
+            one(),
+            Nullability::Unknown,
+            source.clone(),
+        )])
+        .expect("fixture schema is valid"),
+        source.clone(),
+        class.clone(),
+    );
+    let known_sides = [Nullability::NonNullable, Nullability::Nullable];
+
+    for known in known_sides {
+        let right = query_with_schema(
+            RelationSchema::new(vec![Column::new(
+                ColumnId::new(90),
+                "name".parse().expect("fixture column name is valid"),
+                type_ref("String"),
+                one(),
+                known,
+                origin(FIRST_FILE + 1, 101, 120),
+            )])
+            .expect("fixture schema is valid"),
+            origin(FIRST_FILE + 1, 101, 120),
+            class.clone(),
+        );
+
+        let forward = compare_relational_queries(&left, &right);
+        let reverse = compare_relational_queries(&right, &left);
+        assert_eq!(
+            forward, reverse,
+            "indecision selection must be argument-order independent for {known:?}"
+        );
+        assert!(
+            forward.difference().is_none(),
+            "an unknown nullability fact must never be treated as a proven \
+             contradiction for {known:?}, got {forward:?}"
+        );
+        let ComparisonOutcome::Indecisive(indecision) = forward else {
+            panic!("unknown nullability vs {known:?} must stay indecisive, got {forward:?}")
+        };
+        assert_eq!(indecision.reason(), ReasonCode::IndMissingRewrite);
+    }
+}
+
+#[test]
 fn unproven_normal_form_differences_stay_indecisive() {
     let class = class();
     let base = query(&[(7, "name", "String")], origin(FIRST_FILE, 1, 10), class);
