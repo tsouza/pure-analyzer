@@ -29,7 +29,7 @@
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
-use crate::grammar::pda::{is_ident_start, is_ident_tail};
+use crate::grammar::pda::{TERM_END_BYTES, is_ident_start, is_ident_tail};
 use crate::mask::BitMask;
 use crate::schema::model::{Schema, TypeClass};
 use crate::schema::scope::{
@@ -1392,8 +1392,20 @@ const STEP_ARROW: &[u8] = b"->";
 /// Refill `dst` with [`L2Position::SourceExtent`]'s set, plus EOS: a closed
 /// `Class.all()` is a `T[*]` extent, and the only things that follow one are a
 /// pipeline step (`->`), a property navigation that maps over it (`.`), or the
-/// end of the query. Every operator the vocabulary offers is a type mismatch
+/// end of the term. Every operator the vocabulary offers is a type mismatch
 /// against a collection, which is what this clears.
+///
+/// "The end of the term" is [`TERM_END_BYTES`] as well as the EOS bit, because a
+/// zero-step pipeline is a whole pipeline (`docs/spec/grammar.md` §5.2,
+/// `pipeline = source , { "->" step }`) and a pipeline inside a frame is ended by
+/// that frame, not by the stream: `{|Class.all()}` and `{|let c = Class.all(); …}`
+/// end on `}` and `;`. Reading only the EOS bit made the rule admit the top-level
+/// `|Class.all()` and mask the enclosed spellings — the same construct, refused
+/// for its surroundings (issue #296). The family is kept **wholesale**, and the
+/// unevenness of its evidence is deliberate (`docs/spec/schema.md` §6.6): a
+/// completed extent has no obligation outstanding for a terminator to violate, so
+/// *which* one an open frame takes is the byte-PDA's decision, and this rule only
+/// stops pre-empting it.
 ///
 /// The `-` of the step arrow is the one byte an *arithmetic* minus shares, so it
 /// is admitted only as the arrow: either whole (`->`, however much rides behind
@@ -1498,13 +1510,18 @@ fn does_not_close_denied(deny: &Trie, cursor: u32, bytes: &[u8]) -> bool {
     )
 }
 
-/// Whether `bytes` may continue a class extent — see [`fill_source_extent`].
+/// Whether `bytes` may continue **or end** a class extent — see
+/// [`fill_source_extent`].
 fn keeps_source_extent(bytes: &[u8], after_dash: bool) -> bool {
     if after_dash {
         return completes_step_arrow(bytes);
     }
     match bytes.first() {
-        Some(&byte) if byte.is_ascii_whitespace() || byte == NAV_DOT => true,
+        Some(&byte)
+            if byte.is_ascii_whitespace() || byte == NAV_DOT || TERM_END_BYTES.contains(&byte) =>
+        {
+            true
+        }
         Some(&STEP_DASH) => opens_step_arrow(bytes),
         _ => false,
     }

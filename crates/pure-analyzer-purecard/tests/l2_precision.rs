@@ -3450,9 +3450,8 @@ fn n3d_still_admits_the_two_string_store_method_call() {
 /// Issue #55 Phase 4 — N3e, the class-extent continuation. `Class.all()` produces
 /// a `T[*]` extent, so every binary operator the vocabulary offers mismatches it
 /// by construction (live: "Can't find a match for function
-/// 'and(ModelList[*],String[1])'"). Across the 5034 gold queries a closed
-/// `.all()` is followed by `->` 438 times, by a `.` property 37 times and by
-/// end-of-query 25 times — and by nothing else.
+/// 'and(ModelList[*],String[1])'"). The corpus split behind the rule is cited
+/// once, in `docs/spec/schema.md` §6.6.
 #[test]
 fn n3e_masks_every_operator_applied_to_a_class_extent() {
     assert_frozen("n3e-extent-operator");
@@ -3470,6 +3469,38 @@ fn n3e_still_admits_the_step_arrow_and_the_extent_property_dot() {
     assert_streams_soundly_under_l2(
         "world_1",
         "|spider::world_1::model::default::Country.all().name",
+    );
+}
+
+/// Issue #296 — N3e's third continuation, `nothing at all`, spelled the three
+/// ways the grammar spells the *end of a term*. `pipeline = source , { "->" step }`
+/// (`docs/spec/grammar.md` §5.2) permits **zero** steps, so a closed `Class.all()`
+/// is already a whole pipeline; where that pipeline sits inside a frame, the
+/// token that ends it is the frame's own closer or separator, not end-of-stream.
+///
+/// The top-level `|Class.all()` form ended correctly all along (the EOS bit), so
+/// masking `}`, `;` and `)` made the recognizer disagree with itself about the
+/// same construct depending only on what enclosed it.
+#[test]
+fn n3e_admits_the_zero_step_pipeline_its_grammar_defines() {
+    // §5.1 `blockQuery = "{|" { letBinding ";" } pipeline "}"` — the block's
+    // closer ends a zero-step pipeline.
+    assert_streams_soundly_under_l2(
+        "world_1",
+        "{|spider::world_1::model::default::Country.all()}",
+    );
+    // §5.1 `letBinding = "let" ident "=" pipeline` — the `;` that ends a binding
+    // whose pipeline has zero steps.
+    assert_streams_soundly_under_l2(
+        "world_1",
+        "{|let c = spider::world_1::model::default::Country.all(); $c}",
+    );
+    // A binding and a final zero-step pipeline, the latter separated from the
+    // block's closer by the whitespace N3e's arming must survive to reach it.
+    assert_streams_soundly_under_l2(
+        "world_1",
+        "{|let c = spider::world_1::model::default::Country.all(); \
+         spider::world_1::model::default::Countrylanguage.all() }",
     );
 }
 

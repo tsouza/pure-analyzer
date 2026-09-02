@@ -1,6 +1,8 @@
-//! Fuzz the L2 **liveness** invariant (`docs/spec/schema.md` §6.7, issue #275):
-//! over a vocabulary that can spell the continuations the overlay leaves legal,
-//! the schema overlay may narrow the per-step mask but may never empty it.
+//! Fuzz the two L2 **liveness** invariants (`docs/spec/schema.md` §6.7, issues
+//! #275 and #296): over a vocabulary that can spell the continuations the overlay
+//! leaves legal, the schema overlay may narrow the per-step mask but may never
+//! empty it — nor, at a term it agrees is already whole, clear a way of ending
+//! that term which L1 admits.
 //!
 //! A mask with no vocabulary bit *and* no EOS bit hands the host nothing to
 //! sample and no way to stop — a decoder deadlock rather than a constraint. The
@@ -29,9 +31,21 @@
 use libfuzzer_sys::fuzz_target;
 use purecard::{CompiledGrammar, DecoderSession, Schema, Vocab};
 
+#[path = "../../tests/support/completed_term.rs"]
+mod completed_term;
+
+use completed_term::{TERM_END_BYTES, is_completed_term};
+
 /// The printable ASCII range the vocabulary spans, one token per byte.
 const FIRST_BYTE: u8 = 0x20;
 const LAST_BYTE: u8 = 0x7e;
+
+/// The token id of `byte` in the single-byte vocabulary above: one token per
+/// printable ASCII byte, in order, so an id is a byte's offset from
+/// [`FIRST_BYTE`]. Every [`TERM_END_BYTES`] entry is inside that range.
+fn id_of(byte: u8) -> u32 {
+    u32::from(byte - FIRST_BYTE)
+}
 
 /// The committed schema fixture the walk narrows against.
 const SCHEMA_JSON: &str = include_str!("../../tests/fixtures/schemas/world_1.json");
@@ -63,6 +77,10 @@ fuzz_target!(|data: &[u8]| {
         let mut plain = DecoderSession::new(grammar);
 
         for &choice in data {
+            let completed_term = session
+                .active_l2_position()
+                .as_ref()
+                .is_some_and(is_completed_term);
             let complete = session.is_complete();
             let mask = session.allowed_mask();
             let live: Vec<u32> = mask.iter_ones().collect();
@@ -89,6 +107,20 @@ fuzz_target!(|data: &[u8]| {
                 live.iter().all(|id| l1_mask.test(*id)),
                 "L2 widened L1: the overlay admitted a token the grammar does not"
             );
+
+            // The completed-term half (issue #296): a rule that permits only the
+            // *continuations* of a whole term leaves the mask non-empty and still
+            // strands the stream, which the assertion above cannot see. Nothing is
+            // outstanding at such a position, so ending the term is L1's call.
+            if completed_term {
+                for id in TERM_END_BYTES.iter().map(|byte| id_of(*byte)).chain([eos]) {
+                    assert!(
+                        !l1_mask.test(id) || mask.test(id),
+                        "the term is whole and L1 ends it with token {id}, but L2 cleared it: \
+                         the stream can be extended here and never ended"
+                    );
+                }
+            }
 
             // The fuzzer's byte picks the next token *out of the set L2 allows*, so
             // the walk can only ever reach positions the overlay itself endorsed.

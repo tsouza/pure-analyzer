@@ -1,6 +1,7 @@
 //! L2 **liveness** (`docs/spec/schema.md` §6.7): over a vocabulary complete over
 //! the grammar's alphabet, the schema overlay may narrow the per-step mask, but it
-//! may never empty it.
+//! may never empty it — nor, at a term it agrees is already whole, mask away every
+//! way of ending that term.
 //!
 //! A mask with no vocabulary bit *and* no EOS bit hands the host nothing to
 //! sample and no way to stop — a decoder deadlock, not a constraint (issue
@@ -8,6 +9,14 @@
 //! not: its subset check iterates `l2_mask.iter_ones()`, which does nothing at
 //! all on an empty mask, so it passed over the defect. This lane asserts the
 //! missing half, and pins the four witnesses that violated it.
+//!
+//! The second invariant is the same failure one degree weaker, and is what issue
+//! #296 was: a rule written as a permit set of *continuations* left the mask
+//! non-empty but cleared every **terminator**, so a stream that had already
+//! produced a whole term could only be extended, never ended. At a completed-term
+//! position no obligation is outstanding — no arity to meet, no name to finish —
+//! so the only remaining question is which frame is open, and that is the
+//! byte-PDA's to answer: whatever terminator L1 admits there, L2 must admit too.
 //!
 //! **The precondition is load-bearing, and it is why this lane is byte-granular.**
 //! A rule that narrows to a set of *names* can only leave a live token if some
@@ -44,6 +53,8 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
+#[path = "support/completed_term.rs"]
+mod completed_term;
 #[path = "support/corpus.rs"]
 mod corpus;
 #[path = "support/error.rs"]
@@ -57,6 +68,7 @@ mod l2_rules;
 #[path = "support/lex.rs"]
 mod lex;
 
+use completed_term::{TERM_END_BYTES, is_completed_term};
 use corpus::load_gold;
 use fixture_dbs::FIXTURE_DBS;
 use l2::load_schema;
@@ -374,19 +386,35 @@ fn a_token_that_ends_on_the_sigil_still_leaves_a_live_mask() {
     );
 }
 
-/// Assert the three per-step invariants at the sessions' current position, and
-/// record which rule is active there.
+/// What the walk actually exercised, so the assertions below can be shown to be
+/// about positions that were genuinely at risk rather than never reached.
+#[derive(Default)]
+struct Coverage {
+    /// Every rule kind active at some visited position.
+    rules: BTreeSet<&'static str>,
+    /// How many times a terminator was compared at a completed term *because L1
+    /// admitted it there* — the only comparisons that can fail. Reaching the rule
+    /// is not enough: a position where L1 ends nothing tests nothing.
+    term_end_checks: usize,
+}
+
+/// Assert the per-step invariants at the sessions' current position, and
+/// record what was exercised there.
 fn assert_step_invariants(
     l2: &mut DecoderSession<'_>,
     l1: &mut DecoderSession<'_>,
     eos: u32,
     db_id: &str,
     text: &str,
-    rules_seen: &mut BTreeSet<&'static str>,
+    coverage: &mut Coverage,
 ) -> Vec<u32> {
     if let Some(kind) = l2.active_l2_position().as_ref().and_then(rule_kind) {
-        rules_seen.insert(kind);
+        coverage.rules.insert(kind);
     }
+    let completed_term = l2
+        .active_l2_position()
+        .as_ref()
+        .is_some_and(is_completed_term);
     let complete = l2.is_complete();
     let l1_mask = l1.allowed_mask().clone();
     let l2_mask = l2.allowed_mask();
@@ -408,6 +436,26 @@ fn assert_step_invariants(
         l2_mask.test(eos),
         "({db_id}) after {text:?}: the published EOS bit and `is_complete` disagree"
     );
+    // The completed-term half: a whole term may always be *ended* any way the
+    // byte-PDA can end it here.
+    if completed_term {
+        for byte in TERM_END_BYTES {
+            let id = id_of(*byte);
+            coverage.term_end_checks += usize::from(l1_mask.test(id));
+            assert!(
+                !l1_mask.test(id) || l2_mask.test(id),
+                "({db_id}) after {text:?}: the term is whole and L1 ends it with {:?}, but L2 \
+                 cleared it — the stream can be extended here and never ended",
+                char::from(*byte)
+            );
+        }
+        coverage.term_end_checks += usize::from(l1_mask.test(eos));
+        assert!(
+            !l1_mask.test(eos) || l2_mask.test(eos),
+            "({db_id}) after {text:?}: the term is whole and L1 admits the end of the stream, \
+             but L2 cleared the EOS bit"
+        );
+    }
     ids
 }
 
@@ -436,7 +484,7 @@ fn gold_queries(db_id: &str) -> Vec<String> {
 fn the_l2_mask_is_never_empty_at_a_position_l2_admissible_tokens_reach() {
     let (vocab, eos) = byte_vocab();
     let grammar = CompiledGrammar::compile(vocab.clone());
-    let mut rules_seen: BTreeSet<&'static str> = BTreeSet::new();
+    let mut coverage = Coverage::default();
     let mut steps = 0usize;
 
     for db_id in FIXTURE_DBS {
@@ -462,14 +510,8 @@ fn the_l2_mask_is_never_empty_at_a_position_l2_admissible_tokens_reach() {
                 let cut = (rng.next() % (bytes.len() as u64 + 1)) as usize;
                 for &byte in &bytes[..cut] {
                     steps += 1;
-                    let ids = assert_step_invariants(
-                        &mut l2,
-                        &mut l1,
-                        eos,
-                        db_id,
-                        &text,
-                        &mut rules_seen,
-                    );
+                    let ids =
+                        assert_step_invariants(&mut l2, &mut l1, eos, db_id, &text, &mut coverage);
                     let id = id_of(byte);
                     assert!(
                         ids.contains(&id),
@@ -486,7 +528,7 @@ fn the_l2_mask_is_never_empty_at_a_position_l2_admissible_tokens_reach() {
             for _ in 0..WALK_MAX_TOKENS {
                 steps += 1;
                 let ids =
-                    assert_step_invariants(&mut l2, &mut l1, eos, db_id, &text, &mut rules_seen);
+                    assert_step_invariants(&mut l2, &mut l1, eos, db_id, &text, &mut coverage);
                 let pick = ids[(rng.next() % ids.len() as u64) as usize];
                 if pick == eos {
                     break;
@@ -500,13 +542,30 @@ fn the_l2_mask_is_never_empty_at_a_position_l2_admissible_tokens_reach() {
     }
 
     // Non-vacuity, tied to meaning rather than to a tuned number: the walk must
-    // have reached the two rules the defect lived in. A search that never armed
-    // N4b or never bound a variable would assert the invariant over positions that
-    // were never at risk.
-    for rule in ["RefVar", "LogicalOperand"] {
+    // have reached the rules the two defects lived in — N4b and S2 for the
+    // empty-mask half (#275), and all three completed-term rules for the
+    // terminator half (#296). A search that never armed N4b, never bound a
+    // variable, or never closed a call would assert the invariants over positions
+    // that were never at risk.
+    for rule in [
+        "RefVar",
+        "LogicalOperand",
+        "SourceExtent",
+        "StoreResult",
+        "StrOperator",
+    ] {
         assert!(
-            rules_seen.contains(rule),
-            "the walk never reached the {rule} rule; {steps} steps visited {rules_seen:?}"
+            coverage.rules.contains(rule),
+            "the walk never reached the {rule} rule; {steps} steps visited {:?}",
+            coverage.rules
         );
     }
+    // Reaching those rules is necessary but not sufficient for the terminator
+    // half: the comparison only bites where L1 itself ends the term, so the walk
+    // has to have found such a position at least once.
+    assert!(
+        coverage.term_end_checks > 0,
+        "no completed term was ever reached at a position where L1 admits a terminator, \
+         so the terminator invariant was asserted vacuously over {steps} steps"
+    );
 }
