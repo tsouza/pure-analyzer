@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/) and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.2.1](https://github.com/tsouza/pure-analyzer/compare/purecard-v0.2.0...purecard-v0.2.1) - 2026-09-02
+
+No functional changes to `purecard` itself. Re-cut purely to carry a release-
+tooling fix through to a published PyPI wheel: 0.2.0's release build put a
+stray, non-manylinux-tagged `linux_x86_64` wheel into the same output
+directory as the real x86_64 Linux wheel (see #344), which PyPI's upload
+validator rejects outright. crates.io already has 0.2.0 (unaffected by the
+bug — wheels are a PyPI-only concern) and it stays published, in place; PyPI
+publishes only from this version onward.
+
 ## [0.2.0](https://github.com/tsouza/pure-analyzer/releases/tag/purecard-v0.2.0) - 2026-09-02
 
 <!--
