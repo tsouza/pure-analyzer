@@ -47,6 +47,12 @@ enum Command {
         #[arg(long)]
         refresh: bool,
     },
+    /// Verify frozen M4a comparison evidence; `--refresh` also checks decisive rows live.
+    AnalysisComparisonCorpus {
+        /// Verify decisive witnesses against an exactly pinned Legend engine before replaying.
+        #[arg(long)]
+        refresh: bool,
+    },
     /// Run the default and feature-gated mutation-test passes, unsharded.
     TestMutation,
     /// Run one shard of the workspace-wide mutation pass (CI matrix only).
@@ -118,6 +124,7 @@ fn main() -> Result<()> {
         Command::TestRealModel => tasks::test_real_model(),
         Command::ParserDifferential { refresh } => tasks::parser_differential(refresh),
         Command::AnalysisSemanticCorpus { refresh } => tasks::analysis_semantic_corpus(refresh),
+        Command::AnalysisComparisonCorpus { refresh } => tasks::analysis_comparison_corpus(refresh),
         Command::TestMutation => tasks::test_mutation(),
         Command::TestMutationShard { index, total } => tasks::test_mutation_shard(index, total),
         Command::TestMutationDiffShard { index, total, diff } => {
