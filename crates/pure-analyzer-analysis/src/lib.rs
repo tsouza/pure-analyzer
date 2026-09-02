@@ -16,6 +16,7 @@ mod relational;
 mod validate;
 pub use canonical::{
     CanonicalEmissionIndecision, CanonicalEmissionOutcome, CanonicalPure,
+    emit_canonical_lowered_query, emit_canonical_lowered_query_with_budget,
     emit_canonical_normal_form, emit_canonical_normalization,
 };
 pub use column_selectors::{

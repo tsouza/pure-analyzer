@@ -68,11 +68,24 @@ enum Command {
         #[arg(long, requires = "fix", conflicts_with_all = ["check", "stdout"])]
         diff: bool,
     },
-    /// Canonical formatting with transactional in-place file updates where atomic path exchange is
-    /// available.
+    /// Lossless layout formatting with transactional in-place file updates where atomic path
+    /// exchange is available.
+    #[command(
+        after_long_help = "`fmt --canonical` emits a proven relational normal form to standard output without writing input. Exit status: 0 emitted; 2 indecisive."
+    )]
     Fmt {
         /// Input files/globs; `-` reads one source from stdin.
         files: Vec<String>,
+        /// Emit only a proven relational normal form. This never writes files and does not
+        /// preserve source layout or comments.
+        #[arg(
+            long,
+            conflicts_with_all = ["check", "stdout", "diff", "line_width"]
+        )]
+        canonical: bool,
+        /// PMCD JSON and/or Pure-model-file model sources for `--canonical`; may repeat.
+        #[arg(long, requires = "canonical")]
+        model: Vec<String>,
         /// Check formatting without modifying files; exit non-zero if any file
         /// would change.
         #[arg(long, conflicts_with_all = ["stdout", "diff"])]
@@ -205,9 +218,15 @@ fn run(cli: Cli) -> Result<u8, Failure> {
         ),
         Command::Fmt {
             files,
+            canonical: true,
+            ..
+        } => workflow::canonical_format(&files, &resolved),
+        Command::Fmt {
+            files,
             check,
             stdout,
             diff,
+            canonical: false,
             ..
         } => workflow::format(
             &files,
@@ -243,7 +262,14 @@ fn command_overrides(command: &Option<Command>, flags: &ConfigFlags) -> ConfigOv
     };
     let models = match command {
         Some(
-            Command::Lint { model, .. } | Command::Eq { model, .. } | Command::Diff { model, .. },
+            Command::Lint { model, .. }
+            | Command::Fmt {
+                canonical: true,
+                model,
+                ..
+            }
+            | Command::Eq { model, .. }
+            | Command::Diff { model, .. },
         ) => model.iter().map(PathBuf::from).collect(),
         _ => Vec::new(),
     };
@@ -302,6 +328,74 @@ mod tests {
         match cli.command {
             Some(Command::Lint { model, .. }) => assert_eq!(model, vec!["a.json", "b.pure"]),
             other => panic!("expected Lint, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn canonical_format_parses_models_and_rejects_layout_modes() {
+        let cli = Cli::try_parse_from([
+            "pure-analyzer",
+            "fmt",
+            "query.pure",
+            "--canonical",
+            "--model",
+            "model.json",
+            "--model",
+            "domain.pure",
+        ])
+        .expect("parses canonical formatter mode");
+        match cli.command {
+            Some(Command::Fmt {
+                canonical, model, ..
+            }) => {
+                assert!(canonical);
+                assert_eq!(model, vec!["model.json", "domain.pure"]);
+            }
+            other => panic!("expected canonical Fmt, got {other:?}"),
+        }
+
+        for arguments in [
+            vec![
+                "pure-analyzer",
+                "fmt",
+                "query.pure",
+                "--canonical",
+                "--check",
+            ],
+            vec![
+                "pure-analyzer",
+                "fmt",
+                "query.pure",
+                "--canonical",
+                "--stdout",
+            ],
+            vec![
+                "pure-analyzer",
+                "fmt",
+                "query.pure",
+                "--canonical",
+                "--diff",
+            ],
+            vec![
+                "pure-analyzer",
+                "fmt",
+                "query.pure",
+                "--canonical",
+                "--line-width",
+                "80",
+            ],
+            vec![
+                "pure-analyzer",
+                "fmt",
+                "query.pure",
+                "--model",
+                "model.json",
+            ],
+        ] {
+            assert!(
+                Cli::try_parse_from(arguments).is_err(),
+                "canonical formatter accepted an incompatible invocation"
+            );
         }
     }
 
