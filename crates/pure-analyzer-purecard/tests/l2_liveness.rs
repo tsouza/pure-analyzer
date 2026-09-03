@@ -98,16 +98,22 @@ const WITNESS_BLOCK_ANCHOR: &str = "{|";
 const REFVAR_SIGIL: u8 = b'$';
 
 /// The prefix of the operand-class family's witness, up to the armed operand
-/// slot: `||` arms N4b's Boolean operand, and `let->x&&B` is the shortest walk
-/// that reaches an armable value position (delta-minimized from a randomly
-/// generated witness).
+/// slot: `||` arms N4b's Boolean operand, and `let->x()&&B` is the shortest
+/// walk that reaches an armable value position (delta-minimized from a
+/// randomly generated witness).
 ///
 /// The witness itself continued `.`, which opens a leading-dot float (`.5`) and
 /// is not a number *token*, so it slipped past N4b's whole-token classifier —
 /// leaving the byte-PDA at `NeedFracDigit`, which admits only digits, exactly the
 /// class N4b masks. The rule now clears the openers alongside the numbers they
 /// open, so the deadlocked position is no longer reachable at all.
-const WITNESS_OPERAND_SLOT: &str = "|let->x&&B||";
+///
+/// `x`'s call parens (absent from the original delta-minimized witness) are
+/// load-bearing since issue #369: a `->`-step target with no argument list is
+/// itself grammar-illegal (the engine requires `name(…)`), so a bare `->x`
+/// no longer streams past `x` at all — the shortest surviving walk to this
+/// same armed slot re-adds the call.
+const WITNESS_OPERAND_SLOT: &str = "|let->x()&&B||";
 
 /// The numeric-literal openers a Boolean operand slot must clear with the numbers
 /// they open (`NUMBER_OPENERS` in `src/schema/narrow.rs`).

@@ -444,6 +444,32 @@ pub enum State {
     /// `over(~[k: t::A[*]|$k.k])` and the same shape with no `$` on the body
     /// variable are each "no viable alternative" past the binder (issue #368).
     AfterRelColLambdaBinder,
+    /// An identifier reached from the [`AfterArrow`](State::AfterArrow) anchor —
+    /// a pipeline `->`-step's own target name (`->filter`, `->model`,
+    /// `->tableReference`). The same byte class as
+    /// [`InMemberIdent`](State::InMemberIdent), but closing into
+    /// [`AfterArrowName`](State::AfterArrowName) instead: every `->` in the
+    /// grammar introduces a *function application* — `name "(" … ")"`, never a
+    /// bare name — so a `->`-step's own target name is call-required in a way a
+    /// `.`/`$`-reached member name is not (issue #369).
+    InArrowIdent,
+    /// A completed **arrow-step name** — an identifier reached through a `->`,
+    /// past any trailing whitespace, that has not yet opened its own call. The
+    /// call's `(` is the *only* legal continuation; nothing else in the
+    /// completed-term hub's repertoire (`->`, `.`, `::`, an operator, a
+    /// separator, a closer) may follow, so a further `->` right off a bare
+    /// arrow-step name is a dead state — live-attested, `|t::A->b->c()`,
+    /// `|t::A.all()->x->project([p|$p.a],['a'])`,
+    /// `|t::A::p->w->m->A.all()->project([p|$p.a],['a'])` and
+    /// `|t::Db->model->A(%latest)->project([p|$p.a],['a'])` are each "no viable
+    /// alternative at input '->…->'" right at the second arrow, because the
+    /// engine requires every pipeline/navigation step to *apply* and never
+    /// accepts a bare arrow-step name as a connector's whole right-hand side
+    /// (issue #369). Unlike [`AfterMemberName`](State::AfterMemberName), this is
+    /// not a `completes_a_term` hub: an uncalled arrow-step name is not itself a
+    /// complete query either, exactly as the live engine's own grammar requires
+    /// the call.
+    AfterArrowName,
 }
 
 impl State {
@@ -541,6 +567,8 @@ impl State {
             State::AfterRelColColon => "AfterRelColColon",
             State::InRelColLambdaBinder => "InRelColLambdaBinder",
             State::AfterRelColLambdaBinder => "AfterRelColLambdaBinder",
+            State::InArrowIdent => "InArrowIdent",
+            State::AfterArrowName => "AfterArrowName",
         }
     }
 
@@ -642,13 +670,15 @@ impl State {
             State::AfterRelColColon => 83,
             State::InRelColLambdaBinder => 84,
             State::AfterRelColLambdaBinder => 85,
+            State::InArrowIdent => 86,
+            State::AfterArrowName => 87,
         }
     }
 
     /// The number of distinct automaton states — the length a per-state cache
     /// (`Vec<_>` keyed by [`index`](State::index)) must have. One more than the
     /// largest [`index`](State::index).
-    pub const COUNT: usize = 86;
+    pub const COUNT: usize = 88;
 
     /// Whether this state is a **completed-term hub** — an inter-lexeme position
     /// the automaton reaches by finishing a term, whichever kind of term it was.
@@ -731,7 +761,8 @@ impl State {
             | State::LetLe
             | State::LetLet
             | State::InRelColIdent
-            | State::InRelColLambdaBinder => Some(LexKind::Ident),
+            | State::InRelColLambdaBinder
+            | State::InArrowIdent => Some(LexKind::Ident),
             State::SawNumSign
             | State::InNumberInt
             | State::NeedFracDigit
@@ -1223,6 +1254,17 @@ fn step_in_member_ident(stack_top: Option<Frame>, byte: u8) -> Step {
     }
 }
 
+// A `->`-step's target-name identifier — [`step_in_member_ident`]'s sibling,
+// closing into [`State::AfterArrowName`] rather than
+// [`State::AfterMemberName`] (issue #369).
+fn step_in_arrow_ident(stack_top: Option<Frame>, byte: u8) -> Step {
+    if is_ident_tail(byte) {
+        Step::Next(State::InArrowIdent)
+    } else {
+        step(State::AfterArrowName, stack_top, byte)
+    }
+}
+
 // A completed identifier: the one name-only continuation, then everything a
 // completed term admits. Whitespace keeps the position a *name* position, so a
 // call written `foo (x)` still streams — the constraint is on what the `(` may
@@ -1259,6 +1301,20 @@ fn step_after_member_name(stack_top: Option<Frame>, byte: u8) -> Step {
         b if is_ws(b) => Step::Next(State::AfterMemberName),
         b'(' => Step::Push(Frame::Paren, State::ExpectValue),
         _ => step_after_value(stack_top, byte),
+    }
+}
+
+// A completed `->`-step target name that has not yet opened its own call. The
+// call's `(` is the *only* legal continuation — unlike
+// [`step_after_member_name`], nothing here delegates to [`step_after_value`]:
+// every `->` in the grammar introduces a function application, so a further
+// `->`/`.`/`::`/operator/separator/closer right off a bare arrow-step name has
+// no reading at all and is a dead state (issue #369).
+fn step_after_arrow_name(byte: u8) -> Step {
+    match byte {
+        b if is_ws(b) => Step::Next(State::AfterArrowName),
+        b'(' => Step::Push(Frame::Paren, State::ExpectValue),
+        _ => Step::Dead,
     }
 }
 
@@ -1743,7 +1799,10 @@ fn step_after_dot(byte: u8) -> Step {
 fn step_after_arrow(byte: u8) -> Step {
     match byte {
         b if is_ws(b) => Step::Next(State::AfterArrow),
-        b if is_ident_start(b) => Step::Next(State::InMemberIdent),
+        // A `->`-step's own target name, not a generic member name: it closes
+        // into `AfterArrowName`, not `AfterMemberName`, so its own completion
+        // is call-required (issue #369).
+        b if is_ident_start(b) => Step::Next(State::InArrowIdent),
         _ => Step::Dead,
     }
 }
@@ -2123,6 +2182,8 @@ pub fn step(state: State, stack_top: Option<Frame>, byte: u8) -> Step {
         State::AfterRelColColon => step_after_rel_col_colon(byte),
         State::InRelColLambdaBinder => step_in_rel_col_lambda_binder(byte),
         State::AfterRelColLambdaBinder => step_after_rel_col_lambda_binder(byte),
+        State::InArrowIdent => step_in_arrow_ident(stack_top, byte),
+        State::AfterArrowName => step_after_arrow_name(byte),
     }
 }
 
@@ -2232,8 +2293,15 @@ impl Pda {
     /// bit — gold soundness is unaffected (every gold query ends in `)` →
     /// [`AfterValue`](State::AfterValue), still accepting). Because the
     /// empty-stack guard holds, the only newly-reachable completion is a trailing
-    /// top-level identifier (`|X.all()->name`); a top-level number/string/date
-    /// never sits over an empty stack, so those stay non-accepting in practice.
+    /// top-level *dot-navigated* identifier (`|X.name`,
+    /// [`InMemberIdent`](State::InMemberIdent)'s own terminal widening); a
+    /// top-level number/string/date never sits over an empty stack, so those
+    /// stay non-accepting in practice. A trailing **arrow-step** name
+    /// (`|X.all()->name`) is deliberately excluded from this widening:
+    /// [`InArrowIdent`](State::InArrowIdent) closes into
+    /// [`AfterArrowName`](State::AfterArrowName), which is not a
+    /// `completes_a_term` hub, so an uncalled arrow-step name stays
+    /// non-accepting exactly as the live engine requires its call (issue #369).
     #[must_use]
     pub fn is_accepting(&self) -> bool {
         self.stack.is_empty()
@@ -2452,6 +2520,8 @@ pub const ALL_STATES: [State; State::COUNT] = [
     State::AfterRelColColon,
     State::InRelColLambdaBinder,
     State::AfterRelColLambdaBinder,
+    State::InArrowIdent,
+    State::AfterArrowName,
 ];
 
 #[cfg(test)]
@@ -3150,16 +3220,91 @@ mod tests {
     #[test]
     fn a_trailing_top_level_identifier_completes() {
         // The one newly-reachable completion the EOS widening adds: a top-level
-        // step whose last token is a bare identifier (`->name`) with every frame
-        // already closed. `InIdent` over an empty stack now accepts.
-        assert!(accepts("|X.all()->name"));
+        // *dot-navigated* property name (`.name`) with every frame already
+        // closed. `InMemberIdent` over an empty stack now accepts — unlike an
+        // arrow-step name (issue #369, see the tests below), a dot-navigated
+        // name is not itself required to open a call.
+        assert!(accepts("|X.name"));
         let mut pda = Pda::new();
-        for &byte in b"|X.all()->name" {
+        for &byte in b"|X.name" {
             pda.advance(byte).expect("live");
         }
         assert_eq!(pda.state(), State::InMemberIdent);
         assert!(pda.stack_top().is_none());
         assert!(pda.is_accepting());
+    }
+
+    #[test]
+    fn a_trailing_top_level_arrow_step_name_never_completes() {
+        // Issue #369's counterpart to the dot-navigated case above: a `->`-step
+        // name with no call parens is not itself a complete query — the engine
+        // requires the call. `InArrowIdent` over an empty stack stays
+        // non-accepting.
+        assert!(!accepts("|X.all()->name"));
+        let mut pda = Pda::new();
+        for &byte in b"|X.all()->name" {
+            pda.advance(byte).expect("live");
+        }
+        assert_eq!(pda.state(), State::InArrowIdent);
+        assert!(pda.stack_top().is_none());
+        assert!(!pda.is_accepting());
+    }
+
+    // Issue #369: a pipeline `->`-step target with no argument list at all
+    // (`->name->`) is not a legal pipeline step — every `->` in the grammar
+    // introduces a function application, `name "(" … ")"`, and the engine
+    // rejects a bare arrow-step name followed by another `->` with "no viable
+    // alternative at input '->name->'". Each of these is the issue's own
+    // live-verified (finos/legend-engine-server 4.113.0) rejection witness.
+    #[test]
+    fn issue_369_bare_pipeline_step_name_dies() {
+        assert!(dies("|t::A->b->c()"));
+    }
+
+    #[test]
+    fn issue_369_bare_class_nav_step_name_dies() {
+        assert!(dies("|t::A.all()->x->project([p|$p.a],['a'])"));
+    }
+
+    #[test]
+    fn issue_369_chained_bare_step_names_die() {
+        assert!(dies("|t::A::p->w->m->A.all()->project([p|$p.a],['a'])"));
+    }
+
+    #[test]
+    fn issue_369_bare_step_name_before_milestoned_call_dies() {
+        assert!(dies("|t::Db->model->A(%latest)->project([p|$p.a],['a'])"));
+    }
+
+    // The issue's own "control" line — the same shape with every step
+    // properly called — must stay admitted.
+    #[test]
+    fn issue_369_control_line_still_accepts() {
+        assert!(accepts("|t::A.all()->project([p|$p.a],['a'])"));
+    }
+
+    #[test]
+    fn issue_369_chained_arrow_steps_with_calls_accept() {
+        assert!(accepts("|t::A.all()->x()->project([p|$p.a],['a'])"));
+    }
+
+    #[test]
+    fn issue_369_milestoned_arrow_target_accepts() {
+        assert!(accepts("|t::Db->model(%latest)->project([p|$p.a],['a'])"));
+    }
+
+    // Legitimate dot-navigation chains (a source's own property access, never a
+    // `->` step) must stay exactly as permissive as before this fix.
+    #[test]
+    fn issue_369_dot_navigation_chain_unaffected() {
+        assert!(accepts("|t::A.all()->filter(x|$x.fk0.fk1.fk2 == 1)"));
+    }
+
+    #[test]
+    fn issue_369_arm_a_relational_envelope_unaffected() {
+        assert!(accepts(
+            "|db::Db->tableReference('default', 'T')->tableToTDS()->limit(5)"
+        ));
     }
 
     #[test]

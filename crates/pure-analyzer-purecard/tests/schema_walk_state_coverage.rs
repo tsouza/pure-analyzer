@@ -148,6 +148,15 @@ const EXPECTED_UNREACHABLE: &[&str] = &[
 /// in here (constitution §6): this pin only proves the state is — and, absent
 /// that follow-up, remains — reachable, exactly as `DateFrac` above.
 ///
+/// `AfterArrowName` (issue #369's own new state — the token boundary right after
+/// a completed `->`-step name, past any trailing whitespace, that has not yet
+/// opened its call) joins for the identical reason: it is reachable — a
+/// structural whitespace token off `STRUCTURAL_BYTES` right after a step name's
+/// own lexeme closes lands there — but the generator's own step skeleton glues a
+/// step name directly onto its call's `(` (`filter(`, never `filter (`), so no
+/// generated walk happens to sample the space there. This walk forces exactly
+/// that byte.
+///
 /// Each walk is a token list over the db's own vocabulary, and every token must be
 /// admissible where it sits: a stale probe reddens the lane instead of quietly
 /// covering nothing.
@@ -184,6 +193,21 @@ const PROBE_WALKS: &[(&str, &[&[u8]])] = &[
             b"|",
             b"[",
             b"*",
+        ],
+    ),
+    (
+        "battle_death",
+        &[
+            b"|",
+            b"spider::battle_death::model::default::Battle",
+            b".",
+            b"all",
+            b"(",
+            b")",
+            b"-",
+            b">",
+            b"filter",
+            b" ",
         ],
     ),
     (

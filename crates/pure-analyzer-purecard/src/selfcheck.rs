@@ -230,7 +230,12 @@ mod tests {
 
     #[test]
     fn a_faithful_vocab_passes_an_explicit_sample_set() {
-        let samples: &[&[u8]] = &[b"|X.all()->take(3)", b"|X.all()->name"];
+        // The second sample still exercises a query ending on a bare trailing
+        // identifier with no closing paren (the property the set was written to
+        // cover) — via dot-navigation rather than a `->`-step, since a `->`-step
+        // target with no call is grammar-illegal and no longer self-checks
+        // (issue #369).
+        let samples: &[&[u8]] = &[b"|X.all()->take(3)", b"|X.name"];
         let grammar = CompiledGrammar::compile(vocab_of(samples));
         assert_eq!(self_check(&grammar, samples), Ok(()));
     }

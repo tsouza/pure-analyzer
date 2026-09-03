@@ -51,8 +51,14 @@ use purecard::{ByteRecognizer, CompiledGrammar, DecodeError, DecoderSession, Voc
 // (`AfterRelColColon`/`InRelColLambdaBinder`/`AfterRelColLambdaBinder`)
 // narrowing arm-R's binder-after-colon position off the generic typed-binder
 // `AfterColon` machinery — another real automaton change, not a re-pin. (407
-// was the pre-#368 count.)
-const EXPECTED_REACHABLE_CONFIGURATIONS: usize = 428;
+// was the pre-#368 count.) Issue #369 added `InArrowIdent`/`AfterArrowName`,
+// splitting a `->`-step's own target name off the generic
+// `InMemberIdent`/`AfterMemberName` pair so it can no longer stream straight
+// into a second `->` with no call in between — a real automaton change,
+// reviewed in that PR, not a silent re-pin. Landed independently of #368 and
+// merged together here, so this count is the two changes' measured
+// intersection, not a sum of their separately-reported deltas.
+const EXPECTED_REACHABLE_CONFIGURATIONS: usize = 442;
 
 /// Arm-A (relational envelope) gold record count (mirrors
 /// `tests/soundness_replay.rs`).

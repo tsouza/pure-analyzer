@@ -241,3 +241,7 @@
 {"q": "{|Trade.all()->take(1)('x')}", "legend": "parse_fail", "dimension": "negatives-and-malformed", "note": "juxtaposed application off a call's own result - a call's paren binds to a name"}
 {"q": "{|Trade.all()->take(1)['x']}", "legend": "parse_fail", "dimension": "negatives-and-malformed", "note": "bracket off a call's own result - engine has no positional index, only a type's multiplicity"}
 {"q": "|Trade.all()->take(1)('x')", "legend": "parse_fail", "dimension": "negatives-and-malformed", "note": "juxtaposed application at a simple query's top level"}
+{"q": "|t::A->b->c()", "legend": "parse_fail", "dimension": "negatives-and-malformed", "note": "issue #369: a pipeline step target with no argument list at all, followed immediately by another -> step"}
+{"q": "|t::A.all()->x->project([p|$p.a],['a'])", "legend": "parse_fail", "dimension": "negatives-and-malformed", "note": "issue #369: same shape as ->b->c(), off a class-navigation source rather than a store"}
+{"q": "|t::A::p->w->m->A.all()->project([p|$p.a],['a'])", "legend": "parse_fail", "dimension": "negatives-and-malformed", "note": "issue #369: two chained uncalled step names in a row"}
+{"q": "|t::Db->model->A(%latest)->project([p|$p.a],['a'])", "legend": "parse_fail", "dimension": "negatives-and-malformed", "note": "issue #369: an uncalled step name immediately before a later, milestoned, properly-called one"}
