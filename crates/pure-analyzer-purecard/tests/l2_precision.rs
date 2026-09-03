@@ -3932,18 +3932,31 @@ fn n4c_still_admits_concatenation_comparison_and_the_step_arrow() {
 /// categories: `sum`/`pair` are primitive-scalar entries, `restrict` a
 /// relation one.
 ///
-/// L1 admits end-of-stream after any bare arrow-method name (the byte-PDA has no
-/// mandatory-call rule for one), and the engine rejects every such stream — at
-/// the *parser*, live: `|…::Country.all()->restrict` → "no viable alternative at
-/// input '->restrict}'". So the counterfactual below asserts only what it can:
-/// a name this rule does not deny keeps whatever completion L1 gives it, which
-/// is what makes the three denials above the rule's own doing and not L1's.
+/// Before issue #369, L1 admitted end-of-stream after *any* bare arrow-method
+/// name (the byte-PDA had no mandatory-call rule for one), and this test's own
+/// counterfactual — `count`, a name the rule does not deny — proved the three
+/// denials above were `admits_eos`'s own doing rather than L1's, since `count`
+/// alone kept whatever completion L1 gave it. Issue #369 closed that L1 gap
+/// directly: every `->`-step name, denied or not, is now grammar-required to
+/// open a call (`name(`…`)`) before anything else may follow, including EOS —
+/// live: `|…::Country.all()->restrict` and `|…::Country.all()->count` are each
+/// "no viable alternative at input '->…'" against the pinned engine. So EOS is
+/// now denied here twice over — by L1 unconditionally, and by `admits_eos`
+/// specifically for the three denied names — and this test's job narrows to
+/// confirming the two never contradict each other. N3f's *own* distinguishing
+/// behavior (denying only `sum`/`pair`/`restrict`, and only their own call-open
+/// `(`, while every other extent method's call stays open) is exercised where
+/// L1 does not already settle it: `n3f_masks_every_extent_method_whose_receiver_category_a_class_extent_cannot_be`
+/// and `n3f_still_admits_what_a_class_extent_really_accepts`, both call-closed.
 #[test]
 fn n3f_forbids_a_stream_ending_on_a_denied_extent_method_name() {
     let extent = "|spider::world_1::model::default::Country.all()";
+    // A strict prefix is an open lexeme, not a denial — but per issue #369, L1
+    // itself now refuses EOS on any bare (uncalled) arrow-step name, prefix or
+    // whole, so this no longer distinguishes "denied" from "not yet closed".
     assert!(
-        walk_may_end("world_1", &format!("{extent}->su")),
-        "a strict prefix of a denied name is an open lexeme, not a denial"
+        !walk_may_end("world_1", &format!("{extent}->su")),
+        "a bare arrow-step name — even an open prefix — may not end the stream"
     );
     for denied in ["sum", "pair", "restrict"] {
         assert!(
@@ -3951,9 +3964,12 @@ fn n3f_forbids_a_stream_ending_on_a_denied_extent_method_name() {
             "a stream may not end on the denied name {denied:?}"
         );
     }
+    // `count` is not in N3f's deny set, yet it may no longer end the stream
+    // either: L1 alone already refuses it (issue #369), independent of N3f.
     assert!(
-        walk_may_end("world_1", &format!("{extent}->count")),
-        "a name the rule does not deny keeps whatever completion L1 gives it"
+        !walk_may_end("world_1", &format!("{extent}->count")),
+        "a bare arrow-step name may not end the stream even when the rule does \
+         not deny it — L1 requires the call regardless of N3f"
     );
 }
 
@@ -3973,9 +3989,13 @@ fn n3f_forbids_a_stream_ending_on_a_denied_extent_method_name() {
 /// receivers a `ScalarMethod` arms on — a string literal and a property
 /// navigation — are reachable only *inside* a call or a lambda, so an
 /// L1-accepting stream that reaches one still owes a `)` and can never end at
-/// this position at all. The two counterfactuals are what make the denial this
-/// rule's doing and not L1's: a strict prefix is an open lexeme, and a name this
-/// rule does not deny keeps whatever completion L1 gives it.
+/// this position at all. Since issue #369, every witness below is denied EOS by
+/// L1 alone (a bare arrow-step name always owes its call) as well as by N3i
+/// where it applies — see
+/// [`n3f_forbids_a_stream_ending_on_a_denied_extent_method_name`]'s doc for why
+/// that no longer separates "denied" from "not yet closed"; N3i's own
+/// distinguishing behavior stays covered by the call-closed receiver-category
+/// fixtures elsewhere in this file.
 #[test]
 fn n3i_forbids_a_stream_ending_on_a_denied_scalar_method_name() {
     const EXTENT: &str = "|spider::car_1::model::default::CarMakers.all()";
@@ -3984,8 +4004,8 @@ fn n3i_forbids_a_stream_ending_on_a_denied_scalar_method_name() {
         format!("{EXTENT}->count()"),
     ] {
         assert!(
-            walk_may_end("car_1", &format!("{receiver}->res")),
-            "a strict prefix of a denied name is an open lexeme, not a denial"
+            !walk_may_end("car_1", &format!("{receiver}->res")),
+            "a bare arrow-step name — even an open prefix — may not end the stream"
         );
         for denied in ["restrict", "tableToTDS", "renameColumns"] {
             assert!(
@@ -3995,9 +4015,10 @@ fn n3i_forbids_a_stream_ending_on_a_denied_scalar_method_name() {
         }
         for kept in ["count", "sum", "pair", "agg"] {
             assert!(
-                walk_may_end("car_1", &format!("{receiver}->{kept}")),
-                "{kept:?} is legal on a scalar receiver and must keep whatever \
-                 completion L1 gives it after {receiver}"
+                !walk_may_end("car_1", &format!("{receiver}->{kept}")),
+                "{kept:?} is legal on a scalar receiver but a bare arrow-step \
+                 name may still not end the stream after {receiver} — L1 \
+                 requires the call regardless of N3i"
             );
         }
     }

@@ -48,7 +48,12 @@ use purecard::{ByteRecognizer, CompiledGrammar, DecodeError, DecoderSession, Voc
 // automaton change, reviewed in that PR, not a silent re-pin. (325 was the
 // pre-#361 count, itself already grown from 323 by issue #352's own
 // `let`-binder-value states.)
-const EXPECTED_REACHABLE_CONFIGURATIONS: usize = 407;
+// Issue #369 added `InArrowIdent`/`AfterArrowName`, splitting a `->`-step's own
+// target name off the generic `InMemberIdent`/`AfterMemberName` pair so it can
+// no longer stream straight into a second `->` with no call in between — a real
+// automaton change, reviewed in that PR, not a silent re-pin. (407 was the
+// pre-#369 count.)
+const EXPECTED_REACHABLE_CONFIGURATIONS: usize = 421;
 
 /// Arm-A (relational envelope) gold record count (mirrors
 /// `tests/soundness_replay.rs`).

@@ -25,10 +25,35 @@
         {
           "action": {
             "kind": "next",
-            "state": "InMemberIdent"
+            "state": "InArrowIdent"
           },
           "match": {
             "kind": "ident_start"
+          }
+        }
+      ]
+    },
+    "AfterArrowName": {
+      "accepting": false,
+      "rules": [
+        {
+          "action": {
+            "kind": "next",
+            "state": "AfterArrowName"
+          },
+          "match": {
+            "kind": "whitespace"
+          }
+        },
+        {
+          "action": {
+            "kind": "push",
+            "frame": "Paren",
+            "state": "ExpectValue"
+          },
+          "match": {
+            "kind": "exact",
+            "byte": 40
           }
         }
       ]
@@ -1534,6 +1559,29 @@
           "match": {
             "byte": 33,
             "kind": "exact"
+          }
+        }
+      ]
+    },
+    "InArrowIdent": {
+      "accepting": false,
+      "rules": [
+        {
+          "action": {
+            "kind": "next",
+            "state": "InArrowIdent"
+          },
+          "match": {
+            "kind": "ident_tail"
+          }
+        },
+        {
+          "action": {
+            "kind": "goto",
+            "state": "AfterArrowName"
+          },
+          "match": {
+            "kind": "any"
           }
         }
       ]

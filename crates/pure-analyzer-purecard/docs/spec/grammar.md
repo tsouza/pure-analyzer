@@ -338,6 +338,50 @@ here so a later phase does not re-derive it:
   `differential_l1.rs`'s `KNOWN_DIVERGENCES` with its own decision, not folded into
   a precision phase.
 
+**Tightened in issue #369 (also removed from the over-approximation list).**
+Every `->` in the grammar introduces a function application — `pipeline`'s own
+`step`, `term`'s `collapse`/`fn`, `reduceExpr`'s `reducer`, `cmp`'s `boolPred`,
+`colRename`'s `pair` — and every one of those productions spells `name "(" …
+")"`. There is no production anywhere in §5 where a `->`-introduced name stands
+on its own. L1 used to admit one anyway: a name reached through `AfterArrow`
+closed into the same completed-name hub (`AfterMemberName`) a `.`/`$`-reached
+member name closes into, and that hub's own repertoire — a further `->`, `.`,
+`::`, an operator, a separator, a closer — has nothing arm-specific about it, so
+a *second* `->` streamed right off the first name's bytes with no call in
+between. Live-verified against the pinned engine (4.113.0): `|t::A->b->c()`,
+`|t::A.all()->x->project([p|$p.a],['a'])`,
+`|t::A::p->w->m->A.all()->project([p|$p.a],['a'])` and
+`|t::Db->model->A(%latest)->project([p|$p.a],['a'])` are each "no viable
+alternative at input '->…->'" right at the second arrow, against a `200` control
+(`|t::A.all()->project([p|$p.a],['a'])`) that differs only in giving every step
+its call. Empirically this was the *dominant* rejection shape under live
+sampling — 58 of 81 engine-rejected, decoder-complete candidates in one run
+shared exactly this fault, ahead of every other precision gap combined.
+
+- **A `->`-introduced name is call-required.** `AfterArrow`'s own identifier now
+  closes into a new state, `AfterArrowName`, distinct from `AfterMemberName`: an
+  identifier reached from `.`/`$` still closes into the permissive
+  `AfterMemberName` (a `.`-navigated property legitimately takes a further `->`
+  with no call of its own, e.g. `$x.a->toOne()` — that half of the grammar is
+  unchanged), but one reached from `->` closes into `AfterArrowName`, whose only
+  live continuation — besides its own trailing whitespace — is the call's own
+  `(`. Everything else, including a further `->`, is a dead state. `AfterArrowName`
+  is deliberately *not* a `completes_a_term` hub either: an uncalled arrow-step
+  name is not a complete query, so a stream may not end on one — before this fix,
+  `Pda::is_accepting`'s own end-of-stream widening (`src/grammar/pda.rs`, the
+  value-boundary probe)
+  made `|X.all()->name` a false-positive completion with no engine counterpart.
+  Both the per-byte mask and end-of-stream now agree with the live grammar on
+  every witness above.
+- **Scope, precisely.** The two receiver-category L2 rules (N3f/N3i, `docs/spec/schema.md` §6.5) had
+  their own `admits_eos` mechanism clearing end-of-stream on a *denied* extent or
+  scalar method name specifically because L1 gave every arrow-step name — denied
+  or not — a false completion to clear. That L2 mechanism is unchanged and still
+  correct (it also denies the call-opening `(` a denied name may never reach,
+  independent of this fix); it is simply no longer the only line of defense
+  against a bare arrow-step name reaching end-of-stream, since L1 now refuses
+  that universally, before any L2 overlay is even consulted.
+
 ### 5.7 Observed construct inventory (the empirical spec)
 
 Counts in the **Queries** column are **distinct queries containing the construct

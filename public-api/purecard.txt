@@ -307,6 +307,7 @@ pub fn purecard::grammar::pda::Frame::from(T) -> T
 impl<T> pyo3::marker::Ungil for purecard::grammar::pda::Frame where T: core::marker::Send
 #[non_exhaustive] pub enum purecard::grammar::pda::State
 pub purecard::grammar::pda::State::AfterArrow
+pub purecard::grammar::pda::State::AfterArrowName
 pub purecard::grammar::pda::State::AfterBinder
 pub purecard::grammar::pda::State::AfterBinderMult
 pub purecard::grammar::pda::State::AfterBinderMultToken
@@ -342,6 +343,7 @@ pub purecard::grammar::pda::State::ExpectRelColSpecReq
 pub purecard::grammar::pda::State::ExpectSource
 pub purecard::grammar::pda::State::ExpectValue
 pub purecard::grammar::pda::State::ExpectValueReq
+pub purecard::grammar::pda::State::InArrowIdent
 pub purecard::grammar::pda::State::InBinder
 pub purecard::grammar::pda::State::InBinderMult
 pub purecard::grammar::pda::State::InBinderType
