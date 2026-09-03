@@ -2324,6 +2324,17 @@ impl ScopeTracker {
             }
             // S2: a `$` sigil's identifier names a variable, and the only names in
             // the graph are the ones this stream bound.
+            //
+            // Exempted inside a source method's own argument list (issue #367):
+            // a milestoning date variable (`Class.all($d)`) ordinarily names a
+            // binder the stream never sees (a function/service parameter, an
+            // enclosing `let`), so S2's bound-name set is the wrong universe to
+            // check it against here — the same reasoning that exempts the sigil
+            // itself in `masks_unbound_sigil`, extended to the name that follows
+            // it, so an outer lambda binder already in scope (`x` in
+            // `A.all()->filter(x|B.all($d)->…)`) does not narrow this position
+            // down to `{x}` and mask the unrelated date variable `d`.
+            State::AfterDollar if self.in_source_method_args => L2Position::None,
             State::AfterDollar => L2Position::RefVar,
             State::AfterDot => {
                 if self.awaiting_source_method {
@@ -2494,8 +2505,21 @@ impl ScopeTracker {
     ///
     /// Gated on the anchor state rather than on the byte alone so a `$` *inside* a
     /// string literal (`'a$b'`) is untouched.
+    ///
+    /// Exempts [`SourceMethodArg`](L2Position::SourceMethodArg) (issue #367): a
+    /// milestoning date argument (`Class.all($d)`) is ordinarily an as-of date
+    /// bound *outside* the lambda the decoder streams — a function/service
+    /// parameter, or an enclosing `let`, neither of which the stream ever sees —
+    /// so `bound_vars` being empty here is the ordinary case, not evidence of a
+    /// phantom name. The schema contract carries no temporal stereotype, so L2
+    /// cannot type this argument any better than L1 already does; masking `$d`
+    /// while admitting `%latest` at the identical position refused a query shape
+    /// the engine accepts (live-verified: the issue's own `grammarToJson/lambda`
+    /// repro compiles). `in_source_method_args` is this exemption's precise
+    /// scope: every other sigil position (a filter/project lambda body, a `let`
+    /// initializer, …) keeps S2's ordinary bound-name check.
     pub(crate) fn masks_unbound_sigil(&self, state: State) -> bool {
-        state.opens_refvar_sigil() && self.bound_vars.is_empty()
+        state.opens_refvar_sigil() && self.bound_vars.is_empty() && !self.in_source_method_args
     }
 
     /// The **post-dot** L2 target a fused nav-dot token (`.<member>` / `.<col>` in
@@ -2947,6 +2971,50 @@ mod tests {
         // (`a_milestoning_literal_is_an_l2_pass_through_operand`) into a mask.
         let (_tracker, pda) = run(&[b"|", b"A", b".", b"all", b"(", b"%latest", b")"]);
         assert_eq!(pda.state(), State::AfterValue);
+    }
+
+    #[test]
+    fn a_milestoning_date_variable_is_admitted_and_the_call_still_closes() {
+        // Issue #367: `|A.all($d)` — binding an as-of date once (`let d = …;`)
+        // and passing it to a milestoned extent's `all()` is the ordinary way
+        // to write a dated query, and L1 admits it exactly like a `%latest`
+        // literal (`a_milestoning_date_argument_is_admitted_and_the_call_still_closes`
+        // above); the overlay must reach the same clean `AfterValue` close
+        // rather than refuse the sigil or the variable name that follows it.
+        let (_tracker, pda) = run(&[b"|", b"A", b".", b"all", b"(", b"$", b"d", b")"]);
+        assert_eq!(pda.state(), State::AfterValue);
+    }
+
+    #[test]
+    fn the_sigil_right_after_the_source_methods_open_paren_is_not_masked_as_unbound() {
+        // Issue #367: `masks_unbound_sigil` (S2) ordinarily refuses a `$` before
+        // the stream has bound any name at all — but a milestoning date
+        // argument's variable ordinarily names a binder outside the stream
+        // (a function/service parameter), so `SourceMethodArg`'s own position
+        // must be exempt even with `bound_vars` empty.
+        let (tracker, pda) = run(&[b"|", b"A", b".", b"all", b"("]);
+        assert!(tracker.bound_vars.is_empty(), "sanity: nothing bound yet");
+        assert!(!tracker.masks_unbound_sigil(pda.state()));
+    }
+
+    #[test]
+    fn a_source_method_args_refvar_name_is_not_narrowed_to_an_outer_binder() {
+        // Issue #367: `|A.all()->filter(x|B.all($d)->…)` — the outer lambda
+        // binder `x` is already bound when the nested `B.all($d)` opens its
+        // date argument, so S1's ordinary `AfterDollar => RefVar` rule would
+        // narrow `d` down to the single legal name `x` and mask it. The
+        // exemption must report `None` here (unconstrained), not `RefVar`,
+        // regardless of what the stream has bound elsewhere.
+        let (tracker, pda) = run(&[
+            b"|", b"A", b".", b"all", b"(", b")", b"->", b"filter", b"(", b"x", b"|", b"B", b".",
+            b"all", b"(", b"$",
+        ]);
+        assert!(
+            !tracker.bound_vars.is_empty(),
+            "sanity: the outer binder x is in scope"
+        );
+        assert_eq!(pda.state(), State::AfterDollar);
+        assert_eq!(tracker.position(pda.state()), L2Position::None);
     }
 
     #[test]

@@ -1311,7 +1311,10 @@ fn fill_source_method_arg(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32) {
     dst.clear_all();
     for id in 0..vocab.len() as u32 {
         let bytes = vocab.bytes(id).unwrap_or(&[]);
-        if matches!(classify(bytes), Lexeme::Ws | Lexeme::Close | Lexeme::Date) {
+        if matches!(
+            classify(bytes),
+            Lexeme::Ws | Lexeme::Close | Lexeme::Date | Lexeme::Dollar
+        ) {
             dst.set(id);
         }
     }
@@ -2113,7 +2116,8 @@ mod tests {
     }
 
     #[test]
-    fn source_method_arg_keeps_the_closer_and_milestone_dates_but_masks_a_phantom_argument() {
+    fn source_method_arg_keeps_the_closer_milestone_dates_and_a_refvar_but_masks_a_phantom_argument()
+     {
         // The position right after the source method's own `(` (or after a
         // comma inside it): a milestoning date argument legally appears here
         // (bitemporal `Firm.all(%latest, %latest)`, confirmed in the corpus'
@@ -2121,6 +2125,14 @@ mod tests {
         // matching closer and whitespace — but the exact phantom-argument shapes
         // the walker was observed emitting (`Class.all('French')`,
         // `Class.all(all)`) must still be masked.
+        //
+        // A refVar sigil (`$`) survives too (issue #367): binding an as-of date
+        // once (`let d = …; …A.all($d)…`) and passing it to every milestoned
+        // extent is the ordinary way to write a dated query, and the schema
+        // contract carries no temporal stereotype that would let L2 tell a
+        // legal date variable from an illegal one any better than L1 already
+        // does — so, like a milestone literal, a variable reference is left to
+        // the compiler oracle rather than modeled here.
         let v = vocab(&[
             b")",           // 0: the matching closer — kept
             b"  ",          // 1: inter-token whitespace — kept
@@ -2129,7 +2141,7 @@ mod tests {
             b"all",         // 4: an identifier (a phantom argument) — masked
             b"'name'",      // 5: a string literal argument — masked
             b"5",           // 6: a numeric literal argument — masked
-            b"$",           // 7: a refVar argument — masked
+            b"$",           // 7: a refVar sigil (issue #367) — kept
             b"(",           // 8: a nested call argument — masked
             b",", // 9: not legal at L1 here either, but never a candidate structure — masked
         ]);
@@ -2142,7 +2154,10 @@ mod tests {
         assert!(!bit(&mask, 4), "an identifier argument is masked");
         assert!(!bit(&mask, 5), "a string literal argument is masked");
         assert!(!bit(&mask, 6), "a numeric literal argument is masked");
-        assert!(!bit(&mask, 7), "a refVar argument is masked");
+        assert!(
+            bit(&mask, 7),
+            "a refVar sigil survives (issue #367: a date variable is a real argument)"
+        );
         assert!(!bit(&mask, 8), "a nested call argument is masked");
         assert!(!bit(&mask, 9), "a comma is masked");
     }
