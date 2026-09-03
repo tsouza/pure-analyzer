@@ -68,7 +68,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Install nightly toolchain
-        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
         with:
           toolchain: nightly
       - name: Cache PureCARD fuzz build
@@ -109,7 +109,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Install nightly toolchain
-        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
         with:
           toolchain: nightly
       - name: Cache PureCARD fuzz build
