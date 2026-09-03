@@ -7,15 +7,14 @@ diagnostic and reason identifiers.
 
 ## Commands
 
-| Command                                                  | Purpose                                                                                                                                |
-| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `pure-analyzer validate <input>...`                      | Check grammar and shallow well-formedness. No model is required.                                                                       |
-| `pure-analyzer lint <input>... [--model <model>]...`     | Check model-aware milestoning arity, unknown properties, and cardinality misuse when models are supplied.                              |
-| `pure-analyzer fmt <input>...`                           | Format input, preserving source layout and comments. File input is updated by default; standard input is formatted to standard output. |
-| `pure-analyzer eq <left> <right> [--model <model>]...`   | Sound, fail-closed M4a relational comparison.                                                                                          |
-| `pure-analyzer diff <left> <right> [--model <model>]...` | The same M4a comparison, reporting a structural schema distinction when one is proven.                                                 |
-| `pure-analyzer explain <identifier>`                     | Explain one exact registered diagnostic or reason identifier.                                                                          |
-| `pure-analyzer completions bash`                         | Print Bash completion code to standard output.                                                                                         |
+| Command                                                  | Purpose                                                                                                                                                                   |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pure-analyzer validate <input>...`                      | Check grammar and shallow well-formedness. No model is required.                                                                                                          |
+| `pure-analyzer lint <input>... [--model <model>]...`     | Check model-aware milestoning arity, unknown properties, and cardinality misuse when models are supplied.                                                                 |
+| `pure-analyzer fmt <input>...`                           | Format input, preserving source layout and comments. File input is updated by default; standard input is formatted to standard output.                                    |
+| `pure-analyzer eq <left> <right> [--model <model>]...`   | Sound, fail-closed M4a relational comparison, reporting a proven structural schema distinction when one exists. Also invocable as `diff`, an alias for this same command. |
+| `pure-analyzer explain <identifier>`                     | Explain one exact registered diagnostic or reason identifier.                                                                                                             |
+| `pure-analyzer completions bash`                         | Print Bash completion code to standard output.                                                                                                                            |
 
 Use `pure-analyzer <command> --help` for the complete flag syntax.
 
@@ -130,13 +129,15 @@ that produced it.
 | `0`         | A proven normal form was emitted.                             |
 | `2`         | The request was indecisive; no normal form was emitted.       |
 
-## Compare and diff
+## Compare
 
-`eq` and `diff` share the same conservative M4a comparison. They prove
-equivalence only when both lowered queries have the same normal-form identity,
-and prove non-equivalence only for incompatible ordered output schemas. Every
-other case is indecisive; the commands never invoke an engine, synthesize a
-data witness, or guess from partial facts.
+`eq` (also invocable as `diff`, a plain alias for the same command — not a
+separate mode) runs one conservative M4a comparison. It proves equivalence
+only when both lowered queries have the same normal-form identity, and proves
+non-equivalence only for incompatible ordered output schemas, always
+reporting the exact schema distinction that proved it. Every other case is
+indecisive; the command never invokes an engine, synthesizes a data witness,
+or guesses from partial facts.
 
 ```text
 pure-analyzer eq left.pure right.pure --model model.pure
