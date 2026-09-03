@@ -47,7 +47,6 @@ struct Parser<'tokens> {
     index: usize,
     events: EventStream,
     diagnostics: Vec<Diagnostic>,
-    fuel: usize,
     depth: usize,
 }
 
@@ -124,7 +123,6 @@ impl<'tokens> Parser<'tokens> {
             index: 0,
             events: EventStream::with_capacity(tokens.len().saturating_add(2)),
             diagnostics: Vec::new(),
-            fuel: tokens.len(),
             depth: 0,
         }
     }
@@ -981,7 +979,7 @@ impl<'tokens> Parser<'tokens> {
         self.open(SyntaxKind::OPAQUE_ISLAND);
         let _ = self.bump();
         let mut delimiters = vec![OpaqueIslandDelimiter::Island];
-        while self.fuel != 0 {
+        loop {
             if self.at_eof() {
                 break;
             }
@@ -1030,7 +1028,7 @@ impl<'tokens> Parser<'tokens> {
         self.open(SyntaxKind::ISLAND);
         self.open(SyntaxKind::OPAQUE_ISLAND);
         let _ = self.bump();
-        while self.fuel != 0 {
+        loop {
             if self.at_eof() {
                 break;
             }
@@ -1113,7 +1111,7 @@ impl<'tokens> Parser<'tokens> {
 
     fn recover_until(&mut self, boundaries: &[TokenKind]) {
         self.open(SyntaxKind::ERROR_NODE);
-        while self.fuel != 0 {
+        loop {
             if self.at_eof() {
                 break;
             }
@@ -1296,9 +1294,6 @@ impl<'tokens> Parser<'tokens> {
         if self.index >= self.tokens.len() {
             return false;
         }
-        if self.fuel == 0 {
-            return false;
-        }
         if self.raw_kind() == Some(TokenKind::ERROR) {
             self.push_diagnostic(
                 DiagCode::BadToken,
@@ -1308,7 +1303,6 @@ impl<'tokens> Parser<'tokens> {
         }
         self.events.append(Event::Advance);
         self.index = self.index.saturating_add(1);
-        self.fuel = self.fuel.saturating_sub(1);
         true
     }
 
