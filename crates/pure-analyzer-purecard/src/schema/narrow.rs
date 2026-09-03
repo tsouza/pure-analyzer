@@ -98,6 +98,14 @@ enum CacheKey {
     /// [`StoreMethodArgSep`](CacheKey::StoreMethodArgSep) below, keyed the
     /// identical way.
     SourceMethodArgSep(bool),
+    /// Issue #385: a milestoned property navigation's own call argument-slot
+    /// set — a whole-vocab constant, cached under its own key because the
+    /// position is armed independently of `SourceMethodArg` (§6.5 S1 vs. S3).
+    /// Still the pre-#384 shape-only fill ([`fill_milestoning_date_arg`]):
+    /// #384's arity narrowing landed only at the pipeline source's own call;
+    /// the same rule at a property navigation's call is tracked as its own
+    /// follow-up (issue #386).
+    PropertyMethodArg,
     /// N3d's store-method argument-slot set — likewise a whole-vocab constant.
     StoreMethodArg,
     /// N3d's store-method separator set. Whether the call still owes another
@@ -262,6 +270,13 @@ pub(crate) fn narrow_into(
         }
         L2Position::SourceMethodArgSep { remaining } => {
             dispatch_source_method_arg_sep(dst, cache, vocab, eos_bit, *remaining)
+        }
+        // S3's own call (issue #385) — still the pre-#384 shape-only fill;
+        // #384's arity narrowing has not reached this position yet (#386).
+        L2Position::PropertyMethodArg => {
+            with_cache(dst, cache, CacheKey::PropertyMethodArg, |dst| {
+                fill_milestoning_date_arg(dst, vocab, eos_bit);
+            })
         }
         L2Position::StoreMethodArg => with_cache(dst, cache, CacheKey::StoreMethodArg, |dst| {
             fill_store_method_arg(dst, vocab, eos_bit);
@@ -656,6 +671,7 @@ impl<'a> TrieRule<'a> {
             L2Position::None
             | L2Position::SourceMethodArg { .. }
             | L2Position::SourceMethodArgSep { .. }
+            | L2Position::PropertyMethodArg
             | L2Position::StoreMethodArg
             | L2Position::StoreMethodArgSep { .. }
             | L2Position::SourceExtent { .. }
@@ -848,6 +864,7 @@ pub(crate) fn narrow_fused_into(
         | L2Position::StoreMethod
         | L2Position::SourceMethodArg { .. }
         | L2Position::SourceMethodArgSep { .. }
+        | L2Position::PropertyMethodArg
         | L2Position::StoreMethodArg
         | L2Position::StoreMethodArgSep { .. }
         | L2Position::SourceExtent { .. }
@@ -1439,6 +1456,30 @@ fn fill_source_method_arg(
             _ => false,
         };
         if keep {
+            dst.set(id);
+        }
+    }
+    dst.set(eos_bit);
+}
+
+/// Refill `dst` with [`L2Position::PropertyMethodArg`]'s set, plus EOS (issue
+/// #385, the sibling of [`fill_source_method_arg`] one PDA position later, at a
+/// milestoned property navigation's own call, `$x.facet(...)`, rather than the
+/// pipeline source's `all(...)`): the same shape rule as
+/// [`fill_source_method_arg`]'s doc comment describes, minus the arity half —
+/// #384's `required`/`seen` narrowing has not reached this position yet
+/// (tracked as its own follow-up, issue #386), so this stays the whole-vocab
+/// constant `fill_source_method_arg` always was before #384: `Close` and a
+/// fresh `Date`/`Dollar` argument are both unconditionally admissible, at any
+/// count.
+fn fill_milestoning_date_arg(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32) {
+    dst.clear_all();
+    for id in 0..vocab.len() as u32 {
+        let bytes = vocab.bytes(id).unwrap_or(&[]);
+        if matches!(
+            classify(bytes),
+            Lexeme::Ws | Lexeme::Close | Lexeme::Date | Lexeme::Dollar
+        ) {
             dst.set(id);
         }
     }
@@ -2487,6 +2528,43 @@ mod tests {
             "the closer is legal once the arity is met"
         );
         assert!(bit(&arity_met, 2), "whitespace stays legal either way");
+    }
+
+    #[test]
+    fn property_method_arg_keeps_the_closer_milestone_dates_and_a_refvar_but_masks_a_phantom_argument()
+     {
+        // Issue #385, the sibling of `source_method_arg_keeps_the_closer_milestone_dates_and_a_refvar_but_masks_a_phantom_argument`
+        // above, one position later: the position right after a milestoned
+        // property navigation's own call's `(` (or after a comma inside it)
+        // shares `fill_milestoning_date_arg`'s fill exactly, so it must
+        // exercise the identical nine shapes to the same verdicts.
+        let v = vocab(&[
+            b")",           // 0: the matching closer — kept
+            b"  ",          // 1: inter-token whitespace — kept
+            b"%latest",     // 2: a symbolic milestoning literal — kept
+            b"%2018-01-01", // 3: a numeric date literal — kept
+            b"all",         // 4: an identifier (a phantom argument) — masked
+            b"'name'",      // 5: a string literal argument — masked
+            b"5",           // 6: a numeric literal argument — masked
+            b"$",           // 7: a refVar sigil (issue #385) — kept
+            b"(",           // 8: a nested call argument — masked
+            b",", // 9: not legal at L1 here either, but never a candidate structure — masked
+        ]);
+        let (applied, mask) = run(&L2Position::PropertyMethodArg, &[], v);
+        assert!(applied);
+        assert!(bit(&mask, 0), "the matching closer survives");
+        assert!(bit(&mask, 1), "inter-token whitespace survives");
+        assert!(bit(&mask, 2), "a symbolic milestoning literal survives");
+        assert!(bit(&mask, 3), "a numeric date literal survives");
+        assert!(!bit(&mask, 4), "an identifier argument is masked");
+        assert!(!bit(&mask, 5), "a string literal argument is masked");
+        assert!(!bit(&mask, 6), "a numeric literal argument is masked");
+        assert!(
+            bit(&mask, 7),
+            "a refVar sigil survives (issue #385: a date variable is a real argument)"
+        );
+        assert!(!bit(&mask, 8), "a nested call argument is masked");
+        assert!(!bit(&mask, 9), "a comma is masked");
     }
 
     #[test]

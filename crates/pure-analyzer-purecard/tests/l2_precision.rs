@@ -271,6 +271,16 @@ fn source_method_arg_sep_masks_a_premature_closer_before_the_classs_arity_is_met
     assert_frozen("source-method-arg-sep");
 }
 
+/// Issue #385, the sibling of the fixture above one position later: a
+/// milestoned property navigation's own call (`$x.fk4DefaultCarNames(...)`)
+/// takes the identical treatment as `all()`'s own call — a real closer and a
+/// milestone/date literal stay admissible, a phantom identifier/string
+/// argument is masked.
+#[test]
+fn property_method_arg_masks_a_phantom_argument_but_keeps_the_closer_and_a_milestone_date() {
+    assert_frozen("property-method-arg");
+}
+
 /// `$x` is bound to CarsData; `cylinders` is a real property, `sallary` is not.
 ///
 /// A sibling class's property is equally phantom on CarsData (`maker` is a
@@ -670,6 +680,122 @@ fn source_method_arg_admits_a_date_variable_beside_an_outer_bound_binder() {
         session.is_complete(),
         "L2 SOUNDNESS (issue #367): pipeline did not complete:\n  {query}"
     );
+}
+
+/// Issue #385, the sibling of #367 one position later: a variable reference
+/// passed as a milestoned **property navigation's own** date argument
+/// (`$a.b($d1, $d2).bx`) must stream exactly as admissibly as the
+/// `%`-literal date forms at the identical position — binding an as-of date
+/// once (`let d1 = …; let d2 = …;`) and passing it to every milestoned
+/// navigation is the ordinary way to write a dated query, and the schema
+/// contract carries no temporal stereotype that would let L2 type this
+/// argument any better than L1 already does. Uses the issue's own
+/// three-class schema and both witness shapes: a direct property (`.bx`)
+/// and a chained navigation through the milestoned step (`.c.dval`).
+#[test]
+fn property_method_arg_admits_a_milestoning_date_variable() {
+    const SCHEMA_JSON: &str = r#"{
+      "db_id": "t", "db_path": "t::Db",
+      "classes": {
+        "t::A": { "simple_name": "A", "properties": [
+          {"name": "id", "type": {"kind": "primitive", "name": "Integer"}, "mult": {"lower": 1, "upper": 1}},
+          {"name": "b", "type": {"kind": "class", "path": "t::B"}, "mult": {"lower": 1, "upper": 1}}
+        ], "qualified_properties": [], "super_types": [] },
+        "t::B": { "simple_name": "B", "properties": [
+          {"name": "bx", "type": {"kind": "primitive", "name": "Integer"}, "mult": {"lower": 1, "upper": 1}},
+          {"name": "c", "type": {"kind": "class", "path": "t::C"}, "mult": {"lower": 1, "upper": 1}}
+        ], "qualified_properties": [], "super_types": [] },
+        "t::C": { "simple_name": "C", "properties": [
+          {"name": "dval", "type": {"kind": "primitive", "name": "Integer"}, "mult": {"lower": 1, "upper": 1}}
+        ], "qualified_properties": [], "super_types": [] }
+      },
+      "associations": [], "enums": {}
+    }"#;
+    let schema = Schema::from_json(SCHEMA_JSON).expect("synthetic schema parses");
+    // The issue's own five reproduction rows: the un-milestoned baseline, two
+    // `%latest`-literal forms (already admitted before this fix — a direct
+    // property and a chained navigation), plus the two `$d1, $d2` variable
+    // forms (the regression this fix closes) must all stream to a clean,
+    // complete parse.
+    for query in [
+        "|t::A.all()->project([a|$a.b.c.dval],['d'])",
+        "|t::A.all()->project([a|$a.b(%latest,%latest).bx],['d'])",
+        "|t::A.all()->project([a|$a.b(%latest,%latest).c.dval],['d'])",
+        "|t::A.all()->project([a|$a.b($d1, $d2).bx],['d'])",
+        "|t::A.all()->project([a|$a.b($d1, $d2).c.dval],['d'])",
+    ] {
+        let vocab = TokenVocab::build(&[query], &[]);
+        let grammar = CompiledGrammar::compile(vocab.vocab());
+        let mut session =
+            DecoderSession::with_schema(&grammar, schema.clone()).expect("grammar is fixed-engine");
+        for (step, token) in lex(query).into_iter().enumerate() {
+            let id = vocab
+                .id_of(&token)
+                .unwrap_or_else(|| panic!("token not in vocab: {:?}", bytes_str(&token)));
+            assert!(
+                session.allowed_mask().test(id),
+                "L2 SOUNDNESS (issue #385): a real date/variable argument masked \
+                 at step {step} ({:?}) in:\n  {query}",
+                bytes_str(&token)
+            );
+            session.accept_token(id).unwrap_or_else(|err| {
+                panic!("real token rejected at step {step}: {err}\n  {query}")
+            });
+        }
+        assert!(
+            session.is_complete(),
+            "L2 SOUNDNESS (issue #385): pipeline did not complete:\n  {query}"
+        );
+    }
+}
+
+/// Issue #385's precision half, mirroring #367's own: admitting a `$`-led
+/// milestoning date argument at a property navigation's own call must not
+/// reopen the phantom-argument shapes the position already kills — a
+/// variable reference is the one additional value-start byte this fix
+/// admits, not a blanket pass-through of every value shape at the position.
+#[test]
+fn property_method_arg_still_masks_a_phantom_argument_beside_an_admitted_date_variable() {
+    const SCHEMA_JSON: &str = r#"{
+      "db_id": "t", "db_path": "t::Db",
+      "classes": {
+        "t::A": { "simple_name": "A", "properties": [
+          {"name": "b", "type": {"kind": "class", "path": "t::B"}, "mult": {"lower": 1, "upper": 1}}
+        ], "qualified_properties": [], "super_types": [] },
+        "t::B": { "simple_name": "B", "properties": [
+          {"name": "bx", "type": {"kind": "primitive", "name": "Integer"}, "mult": {"lower": 1, "upper": 1}}
+        ], "qualified_properties": [], "super_types": [] }
+      },
+      "associations": [], "enums": {}
+    }"#;
+    let schema = Schema::from_json(SCHEMA_JSON).expect("synthetic schema parses");
+    let prefix = "|t::A.all()->project([a|$a.b(";
+    let probes: [&[u8]; 4] = [b"$", b"'French'", b"all", b")"];
+    let extras: Vec<Vec<u8>> = probes.iter().map(|p| p.to_vec()).collect();
+    let vocab = TokenVocab::build(&[prefix], &extras);
+    let grammar = CompiledGrammar::compile(vocab.vocab());
+    let mut session =
+        DecoderSession::with_schema(&grammar, schema).expect("grammar is fixed-engine");
+    for token in lex(prefix) {
+        let id = vocab
+            .id_of(&token)
+            .unwrap_or_else(|| panic!("prefix token not in vocab: {:?}", bytes_str(&token)));
+        session
+            .accept_token(id)
+            .unwrap_or_else(|err| panic!("prefix token rejected: {err}\n  {prefix}"));
+    }
+    let mask = session.allowed_mask();
+    let verdict: Vec<bool> = probes
+        .iter()
+        .map(|p| mask.test(vocab.id_of(p).expect("probe token in vocab")))
+        .collect();
+    assert!(
+        verdict[0],
+        "L2 SOUNDNESS (issue #385): a refVar sigil stays admissible"
+    );
+    assert!(!verdict[1], "a string-literal phantom argument is masked");
+    assert!(!verdict[2], "an identifier phantom argument is masked");
+    assert!(verdict[3], "the matching closer stays admissible");
 }
 
 /// Nested navigation: an association step reaches a class, and the *next* nav dot
@@ -1418,6 +1544,11 @@ const FROZEN_FAMILIES: &[(&str, &str)] = &[
         "source-method-arg-sep",
         "Issue #384 · a premature closer in `all()`'s own call once the class's \
          declared milestoning arity is known but not yet met",
+    ),
+    (
+        "property-method-arg",
+        "Issue #385, the sibling of source-method-arg one position later — a \
+         phantom argument in a milestoned property navigation's own call",
     ),
     ("n1-member", "M3 G2 · a phantom property after a bound var"),
     (
@@ -2584,6 +2715,43 @@ static FROZEN_KILLS: &[FrozenKill] = &[
         closer: Closer::L2("SourceMethodArg"),
         kill: Kill::Probe {
             prefix: "|spider::car_1::model::default::CarsData.all(",
+            real: "%latest",
+            phantom: "'French'",
+        },
+    },
+    // Issue #385, the sibling of source-method-arg one position later: the
+    // same three phantom-argument probes, replayed at a milestoned property
+    // navigation's own call (`$x.fk4DefaultCarNames(...)`, an association
+    // navigation off a bound var) rather than the pipeline source's `all(`.
+    FrozenKill {
+        fixture: "property-method-arg",
+        db: "car_1",
+        closer: Closer::L2("PropertyMethodArg"),
+        kill: Kill::Probe {
+            prefix: "|spider::car_1::model::default::CarsData.all()\
+                ->filter(x|$x.fk4DefaultCarNames(",
+            real: ")",
+            phantom: "'French'",
+        },
+    },
+    FrozenKill {
+        fixture: "property-method-arg",
+        db: "car_1",
+        closer: Closer::L2("PropertyMethodArg"),
+        kill: Kill::Probe {
+            prefix: "|spider::car_1::model::default::CarsData.all()\
+                ->filter(x|$x.fk4DefaultCarNames(",
+            real: ")",
+            phantom: "all",
+        },
+    },
+    FrozenKill {
+        fixture: "property-method-arg",
+        db: "car_1",
+        closer: Closer::L2("PropertyMethodArg"),
+        kill: Kill::Probe {
+            prefix: "|spider::car_1::model::default::CarsData.all()\
+                ->filter(x|$x.fk4DefaultCarNames(",
             real: "%latest",
             phantom: "'French'",
         },
