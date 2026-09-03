@@ -8,6 +8,22 @@
 //! identical ordered schemas and relation facts. All rewrites that could alter
 //! bag, order, null, partiality, or output-schema behavior remain frozen until
 //! their required proof producer is private and trustworthy.
+//!
+//! Of those three, only the literal-`true` filter and the repeated-`Distinct`
+//! collapse are actually reachable from real lowered IR today. The identity
+//! projection is currently **frozen**: `is_identity_project` is unreachable
+//! from any lowering call site because every `Project`-building path mints a
+//! fresh `ColumnId` per output column, never reusing the input column it
+//! reads, and that exact `ColumnId` equality is load-bearing for soundness
+//! (not something origin-insensitivity can paper over). See
+//! [`is_identity_project`]'s doc and issue #410 for the producer this rewrite
+//! is waiting on. `is_repeated_distinct` was in the same unreachable state
+//! until issue #281: its facts guard used to require the exact `IrOrigin`
+//! that proved each `Distinct`'s row semantics to match too, which two
+//! stacked `->distinct()->distinct()` calls can never satisfy since each
+//! proves its own fact from its own call-site span; comparing
+//! [`RelationFacts::matches`] instead (semantic value, origin ignored) fixed
+//! that without weakening anything origin was actually protecting.
 
 use std::collections::BTreeMap;
 use std::fmt::Write;
@@ -419,6 +435,33 @@ impl Normalizer {
     }
 }
 
+/// Whether `projections` is a pure pass-through of every `input` column, in
+/// order.
+///
+/// **Currently unreachable from real lowered IR — frozen, not merely
+/// conservative (issue #281).** Every lowering call site that builds a
+/// `Project` (`lower_relation_project`, and the shared `project` helper
+/// behind `lower_map`/`project_navigation`) allocates a *fresh* `ColumnId`
+/// per output column via `self.next_column()`, even when the projected
+/// scalar is a bare `$x.field` read; it never reuses the input column's own
+/// id. `RelationSchema`'s equality (and `is_identity_read`'s own
+/// `ScalarOperator::Column(id) if *id == column.id()` check, which compares
+/// against the *output* schema's column) therefore can never hold for a
+/// projection lowering actually produced.
+///
+/// Unlike [`is_repeated_distinct`]'s facts guard, this is not an
+/// origin-sensitivity problem: `ColumnId` carries no `IrOrigin`, and an
+/// origin-insensitive comparison would not change this outcome. The exact
+/// `ColumnId` equality is also not a bug to relax — it is what guarantees
+/// that collapsing `Project` to `input` cannot orphan a `ColumnId` reference
+/// an ancestor still holds into the discarded `Project`'s own output schema
+/// (see [`is_repeated_distinct`]'s doc for why `ColumnId` identity is
+/// load-bearing in a way `IrOrigin` is not). Reaching this rewrite instead
+/// needs a lowering-level change — teaching pass-through projections to
+/// reuse the input column's id — which has its own correctness surface (two
+/// output columns reading the same input column cannot both reuse it without
+/// tripping `RelationSchema`'s duplicate-`ColumnId` invariant) and belongs to
+/// its own design, tracked by issue #410, not folded into this guard.
 fn is_identity_project(
     input: &RelationExpression,
     schema: &RelationSchema,
@@ -469,13 +512,30 @@ fn is_literal_true_filter(
         )
 }
 
+/// Whether `input` is itself a `Distinct` that this outer `Distinct` can
+/// absorb.
+///
+/// The facts comparison deliberately calls [`RelationFacts::matches`], not
+/// `==`: `lower_bare_distinct` attaches each `Distinct` node's own
+/// `Knowledge::Proven` row-semantics fact with an origin derived from that
+/// node's own call-site text range, so two stacked `->distinct()->distinct()`
+/// calls always prove the identical `RowSemantics::Set` conclusion from two
+/// different origins. `IrOrigin` records how a fact was proved, not what it
+/// means, so requiring it to match too made this rewrite unreachable from
+/// real lowered IR for no semantic reason (issue #281). The schema
+/// comparison stays exact `==`: `Distinct` never reallocates a `ColumnId`
+/// (`lower_bare_distinct` clones the input schema unchanged), so a real
+/// repeated `Distinct` already has byte-identical schemas, and relaxing that
+/// comparison would risk collapsing a node whose column identities an
+/// ancestor still references — unlike facts, a `ColumnId` genuinely is part
+/// of what downstream nodes depend on.
 fn is_repeated_distinct(
     input: &RelationExpression,
     schema: &RelationSchema,
     facts: &RelationFacts,
 ) -> bool {
     schema == input.schema()
-        && facts == input.facts()
+        && facts.matches(input.facts())
         && matches!(input.operator(), RelationOperator::Distinct { .. })
 }
 

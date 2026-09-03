@@ -258,6 +258,8 @@ pub pure_analyzer_analysis::Knowledge::Proven
 pub pure_analyzer_analysis::Knowledge::Proven::origin: pure_analyzer_analysis::IrOrigin
 pub pure_analyzer_analysis::Knowledge::Proven::value: T
 pub pure_analyzer_analysis::Knowledge::Unknown
+impl<T: core::cmp::PartialEq> pure_analyzer_analysis::Knowledge<T>
+pub fn pure_analyzer_analysis::Knowledge<T>::matches_ignoring_origin(&self, &Self) -> bool
 impl<T> pure_analyzer_analysis::Knowledge<T>
 pub fn pure_analyzer_analysis::Knowledge<T>::as_proven(&self) -> core::option::Option<(&T, &pure_analyzer_analysis::IrOrigin)>
 pub const fn pure_analyzer_analysis::Knowledge<T>::is_unknown(&self) -> bool
@@ -2245,6 +2247,7 @@ pub fn pure_analyzer_analysis::RelationExpression::from(T) -> T
 pub struct pure_analyzer_analysis::RelationFacts
 impl pure_analyzer_analysis::RelationFacts
 pub const fn pure_analyzer_analysis::RelationFacts::candidate_keys(&self) -> &pure_analyzer_analysis::Knowledge<alloc::vec::Vec<pure_analyzer_analysis::CandidateKey>>
+pub fn pure_analyzer_analysis::RelationFacts::matches(&self, &Self) -> bool
 pub fn pure_analyzer_analysis::RelationFacts::new(pure_analyzer_analysis::Knowledge<alloc::vec::Vec<pure_analyzer_analysis::CandidateKey>>, pure_analyzer_analysis::Knowledge<pure_analyzer_analysis::RowSemantics>) -> Self
 pub const fn pure_analyzer_analysis::RelationFacts::row_semantics(&self) -> &pure_analyzer_analysis::Knowledge<pure_analyzer_analysis::RowSemantics>
 pub fn pure_analyzer_analysis::RelationFacts::unknown() -> Self

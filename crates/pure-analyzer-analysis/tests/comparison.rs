@@ -2,11 +2,11 @@
 
 use pure_analyzer_analysis::{
     AnalysisInput, Column, ColumnId, ComparisonOutcome, IrOrigin, Knowledge, NormalizationBudget,
-    Nullability, OpaqueOutcome, RelationExpression, RelationFacts, RelationOperator,
-    RelationSchema, RelationSource, RelationalOutcome, RelationalQuery, ScalarExpression,
-    ScalarLiteral, ScalarOperator, SourceSpan, StructuralDifferenceKind, Totality,
-    compare_lowered_queries, compare_relational_queries, compare_relational_queries_with_budget,
-    lower_m3_query,
+    NormalizationOutcome, Nullability, OpaqueOutcome, RelationExpression, RelationFacts,
+    RelationOperator, RelationSchema, RelationSource, RelationalOutcome, RelationalQuery,
+    ScalarExpression, ScalarLiteral, ScalarOperator, SourceSpan, StructuralDifferenceKind,
+    Totality, compare_lowered_queries, compare_relational_queries,
+    compare_relational_queries_with_budget, lower_m3_query, normalize_relational_query,
 };
 use pure_analyzer_diagnostics::{FileId, ReasonCode, TextRange, TextSize};
 use pure_analyzer_model::{
@@ -572,5 +572,84 @@ fn property_navigation_and_a_project_sharing_its_column_name_are_never_equivalen
         forward,
         ComparisonOutcome::Equivalent,
         "a scalar collection and a relation must never compare as equivalent, got {forward:#?}"
+    );
+}
+
+/// Production-path regression for
+/// https://github.com/tsouza/pure-analyzer/issues/281: two real, stacked
+/// `->distinct()` calls each lower their own `RelationFacts` from their own
+/// call-site span (`lowering.rs`'s `lower_bare_distinct`), so before the fix
+/// `is_repeated_distinct`'s `facts == input.facts()` guard — which also
+/// compared the `IrOrigin` each fact was proved from — could never match
+/// real lowered IR and `->distinct()->distinct()` never collapsed.
+#[test]
+fn repeated_distinct_collapses_from_real_lowered_source() {
+    let model = person_model_with_name();
+    let repeated = lower_source(
+        "model::Person.all()->distinct()->distinct()",
+        &model,
+        SOURCE_LOWERING_TEST_FILE + 4,
+    );
+    let single = lower_source(
+        "model::Person.all()->distinct()",
+        &model,
+        SOURCE_LOWERING_TEST_FILE + 5,
+    );
+
+    let normalized = match normalize_relational_query(&repeated) {
+        NormalizationOutcome::Normalized(normalized) => *normalized,
+        NormalizationOutcome::Indecisive(failure) => {
+            panic!("repeated ->distinct() must normalize, got {failure:?}")
+        }
+    };
+    assert!(
+        matches!(
+            normalized.root().operator(),
+            RelationOperator::Distinct { input }
+                if matches!(input.operator(), RelationOperator::Scan(_))
+        ),
+        "->distinct()->distinct() must collapse to a single Distinct(Scan), got {:#?}",
+        normalized.root().operator()
+    );
+
+    let forward = compare_relational_queries(&repeated, &single);
+    let reverse = compare_relational_queries(&single, &repeated);
+    assert_eq!(
+        forward, reverse,
+        "the repeated-distinct collapse must not depend on argument order"
+    );
+    assert_eq!(forward, ComparisonOutcome::Equivalent);
+}
+
+/// Companion pin for issue #281/#410: `is_identity_project` stays frozen.
+/// This projection is shape-identical to its input at the JSON/text level
+/// (same single column, same name, same read), but real lowering always
+/// mints a fresh `ColumnId` for a projected column — even a bare
+/// pass-through read — so it never shares the input column's own id, and
+/// must not collapse. If this assertion starts failing because normalization
+/// silently collapses it, that change needs issue #410's full lowering-level
+/// `ColumnId`-reuse design, not an accidental relaxation of the guard.
+#[test]
+fn identity_shaped_project_stays_frozen() {
+    let model = person_model_with_name();
+    let identity_query = lower_source(
+        "model::Person.all()->project(~[name: p | $p.name])",
+        &model,
+        SOURCE_LOWERING_TEST_FILE + 6,
+    );
+
+    let normalized = match normalize_relational_query(&identity_query) {
+        NormalizationOutcome::Normalized(normalized) => *normalized,
+        NormalizationOutcome::Indecisive(failure) => {
+            panic!("identity-shaped project must normalize, got {failure:?}")
+        }
+    };
+    assert!(
+        matches!(
+            normalized.root().operator(),
+            RelationOperator::Project { .. }
+        ),
+        "an identity-shaped project must stay frozen, not collapse to its input, got {:#?}",
+        normalized.root().operator()
     );
 }

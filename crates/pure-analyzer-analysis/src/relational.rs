@@ -474,6 +474,26 @@ impl<T> Knowledge<T> {
     }
 }
 
+impl<T: PartialEq> Knowledge<T> {
+    /// Return whether both facts prove the same conclusion, ignoring the
+    /// [`IrOrigin`] recorded for each proof.
+    ///
+    /// `Knowledge`'s derived `PartialEq` also compares `origin`, which is
+    /// correct for [`StructuralKey`](crate::StructuralKey)'s
+    /// provenance-complete identity. This looser comparison is for callers
+    /// that only care whether two proofs establish the same value: origin
+    /// records *how* a fact was proved, never *what* it means, so it carries
+    /// no semantic content of its own.
+    #[must_use]
+    pub fn matches_ignoring_origin(&self, other: &Self) -> bool {
+        match (self.as_proven(), other.as_proven()) {
+            (None, None) => true,
+            (Some((left, _)), Some((right, _))) => left == right,
+            _ => false,
+        }
+    }
+}
+
 /// Relational facts that must be proved separately from value multiplicity.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RelationFacts {
@@ -510,6 +530,25 @@ impl RelationFacts {
     #[must_use]
     pub const fn row_semantics(&self) -> &Knowledge<RowSemantics> {
         &self.row_semantics
+    }
+
+    /// Return whether both facts prove the same relational conclusions,
+    /// ignoring the [`IrOrigin`] recorded for each proof.
+    ///
+    /// This is a deliberately looser check than the derived `PartialEq`: two
+    /// [`RelationOperator::Distinct`](crate::RelationOperator::Distinct)
+    /// nodes stacked on top of each other each prove their own row-semantics
+    /// fact from their own call's source span, so their facts are never
+    /// `==` even when they assert the identical conclusion. A guard that
+    /// only needs "do these facts mean the same thing" — not "were they
+    /// proved by the same query text" — should call this instead.
+    #[must_use]
+    pub fn matches(&self, other: &Self) -> bool {
+        self.candidate_keys
+            .matches_ignoring_origin(&other.candidate_keys)
+            && self
+                .row_semantics
+                .matches_ignoring_origin(&other.row_semantics)
     }
 }
 

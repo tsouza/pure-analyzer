@@ -10,10 +10,10 @@ use pure_analyzer_diagnostics::ReasonCode;
 
 use crate::relational::MAX_RELATIONAL_RECURSION_DEPTH;
 use crate::{
-    ColumnId, IrOrigin, Knowledge, NormalizationBudget, NormalizationOutcome, NormalizedQuery,
-    ProjectionKind, RelationExpression, RelationFacts, RelationOperator, RelationSchema,
-    RelationSource, RelationalOutcome, RowSemantics, ScalarExpression, ScalarLiteral,
-    ScalarOperator, SortDirection, normalize_relational_query_with_budget,
+    ColumnId, IrOrigin, NormalizationBudget, NormalizationOutcome, NormalizedQuery, ProjectionKind,
+    RelationExpression, RelationFacts, RelationOperator, RelationSchema, RelationSource,
+    RelationalOutcome, RowSemantics, ScalarExpression, ScalarLiteral, ScalarOperator,
+    SortDirection, normalize_relational_query_with_budget,
 };
 
 /// Deterministic Pure text emitted from a supported relational normal form.
@@ -268,7 +268,7 @@ impl Emitter {
     ) -> EmissionResult<EmittedRelation> {
         let input = self.relation(input_expression)?;
         if expression.schema() != input_expression.schema()
-            || !facts_match(expression.facts(), input_expression.facts())
+            || !expression.facts().matches(input_expression.facts())
         {
             return Err(EmissionFailure::unsupported(expression.origin()));
         }
@@ -450,7 +450,7 @@ impl Emitter {
     ) -> EmissionResult<EmittedRelation> {
         let input = self.relation(input_expression)?;
         if expression.schema() != input_expression.schema()
-            || !facts_match(expression.facts(), input_expression.facts())
+            || !expression.facts().matches(input_expression.facts())
             || !schema_names_are_unique(input_expression.schema())
         {
             return Err(EmissionFailure::unsupported(expression.origin()));
@@ -497,17 +497,17 @@ impl Emitter {
         expression: &ScalarExpression,
         references: &BTreeMap<ColumnId, String>,
     ) -> EmissionResult<String> {
-        // Unlike the relation-level `facts_are_unknown`/`facts_match` guards,
-        // totality is never checked here. No lowering call site proves a
-        // `Knowledge<Totality>` fact today (issue #404), so it is always
+        // Unlike the relation-level `facts_are_unknown`/`RelationFacts::matches`
+        // guards, totality is never checked here. No lowering call site proves
+        // a `Knowledge<Totality>` fact today (issue #404), so it is always
         // `Unknown` and this would-be guard could never fire.
         // Nor would it need to once a producer lands: `Totality` may never be
         // inferred from model multiplicity alone (issues #51/#185), so any
         // sound producer necessarily derives it from query-structural facts
         // that re-lowering the same emitted text reproduces identically —
         // unlike a proven candidate key or row-semantics fact, which can rest
-        // on non-local reasoning `facts_are_unknown`/`facts_match` must keep
-        // honest.
+        // on non-local reasoning `facts_are_unknown`/`RelationFacts::matches`
+        // must keep honest.
         match expression.operator() {
             ScalarOperator::Column(column) => references
                 .get(column)
@@ -633,19 +633,6 @@ fn facts_are_distinct_set(facts: &RelationFacts) -> bool {
             facts.row_semantics().as_proven(),
             Some((RowSemantics::Set, _))
         )
-}
-
-fn facts_match(left: &RelationFacts, right: &RelationFacts) -> bool {
-    knowledge_matches(left.candidate_keys(), right.candidate_keys())
-        && knowledge_matches(left.row_semantics(), right.row_semantics())
-}
-
-fn knowledge_matches<T: PartialEq>(left: &Knowledge<T>, right: &Knowledge<T>) -> bool {
-    match (left.as_proven(), right.as_proven()) {
-        (None, None) => true,
-        (Some((left, _)), Some((right, _))) => left == right,
-        _ => false,
-    }
 }
 
 fn schema_names_are_unique(schema: &RelationSchema) -> bool {
