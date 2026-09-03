@@ -16,7 +16,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::grammar::pda::{Frame, LexKind, Pda, State, Step, is_ident_start, is_ident_tail, step};
-use crate::schema::model::{PrimName, Resolved, Schema, TypeClass};
+use crate::schema::model::{PrimName, Resolved, Schema, Temporal, TypeClass};
 use crate::schema::narrow::value_ident_constrains;
 
 /// The first byte of a two-byte operator the PDA has **already consumed** when a
@@ -271,14 +271,42 @@ pub enum L2Position {
     /// whitespace, a milestoning date, or — at the first slot — the matching
     /// closer, so the call cannot smuggle a phantom identifier/string/number
     /// argument in behind it (confirmed live: `Class.all('French')` /
-    /// `Class.all(all)` both fail to compile). It does not cap the argument
-    /// count at two or validate a milestone symbol beyond its lexical shape —
-    /// that residue, like every other `%`-literal position in this overlay, is
-    /// left to the compiler oracle. Armed only for [`SOURCE_METHOD`]'s own
-    /// call — other niladic builtins (`->toOne()`, aggregation reducers) may
-    /// have the same latent gap but are not narrowed here; out of scope for
-    /// this rule.
-    SourceMethodArg,
+    /// `Class.all(all)` both fail to compile). Armed only for
+    /// [`SOURCE_METHOD`]'s own call — other niladic builtins (`->toOne()`,
+    /// aggregation reducers) may have the same latent gap but are not narrowed
+    /// here; out of scope for this rule.
+    ///
+    /// `required` (issue #384) is the class's own [`Temporal`] arity — `Some(1)`
+    /// for a business-/processing-temporal class, `Some(2)` for a bitemporal
+    /// one — or `None` when the schema carries no `temporal` field for it, in
+    /// which case this position keeps the pre-#384 pass-through: a milestone
+    /// date or `$`-variable is admitted at any count, and a milestone symbol's
+    /// own validity beyond its lexical shape is, like every other `%`-literal
+    /// position in this overlay, left to the compiler oracle
+    /// (`ScopeTracker::on_open`'s doc comment explains why an absent field
+    /// reads as "unannotated" rather than "definitely not milestoned"). `seen`
+    /// is how many date/`$`-variable arguments this open call has already
+    /// completed, so a `required` class's slot masks the closer while an
+    /// argument is still owed and masks a fresh value once its arity is met —
+    /// the companion decision, "comma or closer" right after a *completed*
+    /// argument, is [`SourceMethodArgSep`](L2Position::SourceMethodArgSep).
+    SourceMethodArg {
+        /// The class's declared milestoning arity, or `None` when unannotated.
+        required: Option<usize>,
+        /// How many date/`$`-variable arguments this call has completed so far.
+        seen: usize,
+    },
+    /// Issue #384's separator half of [`SourceMethodArg`](L2Position::SourceMethodArg):
+    /// the position right after a *completed* milestoning argument in a
+    /// `required`-arity call, deciding whether a `,` or the call's own `)` comes
+    /// next — the source-method mirror of
+    /// [`StoreMethodArgSep`](L2Position::StoreMethodArgSep), and reached only
+    /// when `required` is known (an unannotated call's post-argument position
+    /// stays [`None`](L2Position::None), exactly as it was before #384).
+    SourceMethodArgSep {
+        /// Whether the call still owes at least one more date argument.
+        remaining: bool,
+    },
     /// N3c (store arm): the identifier right after a pipeline-source **store**
     /// path's own `->` must name a real store method. A store path denotes a
     /// `meta::relational::metamodel::Database`, not a class extent, so the only
@@ -1215,6 +1243,22 @@ pub(crate) struct ScopeTracker {
     /// without an intervening `on_open` (a comparison operand directly
     /// following the call's close, e.g. a hypothetical `A.all() == 5`).
     in_source_method_args: bool,
+    /// Issue #384: the milestoning arity [`Temporal::arity`] declares for the
+    /// class the currently-open [`SOURCE_METHOD`] call is on — resolved once at
+    /// `on_open` from the schema's [`Schema::temporal`] for that class, `None`
+    /// when the schema carries no `temporal` field for it (S1's pre-#384
+    /// pass-through). Meaningless when [`in_source_method_args`](Self::in_source_method_args)
+    /// is `false`; cleared alongside it at the matching `on_close` for the same
+    /// leak-prevention reason.
+    source_method_required: Option<usize>,
+    /// Issue #384: how many commas the currently-open source-method call has
+    /// emitted — the arity counterpart of
+    /// [`store_call_commas`](Self::store_call_commas), tracked the identical
+    /// way and for the identical reason (a `,` only ever follows a completed
+    /// milestoning argument, so `complete = commas + 1`). Reset unconditionally
+    /// at every `on_open`, exactly like `store_call_commas`, and meaningless
+    /// when [`in_source_method_args`](Self::in_source_method_args) is `false`.
+    source_method_commas: usize,
     /// The source method's own call ([`SOURCE_METHOD`]) has just closed, so the
     /// next token sits on the class extent ([`L2Position::SourceExtent`]).
     /// Consumed one token later, exactly like
@@ -1493,7 +1537,7 @@ impl ScopeTracker {
             (
                 _,
                 L2Position::ReValue(_)
-                | L2Position::SourceMethodArg
+                | L2Position::SourceMethodArg { .. }
                 | L2Position::StoreMethodArg
                 | L2Position::ExtentMethodArg(_),
             ) => L2Position::None,
@@ -1554,17 +1598,9 @@ impl ScopeTracker {
             // never fuses a delimiter with a neighbour), so `bytes[0]` is the
             // opener `on_open` needs to tell a brace lambda's `{` apart from
             // every other opener (issue #351).
-            Lexeme::Open => self.on_open(pre_state, bytes[0]),
+            Lexeme::Open => self.on_open(pre_state, bytes[0], schema),
             Lexeme::Close => self.on_close(),
-            Lexeme::Comma => {
-                self.lambda_first_ident = None;
-                self.last_ident = None;
-                self.pending_binder_element = None;
-                self.pending_binder_class = None;
-                if self.store_call_arity.is_some() {
-                    self.store_call_commas += 1;
-                }
-            }
+            Lexeme::Comma => self.on_comma(),
             Lexeme::Str(content) => {
                 self.emitted_strings.push(content.clone());
                 self.last_ident = None;
@@ -2060,13 +2096,25 @@ impl ScopeTracker {
         }
     }
 
-    fn on_open(&mut self, pre_state: State, opener: u8) {
+    fn on_open(&mut self, pre_state: State, opener: u8, schema: &Schema) {
         let method = self.last_ident.take();
         self.depth += 1;
         // N3's grammar production constrains `all()`'s argument slot regardless
         // of nesting depth — unlike the nested-pipeline reset below, this is not
         // depth-gated.
         self.in_source_method_args = method.as_deref() == Some(SOURCE_METHOD);
+        // Issue #384: resolved from `cur_class` (the source classpath `on_ident`
+        // just bound, straight off the dot this call's method name followed —
+        // never an arrow receiver, which only an arrow call sets) rather than
+        // the `receiver` local below, so the lookup happens once, beside the
+        // flag it feeds, instead of threading a second class fact through the
+        // rest of this function.
+        self.source_method_required = self
+            .in_source_method_args
+            .then(|| self.cur_class.as_deref().and_then(|c| schema.temporal(c)))
+            .flatten()
+            .map(Temporal::arity);
+        self.source_method_commas = 0;
         // N3d: a store method's own call owes exactly its declared string
         // arguments, so arm the argument/separator positions for its whole extent.
         self.store_call_arity = method.as_deref().and_then(store_method_arity);
@@ -2137,6 +2185,14 @@ impl ScopeTracker {
         // was the source method's, so what follows sits on the class extent.
         self.awaiting_extent_step = self.in_source_method_args;
         self.in_source_method_args = false;
+        // Issue #384: cleared for the identical leak-prevention reason —
+        // meaningless once this call's own delimiter closes, and the next
+        // `on_open` recomputes it fresh for whatever call opens next.
+        // `source_method_commas` needs no matching reset here, exactly as
+        // `store_call_commas` needs none beside `store_call_arity` below: both
+        // are unconditionally zeroed at every `on_open`, so a stale value
+        // between here and the next open is never read.
+        self.source_method_required = None;
         // N4a reads the store call's close the way N3e reads the source method's:
         // the call that just closed was the store method's, so what follows sits
         // on its `Table[1]` result. Assigned rather than or-ed, so an enclosing
@@ -2228,6 +2284,27 @@ impl ScopeTracker {
         self.pending_arrow_receiver = None;
     }
 
+    /// A `,` separates elements in whichever list is currently open — a
+    /// lambda's parameter list, an argument list, or (issue #384) a source- or
+    /// store-method's own milestoning/string argument list. Factored out of
+    /// `dispatch_token`'s match arm, which grew one comma-counting `if` too
+    /// many for clippy's cognitive-complexity budget once this issue's own
+    /// count was added beside `store_call_commas`'.
+    fn on_comma(&mut self) {
+        self.lambda_first_ident = None;
+        self.last_ident = None;
+        self.pending_binder_element = None;
+        self.pending_binder_class = None;
+        if self.store_call_arity.is_some() {
+            self.store_call_commas += 1;
+        }
+        // Issue #384: the source-method mirror of the store-call comma count
+        // directly above, tracked the identical way.
+        if self.in_source_method_args {
+            self.source_method_commas += 1;
+        }
+    }
+
     /// Whether `state` is a column-spec anchor sitting **directly inside** an
     /// arm-R tilde bracket (`~[Week, Segment]`, and the name before the `:` in
     /// `~[Week: …]`) — the position an arm-R column *key* opens at. The first
@@ -2295,6 +2372,46 @@ impl ScopeTracker {
         })
     }
 
+    /// Issue #384's separator position, the source-method mirror of
+    /// [`store_method_arg_sep`](Self::store_method_arg_sep) and read for the
+    /// identical reason: a milestoning date literal and a `$`-variable are both
+    /// **value-terminal** in-lexeme states — nothing can extend them further
+    /// ([`step_in_milestone_lit`]/[`step_in_member_ident`] in `grammar/pda.rs`
+    /// delegate every other byte straight to the transition table
+    /// `AfterValue`/`AfterMemberName` would use) — but the byte-PDA's own state
+    /// name has not advanced past the value yet, so this is the only point the
+    /// `,`-or-`)` byte can be masked at; waiting for a genuine
+    /// [`State::completes_a_term`] anchor is too late, because that anchor is
+    /// only reached *after* the separator byte itself has already been chosen
+    /// and folded. `InDateLit`/`InDateTime`/`InDateFrac`/`InMilestoneLit` cover
+    /// every way a milestone/date literal can end; `InMemberIdent` covers a
+    /// `$`-variable's own name.
+    ///
+    /// The value currently resting on one of those states has not been counted
+    /// into [`source_method_commas`](Self::source_method_commas) yet — a comma
+    /// only increments the count once it is itself chosen, which has not
+    /// happened here — so `+ 1` is required for both disjuncts, exactly as
+    /// [`store_method_arg_sep`](Self::store_method_arg_sep) needs it for its own
+    /// two decided states.
+    fn source_method_arg_sep(&self, state: State) -> Option<L2Position> {
+        if !self.in_source_method_args {
+            return None;
+        }
+        let required = self.source_method_required?;
+        let decided = state.completes_a_term()
+            || matches!(
+                state,
+                State::InDateLit
+                    | State::InDateTime
+                    | State::InDateFrac
+                    | State::InMilestoneLit
+                    | State::InMemberIdent
+            );
+        decided.then(|| L2Position::SourceMethodArgSep {
+            remaining: self.source_method_commas + 1 < required,
+        })
+    }
+
     /// The L2 constraint at the current PDA `state`.
     ///
     /// At an **anchor** state (an inter-lexeme position) the rule is read from the
@@ -2312,6 +2429,12 @@ impl ScopeTracker {
         // arity half of the rule would be unreachable, because the token that
         // closes the literal is read at this state, not at `AfterValue`.
         if let Some(sep) = self.store_method_arg_sep(state) {
+            return sep;
+        }
+        // Issue #384's identical arity-slot precedent for the source method's
+        // own call — see `source_method_arg_sep`'s doc comment for why this
+        // must be read here rather than at a `completes_a_term` anchor.
+        if let Some(sep) = self.source_method_arg_sep(state) {
             return sep;
         }
         let pos = if state.lexeme_kind().is_some() {
@@ -2523,7 +2646,10 @@ impl ScopeTracker {
     /// comparison context.
     fn value_opening_position(&self, state: State) -> L2Position {
         if self.in_source_method_args {
-            L2Position::SourceMethodArg
+            L2Position::SourceMethodArg {
+                required: self.source_method_required,
+                seen: self.source_method_commas,
+            }
         } else if self.store_call_arity.is_some() {
             L2Position::StoreMethodArg
         } else if self.receiver_only_call {
@@ -2585,13 +2711,17 @@ impl ScopeTracker {
     /// bound *outside* the lambda the decoder streams — a function/service
     /// parameter, or an enclosing `let`, neither of which the stream ever sees —
     /// so `bound_vars` being empty here is the ordinary case, not evidence of a
-    /// phantom name. The schema contract carries no temporal stereotype, so L2
-    /// cannot type this argument any better than L1 already does; masking `$d`
-    /// while admitting `%latest` at the identical position refused a query shape
-    /// the engine accepts (live-verified: the issue's own `grammarToJson/lambda`
-    /// repro compiles). `in_source_method_args` is this exemption's precise
-    /// scope: every other sigil position (a filter/project lambda body, a `let`
-    /// initializer, …) keeps S2's ordinary bound-name check.
+    /// phantom name; masking `$d` while admitting `%latest` at the identical
+    /// position refused a query shape the engine accepts (live-verified: the
+    /// issue's own `grammarToJson/lambda` repro compiles). This exemption is
+    /// about the sigil's *legality*, not its *count* — issue #384's arity rule
+    /// (`source_method_required`/[`SourceMethodArg`](L2Position::SourceMethodArg))
+    /// separately caps how many date arguments a known-milestoned class's call
+    /// admits, but even there the `$` sigil itself is never the wrong shape, so
+    /// this exemption stays unconditional. `in_source_method_args` is this
+    /// exemption's precise scope: every other sigil position (a filter/project
+    /// lambda body, a `let` initializer, …) keeps S2's ordinary bound-name
+    /// check.
     pub(crate) fn masks_unbound_sigil(&self, state: State) -> bool {
         state.opens_refvar_sigil() && self.bound_vars.is_empty() && !self.in_source_method_args
     }
@@ -2818,11 +2948,29 @@ mod tests {
         Schema::from_json(SAMPLE).expect("parses")
     }
 
-    /// Drive `tokens` through a fresh PDA + tracker exactly as the session does
-    /// (pre-state captured before folding), returning both so a test can read the
-    /// position at the live automaton state.
-    fn run(tokens: &[&[u8]]) -> (ScopeTracker, Pda) {
-        let schema = schema();
+    /// Issue #384: a schema whose classes carry every `temporal` shape, for the
+    /// S1 arity-narrowing unit tests — `Biz`/`Proc` need one date argument,
+    /// `Bi` needs two, `Plain` (like `SAMPLE`'s `A`/`B`) needs none and is the
+    /// pre-#384 pass-through case.
+    const MILESTONED_SAMPLE: &str = r#"{
+      "db_id": "d", "db_path": "spider::d::Db",
+      "classes": {
+        "Biz": { "simple_name": "Biz", "properties": [], "temporal": "business" },
+        "Proc": { "simple_name": "Proc", "properties": [], "temporal": "processing" },
+        "Bi": { "simple_name": "Bi", "properties": [], "temporal": "bitemporal" },
+        "Plain": { "simple_name": "Plain", "properties": [] }
+      },
+      "associations": [], "enums": {}
+    }"#;
+
+    fn milestoned_schema() -> Schema {
+        Schema::from_json(MILESTONED_SAMPLE).expect("parses")
+    }
+
+    /// Drive `tokens` through a fresh PDA + tracker over `schema`, exactly as the
+    /// session does (pre-state captured before folding), returning both so a
+    /// test can read the position at the live automaton state.
+    fn run_with_schema(tokens: &[&[u8]], schema: &Schema) -> (ScopeTracker, Pda) {
         let mut pda = Pda::new();
         let mut tracker = ScopeTracker::new();
         for token in tokens {
@@ -2831,9 +2979,13 @@ mod tests {
                 pda.advance(byte)
                     .expect("test tokens are valid emitted Pure");
             }
-            tracker.observe(token, &pre, &schema);
+            tracker.observe(token, &pre, schema);
         }
         (tracker, pda)
+    }
+
+    fn run(tokens: &[&[u8]]) -> (ScopeTracker, Pda) {
+        run_with_schema(tokens, &schema())
     }
 
     #[test]
@@ -3052,7 +3204,13 @@ mod tests {
         // ordinary call's first argument slot does.
         let (tracker, pda) = run(&[b"|", b"A", b".", b"all", b"("]);
         assert_eq!(pda.state(), State::ExpectValue);
-        assert_eq!(tracker.position(pda.state()), L2Position::SourceMethodArg);
+        assert_eq!(
+            tracker.position(pda.state()),
+            L2Position::SourceMethodArg {
+                required: None,
+                seen: 0
+            }
+        );
     }
 
     #[test]
@@ -3122,6 +3280,139 @@ mod tests {
     }
 
     #[test]
+    fn source_method_arg_carries_the_classs_declared_milestoning_arity() {
+        // Issue #384: `|Bi.all(` — `Bi` is bitemporal, so the value slot right
+        // after the call's own `(` must carry `required: Some(2)`, not the
+        // unannotated-class `None` `an_ordinary_calls_open_paren...`'s sibling
+        // test pins for `A`.
+        let ms = milestoned_schema();
+        let (tracker, pda) = run_with_schema(&[b"|", b"Bi", b".", b"all", b"("], &ms);
+        assert_eq!(pda.state(), State::ExpectValue);
+        assert_eq!(
+            tracker.position(pda.state()),
+            L2Position::SourceMethodArg {
+                required: Some(2),
+                seen: 0
+            }
+        );
+
+        // A single-temporal class (`Biz`, business) carries arity 1.
+        let (tracker, pda) = run_with_schema(&[b"|", b"Biz", b".", b"all", b"("], &ms);
+        assert_eq!(
+            tracker.position(pda.state()),
+            L2Position::SourceMethodArg {
+                required: Some(1),
+                seen: 0
+            }
+        );
+
+        // `Plain` carries no `temporal` field — the pre-#384 pass-through.
+        let (tracker, pda) = run_with_schema(&[b"|", b"Plain", b".", b"all", b"("], &ms);
+        assert_eq!(
+            tracker.position(pda.state()),
+            L2Position::SourceMethodArg {
+                required: None,
+                seen: 0
+            }
+        );
+    }
+
+    #[test]
+    fn source_method_arg_tracks_seen_across_a_comma() {
+        // Issue #384: `|Bi.all(%latest,` — one comma emitted inside a bitemporal
+        // call's own arguments must bump `seen` to 1 at the next value slot, so
+        // the second argument's own admissibility is checked against it.
+        let ms = milestoned_schema();
+        let (tracker, pda) =
+            run_with_schema(&[b"|", b"Bi", b".", b"all", b"(", b"%latest", b","], &ms);
+        assert_eq!(pda.state(), State::ExpectValueReq);
+        assert_eq!(
+            tracker.position(pda.state()),
+            L2Position::SourceMethodArg {
+                required: Some(2),
+                seen: 1
+            }
+        );
+    }
+
+    #[test]
+    fn source_method_arg_sep_owes_a_second_bitemporal_argument() {
+        // Issue #384: `|Bi.all(%latest` — resting right after the first of a
+        // bitemporal class's two required date arguments (the byte-PDA's own
+        // `InMilestoneLit` terminal state, not a fresh anchor — see
+        // `ScopeTracker::source_method_arg_sep`'s doc comment for why the
+        // decision has to be read here) must report `SourceMethodArgSep {
+        // remaining: true }`, not the stale value-open stamp.
+        let ms = milestoned_schema();
+        let (tracker, pda) = run_with_schema(&[b"|", b"Bi", b".", b"all", b"(", b"%latest"], &ms);
+        assert_eq!(pda.state(), State::InMilestoneLit);
+        assert_eq!(
+            tracker.position(pda.state()),
+            L2Position::SourceMethodArgSep { remaining: true }
+        );
+    }
+
+    #[test]
+    fn source_method_arg_sep_owes_only_the_closer_once_the_arity_is_met() {
+        // Issue #384: `|Bi.all(%latest,%latest` — the second (and last) of a
+        // bitemporal class's two required arguments must report `remaining:
+        // false`, admitting only the closer next.
+        let ms = milestoned_schema();
+        let (tracker, pda) = run_with_schema(
+            &[
+                b"|", b"Bi", b".", b"all", b"(", b"%latest", b",", b"%latest",
+            ],
+            &ms,
+        );
+        assert_eq!(pda.state(), State::InMilestoneLit);
+        assert_eq!(
+            tracker.position(pda.state()),
+            L2Position::SourceMethodArgSep { remaining: false }
+        );
+    }
+
+    #[test]
+    fn source_method_arg_sep_owes_only_the_closer_for_a_single_temporal_class() {
+        // Issue #384: `|Biz.all(%latest` — a business-temporal class's single
+        // required argument is already met after one date, so the separator
+        // must admit only the closer, never a comma.
+        let ms = milestoned_schema();
+        let (tracker, pda) = run_with_schema(&[b"|", b"Biz", b".", b"all", b"(", b"%latest"], &ms);
+        assert_eq!(pda.state(), State::InMilestoneLit);
+        assert_eq!(
+            tracker.position(pda.state()),
+            L2Position::SourceMethodArgSep { remaining: false }
+        );
+    }
+
+    #[test]
+    fn source_method_arg_sep_reads_a_dollar_variable_argument_too() {
+        // Issue #384: a `$`-variable argument (issue #367's own admitted shape)
+        // must be counted exactly like a `%`-literal date — `|Bi.all($d` rests
+        // on `InMemberIdent` (the refVar's own name), not a date state, and
+        // must still report `remaining: true` for a bitemporal class.
+        let ms = milestoned_schema();
+        let (tracker, pda) = run_with_schema(&[b"|", b"Bi", b".", b"all", b"(", b"$", b"d"], &ms);
+        assert_eq!(pda.state(), State::InMemberIdent);
+        assert_eq!(
+            tracker.position(pda.state()),
+            L2Position::SourceMethodArgSep { remaining: true }
+        );
+    }
+
+    #[test]
+    fn source_method_arg_sep_stays_unconstrained_for_an_unannotated_class() {
+        // Regression guard (issue #384): the pre-#384 pass-through for a class
+        // with no `temporal` field must be byte-for-byte unchanged — the
+        // separator position after a completed argument stays `None`
+        // (unconstrained), never `SourceMethodArgSep`, exactly as it was before
+        // this rule existed (`fill_source_method_arg` never capped the count).
+        let (tracker, pda) = run(&[b"|", b"A", b".", b"all", b"(", b"%latest"]);
+        assert_eq!(pda.state(), State::InMilestoneLit);
+        assert_eq!(tracker.position(pda.state()), L2Position::None);
+    }
+
+    #[test]
     fn source_method_arg_does_not_leak_past_the_calls_own_close() {
         // Drives `on_open`/`on_close` directly (private methods, reachable from
         // this in-file test module) to prove `in_source_method_args` cannot survive
@@ -3132,10 +3423,13 @@ mod tests {
         // `SourceMethodArg` instead of the armed `ReValue` comparison.
         let mut tracker = ScopeTracker::new();
         tracker.last_ident = Some(SOURCE_METHOD.to_owned());
-        tracker.on_open(State::AfterDot, b'(');
+        tracker.on_open(State::AfterDot, b'(', &schema());
         assert_eq!(
             tracker.opening_position(State::ExpectValue),
-            L2Position::SourceMethodArg,
+            L2Position::SourceMethodArg {
+                required: None,
+                seen: 0
+            },
             "sanity: opening the source method's call arms SourceMethodArg"
         );
         tracker.on_close();

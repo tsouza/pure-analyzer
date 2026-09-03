@@ -26,10 +26,11 @@ pub const TERM_END_BYTES: &[u8] = b"),;]}";
 /// terminator invariant by construction rather than by someone remembering.
 ///
 /// The `after_dash` halves are excluded because their term is *not* whole — the
-/// `-` already emitted owes the `>` that completes its arrow. The two argument-slot
-/// rules are excluded for the reason that decides the whole classification: a slot
+/// `-` already emitted owes the `>` that completes its arrow. The argument-slot
+/// and argument-separator rules (store's and, issue #384, the source method's)
+/// are excluded for the reason that decides the whole classification: a slot
 /// with an arity still to meet has an obligation outstanding, and clearing a
-/// terminator is how N3d and N3g state it.
+/// terminator is how N3d, N3g, and #384's own arity rule state it.
 #[must_use]
 pub fn is_completed_term(pos: &L2Position) -> bool {
     match pos {
@@ -40,7 +41,8 @@ pub fn is_completed_term(pos: &L2Position) -> bool {
         | L2Position::SourceIdent
         | L2Position::BinderValueSourceIdent
         | L2Position::SourceMethod
-        | L2Position::SourceMethodArg
+        | L2Position::SourceMethodArg { .. }
+        | L2Position::SourceMethodArgSep { .. }
         | L2Position::StoreMethod
         | L2Position::StoreMethodArg
         | L2Position::StoreMethodArgSep { .. }

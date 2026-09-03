@@ -89,9 +89,15 @@ enum CacheKey {
     SourceMethod,
     /// N3c's store-method set — always [`STORE_METHODS`].
     StoreMethod,
-    /// The source method's argument-position set — a whole-vocab constant
-    /// (independent of schema, class, or emitted prefix), so one key suffices.
-    SourceMethodArg,
+    /// The source method's argument-position set (issue #384's `required`/`seen`
+    /// pair, `None` for the pre-#384 unannotated-class constant) — still a
+    /// whole-vocab constant for any *given* pair, independent of the emitted
+    /// prefix, so the pair alone keys the memo.
+    SourceMethodArg(Option<usize>, usize),
+    /// Issue #384's separator set: the source-method mirror of
+    /// [`StoreMethodArgSep`](CacheKey::StoreMethodArgSep) below, keyed the
+    /// identical way.
+    SourceMethodArgSep(bool),
     /// N3d's store-method argument-slot set — likewise a whole-vocab constant.
     StoreMethodArg,
     /// N3d's store-method separator set. Whether the call still owes another
@@ -249,25 +255,14 @@ pub(crate) fn narrow_into(
             })
         }
         L2Position::ScalarMethod(tc) => {
-            let masked_by = *tc;
-            // Past the last denied name N3i knows, the position constrains
-            // nothing: T4's own half is a whole-token match, which no non-empty
-            // prefix can reach.
-            let Some(cursor) = deny_cursor(&SCALAR_DENY, prefix) else {
-                return false;
-            };
-            with_cache(
-                dst,
-                cache,
-                CacheKey::ScalarMethod(masked_by, cursor),
-                |dst| {
-                    fill_denied_method(dst, vocab, eos_bit, &SCALAR_DENY, cursor, Some(masked_by));
-                },
-            )
+            dispatch_scalar_method(dst, cache, prefix, vocab, eos_bit, *tc)
         }
-        L2Position::SourceMethodArg => with_cache(dst, cache, CacheKey::SourceMethodArg, |dst| {
-            fill_source_method_arg(dst, vocab, eos_bit);
-        }),
+        L2Position::SourceMethodArg { required, seen } => {
+            dispatch_source_method_arg(dst, cache, vocab, eos_bit, *required, *seen)
+        }
+        L2Position::SourceMethodArgSep { remaining } => {
+            dispatch_source_method_arg_sep(dst, cache, vocab, eos_bit, *remaining)
+        }
         L2Position::StoreMethodArg => with_cache(dst, cache, CacheKey::StoreMethodArg, |dst| {
             fill_store_method_arg(dst, vocab, eos_bit);
         }),
@@ -349,6 +344,69 @@ pub(crate) fn narrow_into(
         | L2Position::RelationColumn
         | L2Position::RefVar => false,
     }
+}
+
+/// [`L2Position::ScalarMethod`] (T4) dispatch, factored out of [`narrow_into`]
+/// for the same line-budget reason [`dispatch_source_method_arg`] below is —
+/// this arm's deny-cursor short-circuit plus its `with_cache` call no longer
+/// fits `narrow_into`'s other arms' one-line style once rustfmt wraps it.
+fn dispatch_scalar_method(
+    dst: &mut BitMask,
+    cache: &mut NarrowCache,
+    prefix: &[u8],
+    vocab: &Vocab,
+    eos_bit: u32,
+    masked_by: TypeClass,
+) -> bool {
+    // Past the last denied name N3i knows, the position constrains nothing:
+    // T4's own half is a whole-token match, which no non-empty prefix can reach.
+    let Some(cursor) = deny_cursor(&SCALAR_DENY, prefix) else {
+        return false;
+    };
+    with_cache(
+        dst,
+        cache,
+        CacheKey::ScalarMethod(masked_by, cursor),
+        |dst| {
+            fill_denied_method(dst, vocab, eos_bit, &SCALAR_DENY, cursor, Some(masked_by));
+        },
+    )
+}
+
+/// Issue #384's [`L2Position::SourceMethodArg`] dispatch, factored out of
+/// [`narrow_into`] purely to keep that function under its line budget — the
+/// two-field payload's `with_cache` call does not fit `narrow_into`'s other
+/// arms' one-line style once rustfmt wraps it.
+fn dispatch_source_method_arg(
+    dst: &mut BitMask,
+    cache: &mut NarrowCache,
+    vocab: &Vocab,
+    eos_bit: u32,
+    required: Option<usize>,
+    seen: usize,
+) -> bool {
+    with_cache(
+        dst,
+        cache,
+        CacheKey::SourceMethodArg(required, seen),
+        |dst| {
+            fill_source_method_arg(dst, vocab, eos_bit, required, seen);
+        },
+    )
+}
+
+/// Issue #384's [`L2Position::SourceMethodArgSep`] dispatch — [`narrow_into`]'s
+/// line-budget twin of [`dispatch_source_method_arg`] above.
+fn dispatch_source_method_arg_sep(
+    dst: &mut BitMask,
+    cache: &mut NarrowCache,
+    vocab: &Vocab,
+    eos_bit: u32,
+    remaining: bool,
+) -> bool {
+    with_cache(dst, cache, CacheKey::SourceMethodArgSep(remaining), |dst| {
+        fill_source_method_arg_sep(dst, vocab, eos_bit, remaining);
+    })
 }
 
 /// Whether N7 actually constrains a value position that has emitted `prefix`:
@@ -596,7 +654,8 @@ impl<'a> TrieRule<'a> {
             // new [`L2Position`] must be classified here and no arm can be
             // deleted without a compile error.
             L2Position::None
-            | L2Position::SourceMethodArg
+            | L2Position::SourceMethodArg { .. }
+            | L2Position::SourceMethodArgSep { .. }
             | L2Position::StoreMethodArg
             | L2Position::StoreMethodArgSep { .. }
             | L2Position::SourceExtent { .. }
@@ -787,7 +846,8 @@ pub(crate) fn narrow_fused_into(
         | L2Position::BinderValueSourceIdent
         | L2Position::SourceMethod
         | L2Position::StoreMethod
-        | L2Position::SourceMethodArg
+        | L2Position::SourceMethodArg { .. }
+        | L2Position::SourceMethodArgSep { .. }
         | L2Position::StoreMethodArg
         | L2Position::StoreMethodArgSep { .. }
         | L2Position::SourceExtent { .. }
@@ -1329,29 +1389,56 @@ fn fill_reducer(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32, masked_by: TypeC
 /// position right after the source method's own `(` (or after a comma inside
 /// it) has no legal *identifier/literal* argument at all, only its own closer,
 /// intervening whitespace, or a milestoning date (`docs/spec/grammar.md`'s
-/// `milestoneLit`/`dateLit`, both classified [`Lexeme::Date`] — bitemporal
-/// milestoning legally passes zero, one, or two comma-separated date arguments
-/// here, confirmed by the corpus's own `Firm.all(%latest, %latest)` fixture and
-/// the modern-dialect seed corpus). This rule does not cap the count at two or
-/// validate a milestone symbol beyond its lexical shape — like every other
-/// `%`-literal position in this overlay, that residue is left to the compiler
-/// oracle; it only ever masks the phantom-argument shapes the walker was
+/// `milestoneLit`/`dateLit`, both classified [`Lexeme::Date`], or a `$`-variable
+/// (issue #367) — bitemporal milestoning legally passes zero, one, or two
+/// comma-separated date arguments here, confirmed by the corpus's own
+/// `Firm.all(%latest, %latest)` fixture and the modern-dialect seed corpus).
+/// This rule only ever masks the phantom-argument shapes the walker was
 /// actually observed emitting (`Class.all('French')`, `Class.all(all)` — an
 /// identifier or string literal, never legal here). Every OTHER legal-at-L1
-/// value-start byte (an identifier, a string quote, a non-milestone digit, `$`,
-/// `~`, a nested opener, `|`) resolves to a distinct, non-`Ws`/`Close`/`Date`
+/// value-start byte (an identifier, a string quote, a non-milestone digit, `~`,
+/// a nested opener, `|`) resolves to a distinct, non-`Ws`/`Close`/`Date`/`Dollar`
 /// [`Lexeme`] under [`classify`], so a whole-token classification (mirroring
 /// [`fill_operand`]'s style — no trie/prefix-walk is needed, since legality here
-/// is a function of shape alone) keeps exactly the three shapes that are never a
-/// phantom argument: `Ws`, `Close`, and `Date`.
-fn fill_source_method_arg(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32) {
+/// is a function of shape alone) keeps exactly the four shapes that are never a
+/// phantom argument: `Ws`, `Close`, `Date`, and `Dollar`.
+///
+/// `required` (issue #384) is the class's own milestoning arity — `None` when
+/// the schema carries no `temporal` field for it, in which case `Close` and a
+/// fresh `Date`/`Dollar` argument stay admissible at any `seen` count, exactly
+/// the pre-#384 whole-vocab constant this rule always was (it never capped the
+/// count at two or validated a milestone symbol beyond its lexical shape —
+/// like every other `%`-literal position in this overlay, that residue is left
+/// to the compiler oracle). When `required` is known, `Close` is masked while
+/// `seen < required` (an argument is still owed) and a fresh `Date`/`Dollar`
+/// argument is masked once `seen >= required` (the class's own arity is
+/// already met) — the companion "`,` or `)`" decision right after a
+/// *completed* argument is [`fill_source_method_arg_sep`].
+fn fill_source_method_arg(
+    dst: &mut BitMask,
+    vocab: &Vocab,
+    eos_bit: u32,
+    required: Option<usize>,
+    seen: usize,
+) {
+    let allow_close = match required {
+        Some(r) => seen >= r,
+        None => true,
+    };
+    let allow_value = match required {
+        Some(r) => seen < r,
+        None => true,
+    };
     dst.clear_all();
     for id in 0..vocab.len() as u32 {
         let bytes = vocab.bytes(id).unwrap_or(&[]);
-        if matches!(
-            classify(bytes),
-            Lexeme::Ws | Lexeme::Close | Lexeme::Date | Lexeme::Dollar
-        ) {
+        let keep = match classify(bytes) {
+            Lexeme::Ws => true,
+            Lexeme::Close => allow_close,
+            Lexeme::Date | Lexeme::Dollar => allow_value,
+            _ => false,
+        };
+        if keep {
             dst.set(id);
         }
     }
@@ -1363,11 +1450,33 @@ fn fill_source_method_arg(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32) {
 /// signature evidence), and a Pure string literal has exactly one opener.
 const STR_OPEN: u8 = b'\'';
 
-/// The byte that separates two store-method arguments.
+/// The byte that separates two store-method (or, issue #384, source-method
+/// milestoning) arguments.
 const ARG_SEP: u8 = b',';
 
-/// The byte that closes a store method's own call.
+/// The byte that closes a store method's (or, issue #384, source method's) own
+/// call.
 const CALL_CLOSE: u8 = b')';
+
+/// Refill `dst` with [`L2Position::SourceMethodArgSep`]'s set for a call that
+/// has completed `complete` milestoning arguments, plus EOS: a `,` while a date
+/// argument remains owed, the call's own `)` once the class's declared arity is
+/// met, and whitespace either way — the source-method mirror of
+/// [`fill_store_method_arg_sep`], minus that rule's doubled-quote allowance
+/// (`STR_OPEN`): a milestone/date literal and a `$`-variable have no quoting
+/// ambiguity a date argument's own closing byte could double.
+fn fill_source_method_arg_sep(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32, remaining: bool) {
+    let owed = if remaining { ARG_SEP } else { CALL_CLOSE };
+    dst.clear_all();
+    for id in 0..vocab.len() as u32 {
+        if opens_with(vocab.bytes(id).unwrap_or(&[]), |byte| {
+            byte.is_ascii_whitespace() || byte == owed
+        }) {
+            dst.set(id);
+        }
+    }
+    dst.set(eos_bit);
+}
 
 /// Refill `dst` with [`L2Position::StoreMethodArg`]'s set, plus EOS: an opened
 /// store-method argument slot owes a string literal, so only whitespace and a
@@ -2272,7 +2381,11 @@ mod tests {
             b"(",           // 8: a nested call argument — masked
             b",", // 9: not legal at L1 here either, but never a candidate structure — masked
         ]);
-        let (applied, mask) = run(&L2Position::SourceMethodArg, &[], v);
+        let pos = L2Position::SourceMethodArg {
+            required: None,
+            seen: 0,
+        };
+        let (applied, mask) = run(&pos, &[], v);
         assert!(applied);
         assert!(bit(&mask, 0), "the matching closer survives");
         assert!(bit(&mask, 1), "inter-token whitespace survives");
@@ -2287,6 +2400,93 @@ mod tests {
         );
         assert!(!bit(&mask, 8), "a nested call argument is masked");
         assert!(!bit(&mask, 9), "a comma is masked");
+    }
+
+    /// Issue #384: once the class's own milestoning arity is known, the value
+    /// slot's admission of `Close` vs. a fresh `Date`/`Dollar` argument flips
+    /// with `seen` against `required` — the arity half of the rule the
+    /// unannotated-class test above cannot exercise (`required: None` always
+    /// keeps both, at any count).
+    #[test]
+    fn source_method_arg_masks_the_closer_while_an_argument_is_still_owed() {
+        let v = vocab(&[b")", b"%latest", b"$"]);
+        // A business-temporal class (`required: Some(1)`) with none of its one
+        // required argument seen yet: the closer is masked (the call cannot
+        // close with zero arguments), a fresh date/refVar argument stays legal.
+        let pos = L2Position::SourceMethodArg {
+            required: Some(1),
+            seen: 0,
+        };
+        let (applied, mask) = run(&pos, &[], v);
+        assert!(applied);
+        assert!(
+            !bit(&mask, 0),
+            "L2 SOUNDNESS (issue #384): a required argument is still owed, so the closer must be masked"
+        );
+        assert!(bit(&mask, 1), "a fresh date literal is still legal");
+        assert!(bit(&mask, 2), "a fresh refVar sigil is still legal");
+    }
+
+    /// Issue #384: once a class's declared arity is fully met, the value slot
+    /// must mask a *fresh* argument (only the closer is legal there) — the
+    /// counterpart edge to the "still owed" test above.
+    #[test]
+    fn source_method_arg_masks_a_fresh_argument_once_the_arity_is_met() {
+        let v = vocab(&[b")", b"%latest", b"$"]);
+        // A business-temporal class (`required: Some(1)`) with its one required
+        // argument already seen: only the closer stays legal.
+        let pos = L2Position::SourceMethodArg {
+            required: Some(1),
+            seen: 1,
+        };
+        let (applied, mask) = run(&pos, &[], v);
+        assert!(applied);
+        assert!(bit(&mask, 0), "the closer is legal once the arity is met");
+        assert!(
+            !bit(&mask, 1),
+            "L2 PRECISION (issue #384): a third date literal exceeds a 1-arity class"
+        );
+        assert!(
+            !bit(&mask, 2),
+            "L2 PRECISION (issue #384): a second refVar sigil exceeds a 1-arity class"
+        );
+    }
+
+    /// Issue #384's separator half: right after a completed argument, `,` is
+    /// legal only while the class still owes another, and the closer only once
+    /// the arity is met — the source-method mirror of
+    /// `store_method_arg_sep_admits_the_owed_byte_and_masks_the_other`.
+    #[test]
+    fn source_method_arg_sep_admits_only_the_owed_byte() {
+        let v = vocab(&[b",", b")", b"  "]);
+        let (applied, still_owed) = run(
+            &L2Position::SourceMethodArgSep { remaining: true },
+            &[],
+            v.clone(),
+        );
+        assert!(applied);
+        assert!(
+            bit(&still_owed, 0),
+            "a comma is legal while an argument is still owed"
+        );
+        assert!(
+            !bit(&still_owed, 1),
+            "the closer is masked while an argument is still owed"
+        );
+        assert!(bit(&still_owed, 2), "whitespace stays legal either way");
+
+        let (applied, arity_met) =
+            run(&L2Position::SourceMethodArgSep { remaining: false }, &[], v);
+        assert!(applied);
+        assert!(
+            !bit(&arity_met, 0),
+            "a comma is masked once the arity is met"
+        );
+        assert!(
+            bit(&arity_met, 1),
+            "the closer is legal once the arity is met"
+        );
+        assert!(bit(&arity_met, 2), "whitespace stays legal either way");
     }
 
     #[test]
