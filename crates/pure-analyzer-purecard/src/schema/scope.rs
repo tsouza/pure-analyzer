@@ -1671,29 +1671,28 @@ impl ScopeTracker {
                 self.lambda_first_ident = Some(text.to_owned());
                 self.bind_var(text);
             }
-            // The arm-R map lambda binds its variable *after* a colon
-            // (`~[Col: x|…]`, `~'Name': x|…`), which the byte-PDA parks in an
-            // `InIdent` reached from `AfterColon`/`AfterColonWs`, not a value state.
-            // Recording it rebinds the binder at the following `|` — without this a
-            // re-used name keeps whatever class an earlier `filter(x|…)` lambda bound
-            // it to, and N1 unsoundly masks a projected column. A *class-named*
-            // identifier here is instead the type of a typed binder
-            // (`row: Person[1]|…`), whose true binder precedes the colon and is
-            // already `lambda_first_ident` (set at `ExpectValue`/`ExpectBraceBinder`
-            // above) — paired with the class here (N1/N2 §6.5) rather than left to
-            // fall back to the enclosing pipeline's own class at `on_pipe`, which is
-            // wrong whenever the annotation re-types the binder away from it (a join
-            // lambda's second binder is exactly this). Likewise a *primitive*-named
-            // identifier (`y: Integer[*]|…`, T3's aggregation-reduce binder) is a type
-            // annotation, not the binder. Both annotations' multiplicity brackets
-            // (`[*]`) still lie ahead, and `on_open` unconditionally clears
-            // `lambda_first_ident` on every opening delimiter (a defensive reset for a
-            // *fresh* argument list, which a multiplicity annotation is not) — so the
-            // binder name is read and stashed together with the class/`TypeClass`
-            // *now*, rather than trusted to survive in `lambda_first_ident` until
-            // `on_pipe`. An annotation resolving to neither (`t::NOPE`, an unknown
-            // class) falls through unrecorded, so `on_pipe` keeps its pass-through
-            // default for it (§4: pass through what the corpus does not attest).
+            // A typed lambda binder's own colon (`row: Person[1]|…`): the true
+            // binder precedes the colon and is already `lambda_first_ident`
+            // (set at `ExpectValue`/`ExpectBraceBinder` above). A
+            // *class-named* identifier here is instead the type of that
+            // typed binder, paired with the class here (N1/N2 §6.5) rather
+            // than left to
+            // fall back to the enclosing pipeline's own class at `on_pipe`,
+            // which is wrong whenever the annotation re-types the binder away
+            // from it (a join lambda's second binder is exactly this).
+            // Likewise a *primitive*-named identifier (`y: Integer[*]|…`,
+            // T3's aggregation-reduce binder) is a type annotation, not the
+            // binder. Both annotations' multiplicity brackets (`[*]`) still
+            // lie ahead, and `on_open` unconditionally clears
+            // `lambda_first_ident` on every opening delimiter (a defensive
+            // reset for a *fresh* argument list, which a multiplicity
+            // annotation is not) — so the binder name is read and stashed
+            // together with the class/`TypeClass` *now*, rather than trusted
+            // to survive in `lambda_first_ident` until `on_pipe`. An
+            // annotation resolving to neither (`t::NOPE`, an unknown class)
+            // falls through unrecorded, so `on_pipe` keeps its pass-through
+            // default for it (§4: pass through what the corpus does not
+            // attest).
             State::AfterColon | State::AfterColonWs => {
                 if let Some(prim) = PrimName::from_ident(text) {
                     if let Some(binder) = &self.lambda_first_ident {
@@ -1707,6 +1706,20 @@ impl ScopeTracker {
                     self.lambda_first_ident = Some(text.to_owned());
                     self.bind_var(text);
                 }
+            }
+            // The arm-R lambda binds its variable *after* its own colon
+            // (`~[Col: x|…]`, `~'Name': x|…`), which the byte-PDA parks in an
+            // `InRelColLambdaBinder` reached from `AfterRelColColon` — a
+            // colon position of its own, distinct from the typed-binder
+            // `AfterColon` above (issue #368: arm-R's binderVar is always
+            // bare, so this identifier can never be a type annotation the way
+            // the arm above must guard for). Recording it unconditionally
+            // rebinds the binder at the following `|` — without this a
+            // re-used name keeps whatever class an earlier `filter(x|…)`
+            // lambda bound it to, and N1 unsoundly masks a projected column.
+            State::AfterRelColColon => {
+                self.lambda_first_ident = Some(text.to_owned());
+                self.bind_var(text);
             }
             _ => {}
         }

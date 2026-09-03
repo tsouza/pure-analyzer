@@ -320,6 +320,8 @@ pub purecard::grammar::pda::State::AfterDollar
 pub purecard::grammar::pda::State::AfterDot
 pub purecard::grammar::pda::State::AfterMemberName
 pub purecard::grammar::pda::State::AfterName
+pub purecard::grammar::pda::State::AfterRelColColon
+pub purecard::grammar::pda::State::AfterRelColLambdaBinder
 pub purecard::grammar::pda::State::AfterRelColName
 pub purecard::grammar::pda::State::AfterStrLit
 pub purecard::grammar::pda::State::AfterValue
@@ -358,6 +360,7 @@ pub purecard::grammar::pda::State::InMultiplicity
 pub purecard::grammar::pda::State::InNumberFrac
 pub purecard::grammar::pda::State::InNumberInt
 pub purecard::grammar::pda::State::InRelColIdent
+pub purecard::grammar::pda::State::InRelColLambdaBinder
 pub purecard::grammar::pda::State::InRelColStrLit
 pub purecard::grammar::pda::State::InRelColStrLit::escaped: bool
 pub purecard::grammar::pda::State::InSourceIdent

@@ -420,6 +420,30 @@ pub enum State {
     /// trailing `~[a,]`) — mirrors [`ExpectValueReq`](State::ExpectValueReq)'s
     /// relationship to [`ExpectValue`](State::ExpectValue).
     ExpectRelColSpecReq,
+    /// The `:` that closed at [`AfterRelColName`](State::AfterRelColName) —
+    /// arm-R's own binder colon (`colLambda`/`mapLambda`/`frameLambda`'s
+    /// `colName ":" …`). Distinct from the generic
+    /// [`AfterColon`](State::AfterColon): every arm-R lambda body's
+    /// `binderVar` is a *bare* identifier (`docs/spec/grammar.md` §5.3), never
+    /// a typed one, so unlike `AfterColon` this position admits only a bare
+    /// binder identifier (opening at
+    /// [`InRelColLambdaBinder`](State::InRelColLambdaBinder)) or the
+    /// `winAggSpec`/`relAggSpec` brace form's `{` — never the `::` classpath
+    /// or `[` multiplicity a typed binder's colon carries (issue #368).
+    AfterRelColColon,
+    /// An arm-R lambda's own binder identifier, reached from
+    /// [`AfterRelColColon`](State::AfterRelColColon) (`colName: `**`x`**`|…`).
+    /// Distinct from [`InIdent`](State::InIdent)/[`InBinderType`](State::InBinderType):
+    /// it closes at [`AfterRelColLambdaBinder`](State::AfterRelColLambdaBinder),
+    /// which admits only the pipe that opens the lambda body, never the `::`/`[`
+    /// that would make it a typed binder (issue #368).
+    InRelColLambdaBinder,
+    /// A completed arm-R lambda binder
+    /// ([`InRelColLambdaBinder`](State::InRelColLambdaBinder)): only
+    /// whitespace or the binder's own pipe may follow — live-attested,
+    /// `over(~[k: t::A[*]|$k.k])` and the same shape with no `$` on the body
+    /// variable are each "no viable alternative" past the binder (issue #368).
+    AfterRelColLambdaBinder,
 }
 
 impl State {
@@ -514,6 +538,9 @@ impl State {
             State::AfterRelColName => "AfterRelColName",
             State::ExpectRelColSpec => "ExpectRelColSpec",
             State::ExpectRelColSpecReq => "ExpectRelColSpecReq",
+            State::AfterRelColColon => "AfterRelColColon",
+            State::InRelColLambdaBinder => "InRelColLambdaBinder",
+            State::AfterRelColLambdaBinder => "AfterRelColLambdaBinder",
         }
     }
 
@@ -612,13 +639,16 @@ impl State {
             State::AfterRelColName => 80,
             State::ExpectRelColSpec => 81,
             State::ExpectRelColSpecReq => 82,
+            State::AfterRelColColon => 83,
+            State::InRelColLambdaBinder => 84,
+            State::AfterRelColLambdaBinder => 85,
         }
     }
 
     /// The number of distinct automaton states — the length a per-state cache
     /// (`Vec<_>` keyed by [`index`](State::index)) must have. One more than the
     /// largest [`index`](State::index).
-    pub const COUNT: usize = 83;
+    pub const COUNT: usize = 86;
 
     /// Whether this state is a **completed-term hub** — an inter-lexeme position
     /// the automaton reaches by finishing a term, whichever kind of term it was.
@@ -700,7 +730,8 @@ impl State {
             | State::LetL
             | State::LetLe
             | State::LetLet
-            | State::InRelColIdent => Some(LexKind::Ident),
+            | State::InRelColIdent
+            | State::InRelColLambdaBinder => Some(LexKind::Ident),
             State::SawNumSign
             | State::InNumberInt
             | State::NeedFracDigit
@@ -1287,9 +1318,49 @@ fn step_in_rel_col_str_lit(escaped: bool, stack_top: Option<Frame>, byte: u8) ->
 fn step_after_rel_col_name(stack_top: Option<Frame>, byte: u8) -> Step {
     match byte {
         b if is_ws(b) => Step::Next(State::AfterRelColName),
-        b':' => Step::Next(State::AfterColon),
+        b':' => Step::Next(State::AfterRelColColon),
         b'|' => Step::Dead,
         _ => step_after_value(stack_top, byte),
+    }
+}
+
+// The `:` that closed at `AfterRelColName` — arm-R's own binder colon, never
+// the generic typed-binder colon `AfterColon` serves elsewhere (issue #368).
+// `binderVar = ident` (`docs/spec/grammar.md` §5.3) for every arm-R lambda
+// (`colLambda`/`mapLambda`/`frameLambda`), so this position may only open a
+// *bare* binder identifier (`InRelColLambdaBinder`) or the
+// `winAggSpec`/`relAggSpec` aggregation form's brace lambda (`agg:
+// {p,w,r|…}`) — never a typed binder's own `::` classpath or `[`
+// multiplicity. Live-attested: `over(~[k: t::A[*]|$k.k])` and the same shape
+// with no `$` on the body variable are each "no viable alternative" right
+// past the colon.
+fn step_after_rel_col_colon(byte: u8) -> Step {
+    match byte {
+        b if is_ws(b) => Step::Next(State::AfterRelColColon),
+        b'{' => Step::Push(Frame::BraceLambda, State::ExpectBraceBinder),
+        b if is_ident_start(b) => Step::Next(State::InRelColLambdaBinder),
+        _ => Step::Dead,
+    }
+}
+
+// An arm-R lambda's own binder identifier (`colName: `**`x`**`|…`). Unlike
+// `InBinderType` this name owes nothing but its own pipe: no `::` classpath,
+// no `[` multiplicity — arm-R's binderVar is always bare (issue #368).
+fn step_in_rel_col_lambda_binder(byte: u8) -> Step {
+    if is_ident_tail(byte) {
+        Step::Next(State::InRelColLambdaBinder)
+    } else {
+        step_after_rel_col_lambda_binder(byte)
+    }
+}
+
+// A completed arm-R lambda binder: only whitespace or its own pipe may
+// follow — never the `::`/`[` that would make it a typed binder (issue #368).
+fn step_after_rel_col_lambda_binder(byte: u8) -> Step {
+    match byte {
+        b if is_ws(b) => Step::Next(State::AfterRelColLambdaBinder),
+        b'|' => Step::Next(State::SawPipe),
+        _ => Step::Dead,
     }
 }
 
@@ -2049,6 +2120,9 @@ pub fn step(state: State, stack_top: Option<Frame>, byte: u8) -> Step {
         State::AfterRelColName => step_after_rel_col_name(stack_top, byte),
         State::ExpectRelColSpec => step_expect_rel_col_spec(stack_top, byte),
         State::ExpectRelColSpecReq => step_expect_rel_col_spec_req(stack_top, byte),
+        State::AfterRelColColon => step_after_rel_col_colon(byte),
+        State::InRelColLambdaBinder => step_in_rel_col_lambda_binder(byte),
+        State::AfterRelColLambdaBinder => step_after_rel_col_lambda_binder(byte),
     }
 }
 
@@ -2375,6 +2449,9 @@ pub const ALL_STATES: [State; State::COUNT] = [
     State::AfterRelColName,
     State::ExpectRelColSpec,
     State::ExpectRelColSpecReq,
+    State::AfterRelColColon,
+    State::InRelColLambdaBinder,
+    State::AfterRelColLambdaBinder,
 ];
 
 #[cfg(test)]
@@ -3536,6 +3613,37 @@ mod tests {
         ));
         assert!(accepts(
             "|X.all()->project(~[a: x|$x.a])->extend(over(~a, range(-2, 0)), ~[b: {p,w,r|$r.a}])"
+        ));
+    }
+
+    #[test]
+    fn a_rel_col_colon_admits_only_a_bare_binder_or_a_brace_lambda_never_a_typed_binder() {
+        // Issue #368: a *typed-binder* lambda column is equally illegal at a
+        // `~`-column colon as the bare lambda issue #361 already closed off
+        // `AfterRelColName` itself — `binderVar = ident` (§5.3) is always
+        // bare, so a colon here may open a bare binder's own pipe or the
+        // aggregation brace form, never a typed binder's `::` classpath/`[`
+        // multiplicity. Live-verified against 4.113.0: each is "no viable
+        // alternative" past the colon.
+        assert!(dies(
+            "|t::A.all()->project(~[a: x|$x.a, k: x|$x.k])->extend(over(~[k: t::A[*]|$k.k]), ~[b: r|$r.a])"
+        ));
+        // The same shape with no `$` on the body variable — still typed, still
+        // dead at the same byte (the type annotation is what kills it, not the
+        // sigil on the body).
+        assert!(dies(
+            "|t::A.all()->project(~[a: x|$x.a, k: x|$x.k])->extend(over(~[k: t::A[*]|k.k]), ~[b: r|$r.a])"
+        ));
+        // A multi-item bracket carrying the same typed-binder shape.
+        assert!(dies(
+            "|t::A.all()->project(~[a: x|$x.a, k: x|$x.k])->extend(over(~[k: t::A[*]|$k.k], ~[a: t::A[*]|$a.a]), ~[b: r|$r.a])"
+        ));
+        // The legitimate brace-lambda aggregation form (`agg: {p,w,r|…}`)
+        // stays admitted — issue #368 closes only the bare typed-binder path,
+        // never the `winAggSpec`/`relAggSpec` brace form arm-R's own colon
+        // still legitimately opens.
+        assert!(accepts(
+            "|t::A.all()->project(~[a: x|$x.a, k: x|$x.k])->extend(over(~k), ~[agg: {p,w,r|$r.a}])"
         ));
     }
 

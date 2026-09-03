@@ -485,25 +485,44 @@ quoted string (a column reference) — each routed to its own colName states
 generic identifier/string-literal/value-hub states arm-A/arm-C terms use. That
 separation is deliberate: a `~`-column position is a disjoint sub-grammar from
 the generic value/expression hub, not a value a `|` can attach to, so
-`AfterRelColName` admits a `:` (opening a `colLambda`/`mapLambda`/`frameLambda`
-body — which may itself open a `{`-brace frame lambda, `agg:{p,w,r|…}`) and
-everything else a completed value admits, but never a `|` — live-attested,
-`over(~a|$a.b)`, `rename(~old|$x.a, ~new)`, `sort([ascending(~a|$a.b)])` and
-`groupBy(~[a|$a.b], …)` are each "no viable alternative" right at the `|`. A
-`~[…]` bracket item *past a comma* reopens the same restricted position
-(`ExpectRelColSpecReq`), not the generic one, since a second item has no fresh
-`~` in front of it to route through `SawTilde` again — without that, only a
-bracket's *first* item would have been narrowed (issue #361). Everything else
-in arm-R — the `:` column-to-lambda separators, the `over(~…)` partition
-otherwise, the `{p,w,r|…}` frame bodies, the reducers, the bracket nesting —
-still reuses the shared value-hub / lambda / bracket machinery of §5.2–§5.3. So
-the grammar still admits a superset of the strict productions above (e.g. it
-does not enforce that a `winAggSpec` colon is bare while a `relAggSpec` colon
-carries a leading `~`, nor that `over(…)`'s argument is only ever a `colRef`
-list rather than the general bracketed colSpec form every other arm-R
-construct shares); the compiler oracle catches that residue, exactly as §5.6
-sanctions — but a *lambda* standing in for a column name, at any of these
-positions, is no longer part of it. Like every other L1 identifier, a
+`AfterRelColName` admits a `:` (opening `AfterRelColColon`, arm-R's own
+binder-colon position) and everything else a completed value admits, but
+never a `|` — live-attested, `over(~a|$a.b)`, `rename(~old|$x.a, ~new)`,
+`sort([ascending(~a|$a.b)])` and `groupBy(~[a|$a.b], …)` are each "no viable
+alternative" right at the `|`. A `~[…]` bracket item *past a comma* reopens
+the same restricted position (`ExpectRelColSpecReq`), not the generic one,
+since a second item has no fresh `~` in front of it to route through
+`SawTilde` again — without that, only a bracket's *first* item would have been
+narrowed (issue #361).
+
+`AfterRelColColon` is arm-R's own colon continuation, distinct from the
+generic typed-binder `AfterColon` every other Pure lambda binder's colon
+reuses (`row: Person[1]|…`). Every arm-R lambda's `binderVar` is a *bare*
+identifier (`colLambda`/`mapLambda`/`frameLambda`, §5.3) — never a typed
+one — so this position admits only a bare binder identifier
+(`InRelColLambdaBinder`, closing at `AfterRelColLambdaBinder`, which admits
+only whitespace or its own binder pipe) or the `winAggSpec`/`relAggSpec`
+aggregation form's brace lambda (`agg: {p,w,r|…}`) — never a typed binder's
+`::` classpath or `[` multiplicity. Live-attested: `over(~[k: t::A[*]|$k.k])`
+and the same shape with no `$` on the body variable are each "no viable
+alternative" right past the colon, exactly like the untyped bare-lambda form
+issue #361 closed off `AfterRelColName` itself (issue #368).
+
+Everything else in arm-R — the `:` column-to-lambda separators past the first,
+the `over(~…)` partition otherwise, the `{p,w,r|…}` frame bodies, the
+reducers, the bracket nesting — still reuses the shared value-hub / lambda /
+bracket machinery of §5.2–§5.3. So the grammar still admits a superset of the
+strict productions above (e.g. it does not enforce that a `winAggSpec` colon
+is bare while a `relAggSpec` colon carries a leading `~`, nor that `over(…)`'s
+argument is only ever a `colRef` list rather than the general bracketed
+colSpec form every other arm-R construct shares, nor that a *second*
+lambda-to-lambda colon inside `relAggSpec`/`winAggSpec`
+(`mapLambda ":" reduceLambda`) keeps its own `reduceLambda` binder bare —
+that second colon is reached off a *completed value*, not `AfterRelColName`,
+so it still opens the generic `AfterColon` typed-binder path and is
+out of this issue's scope); the compiler oracle catches that residue, exactly
+as §5.6 sanctions — but a *lambda* standing in for a column name, at any of
+these positions, is no longer part of it. Like every other L1 identifier, a
 `~`-column name is an **L2 pass-through** (it opens at the `SawTilde`/
 `ExpectRelColSpec`/`ExpectRelColSpecReq` anchors, whose rule is `None`), so
 arm-R never masks the model's emitted column names.
