@@ -261,6 +261,16 @@ fn source_method_arg_masks_a_phantom_argument_but_keeps_the_closer_and_a_milesto
     assert_frozen("source-method-arg");
 }
 
+/// Issue #384: once the schema states a class's milestoning arity, the source
+/// method's own closer must stay masked between a completed date argument and
+/// the arity being met — closing early is exactly the schema-decidable mistake
+/// the issue reports (a bitemporal class's `all(%latest)` where the class needs
+/// two comma-separated dates).
+#[test]
+fn source_method_arg_sep_masks_a_premature_closer_before_the_classs_arity_is_met() {
+    assert_frozen("source-method-arg-sep");
+}
+
 /// Issue #385, the sibling of the fixture above one position later: a
 /// milestoned property navigation's own call (`$x.fk4DefaultCarNames(...)`)
 /// takes the identical treatment as `all()`'s own call — a real closer and a
@@ -496,6 +506,117 @@ fn source_method_arg_admits_a_milestoning_date_variable() {
             "L2 SOUNDNESS (issue #367): pipeline did not complete:\n  {query}"
         );
     }
+}
+
+/// Whether `query` can be produced end to end under L2: at every step the next
+/// token must survive `allowed_mask` (a real decoder would never sample a
+/// masked token, so a query that needs one part way through can never be
+/// produced at all, whatever its later bytes look like), and the stream must
+/// finish `is_complete`. Mirrors the issue's own Python reproduction
+/// (`purecard.Session`/`allowed_mask`/`accept_token`/`is_complete`) rather than
+/// `assert_streams_soundly_under_l2`'s style, which panics on the first
+/// masked/incomplete step — this helper is used to prove queries the schema
+/// *rejects*, not ones it must admit.
+fn completes_under_l2(schema: &Schema, query: &str) -> bool {
+    let vocab = TokenVocab::build(&[query], &[]);
+    let grammar = CompiledGrammar::compile(vocab.vocab());
+    let mut session =
+        DecoderSession::with_schema(&grammar, schema.clone()).expect("grammar is fixed-engine");
+    for token in lex(query) {
+        let id = vocab
+            .id_of(&token)
+            .unwrap_or_else(|| panic!("token not in vocab: {:?}", bytes_str(&token)));
+        if !session.allowed_mask().test(id) {
+            return false;
+        }
+        session
+            .accept_token(id)
+            .unwrap_or_else(|err| panic!("L1 rejected an L2-admitted token in {query:?}: {err}"));
+    }
+    session.is_complete()
+}
+
+/// Issue #384's own end-to-end reproduction: a plain class, a business-temporal
+/// one, and a bitemporal one, each probed with the issue's own three `all(...)`
+/// arities (`docs/spec/schema.md`'s milestoning-arity rule).
+///
+/// The plain-class row is the regression-safety net the schema-contract
+/// extension exists to preserve: with no `temporal` field, all three forms
+/// stay exactly as admissible as they were before this issue — see
+/// `ScopeTracker::on_open`'s doc comment for why an absent field reads as
+/// "unannotated" (pass-through) rather than "definitely not milestoned" (which
+/// would instead force the zero-argument form and reject the other two, a
+/// stricter reading the schema corpus available today cannot safely support:
+/// every existing schema blob predates this field, so "absent" there means
+/// "converter hasn't said yet", not "confirmed non-milestoned" — see this PR's
+/// description for the full reasoning).
+#[test]
+fn issue_384_own_reproduction_admits_exactly_the_classs_declared_arity() {
+    const SCHEMA_JSON: &str = r#"{
+      "db_id": "t", "db_path": "t::Db",
+      "classes": {
+        "t::Plain": { "simple_name": "Plain", "properties": [
+          {"name": "a", "type": {"kind": "primitive", "name": "Integer"}, "mult": {"lower": 1, "upper": 1}}
+        ], "qualified_properties": [], "super_types": [] },
+        "t::Biz": { "simple_name": "Biz", "properties": [
+          {"name": "a", "type": {"kind": "primitive", "name": "Integer"}, "mult": {"lower": 1, "upper": 1}}
+        ], "qualified_properties": [], "super_types": [], "temporal": "business" },
+        "t::Bi": { "simple_name": "Bi", "properties": [
+          {"name": "a", "type": {"kind": "primitive", "name": "Integer"}, "mult": {"lower": 1, "upper": 1}}
+        ], "qualified_properties": [], "super_types": [], "temporal": "bitemporal" }
+      },
+      "associations": [], "enums": {}
+    }"#;
+    let schema = Schema::from_json(SCHEMA_JSON).expect("schema parses");
+
+    let query =
+        |class: &str, args: &str| format!("|t::{class}.all({args})->project([x|$x.a],['a'])");
+
+    // Plain (no `temporal`): every arity the issue's own repro tried stays
+    // admissible, byte-for-byte the pre-#384 behavior.
+    assert!(
+        completes_under_l2(&schema, &query("Plain", "")),
+        "regression (issue #384): a plain class's zero-argument all() must stay admissible"
+    );
+    assert!(
+        completes_under_l2(&schema, &query("Plain", "%latest")),
+        "regression (issue #384): a plain class's one-argument all() must stay admissible"
+    );
+    assert!(
+        completes_under_l2(&schema, &query("Plain", "%latest, %latest")),
+        "regression (issue #384): a plain class's two-argument all() must stay admissible"
+    );
+
+    // Business-temporal (`Biz`): exactly one date argument.
+    assert!(
+        !completes_under_l2(&schema, &query("Biz", "")),
+        "issue #384: a business-temporal class's zero-argument all() must be rejected"
+    );
+    assert!(
+        completes_under_l2(&schema, &query("Biz", "%latest")),
+        "issue #384: a business-temporal class's one-argument all() must be admitted"
+    );
+    assert!(
+        !completes_under_l2(&schema, &query("Biz", "%latest, %latest")),
+        "issue #384: a business-temporal class's two-argument all() must be rejected"
+    );
+
+    // Bitemporal (`Bi`): exactly two comma-separated date arguments — the
+    // issue's own headline failure mode (6 of 9 bi-temporal items in its
+    // 81-item run).
+    assert!(
+        !completes_under_l2(&schema, &query("Bi", "")),
+        "issue #384: a bitemporal class's zero-argument all() must be rejected"
+    );
+    assert!(
+        !completes_under_l2(&schema, &query("Bi", "%latest")),
+        "issue #384: a bitemporal class's one-argument all() must be rejected \
+         (the issue's own headline error class)"
+    );
+    assert!(
+        completes_under_l2(&schema, &query("Bi", "%latest, %latest")),
+        "issue #384: a bitemporal class's two-argument all() must be admitted"
+    );
 }
 
 /// Issue #367's precision half: admitting a `$`-led milestoning date argument
@@ -1418,6 +1539,11 @@ const FROZEN_FAMILIES: &[(&str, &str)] = &[
         "source-method-arg",
         "M3 G2 · a phantom argument in `all()`'s own call, past the bitemporal \
          milestoning carve-out",
+    ),
+    (
+        "source-method-arg-sep",
+        "Issue #384 · a premature closer in `all()`'s own call once the class's \
+         declared milestoning arity is known but not yet met",
     ),
     (
         "property-method-arg",
@@ -2628,6 +2754,23 @@ static FROZEN_KILLS: &[FrozenKill] = &[
                 ->filter(x|$x.fk4DefaultCarNames(",
             real: "%latest",
             phantom: "'French'",
+        },
+    },
+    FrozenKill {
+        fixture: "source-method-arg-sep",
+        db: "milestoning",
+        closer: Closer::L2("SourceMethodArgSep"),
+        kill: Kill::Probe {
+            // `t::milestoning::Bi` (`tests/fixtures/schemas/milestoning.json`)
+            // is bitemporal, so its `all(...)` call owes exactly two
+            // comma-separated date arguments (issue #384). Right after the
+            // first, the call cannot legally close yet — only a `,` opening
+            // the second is real; the byte-PDA's own generic call-argument
+            // grammar admits an unbounded comma-separated list, so it does not
+            // refuse the premature closer on its own (`Closer::L2`).
+            prefix: "|t::milestoning::Bi.all(%latest",
+            real: ",",
+            phantom: ")",
         },
     },
     FrozenKill {

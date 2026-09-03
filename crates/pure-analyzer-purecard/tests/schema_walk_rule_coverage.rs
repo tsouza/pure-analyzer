@@ -94,7 +94,20 @@ const STRUCTURAL_BYTES: &[u8] = b"abXY1_ |{}()[].,;:$%'-><=!&+*/";
 ///   shapes that don't need arm-R at all). Permanently out of scope, the same
 ///   way N4/T5 are (`docs/spec/schema.md` §6.5/§6.6): no evidence, no
 ///   implementation.
-const EXPECTED_UNFIRED: &[&str] = &["RelationColumn"];
+/// - `SourceMethodArgSep` (issue #384's `all()`-arity separator, right after a
+///   *completed* milestoning argument in a class whose declared arity the
+///   schema states): needs a fixture class carrying the new `temporal` field,
+///   and none of the 8 Spider-derived fixture schemas do — the corpus predates
+///   the field entirely (that absence is exactly what issue #384 reports), so
+///   there is no real milestoned class any recipe could substitute without
+///   fabricating schema content the corpus does not actually carry. The
+///   identical "no evidence, no implementation" reasoning as `RelationColumn`
+///   above; `SourceMethodArg`'s own value-slot half stays reachable
+///   (`required: None`, the pass-through case every fixture class hits), only
+///   its arity-aware separator does not. Live-verified directly instead, via
+///   `tests/l2_precision.rs`'s dedicated `milestoning` schema fixture and
+///   `tests/fixtures/schemas/milestoning.json`.
+const EXPECTED_UNFIRED: &[&str] = &["RelationColumn", "SourceMethodArgSep"];
 
 fn corpus_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("corpus/gold_queries.jsonl")

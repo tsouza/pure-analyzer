@@ -167,6 +167,33 @@ pub(crate) struct QualifiedPropertySpec {
     pub(crate) return_mult: Multiplicity,
 }
 
+/// A class's bitemporal milestoning stereotype (§6.2.1, issue #384): which of
+/// the engine's `<<temporal.businesstemporal>>` / `<<temporal.processingtemporal>>`
+/// / `<<temporal.bitemporal>>` stereotypes the class carries, and so how many
+/// comma-separated milestone/date arguments its `all(...)` call (and a
+/// milestoned property navigation's own call) requires.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum Temporal {
+    /// `<<temporal.businesstemporal>>` — one date argument.
+    Business,
+    /// `<<temporal.processingtemporal>>` — one date argument.
+    Processing,
+    /// `<<temporal.bitemporal>>` — two comma-separated date arguments.
+    Bitemporal,
+}
+
+impl Temporal {
+    /// The number of comma-separated date arguments this stereotype's `all(...)`
+    /// call requires: one for a single-temporal axis, two for bitemporal.
+    pub(crate) fn arity(self) -> usize {
+        match self {
+            Self::Business | Self::Processing => 1,
+            Self::Bitemporal => 2,
+        }
+    }
+}
+
 /// A class definition (§6.2.1).
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub(crate) struct ClassInfo {
@@ -180,6 +207,12 @@ pub(crate) struct ClassInfo {
     /// Super-type class paths — members resolve transitively.
     #[serde(default)]
     pub(crate) super_types: Vec<String>,
+    /// The class's milestoning stereotype (§6.2.1, issue #384), absent when the
+    /// class carries none — `#[serde(default)]` so every schema JSON blob that
+    /// predates this field keeps deserializing unchanged (§9's backward-compat
+    /// convention, matching `qualified_properties`/`super_types` above).
+    #[serde(default)]
+    pub(crate) temporal: Option<Temporal>,
 }
 
 /// One end of an association (§6.2.1).
@@ -518,11 +551,29 @@ impl Schema {
     pub(crate) fn enum_values(&self, path: &str) -> Option<&[String]> {
         self.enums.get(path).map(Vec::as_slice)
     }
+
+    /// `class`'s milestoning stereotype (§6.2.1, issue #384's S1 arity rule), or
+    /// `None` when the class carries no `temporal` field — an unknown class and a
+    /// known-but-not-milestoned one both report `None` alike, which is exactly
+    /// the "no arity claim to make" case the S1 narrower falls back to L1
+    /// pass-through for (see `ScopeTracker::on_open`'s doc comment on why absence
+    /// here is read as "unannotated", not "definitely not milestoned").
+    ///
+    /// Deliberately **not** transitive over `super_types`: the milestoning
+    /// stereotype is a claim the converter resolves once, from the class's own
+    /// generalization chain, into a single effective per-class field (the same
+    /// "converter does the resolving, the contract just carries the result"
+    /// convention `super_types`' own doc follows for member resolution) —
+    /// duplicating that resolution here would be a second, potentially
+    /// diverging source of truth for the same fact.
+    pub(crate) fn temporal(&self, class: &str) -> Option<Temporal> {
+        self.classes.get(class).and_then(|info| info.temporal)
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{PrimName, Resolved, Schema, TypeClass};
+    use super::{PrimName, Resolved, Schema, Temporal, TypeClass};
 
     /// A small schema exercising every contract feature: a primitive property, a
     /// super-type inherited member, a qualified property, an enum, and a two-way
@@ -709,5 +760,48 @@ mod tests {
             Some(["ONE".to_owned(), "TWO".to_owned()].as_slice())
         );
         assert_eq!(sample().enum_values("Missing"), None);
+    }
+
+    /// Issue #384: `SAMPLE`'s classes predate the `temporal` field entirely (no
+    /// schema JSON in this suite mentions it), so `Schema::temporal` must default
+    /// every one of them — and an unknown class path — to `None` rather than
+    /// require the field, which is the backward-compat half of "absent means not
+    /// milestoned" (every schema blob in the corpus today parses unchanged).
+    #[test]
+    fn temporal_defaults_to_none_when_the_field_is_absent() {
+        let s = sample();
+        assert_eq!(s.temporal("A"), None);
+        assert_eq!(s.temporal("B"), None);
+        assert_eq!(s.temporal("Nope"), None);
+    }
+
+    /// Issue #384: a class whose JSON carries an explicit `"temporal"` field
+    /// parses to the matching [`Temporal`] variant, and a sibling class in the
+    /// same schema with no such field stays `None` — proving the field is
+    /// genuinely per-class and additive, not a schema-wide switch.
+    #[test]
+    fn temporal_parses_each_stereotype_from_its_wire_name() {
+        const SCHEMA_JSON: &str = r#"{
+          "db_id": "d", "db_path": "d::Db",
+          "classes": {
+            "Biz": { "simple_name": "Biz", "properties": [], "temporal": "business" },
+            "Proc": { "simple_name": "Proc", "properties": [], "temporal": "processing" },
+            "Bi": { "simple_name": "Bi", "properties": [], "temporal": "bitemporal" },
+            "Plain": { "simple_name": "Plain", "properties": [] }
+          },
+          "associations": [], "enums": {}
+        }"#;
+        let s = Schema::from_json(SCHEMA_JSON).expect("schema with `temporal` parses");
+        assert_eq!(s.temporal("Biz"), Some(Temporal::Business));
+        assert_eq!(s.temporal("Proc"), Some(Temporal::Processing));
+        assert_eq!(s.temporal("Bi"), Some(Temporal::Bitemporal));
+        assert_eq!(s.temporal("Plain"), None);
+    }
+
+    #[test]
+    fn temporal_arity_is_one_for_single_axis_and_two_for_bitemporal() {
+        assert_eq!(Temporal::Business.arity(), 1);
+        assert_eq!(Temporal::Processing.arity(), 1);
+        assert_eq!(Temporal::Bitemporal.arity(), 2);
     }
 }

@@ -35,7 +35,14 @@ ClassInfo {                                        // the class path is the Map 
   properties:           List<PropertySpec>         // stored/regular properties, declared order
   qualified_properties: List<QualifiedPropertySpec>// derived properties (optional, default [])
   super_types:          List<ClassPath>            // inherited members resolve transitively (optional, default [])
+  temporal:              Temporal | null            // the class's milestoning stereotype (optional, default
+                                                    // absent/null — issue #384, 6.5 S1's SourceMethodArg rule)
 }
+
+Temporal = "business" | "processing" | "bitemporal" // the engine's <<temporal.businesstemporal>> /
+                                                    // <<temporal.processingtemporal>> / <<temporal.bitemporal>>
+                                                    // stereotypes, one date argument required for the first two,
+                                                    // two comma-separated ones for the third (6.5 S1)
 
 PropertySpec {
   name: string                                     // "horsepower"
@@ -103,15 +110,18 @@ Concretely, `fk_0 = { fk0DefaultCountries: Countries[1..*], fk0DefaultContinents
 
 The decoder never calls Legend; the host builds `Schema` once, at session init, from either source (they are the same PMCD, different access paths). The MCP reflection tools live in the upstream project's `mcp_server` (tool names below are stable API):
 
-| Contract field                                     | MCP tool                                                                                | PMCD field                                                         |
-| -------------------------------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| `classes[*].properties` (name, type, multiplicity) | `legend_describe_class` → `properties[]` (`name`, `type`, `lower_bound`, `upper_bound`) | class `properties[].genericType.rawType.fullPath` + `multiplicity` |
-| `classes[*].super_types`                           | `legend_describe_class` → `super_types[]`                                               | `superTypes[].path`                                                |
-| `classes[*].qualified_properties`                  | `legend_get_derivations` → `derivations[]` (`name`, `return_type`)                      | `qualifiedProperties[]` (`returnGenericType`)                      |
-| `associations` (ends, targets, multiplicities)     | `legend_get_associations` → `associations[].properties[]` + `other_end_class`           | `Association.properties[]`                                         |
-| `enums`                                            | `legend_list_enums` → `enums[]` (`path`, `values`)                                      | `Enumeration.values[]`                                             |
+| Contract field                                     | MCP tool                                                                                | PMCD field                                                                                  |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `classes[*].properties` (name, type, multiplicity) | `legend_describe_class` → `properties[]` (`name`, `type`, `lower_bound`, `upper_bound`) | class `properties[].genericType.rawType.fullPath` + `multiplicity`                          |
+| `classes[*].super_types`                           | `legend_describe_class` → `super_types[]`                                               | `superTypes[].path`                                                                         |
+| `classes[*].qualified_properties`                  | `legend_get_derivations` → `derivations[]` (`name`, `return_type`)                      | `qualifiedProperties[]` (`returnGenericType`)                                               |
+| `classes[*].temporal`                              | `legend_describe_class` → `stereotypes[]` (issue #384)                                  | `Class.stereotypes[]` (`temporal.businesstemporal` / `.processingtemporal` / `.bitemporal`) |
+| `associations` (ends, targets, multiplicities)     | `legend_get_associations` → `associations[].properties[]` + `other_end_class`           | `Association.properties[]`                                                                  |
+| `enums`                                            | `legend_list_enums` → `enums[]` (`path`, `values`)                                      | `Enumeration.values[]`                                                                      |
 
-`legend_describe_class` returns `type` as a full path string; the host classifies it into `PropType`: if it is a primitive path → `Primitive`; if it resolves to a `class` element → `ClassRef`; if to an `enumeration` element → `EnumRef`. Milestoning `target_stereotypes` are ignored by L2 (they affect _arguments_, not name/type resolution).
+`legend_describe_class` returns `type` as a full path string; the host classifies it into `PropType`: if it is a primitive path → `Primitive`; if it resolves to a `class` element → `ClassRef`; if to an `enumeration` element → `EnumRef`.
+
+**Milestoning stereotypes (issue #384).** A class's `<<temporal.businesstemporal>>` / `<<temporal.processingtemporal>>` / `<<temporal.bitemporal>>` stereotype is the host's own resolved fact about that class — the converter reads it off the class's own declaration (stereotypes are not inherited through `super_types` by this contract; a milestoned superclass's subclasses must each carry their own effective `temporal` value) and reports it as the `classes[*].temporal` field, `null`/absent when the class carries none. Before #384 these stereotypes were dropped entirely ("ignored by L2, they affect arguments, not name/type resolution"); they still do not affect name/type resolution, but §6.5 S1 now reads them to narrow the milestoning-date **arity** of a class's `all(...)` call, closing the single most common remaining error class a downstream NL-to-Pure consumer reported (issue #384: 6 of 9 bi-temporal items in an 81-item unseen-schema run failed only on argument count).
 
 ### 6.3 The `Schema` construction is host-side
 
@@ -452,10 +462,12 @@ consolidated). The narrowing/type taxonomy has **14 rules**: **7 narrowing**
 (N1–N7) and **7 type** (T1–T7). Scope transitions supply state to constraints;
 they are not constraints themselves.
 
-Two scope transitions additionally *constrain* the position they name rather
+Three scope transitions additionally *constrain* the position they name rather
 than only supplying state: **S1** narrows the identifier after a source
-classpath's own `.` to exactly `all`, and **S2** narrows a `$<IDENT>` refVar to
-the names the stream has bound (§6.5).
+classpath's own `.` to exactly `all` (and, one call further on, its own
+argument slot); **S2** narrows a `$<IDENT>` refVar to the names the stream has
+bound; and **S3** narrows a milestoned property navigation's own call
+argument slot, the sibling of S1's one position later (issue #385) (§6.5).
 
 **S1's must-call veto.** `all` is a niladic *call* (`source = classpath
 ".all()"`), so once the name is whole the only legal continuation is its own
@@ -479,21 +491,69 @@ live to fail Legend compilation.
 
 A `$`-prefixed variable reference is admitted alongside a date literal (issue
 #367): binding an as-of date once (`let d = …; …A.all($d)…`) and passing it to
-every milestoned extent's `all()` is the ordinary way to write a dated query,
-and the schema contract carries no temporal stereotype (§6.2.4's `Milestoning
-target_stereotypes are ignored by L2` note above) that would let this rule tell
-a legal date variable from an illegal one any better than L1 already does — so,
-exactly like a milestone literal, a variable reference is left to the compiler
-oracle rather than modeled here. This is the one position where S2's own two
-narrowings (below) do **not** apply: the sigil-before-any-binder mask does not
-fire, and the identifier after `$` is left fully unconstrained rather than
-narrowed to the stream's bound names, because an as-of date variable ordinarily
-names a binder the stream never sees at all — a function or service parameter,
-or an enclosing `let` — so `SourceMethodArg` is exempt from both rather than
-falsely reading "no name bound here" as "no name could ever be legal here".
-Live-verified: the engine's `grammarToJson/lambda` route compiles
+every milestoned extent's `all()` is the ordinary way to write a dated query.
+This is the one position where S2's own two narrowings (below) do **not**
+apply: the sigil-before-any-binder mask does not fire, and the identifier
+after `$` is left fully unconstrained rather than narrowed to the stream's
+bound names, because an as-of date variable ordinarily names a binder the
+stream never sees at all — a function or service parameter, or an enclosing
+`let` — so `SourceMethodArg` is exempt from both rather than falsely reading
+"no name bound here" as "no name could ever be legal here". Live-verified:
+the engine's `grammarToJson/lambda` route compiles
 `|t::A.all($d)->project(~[a: x|$x.alpha])` (issue #367's own reproduction,
 HTTP 200) exactly as it compiles the `%latest` form beside it.
+
+**S1's argument *count* (`SourceMethodArg`'s `required`/`seen` and
+`SourceMethodArgSep`, issue #384).** The engine rejects a wrong milestoning
+argument count at execution — zero for a plain class, one for a
+business-/processing-temporal class, exactly two comma-separated dates for a
+bitemporal one — and this was a real, undecidable gap for #367's own rule
+above: with no way to know a class's temporal shape, the schema-consistency
+overlay admitted `all()`, `all(%latest)`, and `all(%latest, %latest)` alike for
+the *same* class, which was the single most common remaining error class a
+downstream NL-to-Pure consumer reported (6 of 9 bi-temporal items in an
+81-item unseen-schema run, every other dimension of those candidates passing).
+Once `classes[*].temporal` (§6.2.1/§6.2.4) states a class's stereotype, S1
+reads it at `on_open` (the class the source `.all(` is opening on is already
+resolved for S1/N3) and narrows two related positions by it:
+
+- **The value slot itself.** `SourceMethodArg`'s payload carries `required`
+  (the class's declared arity — `Some(1)`/`Some(2)`, or `None` when the schema
+  carries no `temporal` field for the class) and `seen` (how many
+  comma-separated arguments this open call has completed so far, tracked the
+  identical way N3d's `StoreMethodArgSep` counts a store call's own commas).
+  While an argument is still owed (`seen < required`) the call's own closer is
+  masked — the call cannot legally end short — and once the declared arity is
+  met (`seen >= required`) a *fresh* date/`$`-variable argument is masked in
+  turn, so a bitemporal class's third `%latest` is refused exactly as its
+  first missing one is.
+- **The separator right after a completed argument (`SourceMethodArgSep`).**
+  A milestone/date literal and a `$`-variable are both *value-terminal*
+  in-lexeme byte-PDA states (`InDateLit`/`InDateTime`/`InDateFrac`/
+  `InMilestoneLit` for a date, `InMemberIdent` for a variable's own name) —
+  nothing can extend them further, but the automaton's own state name has not
+  yet advanced past the value, so this is the only point the `,`-or-`)` byte
+  can be masked at (waiting for a genuine post-value anchor is too late: that
+  anchor is only reached *after* the separator byte has already been chosen).
+  `remaining: true` keeps `,` and masks `)`; `remaining: false` is the mirror.
+  This is N3d's own `StoreMethodArgSep`/`InStrLit { escaped: true }` precedent,
+  applied to the source method's own call instead of a store method's.
+
+**When `required` is `None`** — the schema carries no `temporal` field for the
+class — both positions keep the exact pre-#384 pass-through: any count of
+date/`$`-variable arguments stays admissible, and a milestone symbol's own
+validity beyond its lexical shape is, like every other `%`-literal position in
+this overlay, left to the compiler oracle. This is a deliberate reading of
+"absent", not a half-measure: every schema JSON in the corpus today predates
+the `temporal` field entirely, so an absent field there means "the converter
+has not said yet", never "confirmed not milestoned" — narrowing to zero
+arguments on that premise would reject a real, engine-accepted query for any
+schema that has not been re-exported with the new field, which is every
+schema this repository currently ships a fixture for. Only an *explicit*
+`temporal` value narrows the count; the schema-contract change is purely
+additive (`just semver`/`just public-api` confirm no API break), and a host
+that starts populating `temporal` for its milestoned classes gets the tighter
+rule immediately, with no change needed anywhere else.
 
 **S3's argument slot (`PropertyMethodArg`), the sibling of S1's one position
 later (issue #385).** A milestoned **property navigation's own call**
@@ -524,7 +584,9 @@ Conflating the two masked the getters' own string-literal column-name
 argument — caught by `bpe_split_soundness`'s gold-corpus soundness net, which
 every TDS getter call in the 5034-query corpus exercises — so the rule reads
 the tracker's own resolution outcome (`last_nav`) rather than "reached through
-a `.`" alone.
+a `.`" alone. Unlike `SourceMethodArg`, this position does not yet read the
+navigated-to class's own `temporal` arity (issue #384's rule above) — that
+extension is tracked as its own follow-up, issue #386.
 
 **Mask-aware completion.** L1 acceptance is a lookahead fact — "would a
 value-boundary byte from here reach a value-terminal state?" — and an identifier
