@@ -583,7 +583,7 @@ Class <<temporal.businesstemporal>> demo::Holder
   <<milestoning.generatedmilestoningproperty>>
   quotesAllVersionsInRange(): demo::Quote[*] {};
   <<milestoning.generatedmilestoningproperty>>
-  quotesEdge(): demo::Quote[*] {};
+  quotesUnbounded(): demo::Quote[*] {};
   userAllVersions(): demo::Quote[*] {};
   <<milestoning.notgenerated>>
   manualAllVersions(): demo::Quote[*] {};
@@ -609,7 +609,12 @@ Class <<temporal.businesstemporal>> demo::Holder
         pure_properties["quotesAllVersionsInRange"].kind(),
         QpKind::AllVersionsInRange
     );
-    assert_eq!(pure_properties["quotesEdge"].kind(), QpKind::EdgePoint);
+    assert_eq!(
+        pure_properties["quotesUnbounded"].kind(),
+        QpKind::MilestonedPoint,
+        "return multiplicity must not affect classification (#300): a \
+         to-many generated navigation is still a point navigation"
+    );
     assert_eq!(
         pure_properties["userAllVersions"].kind(),
         QpKind::UserQualified,

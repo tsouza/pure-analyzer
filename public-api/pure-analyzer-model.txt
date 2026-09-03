@@ -313,7 +313,6 @@ pub fn pure_analyzer_model::Provenance::from(T) -> T
 pub enum pure_analyzer_model::QpKind
 pub pure_analyzer_model::QpKind::AllVersions
 pub pure_analyzer_model::QpKind::AllVersionsInRange
-pub pure_analyzer_model::QpKind::EdgePoint
 pub pure_analyzer_model::QpKind::MilestonedPoint
 pub pure_analyzer_model::QpKind::UserQualified
 impl core::clone::Clone for pure_analyzer_model::QpKind
