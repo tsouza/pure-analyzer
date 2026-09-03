@@ -782,7 +782,13 @@ const WS: &[u8; 4] = b" \t\n\r";
 /// list of accepting states to drift.
 const VALUE_BOUNDARY: u8 = b' ';
 
-fn is_ws(byte: u8) -> bool {
+/// Whether `byte` is inter-token whitespace. Exposed to the L2 trie walk
+/// (`schema::narrow`) so it can skip a candidate token's leading whitespace run
+/// with the automaton's own exact notion of whitespace, rather than
+/// re-deriving it from e.g. [`u8::is_ascii_whitespace`] — whose set (it also
+/// admits `\x0B`/`\x0C`) does not match [`WS`] byte-for-byte (constitution §4,
+/// DRY).
+pub(crate) fn is_ws(byte: u8) -> bool {
     WS.contains(&byte)
 }
 
