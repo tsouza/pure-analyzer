@@ -517,9 +517,15 @@ struct Baseline {
 const RATCHET_SLACK: usize = 3;
 
 /// Issue #55's criterion baseline, measured live against the pinned Legend
-/// stack (`corpus/legend-stack/docker-compose.yml`): **39/64 total = recipe
-/// 5/5 + exploration 34/59** (Phase 3, 2026-08-29 — up from Phase 2's
-/// 17/64 = 5/5 + 12/59). Two consecutive runs were bit-identical.
+/// stack (`corpus/legend-stack/docker-compose.yml`). What follows is a
+/// chronological ratchet log, oldest phase first — no single paragraph below
+/// is "the" baseline; the struct's own fields, `recipe_compiled` and
+/// `exploration_compiled` right below this comment, are the enforced number,
+/// and the closing paragraph immediately above them states it plainly.
+///
+/// Phase 3 (2026-08-29) first measured **39/64 total = recipe 5/5 +
+/// exploration 34/59** (up from Phase 2's 17/64 = 5/5 + 12/59). Two
+/// consecutive runs were bit-identical.
 ///
 /// Phase 3 ships N3c, the pipeline-source continuation rule. A re-taxonomy of
 /// Phase 2's 47 exploration failures found 34 of them (72%) sharing one shape:
@@ -660,22 +666,31 @@ const RATCHET_SLACK: usize = 3;
 /// value-position bucket the maintainer declined to scope (Decision 3), two of
 /// them N3h's own reroute: a `groupBy('lit')` the rule closes becomes a
 /// `groupBy(x|'lit')` whose binder the engine cannot type.
+///
+/// **Current, enforced (unchanged since Phase 9, 2026-08-30 — Phase 10 above
+/// re-measured lower and did not raise it): exactly the two fields below,
+/// `recipe_compiled`/`exploration_compiled`, out of [`WALK_COUNT`] each.**
 const CRITERION_BASELINE: Baseline = Baseline {
     db_id: CRITERION_DB,
     recipe_compiled: 5,
     exploration_compiled: 49,
 };
 
-/// The generalization guard's baseline, measured in the same run: **40/64
-/// total = recipe 6/6 + exploration 34/58** (Phase 3, up from Phase 2's 23/64
-/// = 6/6 + 17/58 — **+17**). N3c was designed against `world_1`'s re-taxonomy
-/// and `car_1` carried the identical disease in the same proportions (28 of its
-/// 41 exploration failures were the bare-class arrow, 7 the store misuse), so
-/// this arm moving by nearly as much as the criterion is the generalization
-/// evidence, not a coincidence. `car_1` realizes all six eager recipe shapes,
-/// so its partitions split one slot differently from the criterion's — which is
-/// exactly why each floor is stated per database rather than as a single
-/// cross-database number.
+/// The generalization guard's baseline, measured in the same run as
+/// [`CRITERION_BASELINE`]'s Phase 3 entry above. As with that struct, no
+/// single paragraph below is "the" baseline — the fields right below this
+/// comment are the enforced number, restated plainly in the closing
+/// paragraph immediately above them.
+///
+/// Phase 3 first measured **40/64 total = recipe 6/6 + exploration 34/58**
+/// (up from Phase 2's 23/64 = 6/6 + 17/58 — **+17**). N3c was designed
+/// against `world_1`'s re-taxonomy and `car_1` carried the identical disease
+/// in the same proportions (28 of its 41 exploration failures were the
+/// bare-class arrow, 7 the store misuse), so this arm moving by nearly as
+/// much as the criterion is the generalization evidence, not a coincidence.
+/// `car_1` realizes all six eager recipe shapes, so its partitions split one
+/// slot differently from the criterion's — which is exactly why each floor is
+/// stated per database rather than as a single cross-database number.
 ///
 /// **Phase 4 re-measure (2026-08-29): 38/64 = recipe 6/6 + exploration 32/58**,
 /// bit-identical across two consecutive runs, clearing the 34 − 3 = 31 floor.
@@ -802,6 +817,10 @@ const CRITERION_BASELINE: Baseline = Baseline {
 /// `groupBy(String[1],String[1])` deliberately survives, and is now the whole of
 /// the bucket across both databases: it is an arity error on a receiver-generic
 /// name, which neither rule set claims.
+///
+/// **Current, enforced (Phase 10, 2026-08-31, above — the record for this
+/// arm): exactly the two fields below, `recipe_compiled`/`exploration_compiled`,
+/// out of [`WALK_COUNT`] each.**
 const GENERALIZATION_BASELINE: Baseline = Baseline {
     db_id: GENERALIZATION_DB,
     recipe_compiled: 7,
