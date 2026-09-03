@@ -107,7 +107,22 @@ const STRUCTURAL_BYTES: &[u8] = b"abXY1_ |{}()[].,;:$%'-><=!&+*/";
 ///   its arity-aware separator does not. Live-verified directly instead, via
 ///   `tests/l2_precision.rs`'s dedicated `milestoning` schema fixture and
 ///   `tests/fixtures/schemas/milestoning.json`.
-const EXPECTED_UNFIRED: &[&str] = &["RelationColumn", "SourceMethodArgSep"];
+/// - `PropertyMethodArgSep` (issue #386, the identical gap one position
+///   later): the S3 mirror of `SourceMethodArgSep`, right after a *completed*
+///   milestoning argument in a milestoned property navigation's own call.
+///   `PropertyMethodArg`'s own value-slot half stays reachable — a real
+///   association navigation's own call fires it across several fixture
+///   schemas even with `required: None` — but reaching its arity-aware
+///   separator needs a navigated-to class carrying `temporal`, which none of
+///   the 8 Spider-derived fixture schemas do, for the identical reason
+///   `SourceMethodArgSep` is unreachable here. Live-verified directly
+///   instead, via `tests/l2_precision.rs`'s dedicated `milestoning` schema
+///   fixture and `tests/fixtures/schemas/milestoning.json`.
+const EXPECTED_UNFIRED: &[&str] = &[
+    "RelationColumn",
+    "SourceMethodArgSep",
+    "PropertyMethodArgSep",
+];
 
 fn corpus_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("corpus/gold_queries.jsonl")

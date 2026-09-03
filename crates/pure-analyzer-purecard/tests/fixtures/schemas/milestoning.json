@@ -9,6 +9,16 @@
           "name": "a",
           "type": { "kind": "primitive", "name": "Integer" },
           "mult": { "lower": 1, "upper": 1 }
+        },
+        {
+          "name": "biz",
+          "type": { "kind": "class", "path": "t::milestoning::Biz" },
+          "mult": { "lower": 1, "upper": 1 }
+        },
+        {
+          "name": "bi",
+          "type": { "kind": "class", "path": "t::milestoning::Bi" },
+          "mult": { "lower": 1, "upper": 1 }
         }
       ],
       "qualified_properties": [],

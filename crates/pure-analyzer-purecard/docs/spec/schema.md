@@ -36,13 +36,15 @@ ClassInfo {                                        // the class path is the Map 
   qualified_properties: List<QualifiedPropertySpec>// derived properties (optional, default [])
   super_types:          List<ClassPath>            // inherited members resolve transitively (optional, default [])
   temporal:              Temporal | null            // the class's milestoning stereotype (optional, default
-                                                    // absent/null — issue #384, 6.5 S1's SourceMethodArg rule)
+                                                    // absent/null — issue #384, 6.5 S1's SourceMethodArg rule;
+                                                    // issue #386, S3's PropertyMethodArg rule reads the same
+                                                    // field off the navigated-to class)
 }
 
 Temporal = "business" | "processing" | "bitemporal" // the engine's <<temporal.businesstemporal>> /
                                                     // <<temporal.processingtemporal>> / <<temporal.bitemporal>>
                                                     // stereotypes, one date argument required for the first two,
-                                                    // two comma-separated ones for the third (6.5 S1)
+                                                    // two comma-separated ones for the third (6.5 S1, S3)
 
 PropertySpec {
   name: string                                     // "horsepower"
@@ -77,6 +79,17 @@ QualifiedPropertySpec {
   // parameter list exists in the PMCD but is not needed for identifier narrowing; a decoder MAY
   // ignore args and treat a qualified property as a nav step yielding return_type (MVP), or narrow
   // its argument positions later. Args are rare in the emitted subset.
+  //
+  // Disambiguation note (issues #385/#386): S3's PropertyMethodArg rule (6.5) treats EVERY call
+  // opened right after a resolved schema-member navigation as a milestoning date-argument slot,
+  // with no signal in this contract to distinguish a genuine qualified-property parameter from a
+  // compiler-synthesized milestoning date argument. #385 accepted this uniformly for the *shape*
+  // dimension (only Ws/Close/Date/Dollar survive an armed slot, so a real non-date qualified-
+  // property argument is already masked as a phantom); #386 extends the identical treatment to
+  // the *arity* dimension and inherits, rather than widens, that same accepted collision — a
+  // qualified property that legitimately takes Date/`$`-variable-shaped arguments AND whose
+  // return_type is a temporal-annotated class remains a theoretical, corpus-unevidenced edge
+  // case neither issue found a real instance of.
 }
 
 EnumValue = string                                  // the enum literal, e.g. "ACTIVE"
@@ -462,12 +475,10 @@ consolidated). The narrowing/type taxonomy has **14 rules**: **7 narrowing**
 (N1–N7) and **7 type** (T1–T7). Scope transitions supply state to constraints;
 they are not constraints themselves.
 
-Three scope transitions additionally *constrain* the position they name rather
+Two scope transitions additionally *constrain* the position they name rather
 than only supplying state: **S1** narrows the identifier after a source
-classpath's own `.` to exactly `all` (and, one call further on, its own
-argument slot); **S2** narrows a `$<IDENT>` refVar to the names the stream has
-bound; and **S3** narrows a milestoned property navigation's own call
-argument slot, the sibling of S1's one position later (issue #385) (§6.5).
+classpath's own `.` to exactly `all`, and **S2** narrows a `$<IDENT>` refVar to
+the names the stream has bound (§6.5).
 
 **S1's must-call veto.** `all` is a niladic *call* (`source = classpath
 ".all()"`), so once the name is whole the only legal continuation is its own
@@ -584,9 +595,37 @@ Conflating the two masked the getters' own string-literal column-name
 argument — caught by `bpe_split_soundness`'s gold-corpus soundness net, which
 every TDS getter call in the 5034-query corpus exercises — so the rule reads
 the tracker's own resolution outcome (`last_nav`) rather than "reached through
-a `.`" alone. Unlike `SourceMethodArg`, this position does not yet read the
-navigated-to class's own `temporal` arity (issue #384's rule above) — that
-extension is tracked as its own follow-up, issue #386.
+a `.`" alone.
+
+**S3's argument *count* (`PropertyMethodArg`'s `required`/`seen` and
+`PropertyMethodArgSep`, issue #386).** The identical undecidable gap S1 had
+before #384 exists one position later, at a milestoned property navigation's
+own call: with no way to know the *navigated-to* class's temporal shape, the
+overlay admitted `$x.facet()`, `$x.facet(%latest)`, and `$x.facet(%latest,
+%latest)` alike. Once `classes[*].temporal` states that class's stereotype,
+S3 mirrors S1's own treatment exactly, reading `last_nav_class` — the class
+the just-closed navigation resolved *to* — at `on_open` instead of S1's
+`cur_class` (the pipeline **source**'s own class):
+
+- **The value slot itself.** `PropertyMethodArg`'s payload carries the
+  identical `required`/`seen` pair, tracked the identical way
+  (`property_method_commas`, the S3 mirror of `source_method_commas`), and
+  applies the identical owed-closer/met-arity masking.
+- **The separator right after a completed argument
+  (`PropertyMethodArgSep`).** The S3 mirror of `SourceMethodArgSep`, reusing
+  its exact fill (a milestone/date literal and a `$`-variable are
+  value-terminal in-lexeme byte-PDA states regardless of which call opened
+  them, so the separator decision is identical).
+
+**When `required` is `None`** for the navigated-to class, S3 keeps the exact
+pre-#386 pass-through, for the identical "absent means not-yet-stated, never
+confirmed-unmilestoned" reasoning S1's own `None` case documents above. The
+two positions are armed, tracked, and cached independently
+(`in_source_method_args`/`in_property_method_args`, distinct `CacheKey`
+variants) so a call nested inside the other position's own argument list —
+a source `all()` call whose date argument is itself computed through a
+property navigation's call, or vice versa — cannot cross-contaminate the
+other's arity state.
 
 **Mask-aware completion.** L1 acceptance is a lookahead fact — "would a
 value-boundary byte from here reach a value-terminal state?" — and an identifier

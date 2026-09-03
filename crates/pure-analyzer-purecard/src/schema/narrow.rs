@@ -98,14 +98,17 @@ enum CacheKey {
     /// [`StoreMethodArgSep`](CacheKey::StoreMethodArgSep) below, keyed the
     /// identical way.
     SourceMethodArgSep(bool),
-    /// Issue #385: a milestoned property navigation's own call argument-slot
-    /// set — a whole-vocab constant, cached under its own key because the
-    /// position is armed independently of `SourceMethodArg` (§6.5 S1 vs. S3).
-    /// Still the pre-#384 shape-only fill ([`fill_milestoning_date_arg`]):
-    /// #384's arity narrowing landed only at the pipeline source's own call;
-    /// the same rule at a property navigation's call is tracked as its own
-    /// follow-up (issue #386).
-    PropertyMethodArg,
+    /// Issue #386: a milestoned property navigation's own call argument-slot
+    /// set, keyed by the navigated-to class's `required`/`seen` pair the
+    /// identical way [`SourceMethodArg`](CacheKey::SourceMethodArg) is —
+    /// cached under its own key because the two positions are armed
+    /// independently (§6.5 S1 vs. S3) even though
+    /// [`fill_milestoning_date_arg`] fills both identically.
+    PropertyMethodArg(Option<usize>, usize),
+    /// Issue #386's separator set: the property-navigation mirror of
+    /// [`SourceMethodArgSep`](CacheKey::SourceMethodArgSep), keyed the
+    /// identical way.
+    PropertyMethodArgSep(bool),
     /// N3d's store-method argument-slot set — likewise a whole-vocab constant.
     StoreMethodArg,
     /// N3d's store-method separator set. Whether the call still owes another
@@ -271,12 +274,11 @@ pub(crate) fn narrow_into(
         L2Position::SourceMethodArgSep { remaining } => {
             dispatch_source_method_arg_sep(dst, cache, vocab, eos_bit, *remaining)
         }
-        // S3's own call (issue #385) — still the pre-#384 shape-only fill;
-        // #384's arity narrowing has not reached this position yet (#386).
-        L2Position::PropertyMethodArg => {
-            with_cache(dst, cache, CacheKey::PropertyMethodArg, |dst| {
-                fill_milestoning_date_arg(dst, vocab, eos_bit);
-            })
+        L2Position::PropertyMethodArg { required, seen } => {
+            dispatch_property_method_arg(dst, cache, vocab, eos_bit, *required, *seen)
+        }
+        L2Position::PropertyMethodArgSep { remaining } => {
+            dispatch_property_method_arg_sep(dst, cache, vocab, eos_bit, *remaining)
         }
         L2Position::StoreMethodArg => with_cache(dst, cache, CacheKey::StoreMethodArg, |dst| {
             fill_store_method_arg(dst, vocab, eos_bit);
@@ -422,6 +424,46 @@ fn dispatch_source_method_arg_sep(
     with_cache(dst, cache, CacheKey::SourceMethodArgSep(remaining), |dst| {
         fill_source_method_arg_sep(dst, vocab, eos_bit, remaining);
     })
+}
+
+/// Issue #386's [`L2Position::PropertyMethodArg`] dispatch — the S3 mirror of
+/// [`dispatch_source_method_arg`], keyed off the navigated-to class's own
+/// `required`/`seen` pair instead of the pipeline source's.
+fn dispatch_property_method_arg(
+    dst: &mut BitMask,
+    cache: &mut NarrowCache,
+    vocab: &Vocab,
+    eos_bit: u32,
+    required: Option<usize>,
+    seen: usize,
+) -> bool {
+    with_cache(
+        dst,
+        cache,
+        CacheKey::PropertyMethodArg(required, seen),
+        |dst| {
+            fill_source_method_arg(dst, vocab, eos_bit, required, seen);
+        },
+    )
+}
+
+/// Issue #386's [`L2Position::PropertyMethodArgSep`] dispatch — the S3 mirror
+/// of [`dispatch_source_method_arg_sep`].
+fn dispatch_property_method_arg_sep(
+    dst: &mut BitMask,
+    cache: &mut NarrowCache,
+    vocab: &Vocab,
+    eos_bit: u32,
+    remaining: bool,
+) -> bool {
+    with_cache(
+        dst,
+        cache,
+        CacheKey::PropertyMethodArgSep(remaining),
+        |dst| {
+            fill_source_method_arg_sep(dst, vocab, eos_bit, remaining);
+        },
+    )
 }
 
 /// Whether N7 actually constrains a value position that has emitted `prefix`:
@@ -671,7 +713,8 @@ impl<'a> TrieRule<'a> {
             L2Position::None
             | L2Position::SourceMethodArg { .. }
             | L2Position::SourceMethodArgSep { .. }
-            | L2Position::PropertyMethodArg
+            | L2Position::PropertyMethodArg { .. }
+            | L2Position::PropertyMethodArgSep { .. }
             | L2Position::StoreMethodArg
             | L2Position::StoreMethodArgSep { .. }
             | L2Position::SourceExtent { .. }
@@ -864,7 +907,8 @@ pub(crate) fn narrow_fused_into(
         | L2Position::StoreMethod
         | L2Position::SourceMethodArg { .. }
         | L2Position::SourceMethodArgSep { .. }
-        | L2Position::PropertyMethodArg
+        | L2Position::PropertyMethodArg { .. }
+        | L2Position::PropertyMethodArgSep { .. }
         | L2Position::StoreMethodArg
         | L2Position::StoreMethodArgSep { .. }
         | L2Position::SourceExtent { .. }
@@ -1400,37 +1444,47 @@ fn fill_reducer(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32, masked_by: TypeC
     dst.set(eos_bit);
 }
 
-/// Refill `dst` with [`L2Position::SourceMethodArg`]'s set, plus EOS: unlike every
-/// other rule here, which keeps a token unless it is a wrong-shaped *candidate*
-/// the rule specifically governs, this rule's default is inverted — the value
-/// position right after the source method's own `(` (or after a comma inside
-/// it) has no legal *identifier/literal* argument at all, only its own closer,
-/// intervening whitespace, or a milestoning date (`docs/spec/grammar.md`'s
-/// `milestoneLit`/`dateLit`, both classified [`Lexeme::Date`], or a `$`-variable
-/// (issue #367) — bitemporal milestoning legally passes zero, one, or two
-/// comma-separated date arguments here, confirmed by the corpus's own
-/// `Firm.all(%latest, %latest)` fixture and the modern-dialect seed corpus).
-/// This rule only ever masks the phantom-argument shapes the walker was
-/// actually observed emitting (`Class.all('French')`, `Class.all(all)` — an
-/// identifier or string literal, never legal here). Every OTHER legal-at-L1
-/// value-start byte (an identifier, a string quote, a non-milestone digit, `~`,
-/// a nested opener, `|`) resolves to a distinct, non-`Ws`/`Close`/`Date`/`Dollar`
-/// [`Lexeme`] under [`classify`], so a whole-token classification (mirroring
-/// [`fill_operand`]'s style — no trie/prefix-walk is needed, since legality here
-/// is a function of shape alone) keeps exactly the four shapes that are never a
-/// phantom argument: `Ws`, `Close`, `Date`, and `Dollar`.
+/// Refill `dst` with a milestoning date-argument call's set, plus EOS —
+/// shared by [`L2Position::SourceMethodArg`] (the pipeline source's own
+/// `all(...)`) and [`L2Position::PropertyMethodArg`] (a milestoned property
+/// navigation's own call, `$x.facet(...)`, issue #386, the sibling of #367
+/// one position later): unlike every other rule here, which keeps a token
+/// unless it is a wrong-shaped *candidate* the rule specifically governs,
+/// this rule's default is inverted — the value position right after either
+/// call's own `(` (or after a comma inside it) has no legal
+/// *identifier/literal* argument at all, only its own closer, intervening
+/// whitespace, or a milestoning date (`docs/spec/grammar.md`'s
+/// `milestoneLit`/`dateLit`, both classified [`Lexeme::Date`] — bitemporal
+/// milestoning legally passes zero, one, or two comma-separated date
+/// arguments here, confirmed by the corpus's own `Firm.all(%latest,
+/// %latest)` fixture and the modern-dialect seed corpus), or a
+/// `$`-prefixed variable reference (also kept — issue #367/#385 — binding
+/// an as-of date once via `let` and passing it to every dated navigation is
+/// the ordinary way to write a dated query). This rule only ever masks the
+/// phantom-argument shapes the walker was actually observed emitting
+/// (`Class.all('French')`, `Class.all(all)` — an identifier or string
+/// literal, never legal here). Every OTHER legal-at-L1 value-start byte (an
+/// identifier, a string quote, a non-milestone digit, `~`, a nested opener,
+/// `|`) resolves to a distinct, non-`Ws`/`Close`/`Date`/`Dollar` [`Lexeme`]
+/// under [`classify`], so a whole-token classification (mirroring
+/// [`fill_operand`]'s style — no trie/prefix-walk is needed, since legality
+/// here is a function of shape alone) keeps exactly the four shapes that
+/// are never a phantom argument: `Ws`, `Close`, `Date`, and `Dollar`.
 ///
-/// `required` (issue #384) is the class's own milestoning arity — `None` when
-/// the schema carries no `temporal` field for it, in which case `Close` and a
-/// fresh `Date`/`Dollar` argument stay admissible at any `seen` count, exactly
-/// the pre-#384 whole-vocab constant this rule always was (it never capped the
-/// count at two or validated a milestone symbol beyond its lexical shape —
-/// like every other `%`-literal position in this overlay, that residue is left
-/// to the compiler oracle). When `required` is known, `Close` is masked while
-/// `seen < required` (an argument is still owed) and a fresh `Date`/`Dollar`
-/// argument is masked once `seen >= required` (the class's own arity is
-/// already met) — the companion "`,` or `)`" decision right after a
-/// *completed* argument is [`fill_source_method_arg_sep`].
+/// `required` (issue #384 for the source call, #386 for the property-navigation
+/// call) is the navigated class's own milestoning arity — `None` when the
+/// schema carries no `temporal` field for it, in which case `Close` and a
+/// fresh `Date`/`Dollar` argument stay admissible at any `seen` count,
+/// exactly the pre-#384 whole-vocab constant this rule always was (it never
+/// caps the count at two or validates a milestone symbol/variable name
+/// beyond its lexical shape — like every other `%`-literal or `$`-variable
+/// position in this overlay, that residue is left to the compiler oracle).
+/// When `required` is known, `Close` is masked while `seen < required` (an
+/// argument is still owed) and a fresh `Date`/`Dollar` argument is masked
+/// once `seen >= required` (the class's own arity is already met) — the
+/// companion "`,` or `)`" decision right after a *completed* argument is
+/// [`fill_source_method_arg_sep`], shared by both positions' separators the
+/// identical way.
 fn fill_source_method_arg(
     dst: &mut BitMask,
     vocab: &Vocab,
@@ -1456,30 +1510,6 @@ fn fill_source_method_arg(
             _ => false,
         };
         if keep {
-            dst.set(id);
-        }
-    }
-    dst.set(eos_bit);
-}
-
-/// Refill `dst` with [`L2Position::PropertyMethodArg`]'s set, plus EOS (issue
-/// #385, the sibling of [`fill_source_method_arg`] one PDA position later, at a
-/// milestoned property navigation's own call, `$x.facet(...)`, rather than the
-/// pipeline source's `all(...)`): the same shape rule as
-/// [`fill_source_method_arg`]'s doc comment describes, minus the arity half —
-/// #384's `required`/`seen` narrowing has not reached this position yet
-/// (tracked as its own follow-up, issue #386), so this stays the whole-vocab
-/// constant `fill_source_method_arg` always was before #384: `Close` and a
-/// fresh `Date`/`Dollar` argument are both unconditionally admissible, at any
-/// count.
-fn fill_milestoning_date_arg(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32) {
-    dst.clear_all();
-    for id in 0..vocab.len() as u32 {
-        let bytes = vocab.bytes(id).unwrap_or(&[]);
-        if matches!(
-            classify(bytes),
-            Lexeme::Ws | Lexeme::Close | Lexeme::Date | Lexeme::Dollar
-        ) {
             dst.set(id);
         }
     }
@@ -2550,7 +2580,11 @@ mod tests {
             b"(",           // 8: a nested call argument — masked
             b",", // 9: not legal at L1 here either, but never a candidate structure — masked
         ]);
-        let (applied, mask) = run(&L2Position::PropertyMethodArg, &[], v);
+        let pos = L2Position::PropertyMethodArg {
+            required: None,
+            seen: 0,
+        };
+        let (applied, mask) = run(&pos, &[], v);
         assert!(applied);
         assert!(bit(&mask, 0), "the matching closer survives");
         assert!(bit(&mask, 1), "inter-token whitespace survives");
@@ -2565,6 +2599,87 @@ mod tests {
         );
         assert!(!bit(&mask, 8), "a nested call argument is masked");
         assert!(!bit(&mask, 9), "a comma is masked");
+    }
+
+    /// Issue #386: the sibling of `source_method_arg_masks_the_closer_while_an_argument_is_still_owed`
+    /// one position later — once the *navigated-to* class's declared arity is
+    /// known, `PropertyMethodArg`'s value slot flips exactly the way
+    /// `SourceMethodArg`'s does.
+    #[test]
+    fn property_method_arg_masks_the_closer_while_an_argument_is_still_owed() {
+        let v = vocab(&[b")", b"%latest", b"$"]);
+        let pos = L2Position::PropertyMethodArg {
+            required: Some(1),
+            seen: 0,
+        };
+        let (applied, mask) = run(&pos, &[], v);
+        assert!(applied);
+        assert!(
+            !bit(&mask, 0),
+            "L2 SOUNDNESS (issue #386): a required argument is still owed, so the closer must be masked"
+        );
+        assert!(bit(&mask, 1), "a fresh date literal is still legal");
+        assert!(bit(&mask, 2), "a fresh refVar sigil is still legal");
+    }
+
+    /// Issue #386: the sibling of `source_method_arg_masks_a_fresh_argument_once_the_arity_is_met`
+    /// one position later.
+    #[test]
+    fn property_method_arg_masks_a_fresh_argument_once_the_arity_is_met() {
+        let v = vocab(&[b")", b"%latest", b"$"]);
+        let pos = L2Position::PropertyMethodArg {
+            required: Some(1),
+            seen: 1,
+        };
+        let (applied, mask) = run(&pos, &[], v);
+        assert!(applied);
+        assert!(bit(&mask, 0), "the closer is legal once the arity is met");
+        assert!(
+            !bit(&mask, 1),
+            "L2 PRECISION (issue #386): a second date literal exceeds a 1-arity class"
+        );
+        assert!(
+            !bit(&mask, 2),
+            "L2 PRECISION (issue #386): a second refVar sigil exceeds a 1-arity class"
+        );
+    }
+
+    /// Issue #386's separator half: the sibling of
+    /// `source_method_arg_sep_admits_only_the_owed_byte` one position later.
+    #[test]
+    fn property_method_arg_sep_admits_only_the_owed_byte() {
+        let v = vocab(&[b",", b")", b"  "]);
+        let (applied, still_owed) = run(
+            &L2Position::PropertyMethodArgSep { remaining: true },
+            &[],
+            v.clone(),
+        );
+        assert!(applied);
+        assert!(
+            bit(&still_owed, 0),
+            "a comma is legal while an argument is still owed"
+        );
+        assert!(
+            !bit(&still_owed, 1),
+            "the closer is masked while an argument is still owed"
+        );
+        assert!(bit(&still_owed, 2), "whitespace stays legal either way");
+
+        let (applied, arity_met) = run(
+            &L2Position::PropertyMethodArgSep { remaining: false },
+            &[],
+            v,
+        );
+        assert!(applied);
+        assert!(
+            !bit(&arity_met, 0),
+            "a comma is masked once the arity is met"
+        );
+        assert!(
+            bit(&arity_met, 1),
+            "the closer is legal once the arity is met"
+        );
+        assert!(bit(&arity_met, 2), "whitespace stays legal either way");
     }
 
     #[test]
