@@ -269,10 +269,30 @@ diagnostic output on standard output.
 ## Safe file updates
 
 Default `fmt` and file-based `lint --fix` stage the complete set of replacements
-before installing them. They refuse symbolic links and non-regular files,
-re-check each analyzed snapshot, and use atomic path exchange where the platform
-provides it. If safe atomic exchange is unavailable, the command fails rather
-than falling back to an unsafe overwrite.
+before installing any of them, and only start installing once every one has
+staged successfully. They refuse symbolic links and non-regular files, re-check
+each analyzed snapshot immediately before its own exchange, and use atomic path
+exchange where the platform provides it — a file's content is replaced
+completely or not at all, and its containing directory is fsynced immediately
+after the exchange, so a completed replacement survives a crash or power loss.
+If safe atomic exchange is unavailable, the command fails rather than falling
+back to an unsafe overwrite.
+
+This durability guarantee is **per file, not per invocation**: a run over many
+files that is killed (`SIGKILL`, power loss) between two files' exchanges is not
+rolled forward or back on its next run — there is no cross-file journal — so it
+can leave an earlier file already replaced and a later one untouched. Every
+file is still exactly its old or its new content; none is ever torn or
+corrupted. A software error caught *during* a run (a stale snapshot, a failed
+exchange) is different and stronger: it rolls back every file that run had
+already installed, so a handled failure never leaves a partial edit behind.
+
+A leftover `.<name>.pure-analyzer-stage-<pid>-<n>` file beside a target is the
+signature of a run that was killed before it could clean up its own staging
+file. It is never installed or silently deleted by a later run — deleting it
+automatically could destroy a different, still-running invocation's live
+staging file — a later run that touches the same directory instead logs a
+warning naming it, so it can be inspected and removed by hand.
 
 Formatter recovery diagnostics prevent default file writes. Use `--check`,
 `--stdout`, or `--diff` to inspect input that needs recovery without modifying

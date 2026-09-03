@@ -54,8 +54,8 @@ enum Command {
         /// PMCD JSON and/or Pure-model-file model sources; may repeat.
         #[arg(long)]
         model: Vec<String>,
-        /// Apply machine-applicable fixes transactionally in place where atomic path exchange is
-        /// available.
+        /// Apply machine-applicable fixes in place, one atomic file exchange at a time, where
+        /// atomic path exchange is available.
         #[arg(long)]
         fix: bool,
         /// Check whether `--fix` would change any input without writing.
@@ -68,7 +68,7 @@ enum Command {
         #[arg(long, requires = "fix", conflicts_with_all = ["check", "stdout"])]
         diff: bool,
     },
-    /// Lossless layout formatting with transactional in-place file updates where atomic path
+    /// Lossless layout formatting with atomic, per-file in-place updates where atomic path
     /// exchange is available.
     #[command(
         after_long_help = "`fmt --canonical` emits a proven relational normal form to standard output without writing input. Exit status: 0 emitted; 2 indecisive."

@@ -1,4 +1,15 @@
-//! Transactional, staged replacement of analyzed source files.
+//! Staged replacement of analyzed source files.
+//!
+//! Each destination is replaced by one atomic path exchange: the exchange
+//! and the fsync of its containing directory that makes it durable both
+//! happen, or neither does. A software error caught partway through a
+//! multi-file run rolls back every file already installed in that run. A
+//! crash (`SIGKILL`, power loss) between two files' exchanges is not rolled
+//! back or rolled forward — there is no cross-file journal — so it can leave
+//! an earlier file replaced and a later one untouched; every file on disk is
+//! still exactly its old or its new content, never a torn write. See
+//! `docs/pure-analyzer.md`'s "Safe file updates" section for the guarantee
+//! this delivers in full.
 
 use std::collections::BTreeSet;
 use std::ffi::{OsStr, OsString};
@@ -37,6 +48,8 @@ fn replace_all_with_operations<O: FileOperations>(
         return Ok(());
     }
 
+    surface_orphaned_stage_artifacts(&replacements);
+
     let mut destinations = BTreeSet::new();
     let mut staged = Vec::with_capacity(replacements.len());
     for replacement in replacements {
@@ -63,6 +76,59 @@ fn replace_all_with_operations<O: FileOperations>(
     }
 
     commit(&mut staged, operations)
+}
+
+/// Warn about any leftover stage artifact beside a destination this run is
+/// about to touch.
+///
+/// A crash between installing a staged file and removing its now-stale
+/// backup (or between staging a file and installing it) leaves a
+/// `.<name>.pure-analyzer-stage-<pid>-<n>` file with no in-memory record of
+/// which run created it. Deleting it automatically would risk destroying a
+/// concurrently running invocation's own live staging file — a reused PID or
+/// a second legitimate `pure-analyzer` process touching the same tree — so
+/// this only reports it; an operator confirms no such process is running
+/// before removing it by hand.
+fn surface_orphaned_stage_artifacts(replacements: &[Replacement]) {
+    for path in orphaned_stage_artifacts(replacements) {
+        tracing::warn!(
+            path = %path.display(),
+            "leftover pure-analyzer stage artifact from an interrupted run; remove it once no \
+             pure-analyzer process is using it"
+        );
+    }
+}
+
+/// Every stage-artifact-named entry beside a destination this run touches.
+fn orphaned_stage_artifacts(replacements: &[Replacement]) -> Vec<PathBuf> {
+    let mut scanned = BTreeSet::new();
+    let mut found = Vec::new();
+    for replacement in replacements {
+        let parent = parent_or_cwd(&replacement.path);
+        if !scanned.insert(parent.to_path_buf()) {
+            continue;
+        }
+        let Ok(entries) = fs::read_dir(parent) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            if is_stage_artifact(&entry.file_name()) {
+                found.push(entry.path());
+            }
+        }
+    }
+    found
+}
+
+/// Whether a file name matches this writer's own staging-artifact pattern
+/// (`unique_sibling` with [`STAGING_ROLE`]), the single naming convention
+/// production code ever creates on disk.
+fn is_stage_artifact(name: &OsStr) -> bool {
+    name.to_string_lossy().contains(&stage_artifact_marker())
+}
+
+fn stage_artifact_marker() -> String {
+    format!("{WRITER_MARKER}-{STAGING_ROLE}-")
 }
 
 fn canonical_destination(path: &Path) -> Result<PathBuf, Failure> {
@@ -440,12 +506,30 @@ enum ExchangeOperation {
 }
 
 /// Atomically swap two existing sibling paths, preserving the displaced entry
-/// for stale-snapshot verification and rollback.
+/// for stale-snapshot verification and rollback, and fsync the containing
+/// directory so the swap itself — not just the file content already fsynced
+/// while staging — survives a crash immediately after this call returns.
+///
+/// A rename is only durable once its directory entry is: POSIX does not
+/// guarantee a completed `rename`/`renameat2` survives a crash until the
+/// directory holding it has itself been fsynced. Without this, a crash right
+/// after a successful exchange could still lose it on reboot even though
+/// `write_staged` had already fsynced the staged file's contents.
 #[cfg(any(target_os = "linux", target_vendor = "apple"))]
 fn atomic_exchange(source: &Path, destination: &Path) -> io::Result<()> {
     use rustix::fs::{CWD, RenameFlags, renameat_with};
 
     renameat_with(CWD, source, CWD, destination, RenameFlags::EXCHANGE)
+        .map_err(|error| io::Error::from_raw_os_error(error.raw_os_error()))?;
+    fsync_parent_directory(destination)
+}
+
+/// Fsync `path`'s containing directory. Exchanged paths are siblings, so
+/// syncing either one's parent covers the directory entries of both.
+#[cfg(any(target_os = "linux", target_vendor = "apple"))]
+fn fsync_parent_directory(path: &Path) -> io::Result<()> {
+    let directory = File::open(parent_or_cwd(path))?;
+    rustix::fs::fsync(&directory)
         .map_err(|error| io::Error::from_raw_os_error(error.raw_os_error()))
 }
 
@@ -662,11 +746,15 @@ fn create_staging_file(path: &Path) -> Result<(PathBuf, File), Failure> {
     )))
 }
 
-fn unique_sibling(path: &Path, role: &str) -> Result<PathBuf, Failure> {
-    let parent = path
-        .parent()
+/// A path's parent directory, or `.` for a bare relative file name.
+fn parent_or_cwd(path: &Path) -> &Path {
+    path.parent()
         .filter(|parent| !parent.as_os_str().is_empty())
-        .unwrap_or_else(|| Path::new("."));
+        .unwrap_or_else(|| Path::new("."))
+}
+
+fn unique_sibling(path: &Path, role: &str) -> Result<PathBuf, Failure> {
+    let parent = parent_or_cwd(path);
     let file_name = path.file_name().ok_or_else(|| {
         Failure::internal(format!("output path has no file name: {}", path.display()))
     })?;
@@ -839,10 +927,7 @@ mod tests {
         let artifacts: Vec<_> = fs::read_dir(&fixture.root)
             .expect("list fixture entries")
             .map(|entry| entry.expect("read fixture entry").path())
-            .filter(|path| {
-                path.file_name()
-                    .is_some_and(|name| name.to_string_lossy().contains(WRITER_MARKER))
-            })
+            .filter(|path| path.file_name().is_some_and(is_stage_artifact))
             .collect();
         assert_eq!(artifacts.len(), 1, "retain the unknown staged artifact");
         assert_eq!(
@@ -987,6 +1072,92 @@ mod tests {
             .mode()
             & PERMISSION_BITS;
         assert_eq!(mode, FIXTURE_MODE);
+    }
+
+    #[test]
+    fn orphaned_stage_artifacts_finds_only_this_writers_own_naming_pattern() {
+        let fixture = Fixture::new("orphan-scan");
+        let target = fixture.write("target.pure", "before");
+        let leftover = fixture.write(
+            &format!(".target.pure.{WRITER_MARKER}-{STAGING_ROLE}-99999-7"),
+            "leftover after content",
+        );
+        fixture.write(
+            &format!(".target.pure.{WRITER_MARKER}-other-99999-7"),
+            "a different role must not match",
+        );
+        fixture.write(".unrelated-hidden-file", "not ours");
+
+        let found = orphaned_stage_artifacts(&[replacement(&target, "before", "after")]);
+
+        assert_eq!(found, vec![leftover]);
+    }
+
+    /// A process killed between two files' exchanges (`SIGKILL`, power loss)
+    /// never runs a destructor, so `std::mem::forget` on the not-yet-switched
+    /// [`StagedReplacement`] is the faithful way to reproduce that on disk
+    /// inside a test: it skips exactly the `Drop` cleanup a real crash would
+    /// also skip, leaving precisely the artifacts a crash leaves.
+    #[cfg(any(target_os = "linux", target_vendor = "apple"))]
+    #[test]
+    fn crash_between_exchanges_leaves_partial_application_that_a_later_run_surfaces_and_recovers() {
+        let fixture = Fixture::new("crash-recovery");
+        let first = fixture.write("first.pure", "before one");
+        let second = fixture.write("second.pure", "before two");
+
+        let mut first_staged =
+            StagedReplacement::stage(replacement(&first, "before one", "after one"))
+                .expect("stage first replacement");
+        let second_staged =
+            StagedReplacement::stage(replacement(&second, "before two", "after two"))
+                .expect("stage second replacement");
+
+        first_staged
+            .switch(0, &mut NativeFileOperations)
+            .expect("install the first file before the simulated crash");
+        // The crash lands here, between the first and second file's exchange:
+        // nothing further ever runs, `commit`'s loop included.
+        std::mem::forget(second_staged);
+
+        assert_eq!(fixture.read(&first), "after one");
+        assert_eq!(fixture.read(&second), "before two");
+
+        let mut leftovers = orphaned_stage_artifacts(&[
+            replacement(&first, "after one", "irrelevant"),
+            replacement(&second, "before two", "irrelevant"),
+        ]);
+        leftovers.sort();
+        let mut expected: Vec<PathBuf> = fs::read_dir(&fixture.root)
+            .expect("list fixture entries")
+            .map(|entry| entry.expect("read fixture entry").path())
+            .filter(|path| path.file_name().is_some_and(is_stage_artifact))
+            .collect();
+        expected.sort();
+        assert_eq!(
+            leftovers.len(),
+            2,
+            "the crash must leave exactly one backup and one uninstalled staging file"
+        );
+        assert_eq!(leftovers, expected);
+
+        // A later invocation over the same, now half-updated tree must still
+        // succeed, and must not silently delete what it did not create.
+        replace_all(vec![
+            replacement(&first, "after one", "final one"),
+            replacement(&second, "before two", "final two"),
+        ])
+        .expect("a later run must not be blocked by the crash's leftovers");
+        assert_eq!(fixture.read(&first), "final one");
+        assert_eq!(fixture.read(&second), "final two");
+        let mut still_present = orphaned_stage_artifacts(&[
+            replacement(&first, "final one", "irrelevant"),
+            replacement(&second, "final two", "irrelevant"),
+        ]);
+        still_present.sort();
+        assert_eq!(
+            still_present, expected,
+            "leftovers from the crash are surfaced, never silently removed by a later run"
+        );
     }
 
     fn replacement(path: &Path, before: &str, after: &str) -> Replacement {
@@ -1270,7 +1441,7 @@ mod tests {
             for entry in entries {
                 let entry = entry.expect("read fixture entry");
                 assert!(
-                    !entry.file_name().to_string_lossy().contains(WRITER_MARKER),
+                    !is_stage_artifact(&entry.file_name()),
                     "writer artifact remained at {}",
                     entry.path().display()
                 );
