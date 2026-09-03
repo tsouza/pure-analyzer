@@ -86,7 +86,6 @@ struct Parser<'source, 'tokens> {
     events: Vec<Event>,
     diagnostics: Vec<Diagnostic>,
     coverage_gaps: Vec<DomainCoverageGap>,
-    fuel: usize,
     depth: usize,
 }
 
@@ -100,7 +99,6 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
             events: Vec::with_capacity(tokens.len().saturating_add(2)),
             diagnostics: Vec::new(),
             coverage_gaps: Vec::new(),
-            fuel: tokens.len(),
             depth: 0,
         }
     }
@@ -1272,9 +1270,6 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
     }
 
     fn bump(&mut self) -> bool {
-        if self.fuel == 0 {
-            return false;
-        }
         let Some(kind) = self.raw_kind() else {
             return false;
         };
@@ -1287,7 +1282,6 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
         }
         self.events.push(Event::Advance);
         self.index = self.index.saturating_add(1);
-        self.fuel = self.fuel.saturating_sub(1);
         true
     }
 
@@ -1393,49 +1387,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn exhausted_fuel_stops_top_level_recovery_after_one_error_node() {
-        let source = ";;";
-        let tokens = lex(source);
-        let mut parser = Parser::new(source, FileId::new(0), &tokens);
-        parser.fuel = 0;
-
-        let (events, diagnostics, coverage_gaps) = parser.parse();
-
-        assert_eq!(
-            diagnostics.len(),
-            1,
-            "fuel exhaustion must stop recovery rather than emitting duplicate diagnostics: {diagnostics:#?}"
-        );
-        assert_eq!(diagnostics[0].code, DiagCode::MalformedSyntax);
-        assert_eq!(
-            diagnostics[0].primary.span,
-            TextRange::new(TextSize::from(0), TextSize::from(1))
-        );
-        assert_eq!(
-            events
-                .iter()
-                .filter(|event| matches!(event, Event::Open(SyntaxKind::ERROR_NODE)))
-                .count(),
-            1,
-            "fuel exhaustion must close and stop after the first recovery node"
-        );
-        assert_eq!(
-            events
-                .iter()
-                .filter(|event| matches!(event, Event::Advance))
-                .count(),
-            0
-        );
-        assert_eq!(
-            coverage_gaps,
-            vec![DomainCoverageGap {
-                span: TextRange::new(TextSize::from(0), TextSize::from(1)),
-                kind: DomainCoverageGapKind::UnsupportedTopLevel,
-            }]
-        );
-    }
-
-    #[test]
     fn stereotype_list_stops_at_trivia_only_eof() {
         let source = " /* comment */ ";
         let tokens = lex(source);
@@ -1459,55 +1410,25 @@ mod tests {
     }
 
     #[test]
-    fn exhausted_fuel_stops_stereotype_application_recovery() {
-        let source = "{";
-        let tokens = lex(source);
-        let mut parser = Parser::new(source, FileId::new(0), &tokens);
-        parser.fuel = 0;
-
-        parser.parse_stereotype_applications();
-
-        assert_eq!(parser.index, 0);
-        assert_eq!(
-            parser.diagnostics.len(),
-            1,
-            "fuel exhaustion must stop stereotype recovery after its no-progress diagnostic: {:#?}",
-            parser.diagnostics
-        );
-        assert_eq!(
-            parser
-                .events
-                .iter()
-                .filter(|event| matches!(event, Event::Advance))
-                .count(),
-            0
-        );
-    }
-
-    #[test]
-    fn exhausted_fuel_stops_balanced_brace_consumption() {
+    fn unterminated_balanced_braces_report_and_stop_at_real_eof() {
         let source = "{{";
         let tokens = lex(source);
         let mut parser = Parser::new(source, FileId::new(0), &tokens);
-        parser.fuel = 1;
 
         assert!(!parser.consume_balanced_braces());
-        assert_eq!(parser.index, 1);
-        assert_eq!(parser.fuel, 0);
+        assert_eq!(parser.index, tokens.len());
         assert_eq!(parser.diagnostics.len(), 1);
         assert_eq!(parser.diagnostics[0].code, DiagCode::MalformedSyntax);
     }
 
     #[test]
-    fn exhausted_fuel_stops_double_angle_consumption() {
+    fn unterminated_double_angle_reports_and_stops_at_real_eof() {
         let source = "<<<";
         let tokens = lex(source);
         let mut parser = Parser::new(source, FileId::new(0), &tokens);
-        parser.fuel = 2;
 
         assert!(!parser.consume_double_angle());
-        assert_eq!(parser.index, 2);
-        assert_eq!(parser.fuel, 0);
+        assert_eq!(parser.index, tokens.len());
         assert_eq!(parser.diagnostics.len(), 1);
         assert_eq!(parser.diagnostics[0].code, DiagCode::MalformedSyntax);
     }
