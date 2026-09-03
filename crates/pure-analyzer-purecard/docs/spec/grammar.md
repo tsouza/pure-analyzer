@@ -447,18 +447,35 @@ colName         = ident | strlit ;                             (* bare ident OR 
 ```
 
 **How the byte-PDA admits it (the residual over-approximation, §5.6).** The
-machine adds exactly one state, `SawTilde` (reached from the value hubs on `~`),
-transitioning on `[` (a relation column-set), a bare identifier, or a quoted
-string (a column reference); a `:` may additionally open a `{`-brace frame lambda
-(`agg:{p,w,r|…}`). Everything else in arm-R — the `:` column-to-lambda separators,
-the `over(~…)` partition, the `{p,w,r|…}` frames, the reducers, the bracket
-nesting — reuses the shared value-hub / lambda / bracket machinery of §5.2–§5.3.
-So the grammar admits a superset of the strict productions above (e.g. it does not
-enforce that a `winAggSpec` colon is bare while a `relAggSpec` colon carries a
-leading `~`); the compiler oracle catches the residue, exactly as §5.6 sanctions.
-Like every other L1 identifier, a `~`-column name is an **L2 pass-through** (it
-opens at the `SawTilde` anchor, whose rule is `None`), so arm-R never masks the
-model's emitted column names.
+machine adds `SawTilde` (reached from the value hubs on `~`), transitioning on
+`[` (a relation column-set, `Frame::RelColBracket`), a bare identifier, or a
+quoted string (a column reference) — each routed to its own colName states
+(`InRelColIdent`/`InRelColStrLit`, closing at `AfterRelColName`), *not* the
+generic identifier/string-literal/value-hub states arm-A/arm-C terms use. That
+separation is deliberate: a `~`-column position is a disjoint sub-grammar from
+the generic value/expression hub, not a value a `|` can attach to, so
+`AfterRelColName` admits a `:` (opening a `colLambda`/`mapLambda`/`frameLambda`
+body — which may itself open a `{`-brace frame lambda, `agg:{p,w,r|…}`) and
+everything else a completed value admits, but never a `|` — live-attested,
+`over(~a|$a.b)`, `rename(~old|$x.a, ~new)`, `sort([ascending(~a|$a.b)])` and
+`groupBy(~[a|$a.b], …)` are each "no viable alternative" right at the `|`. A
+`~[…]` bracket item *past a comma* reopens the same restricted position
+(`ExpectRelColSpecReq`), not the generic one, since a second item has no fresh
+`~` in front of it to route through `SawTilde` again — without that, only a
+bracket's *first* item would have been narrowed (issue #361). Everything else
+in arm-R — the `:` column-to-lambda separators, the `over(~…)` partition
+otherwise, the `{p,w,r|…}` frame bodies, the reducers, the bracket nesting —
+still reuses the shared value-hub / lambda / bracket machinery of §5.2–§5.3. So
+the grammar still admits a superset of the strict productions above (e.g. it
+does not enforce that a `winAggSpec` colon is bare while a `relAggSpec` colon
+carries a leading `~`, nor that `over(…)`'s argument is only ever a `colRef`
+list rather than the general bracketed colSpec form every other arm-R
+construct shares); the compiler oracle catches that residue, exactly as §5.6
+sanctions — but a *lambda* standing in for a column name, at any of these
+positions, is no longer part of it. Like every other L1 identifier, a
+`~`-column name is an **L2 pass-through** (it opens at the `SawTilde`/
+`ExpectRelColSpec`/`ExpectRelColSpecReq` anchors, whose rule is `None`), so
+arm-R never masks the model's emitted column names.
 
 ### 5.10 Differential gate (L1 vs. the Legend engine)
 

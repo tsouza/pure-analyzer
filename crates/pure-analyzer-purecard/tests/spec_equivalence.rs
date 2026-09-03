@@ -43,7 +43,10 @@ use purecard::{ByteRecognizer, CompiledGrammar, DecodeError, DecoderSession, Voc
 /// sweeps. Pinned so a state or frame that silently stops being reachable — the
 /// way a rule change can orphan one — reddens this suite instead of quietly
 /// shrinking its coverage.
-const EXPECTED_REACHABLE_CONFIGURATIONS: usize = 323;
+// Issue #361 added a `Frame::RelColBracket` and six states narrowing arm-R's
+// `~[…]`/bare `~col` column-spec positions off the generic value hub — a real
+// automaton change, reviewed in that PR, not a silent re-pin.
+const EXPECTED_REACHABLE_CONFIGURATIONS: usize = 405;
 
 /// Arm-A (relational envelope) gold record count (mirrors
 /// `tests/soundness_replay.rs`).

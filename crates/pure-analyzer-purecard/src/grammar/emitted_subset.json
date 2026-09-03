@@ -5,7 +5,8 @@
     "Group",
     "Bracket",
     "Brace",
-    "BraceLambda"
+    "BraceLambda",
+    "RelColBracket"
   ],
   "start": "Start",
   "states": {
@@ -642,6 +643,20 @@
           }
         },
         {
+          "match": {
+            "kind": "exact",
+            "byte": 44
+          },
+          "guard": {
+            "kind": "stack_top_is",
+            "frame": "RelColBracket"
+          },
+          "action": {
+            "kind": "next",
+            "state": "ExpectRelColSpecReq"
+          }
+        },
+        {
           "action": {
             "kind": "next",
             "state": "ExpectValueReq"
@@ -709,6 +724,20 @@
           "match": {
             "byte": 93,
             "kind": "exact"
+          }
+        },
+        {
+          "match": {
+            "kind": "exact",
+            "byte": 93
+          },
+          "guard": {
+            "kind": "stack_top_is",
+            "frame": "RelColBracket"
+          },
+          "action": {
+            "kind": "pop",
+            "state": "AfterValue"
           }
         },
         {
@@ -2392,33 +2421,33 @@
       "accepting": false,
       "rules": [
         {
+          "match": {
+            "kind": "exact",
+            "byte": 91
+          },
           "action": {
-            "frame": "Bracket",
             "kind": "push",
-            "state": "ExpectValue"
-          },
-          "match": {
-            "byte": 91,
-            "kind": "exact"
+            "frame": "RelColBracket",
+            "state": "ExpectRelColSpec"
           }
         },
         {
+          "match": {
+            "kind": "exact",
+            "byte": 39
+          },
           "action": {
             "kind": "next",
-            "state": "InStrLit"
-          },
-          "match": {
-            "byte": 39,
-            "kind": "exact"
+            "state": "InRelColStrLit"
           }
         },
         {
-          "action": {
-            "kind": "next",
-            "state": "InIdent"
-          },
           "match": {
             "kind": "ident_start"
+          },
+          "action": {
+            "kind": "next",
+            "state": "InRelColIdent"
           }
         }
       ]
@@ -2513,6 +2542,199 @@
           "match": {
             "byte": 123,
             "kind": "exact"
+          }
+        }
+      ]
+    },
+    "InRelColIdent": {
+      "accepting": false,
+      "rules": [
+        {
+          "match": {
+            "kind": "ident_tail"
+          },
+          "action": {
+            "kind": "next",
+            "state": "InRelColIdent"
+          }
+        },
+        {
+          "match": {
+            "kind": "any"
+          },
+          "action": {
+            "kind": "goto",
+            "state": "AfterRelColName"
+          }
+        }
+      ]
+    },
+    "InRelColStrLit": {
+      "accepting": false,
+      "rules": [
+        {
+          "match": {
+            "kind": "exact",
+            "byte": 39
+          },
+          "action": {
+            "kind": "next",
+            "state": "InRelColStrLitPending"
+          }
+        },
+        {
+          "match": {
+            "kind": "any"
+          },
+          "action": {
+            "kind": "next",
+            "state": "InRelColStrLit"
+          }
+        }
+      ]
+    },
+    "InRelColStrLitPending": {
+      "accepting": false,
+      "rules": [
+        {
+          "match": {
+            "kind": "exact",
+            "byte": 39
+          },
+          "action": {
+            "kind": "next",
+            "state": "InRelColStrLit"
+          }
+        },
+        {
+          "match": {
+            "kind": "any"
+          },
+          "action": {
+            "kind": "goto",
+            "state": "AfterRelColName"
+          }
+        }
+      ]
+    },
+    "AfterRelColName": {
+      "accepting": true,
+      "rules": [
+        {
+          "match": {
+            "kind": "whitespace"
+          },
+          "action": {
+            "kind": "next",
+            "state": "AfterRelColName"
+          }
+        },
+        {
+          "match": {
+            "kind": "exact",
+            "byte": 58
+          },
+          "action": {
+            "kind": "next",
+            "state": "AfterColon"
+          }
+        },
+        {
+          "match": {
+            "kind": "exact",
+            "byte": 124
+          },
+          "action": {
+            "kind": "dead"
+          }
+        },
+        {
+          "match": {
+            "kind": "any"
+          },
+          "action": {
+            "kind": "goto",
+            "state": "AfterValue"
+          }
+        }
+      ]
+    },
+    "ExpectRelColSpec": {
+      "accepting": false,
+      "rules": [
+        {
+          "match": {
+            "kind": "whitespace"
+          },
+          "action": {
+            "kind": "next",
+            "state": "ExpectRelColSpec"
+          }
+        },
+        {
+          "match": {
+            "kind": "ident_start"
+          },
+          "action": {
+            "kind": "next",
+            "state": "InRelColIdent"
+          }
+        },
+        {
+          "match": {
+            "kind": "exact",
+            "byte": 39
+          },
+          "action": {
+            "kind": "next",
+            "state": "InRelColStrLit"
+          }
+        },
+        {
+          "match": {
+            "kind": "exact",
+            "byte": 93
+          },
+          "guard": {
+            "kind": "stack_top_is",
+            "frame": "RelColBracket"
+          },
+          "action": {
+            "kind": "pop",
+            "state": "AfterValue"
+          }
+        }
+      ]
+    },
+    "ExpectRelColSpecReq": {
+      "accepting": false,
+      "rules": [
+        {
+          "match": {
+            "kind": "whitespace"
+          },
+          "action": {
+            "kind": "next",
+            "state": "ExpectRelColSpecReq"
+          }
+        },
+        {
+          "match": {
+            "kind": "ident_start"
+          },
+          "action": {
+            "kind": "next",
+            "state": "InRelColIdent"
+          }
+        },
+        {
+          "match": {
+            "kind": "exact",
+            "byte": 39
+          },
+          "action": {
+            "kind": "next",
+            "state": "InRelColStrLit"
           }
         }
       ]
