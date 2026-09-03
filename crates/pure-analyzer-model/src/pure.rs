@@ -38,23 +38,28 @@ pub(super) fn parse_pure_document(
         parser_diagnostics: &parsed.diagnostics,
         source,
     };
-    let (elements, mut lowering_diagnostics, coverage_gap) = lower_domain(&parsed.green, context);
+    let (elements, mut lowering_diagnostics) = lower_domain(&parsed.green, context);
     let mut diagnostics = parsed.diagnostics;
     diagnostics.append(&mut lowering_diagnostics);
     diagnostics.sort_by_key(|diagnostic| range_start(diagnostic.primary.span));
     Ok(ModelFragment {
         elements,
         diagnostics,
-        coverage_gap,
     })
 }
 
+/// Lowers one Pure Domain source's confirmed model facts.
+///
+/// Every `coverage_gap` this function sets on a [`ClassInfo`] is scoped to
+/// classes declared in *this* source alone: it is never promoted to a
+/// graph-wide flag by the caller, so it can never contaminate an unrelated
+/// class from a different, independently-loaded source (issue #267).
 fn lower_domain(
     root: &GreenNode,
     context: LoweringContext<'_>,
-) -> (BTreeMap<QName, FragmentElement>, Vec<Diagnostic>, bool) {
+) -> (BTreeMap<QName, FragmentElement>, Vec<Diagnostic>) {
     let Some(file) = find_domain_file(root) else {
-        return (BTreeMap::new(), Vec::new(), true);
+        return (BTreeMap::new(), Vec::new());
     };
     let mut source_wide_gap = context
         .gaps
@@ -124,7 +129,7 @@ fn lower_domain(
             FragmentElement::Association(association),
         );
     }
-    (elements, lowering_diagnostics, source_wide_gap)
+    (elements, lowering_diagnostics)
 }
 
 fn duplicate_top_level_paths(

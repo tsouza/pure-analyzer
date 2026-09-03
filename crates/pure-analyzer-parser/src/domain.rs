@@ -46,9 +46,13 @@ pub struct DomainParse {
 ///
 /// The result always preserves every lexer token.  Classes, associations,
 /// profiles, inheritance, properties, qualified-property signatures, types,
-/// and multiplicities receive Domain-specific CST nodes.  Other legal Domain
-/// constructs remain lossless opaque nodes and produce [`DomainCoverageGap`]
-/// entries, so later model loading cannot invent facts from a partial parse.
+/// and multiplicities receive Domain-specific CST nodes.  `import` statements
+/// and `###` section headers are recognized as fact-free and lowered to
+/// [`SyntaxKind::DOMAIN_IGNORED_TOP_LEVEL`] without a coverage gap, since they
+/// never carry class or association facts. Every other unsupported top-level
+/// construct remains a lossless opaque node and produces a
+/// [`DomainCoverageGap`] entry, so later model loading cannot invent facts
+/// from a partial parse.
 ///
 /// Syntax failures are returned in [`DomainParse::diagnostics`]; an error
 /// result indicates that the shared validated green-tree builder could not
@@ -123,6 +127,7 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
                 Some(DeclarationKind::Class) => self.parse_class(),
                 Some(DeclarationKind::Association) => self.parse_association(),
                 Some(DeclarationKind::Profile) => self.parse_profile(),
+                None if self.at_ignored_top_level() => self.parse_ignored_top_level(),
                 None => self.parse_opaque_top_level(),
             }
             if self.index != before {
@@ -800,7 +805,26 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
 
     fn parse_opaque_top_level(&mut self) {
         let start = self.index;
-        self.open(SyntaxKind::DOMAIN_OPAQUE_NODE);
+        self.consume_top_level_construct(SyntaxKind::DOMAIN_OPAQUE_NODE);
+        self.mark_gap_from(start, DomainCoverageGapKind::UnsupportedTopLevel);
+    }
+
+    /// Consumes a fact-free, recognized top-level construct (an `import`
+    /// statement or a `###` section header) without marking a coverage gap:
+    /// neither carries a class or association fact, so treating either as
+    /// `UnsupportedTopLevel` would falsely declare the whole source open-world
+    /// (issue #267).
+    fn parse_ignored_top_level(&mut self) {
+        self.consume_top_level_construct(SyntaxKind::DOMAIN_IGNORED_TOP_LEVEL);
+    }
+
+    /// Shared, delimiter-aware consumption for one top-level construct that
+    /// this parser does not otherwise understand: everything up to (and
+    /// including) its terminating top-level `;` or `}`, stopping early at the
+    /// next recognized declaration. Callers decide whether the consumed span
+    /// is a genuine coverage gap.
+    fn consume_top_level_construct(&mut self, node_kind: SyntaxKind) {
+        self.open(node_kind);
         let mut parentheses = 0usize;
         let mut brackets = 0usize;
         let mut braces = 0usize;
@@ -811,7 +835,7 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
                 && parentheses == 0
                 && brackets == 0
                 && braces == 0
-                && self.declaration_kind().is_some()
+                && (self.declaration_kind().is_some() || self.at_ignored_top_level())
             {
                 break;
             }
@@ -839,7 +863,25 @@ impl<'source, 'tokens> Parser<'source, 'tokens> {
             }
         }
         self.close();
-        self.mark_gap_from(start, DomainCoverageGapKind::UnsupportedTopLevel);
+    }
+
+    /// Whether the parser sits at a fact-free, recognized top-level
+    /// construct: an `import` statement or a `###` section header. Neither
+    /// contributes class or association facts, so both are lowered without a
+    /// [`DomainCoverageGapKind::UnsupportedTopLevel`] gap.
+    fn at_ignored_top_level(&self) -> bool {
+        self.at_keyword("import") || self.at_section_header()
+    }
+
+    /// Whether the parser sits at a `###`-prefixed Domain section header
+    /// (e.g. `###Pure`). The three `#` tokens must be contiguous, exactly as
+    /// Legend Pure section headers are written.
+    fn at_section_header(&self) -> bool {
+        let Some(first) = self.significant_index() else {
+            return false;
+        };
+        (first..first.saturating_add(3))
+            .all(|index| matches!(self.tokens.get(index), Some((TokenKind::HASH, _))))
     }
 
     fn parse_opaque_member(&mut self) {

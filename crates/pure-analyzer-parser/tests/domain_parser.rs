@@ -217,6 +217,78 @@ Class demo::Known
 }
 
 #[test]
+fn import_and_section_header_are_recognized_without_a_coverage_gap() {
+    // Issue #267: an `import` line is present at the top of virtually every
+    // real Legend Pure source file, and a `###Pure` section header is a
+    // routine multi-section-document construct. Neither carries a class or
+    // association fact, so neither may contribute an `UnsupportedTopLevel`
+    // coverage gap.
+    let source = r#"
+###Pure
+import meta::pure::profiles::*;
+import other::pkg::*;
+
+Class demo::Known
+{
+  value: String[1];
+}
+"#;
+    let parsed = parse(source);
+
+    assert!(parsed.diagnostics.is_empty(), "{:#?}", parsed.diagnostics);
+    assert!(
+        parsed.coverage_gaps.is_empty(),
+        "an import line and a section header must never contribute a coverage gap: {:#?}",
+        parsed.coverage_gaps
+    );
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_IGNORED_TOP_LEVEL),
+        3,
+        "the section header and both import lines are recognized-and-irrelevant nodes"
+    );
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::DOMAIN_CLASS_DECL), 1);
+    assert_lossless(source, &parsed);
+}
+
+#[test]
+fn a_genuinely_unsupported_top_level_gap_does_not_absorb_a_neighboring_import() {
+    // The opaque-top-level recovery boundary must stop at the next `import`
+    // just as it already stops at the next `Class`/`Association`/`Profile`,
+    // so a genuine gap stays scoped to its own construct.
+    let source = r#"
+Enum demo::Skipped { OPEN, CLOSED }
+import meta::pure::profiles::*;
+Class demo::Kept
+{
+  value: String[1];
+}
+"#;
+    let parsed = parse(source);
+
+    assert_eq!(
+        parsed
+            .coverage_gaps
+            .iter()
+            .map(|gap| gap.kind)
+            .collect::<Vec<_>>(),
+        vec![DomainCoverageGapKind::UnsupportedTopLevel],
+        "{:#?}",
+        gap_texts(source, &parsed)
+    );
+    assert_eq!(
+        gap_texts(source, &parsed),
+        vec!["Enum demo::Skipped { OPEN, CLOSED }"],
+        "the opaque gap must not swallow the following import statement"
+    );
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::DOMAIN_IGNORED_TOP_LEVEL),
+        1
+    );
+    assert_eq!(count_kind(&parsed.green, SyntaxKind::DOMAIN_CLASS_DECL), 1);
+    assert_lossless(source, &parsed);
+}
+
+#[test]
 fn malformed_declarations_keep_later_model_facts_and_stable_spans() {
     let source = r#"
 Class broken::First

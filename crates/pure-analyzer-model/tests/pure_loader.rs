@@ -302,6 +302,24 @@ fn pure_file_loading_uses_the_same_ingestion_path() {
     assert!(class.properties().contains_key("value"));
 }
 
+/// Issue #267, file-based loader half of the acceptance criteria: the exact
+/// same `import`-prefixed source must resolve `Found` whether it is loaded
+/// in-memory (see `import_prefixed_pure_source_does_not_open_a_mixed_closed_world_pmcd_source`)
+/// or from disk through `load_pure_files`.
+#[test]
+fn pure_file_loading_resolves_an_import_prefixed_source() {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/imported.pure");
+    let graph = load_pure_files(&[path]).expect("load import-prefixed Pure fixture");
+
+    let class = graph.class("demo::ImportedFixture").expect("fixture class");
+    assert_eq!(class.provenance(), Provenance::PureFile);
+    assert!(class.properties().contains_key("value"));
+    assert!(
+        !class.coverage_gap(),
+        "an import line must not leave a file-loaded source open-world"
+    );
+}
+
 #[test]
 fn conflicting_temporal_stereotypes_leave_the_class_open_world() {
     let graph = pure(
@@ -674,7 +692,7 @@ Class demo::Partial
 }
 
 #[test]
-fn unsupported_later_pure_source_opens_prior_unrelated_pmcd_classes() {
+fn unsupported_later_pure_source_does_not_open_unrelated_pmcd_classes() {
     let existing = empty_pmcd_class("Existing");
     let graph = load_model_documents(&[
         ModelDocument::Pmcd(PmcdDocument::new("existing.pmcd.json", &existing)),
@@ -689,8 +707,38 @@ Enum demo::Unsupported { enabled }
 
     let existing = graph.class("demo::Existing").expect("prior class");
     assert!(
-        existing.coverage_gap(),
-        "an unrelated unsupported later Pure source leaves the complete model open-world"
+        !existing.coverage_gap(),
+        "an unrelated later Pure source's own coverage gap must not contaminate a prior, \
+         independently-loaded closed-world PMCD class (issue #267)"
+    );
+}
+
+#[test]
+fn import_prefixed_pure_source_does_not_open_a_mixed_closed_world_pmcd_source() {
+    let existing = empty_pmcd_class("Existing");
+    let graph = load_model_documents(&[
+        ModelDocument::Pmcd(PmcdDocument::new("existing.pmcd.json", &existing)),
+        ModelDocument::Pure(PureDocument::new(
+            "imported.pure",
+            r#"
+import meta::pure::profiles::*;
+
+Class model::Person { firstName: String[1]; lastName: String[1]; }
+"#,
+        )),
+    ])
+    .expect("import-prefixed Pure source must preserve prior PMCD facts");
+
+    let existing = graph.class("demo::Existing").expect("prior PMCD class");
+    assert!(
+        !existing.coverage_gap(),
+        "a bare `import` line in a mixed-in Pure source must not flip a closed-world PMCD \
+         class's coverage_gap (issue #267)"
+    );
+    let person = graph.class("model::Person").expect("imported Pure class");
+    assert!(
+        !person.coverage_gap(),
+        "an `import` line must not leave its own otherwise-complete source open-world"
     );
 }
 

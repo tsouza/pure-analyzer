@@ -210,6 +210,7 @@ pub pure_analyzer_syntax::SyntaxKind::DOMAIN_ASSOCIATION_DECL = 32803
 pub pure_analyzer_syntax::SyntaxKind::DOMAIN_CLASS_DECL = 32802
 pub pure_analyzer_syntax::SyntaxKind::DOMAIN_EXTENDS_CLAUSE = 32807
 pub pure_analyzer_syntax::SyntaxKind::DOMAIN_FILE = 32801
+pub pure_analyzer_syntax::SyntaxKind::DOMAIN_IGNORED_TOP_LEVEL = 32817
 pub pure_analyzer_syntax::SyntaxKind::DOMAIN_MULTIPLICITY = 32812
 pub pure_analyzer_syntax::SyntaxKind::DOMAIN_OPAQUE_BODY = 32815
 pub pure_analyzer_syntax::SyntaxKind::DOMAIN_OPAQUE_NODE = 32814
@@ -1050,6 +1051,49 @@ impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::DomainFile where T:
 pub unsafe fn pure_analyzer_syntax::DomainFile::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for pure_analyzer_syntax::DomainFile
 pub fn pure_analyzer_syntax::DomainFile::from(T) -> T
+pub struct pure_analyzer_syntax::DomainIgnoredTopLevel(_)
+impl core::clone::Clone for pure_analyzer_syntax::DomainIgnoredTopLevel
+pub fn pure_analyzer_syntax::DomainIgnoredTopLevel::clone(&self) -> pure_analyzer_syntax::DomainIgnoredTopLevel
+impl core::cmp::Eq for pure_analyzer_syntax::DomainIgnoredTopLevel
+impl core::cmp::PartialEq for pure_analyzer_syntax::DomainIgnoredTopLevel
+pub fn pure_analyzer_syntax::DomainIgnoredTopLevel::eq(&self, &pure_analyzer_syntax::DomainIgnoredTopLevel) -> bool
+impl core::fmt::Debug for pure_analyzer_syntax::DomainIgnoredTopLevel
+pub fn pure_analyzer_syntax::DomainIgnoredTopLevel::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for pure_analyzer_syntax::DomainIgnoredTopLevel
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::DomainIgnoredTopLevel
+pub fn pure_analyzer_syntax::DomainIgnoredTopLevel::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::DomainIgnoredTopLevel::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::DomainIgnoredTopLevel::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::DomainIgnoredTopLevel::text_range(&self) -> text_size::range::TextRange
+impl core::marker::Freeze for pure_analyzer_syntax::DomainIgnoredTopLevel
+impl core::marker::Send for pure_analyzer_syntax::DomainIgnoredTopLevel
+impl core::marker::Sync for pure_analyzer_syntax::DomainIgnoredTopLevel
+impl core::marker::Unpin for pure_analyzer_syntax::DomainIgnoredTopLevel
+impl core::marker::UnsafeUnpin for pure_analyzer_syntax::DomainIgnoredTopLevel
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_syntax::DomainIgnoredTopLevel
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_syntax::DomainIgnoredTopLevel
+impl<T, U> core::convert::Into<U> for pure_analyzer_syntax::DomainIgnoredTopLevel where U: core::convert::From<T>
+pub fn pure_analyzer_syntax::DomainIgnoredTopLevel::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_syntax::DomainIgnoredTopLevel where U: core::convert::Into<T>
+pub type pure_analyzer_syntax::DomainIgnoredTopLevel::Error = never
+pub fn pure_analyzer_syntax::DomainIgnoredTopLevel::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_syntax::DomainIgnoredTopLevel where U: core::convert::TryFrom<T>
+pub type pure_analyzer_syntax::DomainIgnoredTopLevel::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_syntax::DomainIgnoredTopLevel::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_syntax::DomainIgnoredTopLevel where T: core::clone::Clone
+pub type pure_analyzer_syntax::DomainIgnoredTopLevel::Owned = T
+pub fn pure_analyzer_syntax::DomainIgnoredTopLevel::clone_into(&self, &mut T)
+pub fn pure_analyzer_syntax::DomainIgnoredTopLevel::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_syntax::DomainIgnoredTopLevel where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainIgnoredTopLevel::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_syntax::DomainIgnoredTopLevel where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainIgnoredTopLevel::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_syntax::DomainIgnoredTopLevel where T: ?core::marker::Sized
+pub fn pure_analyzer_syntax::DomainIgnoredTopLevel::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_syntax::DomainIgnoredTopLevel where T: core::clone::Clone
+pub unsafe fn pure_analyzer_syntax::DomainIgnoredTopLevel::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_syntax::DomainIgnoredTopLevel
+pub fn pure_analyzer_syntax::DomainIgnoredTopLevel::from(T) -> T
 pub struct pure_analyzer_syntax::DomainMultiplicity(_)
 impl core::clone::Clone for pure_analyzer_syntax::DomainMultiplicity
 pub fn pure_analyzer_syntax::DomainMultiplicity::clone(&self) -> pure_analyzer_syntax::DomainMultiplicity
@@ -2808,6 +2852,11 @@ pub fn pure_analyzer_syntax::DomainFile::can_cast(pure_analyzer_syntax::SyntaxKi
 pub fn pure_analyzer_syntax::DomainFile::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
 pub fn pure_analyzer_syntax::DomainFile::syntax(&self) -> &pure_analyzer_syntax::GreenNode
 pub fn pure_analyzer_syntax::DomainFile::text_range(&self) -> text_size::range::TextRange
+impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::DomainIgnoredTopLevel
+pub fn pure_analyzer_syntax::DomainIgnoredTopLevel::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
+pub fn pure_analyzer_syntax::DomainIgnoredTopLevel::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
+pub fn pure_analyzer_syntax::DomainIgnoredTopLevel::syntax(&self) -> &pure_analyzer_syntax::GreenNode
+pub fn pure_analyzer_syntax::DomainIgnoredTopLevel::text_range(&self) -> text_size::range::TextRange
 impl pure_analyzer_syntax::AstNode for pure_analyzer_syntax::DomainMultiplicity
 pub fn pure_analyzer_syntax::DomainMultiplicity::can_cast(pure_analyzer_syntax::SyntaxKind) -> bool
 pub fn pure_analyzer_syntax::DomainMultiplicity::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>

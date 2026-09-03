@@ -190,6 +190,13 @@ ast_node!(
     "A typed view of a Domain source file."
 );
 ast_node!(
+    DomainIgnoredTopLevel,
+    DOMAIN_IGNORED_TOP_LEVEL,
+    "A typed view of a fact-free, recognized top-level Domain construct \
+     (an `import` statement or a `###` section header) that carries no \
+     class or association facts and never contributes a coverage gap."
+);
+ast_node!(
     DomainClassDeclaration,
     DOMAIN_CLASS_DECL,
     "A typed view of a Domain class declaration."

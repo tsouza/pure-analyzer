@@ -1,0 +1,6 @@
+import meta::pure::profiles::*;
+
+Class demo::ImportedFixture
+{
+  value: String[1];
+}

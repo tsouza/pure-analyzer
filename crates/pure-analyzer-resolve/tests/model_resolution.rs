@@ -258,6 +258,37 @@ Class model::Partial
     );
 }
 
+/// Issue #267: a bare `import` line is present at the top of virtually every
+/// real Legend Pure source file. It must not be misclassified as an
+/// unsupported top-level construct and open-world the whole file.
+#[test]
+fn import_prefixed_pure_source_resolves_members_found() {
+    let graph = load_pure_documents(&[PureDocument::new(
+        "resolver-fixture.pure",
+        r#"
+import meta::pure::profiles::*;
+
+Class model::Person { firstName: String[1]; lastName: String[1]; }
+Class model::Firm { legalName: String[1]; }
+Association model::Employment { employer: model::Firm[0..1]; employees: model::Person[*]; }
+"#,
+    )])
+    .expect("fixture must load");
+    let resolver = Resolver::new(&graph);
+
+    assert!(
+        !graph
+            .class(&path("Person"))
+            .expect("person class")
+            .coverage_gap(),
+        "an import line must not leave its own otherwise-complete source open-world"
+    );
+    assert_eq!(
+        *found_member(&resolver, "Person", "firstName").kind(),
+        ResolvedMemberKind::Property
+    );
+}
+
 #[test]
 fn resolves_qualified_names_and_class_ids_with_source_metadata() {
     let graph = graph(vec![temporal_class("Trade", "processingtemporal")]);
