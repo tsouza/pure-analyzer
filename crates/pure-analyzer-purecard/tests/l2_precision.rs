@@ -34,7 +34,7 @@ mod lex;
 
 use l2::{TokenVocab, lex, load_schema};
 use l2_rules::{ALL_RULE_KINDS, rule_kind};
-use purecard::{CompiledGrammar, DecoderSession};
+use purecard::{CompiledGrammar, DecoderSession, Schema};
 
 /// Replay a full `query` token-by-token through a schema-aware session for
 /// `db_id`, asserting the killer L2-soundness property on every step: the real
@@ -243,6 +243,104 @@ fn a_fused_navdot_float_operand_is_never_masked() {
         verdict[0],
         "L2 SOUNDNESS: fused leading-dot float `.5` masked by the nav-dot pass"
     );
+}
+
+/// Issue #354 (end-to-end mask replay of the issue's own reproduction, a
+/// synthetic single-class schema not tied to any `FIXTURE_DBS` entry): a
+/// class-typed lambda binder (`{y: t::A[1]|$y.`) whose annotation resolves in
+/// the schema must narrow `$y.` exactly as an untyped binder narrows against
+/// the pipeline's own class — a class in the schema fully determines its
+/// member set, whichever multiplicity (`[1]`/`[*]`) the binder carries.
+#[test]
+fn n1_masks_a_phantom_member_after_a_known_class_typed_binder() {
+    const SCHEMA_JSON: &str = r#"{
+      "db_id": "t", "db_path": "t::Db",
+      "classes": {
+        "t::A": { "simple_name": "A", "properties": [
+          {"name": "alpha", "type": {"kind": "primitive", "name": "Integer"}, "mult": {"lower": 1, "upper": 1}}
+        ], "qualified_properties": [], "super_types": [] }
+      },
+      "associations": [], "enums": {}
+    }"#;
+    let real: &[u8] = b"alpha";
+    let phantoms: [&[u8]; 2] = [b"zzz", b"beta"];
+
+    for prefix in [
+        "|t::A.all()->filter({y: t::A[1]|$y.",
+        "|t::A.all()->filter({y: t::A[*]|$y.",
+    ] {
+        let extras: Vec<Vec<u8>> = std::iter::once(real.to_vec())
+            .chain(phantoms.iter().map(|p| p.to_vec()))
+            .collect();
+        let vocab = TokenVocab::build(&[prefix], &extras);
+        let grammar = CompiledGrammar::compile(vocab.vocab());
+        let schema = Schema::from_json(SCHEMA_JSON).expect("synthetic schema parses");
+        let mut session =
+            DecoderSession::with_schema(&grammar, schema).expect("grammar is fixed-engine");
+        for token in lex(prefix) {
+            let id = vocab
+                .id_of(&token)
+                .unwrap_or_else(|| panic!("prefix token not in vocab: {:?}", bytes_str(&token)));
+            session
+                .accept_token(id)
+                .unwrap_or_else(|err| panic!("prefix token rejected: {err}\n  {prefix}"));
+        }
+        let mask = session.allowed_mask();
+        let real_id = vocab.id_of(real).expect("real token in vocab");
+        assert!(
+            mask.test(real_id),
+            "L2 SOUNDNESS: a known-class typed binder masked its own real member at:\n  {prefix}"
+        );
+        for phantom in &phantoms {
+            let id = vocab.id_of(phantom).expect("phantom token in vocab");
+            assert!(
+                !mask.test(id),
+                "L2 PRECISION: a known-class typed binder left phantom {:?} admissible at:\n  {prefix}",
+                bytes_str(phantom)
+            );
+        }
+    }
+}
+
+/// The issue's fourth row: a binder typed with a class the schema does not
+/// know (`t::NOPE`) must keep passing through unconstrained — masking here
+/// would invent a member set the overlay cannot actually derive (§4).
+#[test]
+fn n1_admits_every_name_after_an_unresolved_class_typed_binder() {
+    const SCHEMA_JSON: &str = r#"{
+      "db_id": "t", "db_path": "t::Db",
+      "classes": {
+        "t::A": { "simple_name": "A", "properties": [
+          {"name": "alpha", "type": {"kind": "primitive", "name": "Integer"}, "mult": {"lower": 1, "upper": 1}}
+        ], "qualified_properties": [], "super_types": [] }
+      },
+      "associations": [], "enums": {}
+    }"#;
+    let prefix = "|t::A.all()->filter({y: t::NOPE[1]|$y.";
+    let candidates: [&[u8]; 3] = [b"alpha", b"zzz", b"beta"];
+    let extras: Vec<Vec<u8>> = candidates.iter().map(|p| p.to_vec()).collect();
+    let vocab = TokenVocab::build(&[prefix], &extras);
+    let grammar = CompiledGrammar::compile(vocab.vocab());
+    let schema = Schema::from_json(SCHEMA_JSON).expect("synthetic schema parses");
+    let mut session =
+        DecoderSession::with_schema(&grammar, schema).expect("grammar is fixed-engine");
+    for token in lex(prefix) {
+        let id = vocab
+            .id_of(&token)
+            .unwrap_or_else(|| panic!("prefix token not in vocab: {:?}", bytes_str(&token)));
+        session
+            .accept_token(id)
+            .unwrap_or_else(|err| panic!("prefix token rejected: {err}\n  {prefix}"));
+    }
+    let mask = session.allowed_mask();
+    for candidate in &candidates {
+        let id = vocab.id_of(candidate).expect("candidate token in vocab");
+        assert!(
+            mask.test(id),
+            "L2 SOUNDNESS: an unresolved-class typed binder masked {:?} — must pass through:\n  {prefix}",
+            bytes_str(candidate)
+        );
+    }
 }
 
 /// Nested navigation: an association step reaches a class, and the *next* nav dot
