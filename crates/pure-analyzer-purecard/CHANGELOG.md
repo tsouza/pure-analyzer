@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/) and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.2](https://github.com/tsouza/pure-analyzer/compare/purecard-v0.3.1...purecard-v0.3.2) - 2026-09-03
+
+### Fixed
+
+- *(purecard)* admit a $-variable at a milestoned property's own call ([#388](https://github.com/tsouza/pure-analyzer/pull/388))
+
 ## [0.3.1](https://github.com/tsouza/pure-analyzer/compare/purecard-v0.3.0...purecard-v0.3.1) - 2026-09-03
 
 Six more fixes for gaps a downstream NL-to-Pure consumer's grammar/schema
