@@ -100,24 +100,14 @@ enum Command {
         #[arg(long)]
         line_width: Option<usize>,
     },
-    /// Compare two relational queries for proven M4a equivalence.
+    /// Compare two relational queries for proven M4a equivalence, reporting the
+    /// exact structural difference when the comparison refutes it. Also
+    /// invocable as `diff`, an alias for this same command.
     #[command(
+        visible_alias = "diff",
         after_long_help = "Exit status: 0 equivalent; 1 structurally not equivalent; 2 indecisive."
     )]
     Eq {
-        /// First query input; a file, glob resolving to one file, or `-` for standard input.
-        left: String,
-        /// Second query input; a file, glob resolving to one file, or `-` for standard input.
-        right: String,
-        /// PMCD JSON and/or Pure-model-file model sources; may repeat.
-        #[arg(long)]
-        model: Vec<String>,
-    },
-    /// Compare two relational queries and report an M4a structural difference when proven.
-    #[command(
-        after_long_help = "Exit status: 0 equivalent; 1 structurally not equivalent; 2 indecisive."
-    )]
-    Diff {
         /// First query input; a file, glob resolving to one file, or `-` for standard input.
         left: String,
         /// Second query input; a file, glob resolving to one file, or `-` for standard input.
@@ -237,11 +227,6 @@ fn run(cli: Cli) -> Result<u8, Failure> {
             left,
             right,
             model: _,
-        }
-        | Command::Diff {
-            left,
-            right,
-            model: _,
         } => workflow::compare(&left, &right, &resolved),
         Command::Explain { identifier } => workflow::explain(&identifier, resolved.output_format()),
         Command::Completions { shell } => workflow::completions(shell, Cli::command()),
@@ -268,8 +253,7 @@ fn command_overrides(command: &Option<Command>, flags: &ConfigFlags) -> ConfigOv
                 model,
                 ..
             }
-            | Command::Eq { model, .. }
-            | Command::Diff { model, .. },
+            | Command::Eq { model, .. },
         ) => model.iter().map(PathBuf::from).collect(),
         _ => Vec::new(),
     };
@@ -414,8 +398,7 @@ mod tests {
             ])
             .expect("parses comparison command");
             match cli.command {
-                Some(Command::Eq { left, right, model })
-                | Some(Command::Diff { left, right, model }) => {
+                Some(Command::Eq { left, right, model }) => {
                     assert_eq!(left, "left.pure");
                     assert_eq!(right, "right.pure");
                     assert_eq!(model, vec!["model.json", "domain.pure"]);
@@ -470,16 +453,30 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(
             commands,
-            [
-                "validate",
-                "lint",
-                "fmt",
-                "eq",
-                "diff",
-                "explain",
-                "completions"
-            ]
+            ["validate", "lint", "fmt", "eq", "explain", "completions"]
         );
+    }
+
+    #[test]
+    fn diff_is_an_alias_for_eq_not_a_distinct_command() {
+        let mut command = Cli::command();
+        command.build();
+        let eq = command
+            .find_subcommand("eq")
+            .expect("eq subcommand is registered");
+        assert_eq!(eq.get_all_aliases().collect::<Vec<_>>(), ["diff"]);
+        assert_eq!(
+            command
+                .find_subcommand("diff")
+                .expect("diff resolves through eq's alias")
+                .get_name(),
+            "eq",
+            "diff must resolve to eq's subcommand definition, not a distinct one"
+        );
+
+        let cli = Cli::try_parse_from(["pure-analyzer", "diff", "left.pure", "right.pure"])
+            .expect("diff parses as the eq alias");
+        assert!(matches!(cli.command, Some(Command::Eq { .. })));
     }
 
     #[test]

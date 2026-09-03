@@ -344,34 +344,34 @@ pub(crate) fn completions(
 
 fn bash_completion(command: &clap::Command) -> String {
     let global = option_words(command);
-    let subcommands = command
+    let visible_subcommands = command
         .get_subcommands()
         .filter(|subcommand| subcommand.get_name() != "help")
-        .map(|subcommand| subcommand.get_name())
+        .collect::<Vec<_>>();
+    let subcommand_word_list = visible_subcommands
+        .iter()
+        .flat_map(|subcommand| subcommand_names(subcommand))
         .collect::<Vec<_>>();
     let mut output = String::from(
         "# bash completion for pure-analyzer\n_pure_analyzer() {\n    local current command word words\n    current=\"${COMP_WORDS[COMP_CWORD]}\"\n    command=\"\"\n    for word in \"${COMP_WORDS[@]:1}\"; do\n        case \"$word\" in\n",
     );
     output.push_str("            ");
-    output.push_str(&subcommands.join("|"));
+    output.push_str(&subcommand_word_list.join("|"));
     output.push_str(") command=\"$word\"; break ;;\n");
     output.push_str("        esac\n    done\n    case \"$command\" in\n");
-    for subcommand in command
-        .get_subcommands()
-        .filter(|subcommand| subcommand.get_name() != "help")
-    {
+    for subcommand in &visible_subcommands {
         let mut words = global.clone();
         words.extend(option_words(subcommand));
         words.sort();
         words.dedup();
         output.push_str("        ");
-        output.push_str(subcommand.get_name());
+        output.push_str(&subcommand_names(subcommand).join("|"));
         output.push_str(") words=\"");
         output.push_str(&words.join(" "));
         output.push_str("\" ;;\n");
     }
     let mut root_words = global;
-    root_words.extend(subcommands.into_iter().map(str::to_owned));
+    root_words.extend(subcommand_word_list);
     root_words.sort();
     root_words.dedup();
     output.push_str("        *) words=\"");
@@ -381,6 +381,14 @@ fn bash_completion(command: &clap::Command) -> String {
         "    esac\n    if [[ \"$current\" == -* ]]; then\n        COMPREPLY=( $(compgen -W \"$words\" -- \"$current\") )\n    else\n        COMPREPLY=( $(compgen -W \"$words\" -- \"$current\") $(compgen -f -- \"$current\") )\n    fi\n}\ncomplete -F _pure_analyzer pure-analyzer\n",
     );
     output
+}
+
+/// A subcommand's canonical name plus every alias it is also invocable as,
+/// so shell completion offers the same names clap itself accepts.
+fn subcommand_names(subcommand: &clap::Command) -> Vec<String> {
+    std::iter::once(subcommand.get_name().to_owned())
+        .chain(subcommand.get_all_aliases().map(str::to_owned))
+        .collect()
 }
 
 fn option_words(command: &clap::Command) -> Vec<String> {
