@@ -310,7 +310,12 @@ export function inferAreas(title, body) {
 // below argues against. An issue with no CC prefix and no bug:/flake: title
 // is left TYPE-less rather than guessed at; see the PR body for the residue
 // this leaves and how it is surfaced (reported, not silently dropped).
-const BUG_TITLE_PREFIX = /^(?:bug|flake):/i;
+//
+// Carries the same optional `(scope)` HEADER in type-label.mjs allows, e.g.
+// "bug(l2): …" — issue #391 used that form and this fallback rejected it
+// (bare "bug:" only), leaving the issue fully unclassified and failing the
+// issue-label workflow on every event it fired on.
+const BUG_TITLE_PREFIX = /^(?:bug|flake)(?:\([^)]*\))?:/i;
 
 /** inferType returns the single TYPE label an issue should carry, or '' when nothing matched. */
 export function inferType(title) {
