@@ -32,8 +32,10 @@ use purecard::{ByteRecognizer, DecodeError, DecoderSession, Envelope};
 
 /// Arm-A (relational) seed count in the modern-dialect corpus.
 const SEED_ARM_A: usize = 0;
-/// Arm-C (class-navigation) seed count — the `%latest` milestoning seeds (G2).
-const SEED_ARM_C: usize = 5;
+/// Arm-C (class-navigation) seed count — the `%latest` milestoning seeds (G2)
+/// plus the three `letBinding` scalarExpr seeds (issue #352: `today()`,
+/// `now()`, a date literal as a `let` initializer).
+const SEED_ARM_C: usize = 8;
 /// Arm-R (Relation/Function API) seed count — the `~` arm-R seeds (G1) plus the
 /// three engine-validated nested-subquery shapes contributed for the gap report
 /// (`join`/`extend` with a nested `Class.all()` and quoted-member access).

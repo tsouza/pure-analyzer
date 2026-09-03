@@ -43,7 +43,7 @@ use purecard::{ByteRecognizer, CompiledGrammar, DecodeError, DecoderSession, Voc
 /// sweeps. Pinned so a state or frame that silently stops being reachable — the
 /// way a rule change can orphan one — reddens this suite instead of quietly
 /// shrinking its coverage.
-const EXPECTED_REACHABLE_CONFIGURATIONS: usize = 323;
+const EXPECTED_REACHABLE_CONFIGURATIONS: usize = 325;
 
 /// Arm-A (relational envelope) gold record count (mirrors
 /// `tests/soundness_replay.rs`).
@@ -56,8 +56,9 @@ const EXPECTED_GOLD_RECORDS: usize = GOLD_ARM_A + GOLD_ARM_C;
 /// Arm-A (relational) modern-dialect seed count (mirrors
 /// `tests/modern_dialect_soundness.rs`).
 const SEED_ARM_A: usize = 0;
-/// Arm-C (class-navigation) modern-dialect seed count.
-const SEED_ARM_C: usize = 5;
+/// Arm-C (class-navigation) modern-dialect seed count (mirrors
+/// `tests/modern_dialect_soundness.rs`).
+const SEED_ARM_C: usize = 8;
 /// Arm-R (Relation/Function API) modern-dialect seed count.
 const SEED_ARM_R: usize = 14;
 /// The full modern-dialect seed corpus size.
