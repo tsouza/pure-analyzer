@@ -442,9 +442,9 @@ pub enum State {
     /// engine requires every pipeline/navigation step to *apply* and never
     /// accepts a bare arrow-step name as a connector's whole right-hand side
     /// (issue #369). Unlike [`AfterMemberName`](State::AfterMemberName), this is
-    /// not a [`completes_a_term`](State::completes_a_term) hub: an uncalled
-    /// arrow-step name is not itself a complete query either, exactly as the
-    /// live engine's own grammar requires the call.
+    /// not a `completes_a_term` hub: an uncalled arrow-step name is not itself a
+    /// complete query either, exactly as the live engine's own grammar requires
+    /// the call.
     AfterArrowName,
 }
 
@@ -2219,15 +2219,15 @@ impl Pda {
     /// bit — gold soundness is unaffected (every gold query ends in `)` →
     /// [`AfterValue`](State::AfterValue), still accepting). Because the
     /// empty-stack guard holds, the only newly-reachable completion is a trailing
-    /// top-level *dot-navigated* identifier (`|X.name`, [`InMemberIdent`]'s own
-    /// terminal widening); a top-level number/string/date never sits over an
-    /// empty stack, so those stay non-accepting in practice. A trailing
-    /// **arrow-step** name (`|X.all()->name`) is deliberately excluded from
-    /// this widening: [`InArrowIdent`](State::InArrowIdent) closes into
+    /// top-level *dot-navigated* identifier (`|X.name`,
+    /// [`InMemberIdent`](State::InMemberIdent)'s own terminal widening); a
+    /// top-level number/string/date never sits over an empty stack, so those
+    /// stay non-accepting in practice. A trailing **arrow-step** name
+    /// (`|X.all()->name`) is deliberately excluded from this widening:
+    /// [`InArrowIdent`](State::InArrowIdent) closes into
     /// [`AfterArrowName`](State::AfterArrowName), which is not a
-    /// [`completes_a_term`](State::completes_a_term) hub, so an uncalled
-    /// arrow-step name stays non-accepting exactly as the live engine requires
-    /// its call (issue #369).
+    /// `completes_a_term` hub, so an uncalled arrow-step name stays
+    /// non-accepting exactly as the live engine requires its call (issue #369).
     #[must_use]
     pub fn is_accepting(&self) -> bool {
         self.stack.is_empty()
