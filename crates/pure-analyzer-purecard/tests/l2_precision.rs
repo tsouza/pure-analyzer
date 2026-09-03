@@ -261,6 +261,16 @@ fn source_method_arg_masks_a_phantom_argument_but_keeps_the_closer_and_a_milesto
     assert_frozen("source-method-arg");
 }
 
+/// Issue #385, the sibling of the fixture above one position later: a
+/// milestoned property navigation's own call (`$x.fk4DefaultCarNames(...)`)
+/// takes the identical treatment as `all()`'s own call — a real closer and a
+/// milestone/date literal stay admissible, a phantom identifier/string
+/// argument is masked.
+#[test]
+fn property_method_arg_masks_a_phantom_argument_but_keeps_the_closer_and_a_milestone_date() {
+    assert_frozen("property-method-arg");
+}
+
 /// Issue #384: once the schema states a class's milestoning arity, the source
 /// method's own closer must stay masked between a completed date argument and
 /// the arity being met — closing early is exactly the schema-decidable mistake
@@ -271,14 +281,14 @@ fn source_method_arg_sep_masks_a_premature_closer_before_the_classs_arity_is_met
     assert_frozen("source-method-arg-sep");
 }
 
-/// Issue #385, the sibling of the fixture above one position later: a
-/// milestoned property navigation's own call (`$x.fk4DefaultCarNames(...)`)
-/// takes the identical treatment as `all()`'s own call — a real closer and a
-/// milestone/date literal stay admissible, a phantom identifier/string
-/// argument is masked.
+/// Issue #386, the sibling of the fixture above one position later: once the
+/// schema states the **navigated-to** class's milestoning arity, a milestoned
+/// property navigation's own call's closer must stay masked between a
+/// completed date argument and the arity being met — the identical
+/// schema-decidable mistake as the source-method case, one position later.
 #[test]
-fn property_method_arg_masks_a_phantom_argument_but_keeps_the_closer_and_a_milestone_date() {
-    assert_frozen("property-method-arg");
+fn property_method_arg_sep_masks_a_premature_closer_before_the_classs_arity_is_met() {
+    assert_frozen("property-method-arg-sep");
 }
 
 /// `$x` is bound to CarsData; `cylinders` is a real property, `sallary` is not.
@@ -616,6 +626,121 @@ fn issue_384_own_reproduction_admits_exactly_the_classs_declared_arity() {
     assert!(
         completes_under_l2(&schema, &query("Bi", "%latest, %latest")),
         "issue #384: a bitemporal class's two-argument all() must be admitted"
+    );
+}
+
+/// Issue #386's own end-to-end reproduction, the S3 sibling of #384's own test
+/// above: a property navigation to a plain class, a business-temporal one,
+/// and a bitemporal one, each probed with the identical three `all(...)`-style
+/// arities, but at a milestoned **property navigation's own call**
+/// (`$x.facet(...)`) rather than the pipeline source's. The plain-navigated-class
+/// row is the identical regression-safety net #384's own plain-class row is —
+/// #385's own `$`-variable admission and #384's `all()` arity rule are also
+/// exercised alongside it to prove neither of this file's two neighbors
+/// regressed.
+#[test]
+fn issue_386_own_reproduction_admits_exactly_the_navigated_to_classs_declared_arity() {
+    const SCHEMA_JSON: &str = r#"{
+      "db_id": "t", "db_path": "t::Db",
+      "classes": {
+        "t::Root": { "simple_name": "Root", "properties": [
+          {"name": "plain", "type": {"kind": "class", "path": "t::Plain"}, "mult": {"lower": 1, "upper": 1}},
+          {"name": "biz", "type": {"kind": "class", "path": "t::Biz"}, "mult": {"lower": 1, "upper": 1}},
+          {"name": "bi", "type": {"kind": "class", "path": "t::Bi"}, "mult": {"lower": 1, "upper": 1}}
+        ], "qualified_properties": [], "super_types": [] },
+        "t::Plain": { "simple_name": "Plain", "properties": [
+          {"name": "a", "type": {"kind": "primitive", "name": "Integer"}, "mult": {"lower": 1, "upper": 1}}
+        ], "qualified_properties": [], "super_types": [] },
+        "t::Biz": { "simple_name": "Biz", "properties": [
+          {"name": "a", "type": {"kind": "primitive", "name": "Integer"}, "mult": {"lower": 1, "upper": 1}}
+        ], "qualified_properties": [], "super_types": [], "temporal": "business" },
+        "t::Bi": { "simple_name": "Bi", "properties": [
+          {"name": "a", "type": {"kind": "primitive", "name": "Integer"}, "mult": {"lower": 1, "upper": 1}}
+        ], "qualified_properties": [], "super_types": [], "temporal": "bitemporal" }
+      },
+      "associations": [], "enums": {}
+    }"#;
+    let schema = Schema::from_json(SCHEMA_JSON).expect("schema parses");
+
+    let query =
+        |prop: &str, args: &str| format!("|t::Root.all()->project([x|$x.{prop}({args}).a],['a'])");
+
+    // Plain (no `temporal`): every arity the source-side repro tried stays
+    // admissible, byte-for-byte the pre-#386 behavior.
+    assert!(
+        completes_under_l2(&schema, &query("plain", "")),
+        "regression (issue #386): an unannotated navigated class's zero-argument \
+         call must stay admissible"
+    );
+    assert!(
+        completes_under_l2(&schema, &query("plain", "%latest")),
+        "regression (issue #386): an unannotated navigated class's one-argument \
+         call must stay admissible"
+    );
+    assert!(
+        completes_under_l2(&schema, &query("plain", "%latest, %latest")),
+        "regression (issue #386): an unannotated navigated class's two-argument \
+         call must stay admissible"
+    );
+
+    // Business-temporal (`Biz`): exactly one date argument.
+    assert!(
+        !completes_under_l2(&schema, &query("biz", "")),
+        "issue #386: a business-temporal navigated class's zero-argument call \
+         must be rejected"
+    );
+    assert!(
+        completes_under_l2(&schema, &query("biz", "%latest")),
+        "issue #386: a business-temporal navigated class's one-argument call \
+         must be admitted"
+    );
+    assert!(
+        !completes_under_l2(&schema, &query("biz", "%latest, %latest")),
+        "issue #386: a business-temporal navigated class's two-argument call \
+         must be rejected"
+    );
+
+    // Bitemporal (`Bi`): exactly two comma-separated date arguments — the S3
+    // mirror of #384's own headline failure mode.
+    assert!(
+        !completes_under_l2(&schema, &query("bi", "")),
+        "issue #386: a bitemporal navigated class's zero-argument call must be \
+         rejected"
+    );
+    assert!(
+        !completes_under_l2(&schema, &query("bi", "%latest")),
+        "issue #386: a bitemporal navigated class's one-argument call must be \
+         rejected (the S3 mirror of #384's own headline error class)"
+    );
+    assert!(
+        completes_under_l2(&schema, &query("bi", "%latest, %latest")),
+        "issue #386: a bitemporal navigated class's two-argument call must be \
+         admitted"
+    );
+
+    // Regression guard: issue #385's own `$`-variable admission at S3 must
+    // still stream cleanly beside #386's own arity narrowing.
+    assert!(
+        completes_under_l2(&schema, &query("bi", "$d1, $d2")),
+        "regression (issue #385): a `$`-variable pair must still satisfy a \
+         bitemporal navigated class's own arity"
+    );
+
+    // Regression guard: issue #384's own source-`all()` arity rule must still
+    // hold at the pipeline source, unperturbed by S3's own arity rule right
+    // beside it in the same file.
+    assert!(
+        !completes_under_l2(&schema, "|t::Bi.all(%latest)->project([x|$x.a],['a'])"),
+        "regression (issue #384): the source method's own arity rule must \
+         still reject a bitemporal class's one-argument all()"
+    );
+    assert!(
+        completes_under_l2(
+            &schema,
+            "|t::Bi.all(%latest, %latest)->project([x|$x.a],['a'])"
+        ),
+        "regression (issue #384): the source method's own arity rule must \
+         still admit a bitemporal class's two-argument all()"
     );
 }
 
@@ -1541,14 +1666,21 @@ const FROZEN_FAMILIES: &[(&str, &str)] = &[
          milestoning carve-out",
     ),
     (
+        "property-method-arg",
+        "Issue #385, the sibling of source-method-arg one position later — a \
+         phantom argument in a milestoned property navigation's own call",
+    ),
+    (
         "source-method-arg-sep",
         "Issue #384 · a premature closer in `all()`'s own call once the class's \
          declared milestoning arity is known but not yet met",
     ),
     (
-        "property-method-arg",
-        "Issue #385, the sibling of source-method-arg one position later — a \
-         phantom argument in a milestoned property navigation's own call",
+        "property-method-arg-sep",
+        "Issue #386, the sibling of source-method-arg-sep one position later — \
+         a premature closer in a milestoned property navigation's own call \
+         once the navigated-to class's declared milestoning arity is known \
+         but not yet met",
     ),
     ("n1-member", "M3 G2 · a phantom property after a bound var"),
     (
@@ -2769,6 +2901,24 @@ static FROZEN_KILLS: &[FrozenKill] = &[
             // grammar admits an unbounded comma-separated list, so it does not
             // refuse the premature closer on its own (`Closer::L2`).
             prefix: "|t::milestoning::Bi.all(%latest",
+            real: ",",
+            phantom: ")",
+        },
+    },
+    FrozenKill {
+        fixture: "property-method-arg-sep",
+        db: "milestoning",
+        closer: Closer::L2("PropertyMethodArgSep"),
+        kill: Kill::Probe {
+            // Issue #386, the sibling of source-method-arg-sep one position
+            // later: `t::milestoning::Plain.bi` navigates to `Bi`, which is
+            // bitemporal, so the property navigation's own call owes exactly
+            // two comma-separated date arguments. Right after the first, the
+            // call cannot legally close yet — only a `,` opening the second
+            // is real; the byte-PDA's own generic call-argument grammar
+            // admits an unbounded comma-separated list, so it does not
+            // refuse the premature closer on its own (`Closer::L2`).
+            prefix: "|t::milestoning::Plain.all()->filter(x|$x.bi(%latest",
             real: ",",
             phantom: ")",
         },

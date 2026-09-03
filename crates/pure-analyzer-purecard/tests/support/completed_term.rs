@@ -43,7 +43,8 @@ pub fn is_completed_term(pos: &L2Position) -> bool {
         | L2Position::SourceMethod
         | L2Position::SourceMethodArg { .. }
         | L2Position::SourceMethodArgSep { .. }
-        | L2Position::PropertyMethodArg
+        | L2Position::PropertyMethodArg { .. }
+        | L2Position::PropertyMethodArgSep { .. }
         | L2Position::StoreMethod
         | L2Position::StoreMethodArg
         | L2Position::StoreMethodArgSep { .. }
