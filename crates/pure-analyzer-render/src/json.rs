@@ -1,7 +1,7 @@
 //! Versioned JSON diagnostic envelope.
 
 use libpure::{LineColumn, SourceFile, SourceOrigin};
-use pure_analyzer_diagnostics::{Applicability, FixProvenance, ReasonCode, Severity, TextRange};
+use pure_analyzer_diagnostics::{Applicability, FixProvenance, Severity, TextRange};
 use serde::Serialize;
 
 use crate::{
@@ -51,7 +51,6 @@ struct JsonDiagnostic<'a> {
     primary: JsonLabel<'a>,
     secondary: Vec<JsonLabel<'a>>,
     fix: Option<JsonFix<'a>>,
-    reason: Option<ReasonCode>,
     url: Option<&'a str>,
 }
 
@@ -123,7 +122,6 @@ fn json_diagnostic<'a>(diagnostic: &PreparedDiagnostic<'a>) -> JsonDiagnostic<'a
         primary: json_label(&diagnostic.primary),
         secondary: diagnostic.secondary.iter().map(json_label).collect(),
         fix: diagnostic.fix.as_ref().map(json_fix),
-        reason: diagnostic.diagnostic.reason,
         url: diagnostic.diagnostic.url.as_deref(),
     }
 }

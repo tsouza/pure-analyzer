@@ -10,7 +10,6 @@ queries/α.pure:
       |       ^ secondary: declared here
     = fix: replace the query symbol [machine_applicable, single_arity_proven]
       replace queries/α.pure:1:5.. 1:7 with "γ\n"
-    = reason: IND_OPAQUE_PREDICATE — the predicate is outside the sound interpreted whitelist
     = docs: https://example.invalid/PUR2002?x=1&y=2
 
 summary: 1 errors, 0 warnings, 0 info, 0 hints (1 total)

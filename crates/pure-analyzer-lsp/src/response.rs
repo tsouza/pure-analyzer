@@ -131,17 +131,13 @@ pub(crate) fn publish_diagnostics<W: Write>(
     )
 }
 
-pub(crate) fn hover_value(
-    range: PublishedRange,
-    diagnostic: &ExplainContent,
-    reason: Option<&ExplainContent>,
-) -> Value {
+pub(crate) fn hover_value(range: PublishedRange, diagnostic: &ExplainContent) -> Value {
     object([
         (
             "contents",
             object([
                 ("kind", Value::String("markdown".to_owned())),
-                ("value", Value::String(hover_markup(diagnostic, reason))),
+                ("value", Value::String(explanation_markup(diagnostic))),
             ]),
         ),
         ("range", range_value(range)),
@@ -194,15 +190,6 @@ fn position_value(position: PublishedPosition) -> Value {
         ("line", Value::Number(position.line.into())),
         ("character", Value::Number(position.character.into())),
     ])
-}
-
-fn hover_markup(diagnostic: &ExplainContent, reason: Option<&ExplainContent>) -> String {
-    let diagnostic = explanation_markup(diagnostic);
-    if let Some(reason) = reason {
-        format!("{diagnostic}\n\n---\n\n{}", explanation_markup(reason))
-    } else {
-        diagnostic
-    }
 }
 
 fn explanation_markup(explanation: &ExplainContent) -> String {

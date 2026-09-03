@@ -66,13 +66,6 @@ fn append_diagnostic(output: &mut String, diagnostic: &PreparedDiagnostic<'_>, c
             append_edit(output, edit);
         }
     }
-    if let Some(reason) = diagnostic.diagnostic.reason {
-        output.push_str("    = reason: ");
-        output.push_str(reason.id());
-        output.push_str(" — ");
-        output.push_str(reason.blurb());
-        output.push('\n');
-    }
     if let Some(url) = &diagnostic.diagnostic.url {
         output.push_str("    = docs: ");
         append_terminal_text(output, url);

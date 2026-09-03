@@ -6,8 +6,8 @@ use std::{
 };
 
 use pure_analyzer_diagnostics::{
-    Applicability, DiagCode, Diagnostic, FileId, Fix, FixProvenance, Label, ReasonCode, Severity,
-    TextEdit, TextRange,
+    Applicability, DiagCode, Diagnostic, FileId, Fix, FixProvenance, Label, Severity, TextEdit,
+    TextRange,
 };
 use pure_analyzer_render::{
     ColorPolicy, HumanOptions, RenderError, RenderInput, SpanKind, render_human, render_json,
@@ -86,7 +86,6 @@ fn rich_diagnostic() -> Diagnostic {
         "declared here",
     ))
     .fix(fix)
-    .reason(ReasonCode::IndOpaquePredicate)
     .url("https://example.invalid/PUR2002?x=1&y=2")
     .build()
 }
@@ -220,7 +219,6 @@ fn assert_human_contract(human: &str) {
     assert!(human.contains("secondary: declared here"));
     assert!(human.contains("replace the query symbol"));
     assert!(human.contains(r#"with "γ\n""#));
-    assert!(human.contains("IND_OPAQUE_PREDICATE"));
     assert!(human.contains("docs: https://example.invalid/PUR2002?x=1&y=2"));
     assert!(human.contains("summary: 1 errors, 0 warnings, 0 info, 0 hints (1 total)"));
 }
@@ -256,7 +254,6 @@ fn assert_json_fix_and_metadata(diagnostic: &Value) {
         (6, 1, 7),
     );
     assert_eq!(diagnostic["fix"]["edits"][0]["replacement"], "γ\n");
-    assert_eq!(diagnostic["reason"]["id"], "IND_OPAQUE_PREDICATE");
     assert_eq!(diagnostic["url"], "https://example.invalid/PUR2002?x=1&y=2");
 }
 
@@ -273,25 +270,22 @@ fn assert_sarif_contract(sarif: &str) {
 }
 
 #[test]
-fn sarif_emits_properties_for_a_reason_without_documentation() {
+fn sarif_omits_properties_without_a_documentation_url() {
     let sources = fixture_sources();
     let diagnostics = vec![
         Diagnostic::builder(
             DiagCode::UnknownProperty,
             Severity::Error,
-            "reason-only finding",
+            "no documentation link",
             Label::new(FileId::new(0), range(4, 6)),
         )
-        .reason(ReasonCode::IndOpaquePredicate)
         .build(),
     ];
 
     let sarif = render_sarif(RenderInput::new(&sources, &diagnostics)).expect("SARIF renders");
     let log: Value = serde_json::from_str(&sarif).expect("renderer output is SARIF JSON");
-    let properties = &log["runs"][0]["results"][0]["properties"];
 
-    assert_eq!(properties["reason"]["id"], "IND_OPAQUE_PREDICATE");
-    assert!(properties.get("documentationUrl").is_none());
+    assert!(log["runs"][0]["results"][0].get("properties").is_none());
 }
 
 fn assert_sarif_rule(rule: &Value) {
@@ -357,7 +351,6 @@ fn assert_sarif_fix_and_metadata(result: &Value) {
         result["fixes"][0]["properties"]["provenance"],
         "single_arity_proven"
     );
-    assert_eq!(result["properties"]["reason"]["id"], "IND_OPAQUE_PREDICATE");
     assert_eq!(
         result["properties"]["documentationUrl"],
         "https://example.invalid/PUR2002?x=1&y=2"

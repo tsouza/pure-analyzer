@@ -777,15 +777,9 @@ fn render_diagnostic(
 
 fn diagnostic_hover(document: &DocumentSnapshot, diagnostic: &Diagnostic) -> Option<Value> {
     let diagnostic_content = explain(diagnostic.code.as_str()).ok()?;
-    let reason_content = diagnostic
-        .reason
-        .map(|reason| explain(reason.id()))
-        .transpose()
-        .ok()?;
     Some(hover_value(
         diagnostic_range(document, diagnostic)?,
         diagnostic_content,
-        reason_content,
     ))
 }
 
@@ -810,7 +804,7 @@ fn diagnostic_contains(span: TextRange, offset: usize) -> bool {
     (start == end && offset == start) || (start <= offset && offset < end)
 }
 
-fn hover_sort_key(diagnostic: &Diagnostic) -> (usize, usize, usize, &str, &str, &str) {
+fn hover_sort_key(diagnostic: &Diagnostic) -> (usize, usize, usize, &str, &str) {
     let start = usize::from(diagnostic.primary.span.start());
     let end = usize::from(diagnostic.primary.span.end());
     (
@@ -818,7 +812,6 @@ fn hover_sort_key(diagnostic: &Diagnostic) -> (usize, usize, usize, &str, &str, 
         start,
         end,
         diagnostic.code.as_str(),
-        diagnostic.reason.map_or("", |reason| reason.id()),
         diagnostic.message.as_str(),
     )
 }
@@ -835,7 +828,7 @@ const fn lsp_severity(severity: Severity) -> u8 {
 #[cfg(test)]
 mod tests {
     use libpure::{DiagCode, Diagnostic, FileId, Severity, TextRange, explain};
-    use pure_analyzer_diagnostics::{Label, ReasonCode};
+    use pure_analyzer_diagnostics::Label;
     use serde_json::Value;
 
     use super::{AnalysisSnapshot, diagnostic_hover};
@@ -869,7 +862,7 @@ mod tests {
     }
 
     #[test]
-    fn diagnostic_hover_appends_the_attached_reason_explanation() {
+    fn diagnostic_hover_renders_the_registered_explanation() {
         let document =
             DocumentSnapshot::new("untitled:query".to_owned(), "query".to_owned(), Some(1));
         let diagnostic = Diagnostic::builder(
@@ -878,7 +871,6 @@ mod tests {
             "not used by hover markup",
             Label::new(FileId::new(0), TextRange::new(0.into(), 5.into())),
         )
-        .reason(ReasonCode::IndUnparseable)
         .build();
 
         let hover = diagnostic_hover(&document, &diagnostic).expect("registered explanations");
@@ -887,11 +879,10 @@ mod tests {
             value(r#"{"start":{"line":0,"character":0},"end":{"line":0,"character":5}}"#)
         );
         let diagnostic = explain("PUR2002").expect("registered diagnostic");
-        let reason = explain("IND_UNPARSEABLE").expect("registered reason");
         assert_eq!(
             hover["contents"]["value"],
             format!(
-                "**`{}`** · {} / {}\n\n{}\n\n**Limit:** {}\n\n**Remedy:** {}\n\n[Documentation]({})\n\n---\n\n**`{}`** · {} / {}\n\n{}\n\n**Limit:** {}\n\n**Remedy:** {}\n\n[Documentation]({})",
+                "**`{}`** · {} / {}\n\n{}\n\n**Limit:** {}\n\n**Remedy:** {}\n\n[Documentation]({})",
                 diagnostic.identifier,
                 diagnostic.kind.as_str(),
                 diagnostic.classification.as_str(),
@@ -899,13 +890,6 @@ mod tests {
                 diagnostic.limit,
                 diagnostic.remedy,
                 diagnostic.documentation_url,
-                reason.identifier,
-                reason.kind.as_str(),
-                reason.classification.as_str(),
-                reason.meaning,
-                reason.limit,
-                reason.remedy,
-                reason.documentation_url,
             )
         );
     }
