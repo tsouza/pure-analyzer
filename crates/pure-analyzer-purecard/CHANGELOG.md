@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/) and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.4.1](https://github.com/tsouza/pure-analyzer/compare/purecard-v0.4.0...purecard-v0.4.1) - 2026-09-03
+
+### Fixed
+
+- *(purecard)* stop masking a date literal's own continuation bytes ([#393](https://github.com/tsouza/pure-analyzer/pull/393))
+
 ## [0.4.0](https://github.com/tsouza/pure-analyzer/compare/purecard-v0.3.1...purecard-v0.4.0) - 2026-09-03
 
 Milestoning-arity narrowing, closing out the last major error class the
