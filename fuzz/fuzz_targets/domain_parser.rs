@@ -13,8 +13,7 @@ fuzz_target!(|source: &str| {
     let parsed = match parse_domain(source, FileId::new(0)) {
         Ok(parsed) => parsed,
         Err(error) => {
-            assert!(false, "small fuzz inputs must build a tree: {error}");
-            return;
+            panic!("small fuzz inputs must build a tree: {error}");
         }
     };
     assert_eq!(parsed.green.text(), source);

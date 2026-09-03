@@ -19,3 +19,4 @@ rule:
 files:
   - "crates/**/*.rs"
   - "xtask/**/*.rs"
+  - "fuzz/**/*.rs"

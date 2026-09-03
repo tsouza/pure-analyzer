@@ -19,7 +19,10 @@ fuzz_target!(|data: &str| {
     let diagnostic =
         Diagnostic::builder(DiagCode::BadToken, Severity::Info, data, label).build();
 
-    let value = serde_json::to_value(&diagnostic).expect("Diagnostic must always serialize");
+    let value = match serde_json::to_value(&diagnostic) {
+        Ok(value) => value,
+        Err(error) => panic!("Diagnostic must always serialize: {error}"),
+    };
 
     assert_eq!(value["message"], data, "message must round-trip through JSON verbatim");
     assert_eq!(value["primary"]["note"], data, "label note must round-trip through JSON verbatim");

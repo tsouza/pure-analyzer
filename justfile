@@ -40,6 +40,18 @@ lint:
     cargo clippy --workspace --all-targets -- -D warnings
     cargo clippy --workspace --all-targets --all-features -- -D warnings
 
+# Clippy the analyzer's own fuzz crate (issue #298). `fuzz/Cargo.toml` declares
+# its own `[workspace]` (cargo-fuzz needs its own lockfile/libfuzzer-sys pin,
+# per the root `Cargo.toml` exclude comment), which makes it invisible to
+# `lint` above — a bare `panic!`/`.unwrap()` there compiled and shipped
+# unnoticed until `cd fuzz && cargo clippy` was run by hand. Wired into
+# `ci-full` so it can't silently rot again. PureCARD's separate,
+# workspace-excluded fuzz crate is a different product (ADR-0004) with its own
+# release authority and is deliberately out of scope here — tracked in its own
+# issue where it applies.
+lint-fuzz:
+    cargo clippy --manifest-path fuzz/Cargo.toml --all-targets -- -D warnings
+
 # Lint + auto-fix markdown (aligns tables for MD060, then markdownlint --fix).
 lint-md:
     bun scripts/lib/align-md-tables.mjs $(git ls-files '*.md' '*.markdown')
@@ -540,7 +552,7 @@ ci: no-work-ledger generated-paths-gated
 # cargo-fuzz's sanitizers) — so they are only enforced in CI. Run the relevant fuzz-smoke directly with `just fuzz <target>
 # 60` if you have nightly. Use before a PR when a change touches what the fast
 # gate skips.
-ci-full: ci coverage test-mutation deny audit vet machete release-plz-check package semver public-api sweep no-shell-scripts postponed-markers lint-purecard-stale gates-run-in-ci docs test-scripts lint-actions zizmor
+ci-full: ci lint-fuzz coverage test-mutation deny audit vet machete release-plz-check package semver public-api sweep no-shell-scripts postponed-markers lint-purecard-stale gates-run-in-ci docs test-scripts lint-actions zizmor
     @echo "ci-full: ran every locally reproducible PR gate; the no-warnings log sweep and fuzz-smoke are enforced only in CI"
 
 # Install git hooks (managed by lefthook.yml). Also run automatically by the
