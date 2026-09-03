@@ -9,6 +9,11 @@ use crate::raw::{
     RawAssociation, RawClass, RawGenericType, RawMultiplicity, RawProperty, RawQualifiedProperty,
     RawStereotype,
 };
+use crate::stereotypes::{
+    ALL_VERSIONS_IN_RANGE_SUFFIX, ALL_VERSIONS_SUFFIX, BITEMPORAL, BUSINESS_TEMPORAL,
+    GENERATED_MILESTONING_PROPERTY, MILESTONING_PROFILE, MILESTONING_PROFILE_PROTOCOL,
+    PROCESSING_TEMPORAL, TEMPORAL_PROFILE, TEMPORAL_PROFILE_PROTOCOL,
+};
 use crate::{
     AssocInfo, AssociationEndInfo, ClassId, ClassInfo, MODEL_MERGE_CONFLICT, ModelGraph,
     ModelSource, ModelSourceInfo, Multiplicity, Name, PropInfo, Provenance, QName, QpInfo, QpKind,
@@ -18,16 +23,6 @@ use crate::{
 const DOCUMENT_TYPE: &str = "data";
 const CLASS_TYPE: &str = "class";
 const ASSOCIATION_TYPE: &str = "association";
-const TEMPORAL_PROFILE: &str = "meta::pure::profiles::temporal";
-const TEMPORAL_PROFILE_PROTOCOL: &str = "temporal";
-const MILESTONING_PROFILE: &str = "meta::pure::profiles::milestoning";
-const MILESTONING_PROFILE_PROTOCOL: &str = "milestoning";
-const GENERATED_MILESTONING_PROPERTY: &str = "generatedmilestoningproperty";
-const BITEMPORAL: &str = "bitemporal";
-const BUSINESS_TEMPORAL: &str = "businesstemporal";
-const PROCESSING_TEMPORAL: &str = "processingtemporal";
-const ALL_VERSIONS_SUFFIX: &str = "AllVersions";
-const ALL_VERSIONS_IN_RANGE_SUFFIX: &str = "AllVersionsInRange";
 
 /// Borrowed in-memory PMCD JSON with a stable diagnostic label.
 #[derive(Debug, Clone, Copy)]

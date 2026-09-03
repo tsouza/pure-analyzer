@@ -6,14 +6,15 @@ use pure_analyzer_syntax::{GreenElement, GreenNode, GreenToken, SyntaxKind};
 
 use crate::error::ModelError;
 use crate::loader::{AssocDraft, FragmentElement, ModelFragment};
+use crate::stereotypes::{
+    ALL_VERSIONS_IN_RANGE_SUFFIX, ALL_VERSIONS_SUFFIX, BITEMPORAL, BUSINESS_TEMPORAL,
+    GENERATED_MILESTONING_PROPERTY, MILESTONING_PROFILE, MILESTONING_PROFILE_PROTOCOL,
+    PROCESSING_TEMPORAL, TEMPORAL_PROFILE, TEMPORAL_PROFILE_PROTOCOL,
+};
 use crate::{
     ClassInfo, Multiplicity, Name, PropInfo, Provenance, QName, QpInfo, QpKind, SourceId, Temporal,
     TypeRef,
 };
-
-const GENERATED_MILESTONING_PROPERTY: &str = "generatedmilestoningproperty";
-const ALL_VERSIONS_SUFFIX: &str = "AllVersions";
-const ALL_VERSIONS_IN_RANGE_SUFFIX: &str = "AllVersionsInRange";
 
 #[derive(Clone, Copy)]
 struct LoweringContext<'a> {
@@ -643,12 +644,15 @@ fn annotation_facts(node: &GreenNode) -> AnnotationFacts {
     let text = compact_text(node);
     let mut facts = AnnotationFacts::default();
     for atom in stereotype_atoms(&text) {
-        let normalized = atom.to_ascii_lowercase();
-        if let Some(value) = temporal_value(&normalized) {
+        // Legend Pure stereotypes are case-sensitive: `atom` is matched
+        // verbatim (never case-folded) against the exact spellings
+        // `crate::stereotypes` shares with the PMCD loader, so the two
+        // loaders agree on every casing, canonical or not.
+        if let Some(value) = temporal_value(atom) {
             match value {
-                "bitemporal" => facts.note_temporal(Temporal::Bitemporal),
-                "businesstemporal" => facts.note_temporal(Temporal::BusinessTemporal),
-                "processingtemporal" => facts.note_temporal(Temporal::ProcessingTemporal),
+                BITEMPORAL => facts.note_temporal(Temporal::Bitemporal),
+                BUSINESS_TEMPORAL => facts.note_temporal(Temporal::BusinessTemporal),
+                PROCESSING_TEMPORAL => facts.note_temporal(Temporal::ProcessingTemporal),
                 _ => {
                     facts.temporal = None;
                     facts.temporal_uncertain = true;
@@ -672,14 +676,20 @@ fn stereotype_atoms(text: &str) -> impl Iterator<Item = &str> {
         .filter(|atom| !atom.is_empty())
 }
 
+/// Splits `profile.value` off a stereotype atom when its profile is exactly
+/// `protocol` or `qualified`, matching case-sensitively as Legend Pure does.
+fn strip_profile_prefix<'a>(atom: &'a str, protocol: &str, qualified: &str) -> Option<&'a str> {
+    atom.strip_prefix(protocol)
+        .or_else(|| atom.strip_prefix(qualified))
+        .and_then(|rest| rest.strip_prefix('.'))
+}
+
 fn temporal_value(atom: &str) -> Option<&str> {
-    atom.strip_prefix("temporal.")
-        .or_else(|| atom.strip_prefix("meta::pure::profiles::temporal."))
+    strip_profile_prefix(atom, TEMPORAL_PROFILE_PROTOCOL, TEMPORAL_PROFILE)
 }
 
 fn milestoning_value(atom: &str) -> Option<&str> {
-    atom.strip_prefix("milestoning.")
-        .or_else(|| atom.strip_prefix("meta::pure::profiles::milestoning."))
+    strip_profile_prefix(atom, MILESTONING_PROFILE_PROTOCOL, MILESTONING_PROFILE)
 }
 
 fn direct_name(node: &GreenNode) -> Option<Name> {
