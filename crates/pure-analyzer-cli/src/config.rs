@@ -1050,11 +1050,11 @@ mod tests {
         let fixture = DirectoryFixture::new("serialization-order");
         let first_path = fixture.write(
             "first.toml",
-            "version = 1\n[lint]\nselect = [\"PUR2002\", \"PUR2001\"]\nignore = [\"PUR2101\", \"PUR2100\"]\ndeny = [\"PUR9000\", \"PUR2003\"]\nwarn = [\"PUR1202\", \"PUR1201\"]\n[model]\npaths = [\"first.pure\", \"second.pure\"]\n",
+            "version = 1\n[lint]\nselect = [\"PUR2002\", \"PUR2001\"]\nignore = [\"PUR2101\", \"PUR1210\"]\ndeny = [\"PUR9000\", \"PUR1204\"]\nwarn = [\"PUR1202\", \"PUR1201\"]\n[model]\npaths = [\"first.pure\", \"second.pure\"]\n",
         );
         let second_path = fixture.write(
             "second.toml",
-            "version = 1\n[lint]\nselect = [\"PUR2001\", \"PUR2002\"]\nignore = [\"PUR2100\", \"PUR2101\"]\ndeny = [\"PUR2003\", \"PUR9000\"]\nwarn = [\"PUR1201\", \"PUR1202\"]\n[model]\npaths = [\"first.pure\", \"second.pure\"]\n",
+            "version = 1\n[lint]\nselect = [\"PUR2001\", \"PUR2002\"]\nignore = [\"PUR1210\", \"PUR2101\"]\ndeny = [\"PUR1204\", \"PUR9000\"]\nwarn = [\"PUR1201\", \"PUR1202\"]\n[model]\npaths = [\"first.pure\", \"second.pure\"]\n",
         );
         let first_arguments = [
             "test",
@@ -1090,8 +1090,8 @@ mod tests {
             second.to_toml().expect("serialize second ordering")
         );
         assert!(serialized.contains("select = [\"PUR2001\", \"PUR2002\"]"));
-        assert!(serialized.contains("ignore = [\"PUR2100\", \"PUR2101\"]"));
-        assert!(serialized.contains("deny = [\"PUR2003\", \"PUR9000\"]"));
+        assert!(serialized.contains("ignore = [\"PUR1210\", \"PUR2101\"]"));
+        assert!(serialized.contains("deny = [\"PUR1204\", \"PUR9000\"]"));
         assert!(serialized.contains("warn = [\"PUR1201\", \"PUR1202\"]"));
     }
 
@@ -1285,7 +1285,7 @@ mod tests {
             (ENV_COLOR.to_owned(), "never".to_owned()),
             (ENV_QUIET.to_owned(), "true".to_owned()),
             (ENV_SELECT.to_owned(), "PUR2*".to_owned()),
-            (ENV_IGNORE.to_owned(), "PUR2100".to_owned()),
+            (ENV_IGNORE.to_owned(), "PUR2101".to_owned()),
             (ENV_DENY.to_owned(), "PUR2001".to_owned()),
             (ENV_WARN.to_owned(), "PUR2002".to_owned()),
             (ENV_STRICT.to_owned(), "true".to_owned()),
@@ -1307,7 +1307,7 @@ mod tests {
         assert_eq!(resolved.color(), ColorChoice::Never);
         assert!(resolved.quiet());
         assert_eq!(resolved.lint.select, BTreeSet::from(["PUR2*".to_owned()]));
-        assert_eq!(resolved.lint.ignore, BTreeSet::from(["PUR2100".to_owned()]));
+        assert_eq!(resolved.lint.ignore, BTreeSet::from(["PUR2101".to_owned()]));
         assert_eq!(resolved.lint.deny, BTreeSet::from(["PUR2001".to_owned()]));
         assert_eq!(resolved.lint.warn, BTreeSet::from(["PUR2002".to_owned()]));
         assert!(resolved.validate_strict());
@@ -1330,7 +1330,7 @@ mod tests {
             "--select",
             "PUR2*,PUR2001",
             "--ignore",
-            "PUR2100",
+            "PUR2101",
             "--deny",
             "PUR2001",
         ];

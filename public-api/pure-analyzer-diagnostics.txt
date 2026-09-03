@@ -50,15 +50,11 @@ pub fn pure_analyzer_diagnostics::Applicability::from(T) -> T
 impl<T> serde_core::de::DeserializeOwned for pure_analyzer_diagnostics::Applicability where T: for<'de> serde_core::de::Deserialize<'de>
 pub enum pure_analyzer_diagnostics::DiagCode
 pub pure_analyzer_diagnostics::DiagCode::BadToken
-pub pure_analyzer_diagnostics::DiagCode::CardinalityMisuse
-pub pure_analyzer_diagnostics::DiagCode::DerivedQualifiedProperty
 pub pure_analyzer_diagnostics::DiagCode::DuplicateModelDeclaration
-pub pure_analyzer_diagnostics::DiagCode::EquivalenceVerdict
 pub pure_analyzer_diagnostics::DiagCode::IllegalBracketIndex
 pub pure_analyzer_diagnostics::DiagCode::MalformedMilestoningArguments
 pub pure_analyzer_diagnostics::DiagCode::MalformedSyntax
 pub pure_analyzer_diagnostics::DiagCode::ModelMergeConflict
-pub pure_analyzer_diagnostics::DiagCode::ModelRequired
 pub pure_analyzer_diagnostics::DiagCode::ParenthesizedTuple
 pub pure_analyzer_diagnostics::DiagCode::UnknownJoinKind
 pub pure_analyzer_diagnostics::DiagCode::UnknownProperty
@@ -127,7 +123,6 @@ impl<T> core::convert::From<T> for pure_analyzer_diagnostics::DiagCode
 pub fn pure_analyzer_diagnostics::DiagCode::from(T) -> T
 impl<T> serde_core::de::DeserializeOwned for pure_analyzer_diagnostics::DiagCode where T: for<'de> serde_core::de::Deserialize<'de>
 pub enum pure_analyzer_diagnostics::DiagFamily
-pub pure_analyzer_diagnostics::DiagFamily::Equivalence
 pub pure_analyzer_diagnostics::DiagFamily::Lexer
 pub pure_analyzer_diagnostics::DiagFamily::Lint
 pub pure_analyzer_diagnostics::DiagFamily::Parser
@@ -177,7 +172,6 @@ pub unsafe fn pure_analyzer_diagnostics::DiagFamily::clone_to_uninit(&self, *mut
 impl<T> core::convert::From<T> for pure_analyzer_diagnostics::DiagFamily
 pub fn pure_analyzer_diagnostics::DiagFamily::from(T) -> T
 pub enum pure_analyzer_diagnostics::ExplainClassification
-pub pure_analyzer_diagnostics::ExplainClassification::Equivalence
 pub pure_analyzer_diagnostics::ExplainClassification::Fundamental
 pub pure_analyzer_diagnostics::ExplainClassification::Lexer
 pub pure_analyzer_diagnostics::ExplainClassification::Lint

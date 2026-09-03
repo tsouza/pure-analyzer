@@ -8,6 +8,7 @@
 //!
 //! [cargo-xtask]: https://github.com/matklad/cargo-xtask
 
+mod diagnostic_producers;
 mod explain_docs;
 mod markdown;
 mod process;
@@ -91,6 +92,8 @@ enum Command {
     GenerateExplainDocs,
     /// Assert the tracked diagnostic and reason explain reference matches the shared catalog.
     CheckExplainDocs,
+    /// Assert every registered `DiagCode` has at least one non-test constructor.
+    CheckDiagnosticProducers,
     /// Check tracked Markdown relative files and GitHub-style heading anchors.
     CheckDocLinks,
     /// Snapshot / verify the public API surface via cargo-public-api (nightly).
@@ -138,6 +141,7 @@ fn main() -> Result<()> {
         Command::CheckDocFacts => tasks::check_doc_facts(),
         Command::GenerateExplainDocs => explain_docs::generate(),
         Command::CheckExplainDocs => explain_docs::check(),
+        Command::CheckDiagnosticProducers => diagnostic_producers::check(),
         Command::CheckDocLinks => markdown::check_doc_links(),
         Command::PublicApi { bless } => tasks::public_api(bless),
         Command::NewFeature { name } => tasks::new_feature(&name),

@@ -252,12 +252,8 @@ const fn rule_description(code: DiagCode) -> &'static str {
         DiagCode::UnknownJoinKind => "unknown join kind",
         DiagCode::WrongMilestoningArity => "wrong milestoning arity",
         DiagCode::UnknownProperty => "unknown property",
-        DiagCode::CardinalityMisuse => "cardinality misuse",
-        DiagCode::DerivedQualifiedProperty => "derived qualified property",
         DiagCode::UnknownSource => "unknown navigation source",
-        DiagCode::EquivalenceVerdict => "equivalence analysis verdict",
         DiagCode::ModelMergeConflict => "model merge conflict",
-        DiagCode::ModelRequired => "model input required",
         DiagCode::DuplicateModelDeclaration => "duplicate model declaration",
         DiagCode::UnresolvedModelAssociation => "unresolved model association",
     }
@@ -391,7 +387,6 @@ const fn family_name(family: DiagFamily) -> &'static str {
         DiagFamily::Lexer => "lexer",
         DiagFamily::Parser => "parser",
         DiagFamily::Lint => "lint",
-        DiagFamily::Equivalence => "equivalence",
         DiagFamily::Tool => "tool",
     }
 }

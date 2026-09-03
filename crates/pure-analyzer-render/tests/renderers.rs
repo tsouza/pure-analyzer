@@ -392,7 +392,7 @@ fn severity_mappings_and_counters_are_consistent_across_formats() {
         (DiagCode::BadToken, Severity::Error, "error"),
         (DiagCode::MalformedSyntax, Severity::Warning, "warning"),
         (DiagCode::UnknownProperty, Severity::Info, "info"),
-        (DiagCode::ModelRequired, Severity::Hint, "hint"),
+        (DiagCode::ModelMergeConflict, Severity::Hint, "hint"),
     ]
     .into_iter()
     .enumerate()
@@ -414,7 +414,7 @@ fn severity_mappings_and_counters_are_consistent_across_formats() {
         "error[PUR0102]: error",
         "warning[PUR1200]: warning",
         "info[PUR2002]: info",
-        "hint[PUR9001]: hint",
+        "hint[PUR9000]: hint",
     ] {
         assert!(
             human.contains(header),

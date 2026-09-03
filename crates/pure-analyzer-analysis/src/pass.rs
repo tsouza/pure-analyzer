@@ -418,17 +418,20 @@ mod tests {
                 name: "only",
                 diagnostics: vec![
                     diagnostic(DiagCode::UnknownProperty, Severity::Error, "hidden"),
-                    diagnostic(DiagCode::CardinalityMisuse, Severity::Hint, "promoted"),
+                    diagnostic(DiagCode::WrongMilestoningArity, Severity::Hint, "promoted"),
                 ],
             })],
             FindingPolicy::new()
                 .suppress(DiagCode::UnknownProperty)
-                .with_severity(DiagCode::CardinalityMisuse, Severity::Warning),
+                .with_severity(DiagCode::WrongMilestoningArity, Severity::Warning),
         );
 
         let result = engine.analyze(input());
         assert_eq!(result.diagnostics().len(), 1);
-        assert_eq!(result.diagnostics()[0].code, DiagCode::CardinalityMisuse);
+        assert_eq!(
+            result.diagnostics()[0].code,
+            DiagCode::WrongMilestoningArity
+        );
         assert_eq!(result.diagnostics()[0].severity, Severity::Warning);
     }
 
@@ -439,7 +442,7 @@ mod tests {
                 name: "only",
                 diagnostics: vec![
                     diagnostic(DiagCode::UnknownProperty, Severity::Hint, "quiet"),
-                    diagnostic(DiagCode::CardinalityMisuse, Severity::Error, "loud"),
+                    diagnostic(DiagCode::WrongMilestoningArity, Severity::Error, "loud"),
                 ],
             })],
             FindingPolicy::new().with_minimum_severity(Severity::Warning),
@@ -447,21 +450,27 @@ mod tests {
 
         let result = engine.analyze(input());
         assert_eq!(result.diagnostics().len(), 1);
-        assert_eq!(result.diagnostics()[0].code, DiagCode::CardinalityMisuse);
+        assert_eq!(
+            result.diagnostics()[0].code,
+            DiagCode::WrongMilestoningArity
+        );
     }
 
     #[test]
     fn exact_overrides_take_precedence_over_warning_promotion() {
+        // `compare_diagnostics` sorts by wire code first (`PUR2002` <
+        // `PUR2101`), so `UnknownProperty` must sort before `UnknownSource`
+        // for the two assertions below to check the intended diagnostic.
         let engine = AnalysisEngine::new(
             vec![Box::new(StaticPass {
                 name: "only",
                 diagnostics: vec![
                     diagnostic(DiagCode::UnknownProperty, Severity::Warning, "promoted"),
-                    diagnostic(DiagCode::CardinalityMisuse, Severity::Info, "unchanged"),
+                    diagnostic(DiagCode::UnknownSource, Severity::Info, "unchanged"),
                 ],
             })],
             FindingPolicy::new()
-                .with_severity(DiagCode::CardinalityMisuse, Severity::Warning)
+                .with_severity(DiagCode::UnknownSource, Severity::Warning)
                 .with_warnings_as_errors(true),
         );
 

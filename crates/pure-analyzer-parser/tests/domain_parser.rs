@@ -1,7 +1,11 @@
 //! Contracts for the resilient Pure Domain parser.
 
+#[path = "support/lexeme_strategy.rs"]
+mod lexeme_strategy;
+
 use std::panic;
 
+use lexeme_strategy::arbitrary_source;
 use proptest::prelude::*;
 use pure_analyzer_diagnostics::{DiagCode, FileId, TextRange};
 use pure_analyzer_lexer::lex;
@@ -2204,8 +2208,16 @@ Class demo::Known
 }
 
 proptest! {
+    // `source in ".{0,2048}"` used to draw each character independently from
+    // the full Unicode codepoint space, so the odds of it ever emitting
+    // `Class`, `Association`, `extends`, or `<<` were effectively zero — none
+    // of the recovery machinery this test is named for was ever exercised
+    // (issue #299). `arbitrary_source()` instead samples a weighted sequence
+    // over the parser's real lexeme alphabet plus the Domain grammar's own
+    // textual keywords, so real grammar structure is reached at a
+    // meaningful rate; see `tests/support/lexeme_strategy.rs`.
     #[test]
-    fn arbitrary_domain_source_is_lossless_and_recovery_safe(source in ".{0,2048}") {
+    fn arbitrary_domain_source_is_lossless_and_recovery_safe(source in arbitrary_source()) {
         let result = panic::catch_unwind(|| parse_domain(&source, file()));
         prop_assert!(result.is_ok());
         let parsed = result.expect("no panic").expect("small source must build a tree");
@@ -2228,6 +2240,23 @@ proptest! {
             let end = usize::from(gap.span.end());
             prop_assert!(start <= end && end <= source.len());
             prop_assert!(source.is_char_boundary(start) && source.is_char_boundary(end));
+        }
+
+        // Recovery-safety, the invariant this test's own name promises but
+        // never checked: every `ERROR_NODE` the Domain parser builds is
+        // reached only through a call path that first records evidence of
+        // why — either a diagnostic (`Parser::syntax_error`/`expect`/the
+        // automatic `BadToken` push in `Parser::bump`) or a coverage gap
+        // (`Parser::mark_gap_from`, e.g. a structurally invalid stereotype
+        // application) — see `src/domain.rs`. Recovery never silently
+        // discards an error; it always leaves at least one of the two
+        // records behind.
+        if count_kind(&parsed.green, SyntaxKind::ERROR_NODE) > 0 {
+            prop_assert!(
+                !parsed.diagnostics.is_empty() || !parsed.coverage_gaps.is_empty(),
+                "an ERROR_NODE was built without any diagnostic or coverage gap explaining it: {:#?}",
+                parsed
+            );
         }
     }
 }
