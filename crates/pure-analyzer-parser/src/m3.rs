@@ -49,7 +49,6 @@ struct Parser<'tokens> {
     diagnostics: Vec<Diagnostic>,
     fuel: usize,
     depth: usize,
-    retroactive_wraps: usize,
 }
 
 /// Append-friendly parser events with constant-time retroactive wrapping.
@@ -127,7 +126,6 @@ impl<'tokens> Parser<'tokens> {
             diagnostics: Vec::new(),
             fuel: tokens.len(),
             depth: 0,
-            retroactive_wraps: 0,
         }
     }
 
@@ -150,7 +148,6 @@ impl<'tokens> Parser<'tokens> {
                 continue;
             }
 
-            self.retroactive_wraps = 0;
             self.parse_query_expression();
             self.consume_trivia();
             self.consume_source_separator();
@@ -260,11 +257,12 @@ impl<'tokens> Parser<'tokens> {
             return false;
         }
 
+        let mut wrap_depth = 0usize;
         while let Some(kind) = self.significant_kind() {
             let before = self.index;
             match kind {
                 TokenKind::DOT if self.dot_starts_all_expression() => {
-                    if !self.reserve_retroactive_wrap() {
+                    if !self.reserve_retroactive_wrap(&mut wrap_depth) {
                         break;
                     }
                     self.parse_all_expression(expression_start);
@@ -273,7 +271,7 @@ impl<'tokens> Parser<'tokens> {
                 TokenKind::ARROW => self.parse_arrow_call(),
                 TokenKind::BRACKET_OPEN => self.parse_bracket_index(),
                 TokenKind::PAREN_OPEN => {
-                    if !self.reserve_retroactive_wrap() {
+                    if !self.reserve_retroactive_wrap(&mut wrap_depth) {
                         break;
                     }
                     self.parse_function_call(expression_start);
@@ -1335,12 +1333,22 @@ impl<'tokens> Parser<'tokens> {
         self.events.append(Event::Close);
     }
 
-    fn reserve_retroactive_wrap(&mut self) -> bool {
-        if self.retroactive_wraps >= MAX_PARSE_DEPTH {
+    /// Reserves one retroactive wrap in the postfix chain currently being
+    /// parsed. `wrap_depth` is local to a single [`Self::parse_postfix_expression`]
+    /// call: each wrap in that chain nests the whole prior chain inside the
+    /// new node (`wrap_from` retroactively inserts the new `Open` right
+    /// before the chain's start), so consecutive wraps genuinely deepen the
+    /// resulting tree and must share one budget. Sibling chains — separate
+    /// primaries such as list elements or call arguments — start their own
+    /// `parse_postfix_expression` call and so their own fresh budget; only
+    /// real recursion into a new expression (bounded by
+    /// [`Self::enter_parse_depth`]) links one chain's depth to another's.
+    fn reserve_retroactive_wrap(&mut self, wrap_depth: &mut usize) -> bool {
+        if *wrap_depth >= MAX_PARSE_DEPTH {
             self.error_current("expression nesting limit reached");
             return false;
         }
-        self.retroactive_wraps = self.retroactive_wraps.saturating_add(1);
+        *wrap_depth = wrap_depth.saturating_add(1);
         true
     }
 
