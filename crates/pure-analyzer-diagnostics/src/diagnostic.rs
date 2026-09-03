@@ -6,7 +6,7 @@ use text_size::TextRange;
 use crate::code::DiagCode;
 use crate::file::FileId;
 use crate::fix::Fix;
-use crate::verdict::{ReasonCode, Verdict};
+use crate::verdict::ReasonCode;
 
 /// How serious a [`Diagnostic`] is, independent of which pass produced it.
 ///
@@ -66,7 +66,7 @@ impl Label {
 }
 
 /// A finding produced by a pass: the parser's syntax errors, `lint`'s
-/// milestoning-arity findings, `eq`'s verdicts.
+/// milestoning-arity findings.
 ///
 /// Findings flow one way, from passes to renderers, so this type is
 /// intentionally serialization-only. Its identifiers are closed enums rather
@@ -85,10 +85,8 @@ pub struct Diagnostic {
     pub secondary: Vec<Label>,
     /// A structured fix, if one is available.
     pub fix: Option<Fix>,
-    /// Set only for `eq`/`diff` verdict-carrying diagnostics (`PUR3xxx`).
-    pub verdict: Option<Verdict>,
-    /// Set iff the verdict (or the finding itself) is `Indecisive`/downgraded;
-    /// carries the reason bucket.
+    /// Set iff the finding is `Indecisive`/downgraded; carries the reason
+    /// bucket.
     pub reason: Option<ReasonCode>,
     /// A doc link into `docs/reason-codes/<code>`, if one exists.
     pub url: Option<String>,
@@ -125,7 +123,6 @@ impl DiagnosticBuilder {
                 primary,
                 secondary: Vec::new(),
                 fix: None,
-                verdict: None,
                 reason: None,
                 url: None,
             },
@@ -143,13 +140,6 @@ impl DiagnosticBuilder {
     #[must_use]
     pub fn fix(mut self, fix: Fix) -> Self {
         self.inner.fix = Some(fix);
-        self
-    }
-
-    /// Attach an `eq`/`diff` verdict.
-    #[must_use]
-    pub fn verdict(mut self, verdict: Verdict) -> Self {
-        self.inner.verdict = Some(verdict);
         self
     }
 
@@ -190,7 +180,6 @@ mod tests {
         assert_eq!(d.severity, Severity::Error);
         assert!(d.secondary.is_empty());
         assert!(d.fix.is_none());
-        assert!(d.verdict.is_none());
         assert!(d.reason.is_none());
         assert!(d.url.is_none());
     }

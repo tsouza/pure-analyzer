@@ -1,29 +1,8 @@
-//! `eq`/`diff` verdicts and the `Indecisive` reason-code taxonomy.
+//! The `Indecisive` reason-code taxonomy.
 
 use std::{fmt, str::FromStr};
 
 use serde::ser::{SerializeStruct, Serializer};
-
-/// The outcome of `eq`/`diff`: sound, incomplete, three-valued.
-///
-/// This type has no fourth
-/// variant that could be mistaken for a commitment, and every producer must
-/// map uncertainty to [`Verdict::Indecisive`] rather than guessing.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-#[serde(tag = "verdict", rename_all = "snake_case")]
-pub enum Verdict {
-    /// Proven equal by canonical-normal-form match.
-    Equivalent,
-    /// Proven distinct by a concrete, model-legal witness.
-    NotEquivalent {
-        /// A rendered, paste-and-run-in-the-engine Pure literal exhibiting
-        /// the divergence.
-        witness: String,
-    },
-    /// Neither proof succeeded. The owning [`crate::Diagnostic`]'s `reason`
-    /// field carries why.
-    Indecisive,
-}
 
 /// Whether an inconclusive result is a deliberate semantic limit or tractable backlog.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -240,22 +219,6 @@ mod tests {
     use std::collections::BTreeSet;
 
     use super::*;
-
-    #[test]
-    fn not_equivalent_carries_its_witness() {
-        let verdict = Verdict::NotEquivalent {
-            witness: "#>{db.T}#->filter(x|$x.a == 1)".to_owned(),
-        };
-        assert!(
-            matches!(verdict, Verdict::NotEquivalent { witness } if witness.contains("filter"))
-        );
-    }
-
-    #[test]
-    fn verdict_serializes_with_a_tag() {
-        let json = serde_json::to_string(&Verdict::Equivalent).expect("serialize");
-        assert!(json.contains("\"verdict\":\"equivalent\""));
-    }
 
     #[test]
     fn every_reason_has_a_unique_exact_identifier() {
