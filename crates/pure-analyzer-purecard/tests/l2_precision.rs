@@ -162,6 +162,31 @@ fn a_shadowed_binder_is_restored_when_the_inner_arm_r_scope_closes() {
     assert_streams_soundly_under_l2("car_1", query);
 }
 
+#[test]
+fn a_window_aggregation_reducer_binder_streams_soundly_under_l2() {
+    // Soundness (issue #377): a window aggregation's own reducer binds its
+    // variable after a *second* colon that directly follows the winAggSpec's
+    // brace lambda close (`{p,w,r|$r.Hp}:y|…`, no whitespace) — reached from
+    // `AfterValue` through `AfterValueColon`, not from the bare-colName colon
+    // `AfterRelColColon` serves (issue #368/#372). `on_ident`'s binder-capture
+    // match had no arm for `AfterValueColon`, so the reducer's own `y` was
+    // never recorded as bound: `$y` in the reducer body was then masked as an
+    // unbound sigil (S2), even though the exact same untyped bare-reducer
+    // shape streams for `groupBy` (there separated from its own colon by
+    // whitespace, landing on `AfterColonWs` instead — already handled).
+    //
+    // `->extend(over(~desk), ~[agg:{p,w,r|$r.notional}:y|$y->sum()])` is a
+    // live-engine-verified corpus entry (`modern_dialect_seeds.jsonl`,
+    // `gap-report/g1-armr:real-window`); this reuses the identical no-space
+    // colon shape against the `car_1` fixture already loaded by this file's
+    // other arm-R tests.
+    let query = "|spider::car_1::model::default::CarsData.all()\
+        ->filter(x|$x.cylinders >= 0)\
+        ->project(~[Cyl: x|$x.cylinders, Hp: x|$x.horsepower])\
+        ->extend(over(~Cyl), ~[TotalHp:{p,w,r|$r.Hp}:y|$y->average()])";
+    assert_streams_soundly_under_l2("car_1", query);
+}
+
 /// Drive `prefix` (a valid partial query) through a schema-aware session for
 /// `db_id`, then report, for each token in `probes`, whether it is admissible at
 /// the resulting position. `probes` tokens are injected into the vocabulary so
@@ -950,6 +975,50 @@ fn arm_r_groupby_map_lambda_binder_does_not_mask_a_projected_column() {
         verdicts[0],
         "L2 SOUNDNESS: the projected column `Cyl` was masked at the groupBy map \
          lambda's member position in car_1:\n  {prefix}"
+    );
+}
+
+#[test]
+fn arm_r_window_reducer_binder_admits_its_own_variable() {
+    // Soundness (issue #377): at the exact position the issue's own
+    // reproduction masks — right after the reducer's own `$`, in
+    // `~[TotalHp:{p,w,r|$r.Hp}:y|$y->average()])` — the reducer's own binder
+    // `y` must stream. L1 already admits it; this was an L2-only gap: the
+    // no-whitespace second colon directly off the winAggSpec brace lambda's
+    // close (`}:y|…`) lands on `AfterValueColon` (`step_after_value`'s `:`
+    // arm), a state `on_ident`'s binder-capture match had no arm for — unlike
+    // `AfterColonWs`, which the same shape reaches when whitespace splits the
+    // colon from the binder (`groupBy`'s reducer, see the positive control
+    // below), so `y` was never recorded bound and S2 masked `$y` as an
+    // unbound sigil.
+    let prefix = "|spider::car_1::model::default::CarsData.all()\
+        ->filter(x|$x.cylinders >= 0)\
+        ->project(~[Cyl: x|$x.cylinders, Hp: x|$x.horsepower])\
+        ->extend(over(~Cyl), ~[TotalHp:{p,w,r|$r.Hp}:y|$";
+    let verdicts = admissible_after("car_1", prefix, &[b"y"]);
+    assert!(
+        verdicts[0],
+        "L2 SOUNDNESS: the window reducer's own binder `y` was masked right \
+         after its `$` in car_1:\n  {prefix}"
+    );
+}
+
+/// Positive control for the fix above: the identical untyped bare-reducer
+/// shape in `groupBy` (`: y|$y->sum()`), where whitespace splits the second
+/// colon from the binder so it lands on `AfterColonWs` rather than
+/// `AfterValueColon`. Pinned so the #377 fix cannot silently regress the
+/// shape it was modeled on.
+#[test]
+fn arm_r_groupby_reducer_binder_admits_its_own_variable() {
+    let prefix = "|spider::car_1::model::default::CarsData.all()\
+        ->filter(x|$x.cylinders >= 0)\
+        ->project(~[Cyl: x|$x.cylinders, Hp: x|$x.horsepower])\
+        ->groupBy(~[Cyl], ~'TotalHp': x|$x.Hp : y|$";
+    let verdicts = admissible_after("car_1", prefix, &[b"y"]);
+    assert!(
+        verdicts[0],
+        "L2 SOUNDNESS: the groupBy reducer's own binder `y` was masked right \
+         after its `$` in car_1:\n  {prefix}"
     );
 }
 
