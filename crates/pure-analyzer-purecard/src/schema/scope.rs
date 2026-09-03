@@ -279,6 +279,31 @@ pub enum L2Position {
     /// have the same latent gap but are not narrowed here; out of scope for
     /// this rule.
     SourceMethodArg,
+    /// Issue #385, the sibling of [`SourceMethodArg`](L2Position::SourceMethodArg)
+    /// one position later: a **milestoned property navigation's own call**
+    /// (`$x.facet(...)`, S3's own argument slot rather than S1's) legally
+    /// passes zero, one, or two comma-separated milestone/date literals or a
+    /// `$`-prefixed variable reference exactly as `all()`'s own call does
+    /// (`$a.b(%latest, %latest).bx`, `$a.b($d1, $d2).bx`, both live-verified —
+    /// L1 already admits both and the pinned engine compiles both). Armed only
+    /// for the call opened right off a member-navigation identifier that just
+    /// resolved to a genuine schema member (a class-ref or primitive
+    /// property, association end, or qualified property) — never off a
+    /// `->`-reached arrow call or a bare `$var`'s own name (both leave no
+    /// resolved member behind), and never off a **different** dot-reached
+    /// call the byte-PDA parks at the identical
+    /// [`State::AfterMemberName`]/`ExpectValue` pair but which resolves no
+    /// schema member either — a TDS row accessor (`$row.getInteger(...)`) or
+    /// a bare relation column reference, both already governed by N6's own
+    /// `Column` rule. Shares `fill_milestoning_date_arg`'s fill and, like
+    /// `SourceMethodArg`, S2's sigil-unbound and refVar-name-narrowing
+    /// exemptions (`masks_unbound_sigil`, the `AfterDollar` arm below) — a
+    /// milestoning date variable ordinarily names a binder the stream never
+    /// sees (a function/service parameter, an enclosing `let`), so the schema
+    /// contract carries no temporal stereotype that would let this rule tell a
+    /// legal date variable from an illegal one any better than L1 already
+    /// does.
+    PropertyMethodArg,
     /// N3c (store arm): the identifier right after a pipeline-source **store**
     /// path's own `->` must name a real store method. A store path denotes a
     /// `meta::relational::metamodel::Database`, not a class extent, so the only
@@ -1215,6 +1240,24 @@ pub(crate) struct ScopeTracker {
     /// without an intervening `on_open` (a comparison operand directly
     /// following the call's close, e.g. a hypothetical `A.all() == 5`).
     in_source_method_args: bool,
+    /// Issue #385: the call just opened via `on_open` followed a
+    /// member-navigation identifier that [`last_nav`](Self::last_nav) says
+    /// just resolved to a genuine schema member (a class-ref or primitive
+    /// property, association end, or qualified property) — a milestoned
+    /// property navigation's own call, `$x.facet(...)`. Every value slot
+    /// inside it is a [`L2Position::PropertyMethodArg`], S3's own argument-slot
+    /// twin of [`in_source_method_args`](Self::in_source_method_args).
+    /// `last_nav` is read rather than "reached through a `.`" alone because
+    /// the byte-PDA parks a **different** dot-reached call family at the
+    /// identical `AfterMemberName`/`ExpectValue` pair — a TDS row accessor
+    /// (`$row.getInteger(...)`, `$row.getDateTime(...)`, …) or a bare column
+    /// reference — and `resolve_member` leaves `last_nav` at `None` for
+    /// exactly those (no real schema member resolved), which is what keeps
+    /// this rule from wrongly overriding N6's own `Column` rule (or an
+    /// unnamed accessor's unconstrained pass-through) at their call's
+    /// argument slot. Cleared unconditionally at the matching `on_close`, for
+    /// the same reason `in_source_method_args` is.
+    in_property_method_args: bool,
     /// The source method's own call ([`SOURCE_METHOD`]) has just closed, so the
     /// next token sits on the class extent ([`L2Position::SourceExtent`]).
     /// Consumed one token later, exactly like
@@ -1494,6 +1537,7 @@ impl ScopeTracker {
                 _,
                 L2Position::ReValue(_)
                 | L2Position::SourceMethodArg
+                | L2Position::PropertyMethodArg
                 | L2Position::StoreMethodArg
                 | L2Position::ExtentMethodArg(_),
             ) => L2Position::None,
@@ -1655,6 +1699,18 @@ impl ScopeTracker {
         });
         match pre_state {
             // A refVar use (`$x`): never a lambda binder, never a member position.
+            //
+            // Issue #385: a milestoning date-argument call's own `$name`
+            // (S1's `SourceMethodArg` or S3's `PropertyMethodArg` position,
+            // still armed here — its own call has not closed yet) is a call
+            // *argument*, not a navigation receiver, so it must not become
+            // `pending_refvar`. Left set, it would survive to the next `.`
+            // and `on_dot`'s pending-refvar-first precedence would wrongly
+            // read that dot as continuing the date variable's own (nonexistent)
+            // chain instead of the real receiver's — e.g. `$a.b($d1,
+            // $d2).c` would resolve `.c` off `$d2`, not off `$a.b`'s own
+            // `t::B` result, masking every real member the chain still owes.
+            State::AfterDollar if self.in_milestoning_date_arg_position() => {}
             State::AfterDollar => {
                 self.pending_refvar = Some(text.to_owned());
             }
@@ -2067,6 +2123,21 @@ impl ScopeTracker {
         // of nesting depth — unlike the nested-pipeline reset below, this is not
         // depth-gated.
         self.in_source_method_args = method.as_deref() == Some(SOURCE_METHOD);
+        // Issue #385, S3's own argument-slot arming: the call just opened
+        // followed a member-navigation identifier that `last_nav` says just
+        // resolved to a genuine schema member (`in_property_method_args`'s
+        // own doc comment). Read *before* `resolve_member`'s next call
+        // overwrites it — `last_nav` is set once per non-whitespace token
+        // dispatch and this token (the `(`) has not reached that assignment
+        // yet, so it still names the just-closed identifier's own outcome.
+        // Excludes `in_source_method_args` above so the two stay mutually
+        // exclusive: `all` is not a class member either (`resolve_member`
+        // returns before resolving it), so `last_nav` alone would already
+        // exclude it, but the explicit exclusion documents the invariant
+        // rather than leaving S1's sole ownership of its position to a
+        // coincidence of `resolve_member`'s early return.
+        self.in_property_method_args =
+            method.is_some() && !self.in_source_method_args && self.last_nav.is_some();
         // N3d: a store method's own call owes exactly its declared string
         // arguments, so arm the argument/separator positions for its whole extent.
         self.store_call_arity = method.as_deref().and_then(store_method_arity);
@@ -2137,6 +2208,11 @@ impl ScopeTracker {
         // was the source method's, so what follows sits on the class extent.
         self.awaiting_extent_step = self.in_source_method_args;
         self.in_source_method_args = false;
+        // Issue #385: cleared unconditionally for the same reason
+        // `in_source_method_args` is — a milestoned property call's own close
+        // has no analogous "what follows" arming to hand off (unlike the
+        // source method's `SourceExtent`), so nothing reads it further on.
+        self.in_property_method_args = false;
         // N4a reads the store call's close the way N3e reads the source method's:
         // the call that just closed was the store method's, so what follows sits
         // on its `Table[1]` result. Assigned rather than or-ed, so an enclosing
@@ -2399,16 +2475,18 @@ impl ScopeTracker {
             // S2: a `$` sigil's identifier names a variable, and the only names in
             // the graph are the ones this stream bound.
             //
-            // Exempted inside a source method's own argument list (issue #367):
-            // a milestoning date variable (`Class.all($d)`) ordinarily names a
-            // binder the stream never sees (a function/service parameter, an
-            // enclosing `let`), so S2's bound-name set is the wrong universe to
-            // check it against here — the same reasoning that exempts the sigil
-            // itself in `masks_unbound_sigil`, extended to the name that follows
-            // it, so an outer lambda binder already in scope (`x` in
+            // Exempted inside a milestoning-date-argument call's own argument
+            // list (issue #367 for the source method, issue #385 for a
+            // property navigation's own): a milestoning date variable
+            // (`Class.all($d)`, `$x.facet($d)`) ordinarily names a binder the
+            // stream never sees (a function/service parameter, an enclosing
+            // `let`), so S2's bound-name set is the wrong universe to check it
+            // against here — the same reasoning that exempts the sigil itself
+            // in `masks_unbound_sigil`, extended to the name that follows it,
+            // so an outer lambda binder already in scope (`x` in
             // `A.all()->filter(x|B.all($d)->…)`) does not narrow this position
             // down to `{x}` and mask the unrelated date variable `d`.
-            State::AfterDollar if self.in_source_method_args => L2Position::None,
+            State::AfterDollar if self.in_milestoning_date_arg_position() => L2Position::None,
             State::AfterDollar => L2Position::RefVar,
             State::AfterDot => {
                 if self.awaiting_source_method {
@@ -2524,6 +2602,9 @@ impl ScopeTracker {
     fn value_opening_position(&self, state: State) -> L2Position {
         if self.in_source_method_args {
             L2Position::SourceMethodArg
+        } else if self.in_property_method_args {
+            // Issue #385: S3's own argument-slot twin of the arm above.
+            L2Position::PropertyMethodArg
         } else if self.store_call_arity.is_some() {
             L2Position::StoreMethodArg
         } else if self.receiver_only_call {
@@ -2580,20 +2661,42 @@ impl ScopeTracker {
     /// Gated on the anchor state rather than on the byte alone so a `$` *inside* a
     /// string literal (`'a$b'`) is untouched.
     ///
-    /// Exempts [`SourceMethodArg`](L2Position::SourceMethodArg) (issue #367): a
-    /// milestoning date argument (`Class.all($d)`) is ordinarily an as-of date
-    /// bound *outside* the lambda the decoder streams — a function/service
-    /// parameter, or an enclosing `let`, neither of which the stream ever sees —
-    /// so `bound_vars` being empty here is the ordinary case, not evidence of a
-    /// phantom name. The schema contract carries no temporal stereotype, so L2
-    /// cannot type this argument any better than L1 already does; masking `$d`
-    /// while admitting `%latest` at the identical position refused a query shape
-    /// the engine accepts (live-verified: the issue's own `grammarToJson/lambda`
-    /// repro compiles). `in_source_method_args` is this exemption's precise
-    /// scope: every other sigil position (a filter/project lambda body, a `let`
-    /// initializer, …) keeps S2's ordinary bound-name check.
+    /// Exempts [`SourceMethodArg`](L2Position::SourceMethodArg) (issue #367)
+    /// and its sibling [`PropertyMethodArg`](L2Position::PropertyMethodArg)
+    /// (issue #385): a milestoning date argument (`Class.all($d)`,
+    /// `$x.facet($d)`) is ordinarily an as-of date bound *outside* the lambda
+    /// the decoder streams — a function/service parameter, or an enclosing
+    /// `let`, neither of which the stream ever sees — so `bound_vars` being
+    /// empty here is the ordinary case, not evidence of a phantom name. The
+    /// schema contract carries no temporal stereotype, so L2 cannot type
+    /// either argument any better than L1 already does; masking `$d` while
+    /// admitting `%latest` at the identical position refused a query shape
+    /// the engine accepts (live-verified: both issues' own
+    /// `grammarToJson/lambda` repros compile).
+    /// [`in_milestoning_date_arg_position`](Self::in_milestoning_date_arg_position)
+    /// is this exemption's precise scope: every other sigil position (a
+    /// filter/project lambda body, a `let` initializer, …) keeps S2's
+    /// ordinary bound-name check.
     pub(crate) fn masks_unbound_sigil(&self, state: State) -> bool {
-        state.opens_refvar_sigil() && self.bound_vars.is_empty() && !self.in_source_method_args
+        state.opens_refvar_sigil()
+            && self.bound_vars.is_empty()
+            && !self.in_milestoning_date_arg_position()
+    }
+
+    /// Whether the stream is inside either milestoning-date-argument call's
+    /// own argument list — [`in_source_method_args`](Self::in_source_method_args)
+    /// (S1, `all(...)`) or [`in_property_method_args`](Self::in_property_method_args)
+    /// (S3, a property navigation's own call). The two flags are armed
+    /// mutually exclusively by `on_open` (see
+    /// [`in_property_method_args`](Self::in_property_method_args)'s doc
+    /// comment), so this is a plain disjunction, not a precedence choice — but
+    /// both of S2's exemptions (the sigil-unbound check here and the
+    /// `AfterDollar` name-narrowing arm in
+    /// [`opening_position`](Self::opening_position)) read exactly the same
+    /// disjunction, and DRYing it into one predicate keeps the two readings
+    /// from drifting apart.
+    fn in_milestoning_date_arg_position(&self) -> bool {
+        self.in_source_method_args || self.in_property_method_args
     }
 
     /// The **post-dot** L2 target a fused nav-dot token (`.<member>` / `.<col>` in
@@ -2707,7 +2810,7 @@ impl ScopeTracker {
 #[cfg(test)]
 mod tests {
     use super::{
-        L2Position, Lexeme, SOURCE_METHOD, ScopeTracker, classify, classify_at,
+        L2Position, Lexeme, NavResult, SOURCE_METHOD, ScopeTracker, classify, classify_at,
         is_logical_operator, is_two_byte_op,
     };
     use crate::grammar::pda::{Pda, State};
@@ -3144,6 +3247,132 @@ mod tests {
             tracker.opening_position(State::ExpectValue),
             L2Position::ReValue(TypeClass::Numeric),
             "a stale SourceMethodArg flag must not mask a real comparison after the call's own close"
+        );
+    }
+
+    #[test]
+    fn a_property_navs_own_open_paren_is_a_property_method_arg_position() {
+        // Issue #385, the sibling of `the_source_methods_own_open_paren_is_a_source_method_arg_position`
+        // one position later: `|B.all()->filter(y|$y.a(` — the position right
+        // after a milestoned property navigation's own call's opening `(`
+        // must be narrowed the same way S1's own is, not fall through to
+        // `L2Position::None` the way an ordinary call's first argument slot
+        // does. `B.a` is a real to-one association property on the sample
+        // schema.
+        let (tracker, pda) = run(&[
+            b"|", b"B", b".", b"all", b"(", b")", b"->", b"filter", b"(", b"y", b"|", b"$", b"y",
+            b".", b"a", b"(",
+        ]);
+        assert_eq!(pda.state(), State::ExpectValue);
+        assert_eq!(tracker.position(pda.state()), L2Position::PropertyMethodArg);
+    }
+
+    #[test]
+    fn a_milestoning_date_argument_is_admitted_off_a_propertys_own_call_and_it_still_closes() {
+        // `|B.all()->filter(y|$y.a(%latest)` — bitemporal milestoning's
+        // single-argument form must reach a clean `AfterValue` close off a
+        // property navigation's own call exactly as it does off `all()`'s
+        // (`a_milestoning_date_argument_is_admitted_and_the_call_still_closes`
+        // above).
+        let (_tracker, pda) = run(&[
+            b"|", b"B", b".", b"all", b"(", b")", b"->", b"filter", b"(", b"y", b"|", b"$", b"y",
+            b".", b"a", b"(", b"%latest", b")",
+        ]);
+        assert_eq!(pda.state(), State::AfterValue);
+    }
+
+    #[test]
+    fn a_milestoning_date_variable_is_admitted_off_a_propertys_own_call_and_it_still_closes() {
+        // Issue #385: `|B.all()->filter(y|$y.a($d)` — binding an as-of date
+        // once and passing it to a milestoned property navigation's own call
+        // is the ordinary way to write a dated query, and L1 admits it
+        // exactly like a `%latest` literal (the test above); the overlay
+        // must reach the same clean `AfterValue` close rather than refuse
+        // the sigil or the variable name that follows it.
+        let (_tracker, pda) = run(&[
+            b"|", b"B", b".", b"all", b"(", b")", b"->", b"filter", b"(", b"y", b"|", b"$", b"y",
+            b".", b"a", b"(", b"$", b"d", b")",
+        ]);
+        assert_eq!(pda.state(), State::AfterValue);
+    }
+
+    #[test]
+    fn the_sigil_right_after_a_property_navs_own_open_paren_is_not_masked_as_unbound() {
+        // Issue #385: `|A.all().bs(` — a property navigation straight off the
+        // class extent (no lambda binder in scope at all — `bound_vars` is
+        // empty here exactly as it is right after a bare `all(`). S2's
+        // sigil-unbound check must be exempt at `PropertyMethodArg` for the
+        // same reason it is at `SourceMethodArg`
+        // (`the_sigil_right_after_the_source_methods_open_paren_is_not_masked_as_unbound`
+        // above): a milestoning date argument's variable ordinarily names a
+        // binder outside the stream.
+        let (tracker, pda) = run(&[b"|", b"A", b".", b"all", b"(", b")", b".", b"bs", b"("]);
+        assert!(tracker.bound_vars.is_empty(), "sanity: nothing bound yet");
+        assert!(!tracker.masks_unbound_sigil(pda.state()));
+    }
+
+    #[test]
+    fn a_property_method_args_refvar_name_is_not_narrowed_to_an_outer_binder() {
+        // Issue #385: `|A.all()->filter(x|B.all().a($` — the outer lambda
+        // binder `x` is already bound when the nested `B.all().a($…)` opens
+        // its milestoned property call's own date argument, so S3's ordinary
+        // `AfterDollar => RefVar` rule would narrow `d` down to the single
+        // legal name `x` and mask it. The exemption must report `None` here
+        // (unconstrained), not `RefVar`, regardless of what the stream has
+        // bound elsewhere — the sibling of
+        // `a_source_method_args_refvar_name_is_not_narrowed_to_an_outer_binder`
+        // above.
+        let (tracker, pda) = run(&[
+            b"|", b"A", b".", b"all", b"(", b")", b"->", b"filter", b"(", b"x", b"|", b"B", b".",
+            b"all", b"(", b")", b".", b"a", b"(", b"$",
+        ]);
+        assert!(
+            !tracker.bound_vars.is_empty(),
+            "sanity: the outer binder x is in scope"
+        );
+        assert_eq!(pda.state(), State::AfterDollar);
+        assert_eq!(tracker.position(pda.state()), L2Position::None);
+    }
+
+    #[test]
+    fn an_arrow_reached_calls_open_paren_is_not_a_property_method_arg_position() {
+        // `|A.all()->filter(` — `filter`'s own call is reached through a `->`,
+        // not a `.`, so it must not be armed as `PropertyMethodArg` even
+        // though the byte-PDA parks both at the same `AfterMemberName`/
+        // `ExpectValue` pair (`in_property_method_args`'s own doc comment):
+        // `filter` never runs through `resolve_member` (only an `AfterDot`
+        // identifier does), so `last_nav` stays `None` and the rule does not
+        // arm.
+        let (tracker, pda) = run(&[b"|", b"A", b".", b"all", b"(", b")", b"->", b"filter", b"("]);
+        assert_eq!(pda.state(), State::ExpectValue);
+        assert_eq!(tracker.position(pda.state()), L2Position::None);
+    }
+
+    #[test]
+    fn property_method_arg_does_not_leak_past_the_calls_own_close() {
+        // The sibling of `source_method_arg_does_not_leak_past_the_calls_own_close`:
+        // drives `on_open`/`on_close` directly to prove `in_property_method_args`
+        // cannot survive its own call's close and wrongly mask an unrelated
+        // value position reached without an intervening `on_open`. `last_nav`
+        // stands in for a just-resolved real schema member
+        // (`in_property_method_args`'s own doc comment) — the fact `on_open`
+        // actually reads, since it is a private method reachable directly
+        // from this in-file test module.
+        let mut tracker = ScopeTracker::new();
+        tracker.last_ident = Some("a".to_owned());
+        tracker.last_nav = Some(NavResult::NonScalar);
+        tracker.on_open(State::AfterDot, b'(');
+        assert_eq!(
+            tracker.opening_position(State::ExpectValue),
+            L2Position::PropertyMethodArg,
+            "sanity: opening a property navigation's own call arms PropertyMethodArg"
+        );
+        tracker.on_close();
+        tracker.cmp_pending = Some(TypeClass::Numeric);
+        assert_eq!(
+            tracker.opening_position(State::ExpectValue),
+            L2Position::ReValue(TypeClass::Numeric),
+            "a stale PropertyMethodArg flag must not mask a real comparison after the call's own close"
         );
     }
 

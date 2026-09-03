@@ -495,6 +495,37 @@ Live-verified: the engine's `grammarToJson/lambda` route compiles
 `|t::A.all($d)->project(~[a: x|$x.alpha])` (issue #367's own reproduction,
 HTTP 200) exactly as it compiles the `%latest` form beside it.
 
+**S3's argument slot (`PropertyMethodArg`), the sibling of S1's one position
+later (issue #385).** A milestoned **property navigation's own call**
+(`$x.facet(...)`, reached through S3's nav-advance rather than S1's source
+dot) legally passes the identical zero, one, or two comma-separated as-of
+dates `all()`'s own call does — `$a.b(%latest, %latest).bx`, confirmed live
+alongside the un-milestoned `$a.b.c.dval` baseline — and takes the same
+inverted-default treatment: no legal identifier/string/number argument at
+all, only its own closer, intervening whitespace, or a milestone/date
+literal. A `$`-prefixed variable reference is admitted here too, and exempted
+from both of S2's narrowings, for exactly S1's own reason: an as-of date
+variable ordinarily names a binder the stream never sees, so `PropertyMethodArg`
+is no more able to validate it than `SourceMethodArg` is. Live-verified: the
+engine's `grammarToJson/lambda` route compiles both
+`|t::A.all()->project([a|$a.b($d1, $d2).bx],['d'])` and the chained
+`|t::A.all()->project([a|$a.b($d1, $d2).c.dval],['d'])` (issue #385's own
+reproduction, HTTP 200) exactly as it compiles the `%latest` forms beside
+them.
+
+Armed only when the just-closed member-navigation identifier resolved to a
+genuine schema member (a class-ref or primitive property, association end, or
+qualified property) — never for a `->`-reached arrow call, a bare `$var`'s own
+name, or a **different** dot-reached call family the byte-PDA parks at the
+identical anchor but that resolves no schema member either: a TDS row
+accessor (`$row.getInteger(...)`, `$row.getDateTime(...)`, …) or a bare
+relation-column reference, both already governed by N6's own `Column` rule.
+Conflating the two masked the getters' own string-literal column-name
+argument — caught by `bpe_split_soundness`'s gold-corpus soundness net, which
+every TDS getter call in the 5034-query corpus exercises — so the rule reads
+the tracker's own resolution outcome (`last_nav`) rather than "reached through
+a `.`" alone.
+
 **Mask-aware completion.** L1 acceptance is a lookahead fact — "would a
 value-boundary byte from here reach a value-terminal state?" — and an identifier
 has no self-terminating byte, so *every* partial name satisfies it: a stream
@@ -541,10 +572,11 @@ precise, not less (issue #275):
   image of the fused nav-dot pass above: that one narrows a token the anchor-read
   rule cannot see *into*, this one narrows the token the rule's position is reached
   *through*. Both this sigil pass and the ordinary bound-name narrowing it backs
-  are suspended inside `SourceMethodArg` (issue #367, above): a milestoning date
-  variable ordinarily names a binder outside the stream entirely, so an empty
+  are suspended inside `SourceMethodArg` (issue #367, above) and its sibling
+  `PropertyMethodArg` (issue #385, above): a milestoning date variable
+  ordinarily names a binder outside the stream entirely, so an empty
   `bound_vars` — or an outer binder that simply is not `d` — is not evidence of a
-  phantom name at this one position.
+  phantom name at either position.
 - **A binder's *type* path is not a bindable name.** S2 walks its names as plain
   identifiers, so a `::`-joined name is a branch no `$<IDENT>` can ever finish: a
   stream on its live prefix has every continuation cleared as a divergence and
