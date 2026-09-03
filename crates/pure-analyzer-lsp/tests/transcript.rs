@@ -756,6 +756,7 @@ fn unknown_requests_receive_a_json_rpc_method_error() {
     let mut server = Server::new();
     let mut output = Vec::new();
     let mut input = Cursor::new(transcript(&[
+        value(r#"{"jsonrpc":"2.0","id":1,"method":"initialize"}"#),
         value(r#"{"jsonrpc":"2.0","id":9,"method":"pureAnalyzer/notReady"}"#),
         value(r#"{"jsonrpc":"2.0","method":"exit"}"#),
     ]));
@@ -767,11 +768,141 @@ fn unknown_requests_receive_a_json_rpc_method_error() {
         ServerExit::Unclean
     );
     assert_eq!(
-        responses(&output),
-        vec![value(
-            r#"{"jsonrpc":"2.0","id":9,"error":{"code":-32601,"message":"method not found"}}"#
-        )]
+        response_for(&responses(&output), 9),
+        &value(r#"{"jsonrpc":"2.0","id":9,"error":{"code":-32601,"message":"method not found"}}"#)
     );
+}
+
+#[test]
+fn request_before_initialize_receives_server_not_initialized_error() {
+    let uri = "untitled:pre-init-request";
+    let mut server = Server::new();
+    let mut output = Vec::new();
+    let mut input = Cursor::new(transcript(&[
+        hover_request(5, uri, 0),
+        value(r#"{"jsonrpc":"2.0","id":1,"method":"initialize"}"#),
+        value(r#"{"jsonrpc":"2.0","id":2,"method":"shutdown"}"#),
+        value(r#"{"jsonrpc":"2.0","method":"exit"}"#),
+    ]));
+
+    assert_eq!(
+        server
+            .serve(&mut input, &mut output)
+            .expect("valid transcript"),
+        ServerExit::Clean
+    );
+    let frames = responses(&output);
+    assert_eq!(
+        response_for(&frames, 5),
+        &value(
+            r#"{"jsonrpc":"2.0","id":5,"error":{"code":-32002,"message":"server not initialized"}}"#
+        )
+    );
+    assert!(response_for(&frames, 1)["result"].is_object());
+}
+
+#[test]
+fn notification_before_initialize_is_dropped_not_processed() {
+    let uri = "untitled:pre-init-notification";
+    let mut server = Server::new();
+    let mut output = Vec::new();
+    let mut input = Cursor::new(transcript(&[
+        did_open(uri, 1, "Class A{}"),
+        value(r#"{"jsonrpc":"2.0","id":1,"method":"initialize"}"#),
+        hover_request(2, uri, 0),
+        value(r#"{"jsonrpc":"2.0","id":3,"method":"shutdown"}"#),
+        value(r#"{"jsonrpc":"2.0","method":"exit"}"#),
+    ]));
+
+    assert_eq!(
+        server
+            .serve(&mut input, &mut output)
+            .expect("valid transcript"),
+        ServerExit::Clean
+    );
+    assert!(server.documents().get(uri).is_none());
+    assert!(published_diagnostics(&output).is_empty());
+    assert_eq!(response_for(&responses(&output), 2)["result"], Value::Null);
+}
+
+#[test]
+fn request_after_shutdown_receives_invalid_request_error() {
+    let uri = "untitled:post-shutdown-request";
+    let mut server = Server::new();
+    let mut output = Vec::new();
+    let mut input = Cursor::new(transcript(&[
+        value(r#"{"jsonrpc":"2.0","id":1,"method":"initialize"}"#),
+        value(r#"{"jsonrpc":"2.0","id":2,"method":"shutdown"}"#),
+        hover_request(3, uri, 0),
+        value(r#"{"jsonrpc":"2.0","method":"exit"}"#),
+    ]));
+
+    assert_eq!(
+        server
+            .serve(&mut input, &mut output)
+            .expect("valid transcript"),
+        ServerExit::Clean
+    );
+    let frames = responses(&output);
+    assert_eq!(response_for(&frames, 2)["result"], Value::Null);
+    assert_eq!(
+        response_for(&frames, 3),
+        &value(
+            r#"{"jsonrpc":"2.0","id":3,"error":{"code":-32600,"message":"request received after shutdown"}}"#
+        )
+    );
+}
+
+#[test]
+fn no_server_initiated_message_precedes_the_initialize_response() {
+    let uri = "untitled:lifecycle-repro";
+    let source = "/* 😀 */ [a,]";
+    let mut server = Server::new();
+    let mut output = Vec::new();
+    let mut input = Cursor::new(transcript(&[
+        did_open(uri, 1, source),
+        hover_request(5, uri, 12),
+        value(r#"{"jsonrpc":"2.0","id":1,"method":"initialize"}"#),
+        value(r#"{"jsonrpc":"2.0","id":99,"method":"shutdown"}"#),
+        hover_request(7, uri, 12),
+        value(r#"{"jsonrpc":"2.0","method":"exit"}"#),
+    ]));
+
+    assert_eq!(
+        server
+            .serve(&mut input, &mut output)
+            .expect("valid transcript"),
+        ServerExit::Clean
+    );
+    let frames = responses(&output);
+    let initialize_index = frames
+        .iter()
+        .position(|frame| frame["id"] == 1)
+        .expect("initialize response frame");
+    assert!(
+        frames[..initialize_index]
+            .iter()
+            .all(|frame| frame.get("method").is_none()),
+        "no server-initiated notification may precede the initialize response: {frames:?}"
+    );
+    assert_eq!(
+        frames[initialize_index]["result"]["serverInfo"]["name"],
+        "pure-analyzer-lsp"
+    );
+    assert_eq!(
+        response_for(&frames, 5),
+        &value(
+            r#"{"jsonrpc":"2.0","id":5,"error":{"code":-32002,"message":"server not initialized"}}"#
+        )
+    );
+    assert_eq!(response_for(&frames, 99)["result"], Value::Null);
+    assert_eq!(
+        response_for(&frames, 7),
+        &value(
+            r#"{"jsonrpc":"2.0","id":7,"error":{"code":-32600,"message":"request received after shutdown"}}"#
+        )
+    );
+    assert!(published_diagnostics(&output).is_empty());
 }
 
 #[test]
@@ -1114,6 +1245,24 @@ fn definition_request(id: i64, uri: &str, line: u32, character: u32) -> Value {
                     object([("uri", Value::String(uri.to_owned()))]),
                 ),
                 ("position", definition_position(line, character)),
+            ]),
+        ),
+    ])
+}
+
+fn hover_request(id: i64, uri: &str, character: u32) -> Value {
+    object([
+        ("jsonrpc", Value::String("2.0".to_owned())),
+        ("id", Value::Number(id.into())),
+        ("method", Value::String("textDocument/hover".to_owned())),
+        (
+            "params",
+            object([
+                (
+                    "textDocument",
+                    object([("uri", Value::String(uri.to_owned()))]),
+                ),
+                ("position", definition_position(0, character)),
             ]),
         ),
     ])

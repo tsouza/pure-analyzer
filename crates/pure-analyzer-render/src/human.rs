@@ -231,9 +231,30 @@ fn append_terminal_character(output: &mut String, character: char) {
         '\t' => output.push_str("\\t"),
         '\n' => output.push_str("\\n"),
         '\r' => output.push_str("\\r"),
-        character if character.is_control() => output.extend(character.escape_unicode()),
+        character if character.is_control() || is_bidi_control(character) => {
+            output.extend(character.escape_unicode());
+        }
         _ => output.push(character),
     }
+}
+
+/// True for the Unicode `Bidi_Control` characters: the twelve code points
+/// (U+061C, U+200E..U+200F, U+202A..U+202E, U+2066..U+2069, per the Unicode
+/// `PropList.txt` `Bidi_Control` property) that can reorder how surrounding
+/// text is *displayed* without changing its byte content — the "Trojan
+/// Source" (CVE-2021-42574) attack class rustc's own
+/// `text_direction_codepoint_in_literal` lint guards against. None of these
+/// are `char::is_control()`, so they need a dedicated check: left raw, they
+/// would let attacker-controlled `.pure` source visually disguise its real
+/// content when rendered to a terminal.
+const fn is_bidi_control(character: char) -> bool {
+    matches!(
+        character,
+        '\u{061c}'
+            | '\u{200e}'..='\u{200f}'
+            | '\u{202a}'..='\u{202e}'
+            | '\u{2066}'..='\u{2069}'
+    )
 }
 
 fn terminal_text_width(text: &str) -> usize {
@@ -243,7 +264,9 @@ fn terminal_text_width(text: &str) -> usize {
 fn terminal_character_width(character: char) -> usize {
     match character {
         '\0' | '\t' | '\n' | '\r' => 2,
-        character if character.is_control() => character.escape_unicode().count(),
+        character if character.is_control() || is_bidi_control(character) => {
+            character.escape_unicode().count()
+        }
         _ => 1,
     }
 }
