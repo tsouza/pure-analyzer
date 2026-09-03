@@ -6,7 +6,10 @@ use pure_analyzer_diagnostics::FileId;
 use pure_analyzer_model::Name;
 use pure_analyzer_syntax::{GreenElement, GreenNode, SyntaxKind};
 
-use crate::{ColumnId, RelationSchema, SourceSpan, lowering::contains_error_node};
+use crate::{
+    ColumnId, RelationSchema, SourceSpan,
+    cst_util::{contains_error_node, element_is_trivia, is_trivia},
+};
 
 /// A column name as it was written in a relation selector.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -444,17 +447,4 @@ fn significant_source(file: FileId, node: &GreenNode) -> SourceSpan {
 
 fn takes_token(element: Option<&&GreenElement>, kind: SyntaxKind) -> bool {
     matches!(element, Some(GreenElement::Token(token)) if token.kind() == kind)
-}
-
-fn element_is_trivia(element: &GreenElement) -> bool {
-    element
-        .as_token()
-        .is_some_and(|token| is_trivia(token.kind()))
-}
-
-fn is_trivia(kind: SyntaxKind) -> bool {
-    matches!(
-        kind,
-        SyntaxKind::WHITESPACE | SyntaxKind::LINE_COMMENT | SyntaxKind::BLOCK_COMMENT
-    )
 }

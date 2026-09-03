@@ -6,6 +6,7 @@
 mod canonical;
 mod column_selectors;
 mod comparison;
+mod cst_util;
 mod format;
 mod lint;
 mod local;
