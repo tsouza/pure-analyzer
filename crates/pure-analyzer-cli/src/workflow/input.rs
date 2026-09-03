@@ -146,18 +146,51 @@ fn expand_argument(argument: &str, cwd: &Path) -> Result<Vec<PathBuf>, Failure> 
     let mut matches = candidates
         .into_iter()
         .filter_map(|path| {
-            let display = display_path(path, cwd);
+            let display = display_path(path.clone(), cwd);
             let text = display.to_str()?;
-            path_matches(&pattern, &normalize_separators(text)).then_some(display)
+            path_matches(&pattern, &normalize_separators(text)).then_some((display, path))
         })
         .collect::<Vec<_>>();
-    matches.sort();
+    matches.sort_by(|left, right| left.0.cmp(&right.0));
     if matches.is_empty() {
         return Err(Failure::usage(format!(
             "input pattern {argument:?} matched no files"
         )));
     }
-    Ok(matches)
+    reject_symlink_escapes(&matches, argument, cwd)?;
+    Ok(matches.into_iter().map(|(display, _)| display).collect())
+}
+
+/// Reject any glob match whose canonicalized (symlink-resolved) path falls
+/// outside `cwd`. `validate_pattern` catches a literal `..` component in the
+/// pattern string, but a symlink can point outside the working directory
+/// without one ever appearing in the pattern, so the candidates themselves
+/// must be re-checked after resolution.
+fn reject_symlink_escapes(
+    matches: &[(PathBuf, PathBuf)],
+    argument: &str,
+    cwd: &Path,
+) -> Result<(), Failure> {
+    let canonical_cwd = cwd.canonicalize().map_err(|error| {
+        Failure::usage(format!(
+            "could not resolve working directory {}: {error}",
+            cwd.display()
+        ))
+    })?;
+    for (_, absolute) in matches {
+        let canonical = absolute.canonicalize().map_err(|error| {
+            Failure::usage(format!(
+                "could not resolve input candidate {}: {error}",
+                absolute.display()
+            ))
+        })?;
+        if !canonical.starts_with(&canonical_cwd) {
+            return Err(Failure::usage(format!(
+                "input pattern {argument:?} must not traverse above the working directory"
+            )));
+        }
+    }
+    Ok(())
 }
 
 fn rooted_pattern(argument: &str, cwd: &Path) -> Result<String, Failure> {

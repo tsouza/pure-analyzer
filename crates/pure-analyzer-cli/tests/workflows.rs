@@ -235,6 +235,46 @@ fn glob_order_and_parallel_output_are_deterministic() {
     assert_eq!(document["files"][1]["name"], "b.pure");
 }
 
+#[cfg(unix)]
+#[test]
+fn glob_pattern_rejects_a_symlink_that_escapes_the_working_directory() {
+    use std::os::unix::fs::symlink;
+
+    let outside = Fixture::new("glob-symlink-outside");
+    outside.write("secret.pure", "\0");
+
+    let fixture = Fixture::new("glob-symlink-inside");
+    symlink(
+        outside.root.join("secret.pure"),
+        fixture.root.join("leak.pure"),
+    )
+    .expect("create escaping symlink fixture");
+
+    let literal = run(
+        &fixture.root,
+        &["validate", "../*.pure", "--format", "json", "--no-config"],
+    );
+    let escaping_glob = run(
+        &fixture.root,
+        &["validate", "*.pure", "--format", "json", "--no-config"],
+    );
+
+    assert_eq!(literal.status.code(), Some(EXIT_USAGE));
+    assert_eq!(escaping_glob.status.code(), Some(EXIT_USAGE));
+    assert!(literal.stdout.is_empty());
+    assert!(escaping_glob.stdout.is_empty());
+    let literal_message = utf8(&literal.stderr);
+    let escaping_message = utf8(&escaping_glob.stderr);
+    assert!(
+        literal_message.contains("must not traverse above the working directory"),
+        "unexpected literal-pattern message: {literal_message}"
+    );
+    assert!(
+        escaping_message.contains("must not traverse above the working directory"),
+        "symlink escape was not rejected: {escaping_message}"
+    );
+}
+
 #[test]
 fn configuration_environment_and_cli_precedence_crosses_the_process_boundary() {
     let fixture = Fixture::new("config-precedence");
@@ -1192,7 +1232,7 @@ fn formatter_recovery_blocks_every_default_write_even_when_the_diagnostic_is_hid
     assert_default_format_write_is_blocked(
         &fixture,
         &["fmt", "valid.pure", "broken.pure", "--no-config"],
-        Some("PUR0102"),
+        "PUR0102",
     );
     assert_default_format_write_is_blocked(
         &fixture,
@@ -1204,8 +1244,12 @@ fn formatter_recovery_blocks_every_default_write_even_when_the_diagnostic_is_hid
             "PUR0102",
             "--no-config",
         ],
-        Some("PUR0102"),
+        "PUR0102",
     );
+    // Regression for issue #273: an `--ignore`d recovery diagnostic still
+    // blocks the write, but with nothing left in the (post-policy) diagnostic
+    // set to explain why, the CLI must say so explicitly rather than exit
+    // non-zero with empty stdout and empty stderr.
     assert_default_format_write_is_blocked(
         &fixture,
         &[
@@ -1216,7 +1260,7 @@ fn formatter_recovery_blocks_every_default_write_even_when_the_diagnostic_is_hid
             "PUR0102",
             "--no-config",
         ],
-        None,
+        "formatting blocked by suppressed recovery diagnostics in `broken.pure`",
     );
     fixture.assert_no_writer_artifacts();
 }
@@ -1224,18 +1268,46 @@ fn formatter_recovery_blocks_every_default_write_even_when_the_diagnostic_is_hid
 fn assert_default_format_write_is_blocked(
     fixture: &Fixture,
     arguments: &[&str],
-    expected_diagnostic: Option<&str>,
+    expected_stderr_text: &str,
 ) {
     let output = run(&fixture.root, arguments);
 
     assert_eq!(output.status.code(), Some(EXIT_ACTIONABLE));
     assert!(output.stdout.is_empty());
-    match expected_diagnostic {
-        Some(diagnostic) => assert!(utf8(&output.stderr).contains(diagnostic)),
-        None => assert!(output.stderr.is_empty()),
-    }
+    assert!(
+        !output.stderr.is_empty(),
+        "fmt exited non-zero with no output at all"
+    );
+    assert!(utf8(&output.stderr).contains(expected_stderr_text));
     assert_eq!(fixture.read("valid.pure"), FORMATTER_VALID_SOURCE);
     assert_eq!(fixture.read("broken.pure"), FORMATTER_BROKEN_SOURCE);
+}
+
+/// Regression for issue #273: the exact `pure-analyzer fmt q.pure --no-config
+/// --ignore PUR1200` reproduction from the report must no longer exit 1 with
+/// zero bytes on both standard streams.
+#[test]
+fn formatter_ignored_recovery_diagnostic_explains_its_blocked_write() {
+    let fixture = Fixture::new("format-ignored-recovery");
+    let source = "[ a , ]\n";
+    fixture.write("q.pure", source);
+
+    let output = run(
+        &fixture.root,
+        &["fmt", "q.pure", "--no-config", "--ignore", "PUR1200"],
+    );
+
+    assert_eq!(output.status.code(), Some(EXIT_ACTIONABLE));
+    assert!(output.stdout.is_empty());
+    assert!(
+        !output.stderr.is_empty(),
+        "fmt exited non-zero with no output at all"
+    );
+    assert!(
+        utf8(&output.stderr)
+            .contains("formatting blocked by suppressed recovery diagnostics in `q.pure`")
+    );
+    assert_eq!(fixture.read("q.pure"), source);
 }
 
 const EQUIVALENT_COMPARISON_QUERY: &str =

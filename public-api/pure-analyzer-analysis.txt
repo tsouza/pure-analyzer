@@ -2178,6 +2178,8 @@ pub fn pure_analyzer_analysis::RelationExpression::eq(&self, &pure_analyzer_anal
 impl core::fmt::Debug for pure_analyzer_analysis::RelationExpression
 pub fn pure_analyzer_analysis::RelationExpression::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for pure_analyzer_analysis::RelationExpression
+impl core::ops::drop::Drop for pure_analyzer_analysis::RelationExpression
+pub fn pure_analyzer_analysis::RelationExpression::drop(&mut self)
 impl core::marker::Freeze for pure_analyzer_analysis::RelationExpression
 impl core::marker::Send for pure_analyzer_analysis::RelationExpression
 impl core::marker::Sync for pure_analyzer_analysis::RelationExpression

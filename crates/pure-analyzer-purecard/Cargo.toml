@@ -12,6 +12,11 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 rust-version.workspace = true
+# The workspace repository root is the whole two-product monorepo (constitution
+# ADR-0004); this points a visitor arriving from crates.io/PyPI straight at
+# PureCARD's own tree instead, since `repository.workspace` alone would land
+# them at the top level with no obvious way to find this crate.
+homepage = "https://github.com/tsouza/pure-analyzer/tree/main/crates/pure-analyzer-purecard"
 # The one publishable crate in a workspace that is otherwise uniformly
 # `publish = false`; stated explicitly rather than omitted so the exception is
 # visible at the same line every sibling manifest states the rule, and so

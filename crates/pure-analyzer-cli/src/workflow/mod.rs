@@ -263,6 +263,17 @@ pub(crate) fn format(
         )?;
     }
     let formatted = finish_format(&output, mode, !output.has_recovery_diagnostics())?;
+    if formatted.blocked_in_place_change
+        && output.has_recovery_diagnostics()
+        && output.diagnostics().is_empty()
+    {
+        // The write guard fires on the pre-policy recovery signal (see
+        // `FormatOutput::has_recovery_diagnostics`), which a diagnostic policy
+        // cannot clear by design. When that policy also filtered every
+        // diagnostic that would have explained the block, surface it directly
+        // so the command never exits non-zero with no output at all.
+        write_stderr(&blocked_write_message(&formatted.blocked_files))?;
+    }
     if has_errors
         || (formatted.changed && mode.previews_changes())
         || formatted.blocked_in_place_change
@@ -271,6 +282,13 @@ pub(crate) fn format(
     } else {
         Ok(EXIT_SUCCESS)
     }
+}
+
+fn blocked_write_message(blocked_files: &[String]) -> String {
+    blocked_files
+        .iter()
+        .map(|file| format!("formatting blocked by suppressed recovery diagnostics in `{file}`\n"))
+        .collect()
 }
 
 /// Write exact command output without mixing it with tracing or errors.
@@ -684,10 +702,11 @@ fn fix_preview_exit(output: &AnalysisOutput, mode: FixMode, changed: bool) -> u8
     }
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 struct FinishedFormat {
     changed: bool,
     blocked_in_place_change: bool,
+    blocked_files: Vec<String>,
 }
 
 fn finish_format(
@@ -732,6 +751,7 @@ fn finish_format(
             });
         } else if mode.requests_in_place_write() {
             finished.blocked_in_place_change = true;
+            finished.blocked_files.push(source.name().to_owned());
         }
     }
     if !rendered.is_empty() {
