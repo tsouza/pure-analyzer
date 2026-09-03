@@ -400,9 +400,7 @@ impl Normalizer {
             ScalarOperator::Navigation { input, .. } | ScalarOperator::Not { input } => {
                 self.scalar(input)?;
             }
-            ScalarOperator::Equal { left, right }
-            | ScalarOperator::And { left, right }
-            | ScalarOperator::Or { left, right } => {
+            ScalarOperator::Equal { left, right } => {
                 self.scalar(left)?;
                 self.scalar(right)?;
             }
@@ -435,6 +433,13 @@ fn is_identity_project(
             .zip(schema.columns())
             .all(|(projection, column)| is_identity_read(projection, column))
 }
+
+// `totality().is_unknown()` is always true below today: no lowering call
+// site proves a `Totality` fact yet (see its rustdoc). The check stays as
+// forward-looking scaffolding rather than dead weight to delete — once a
+// sound (non-multiplicity-alone) producer lands, a `Knowledge::Proven` fact
+// here would carry evidence this rewrite must not silently discard by
+// treating the node as a bare read/literal.
 
 fn is_identity_read(projection: &Projection, column: &Column) -> bool {
     let expression = projection.expression();
@@ -673,16 +678,9 @@ impl KeyEncoder {
     }
 
     fn source(&mut self, source: &RelationSource) {
-        match source {
-            RelationSource::Class(class) => {
-                write_fragment(&mut self.output, "class");
-                self.class(class);
-            }
-            RelationSource::Member(member) => {
-                write_fragment(&mut self.output, "member");
-                self.member(member);
-            }
-        }
+        let RelationSource::Class(class) = source;
+        write_fragment(&mut self.output, "class");
+        self.class(class);
     }
 
     fn sort_key(&mut self, key: &SortKey, scope: &ColumnScope) {
@@ -725,16 +723,6 @@ impl KeyEncoder {
                 self.scalar(left, scope);
                 self.scalar(right, scope);
             }
-            ScalarOperator::And { left, right } => {
-                write_fragment(&mut self.output, "and");
-                self.scalar(left, scope);
-                self.scalar(right, scope);
-            }
-            ScalarOperator::Or { left, right } => {
-                write_fragment(&mut self.output, "or");
-                self.scalar(left, scope);
-                self.scalar(right, scope);
-            }
             ScalarOperator::Not { input } => {
                 write_fragment(&mut self.output, "not");
                 self.scalar(input, scope);
@@ -764,6 +752,9 @@ impl KeyEncoder {
         write_fragment(&mut self.output, "totality");
         match knowledge {
             Knowledge::Unknown => write_fragment(&mut self.output, "unknown"),
+            // Unreached by any lowered input today — see `Totality`'s
+            // rustdoc — but kept so the structural key stays correct the
+            // moment a sound producer lands.
             Knowledge::Proven { value, origin } => {
                 write_fragment(&mut self.output, "proven");
                 write_fragment(
@@ -967,7 +958,6 @@ fn model_origin_key(origin: &ModelOrigin) -> String {
         match origin.kind() {
             ModelOriginKind::Class => "class",
             ModelOriginKind::Member => "member",
-            ModelOriginKind::Unspecified => "unspecified",
         },
     );
     write_fragment(
