@@ -4,6 +4,51 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/) and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.0](https://github.com/tsouza/pure-analyzer/compare/purecard-v0.2.2...purecard-v0.3.0) - 2026-09-03
+
+<!--
+Not release-plz-generated: the version bump landed inside #364's own PR
+(needed to satisfy `cargo semver-checks` against the already-published 0.2.2
+baseline before merge — see that PR for why), so release-plz's automated
+`release-pr` step found nothing left to bump and went straight to tagging and
+publishing the already-committed 0.3.0 without ever writing this entry.
+Backfilled by hand instead, following the same pattern as the 0.2.1/0.2.2
+entries above.
+-->
+
+Four fixes for gaps a downstream NL-to-Pure consumer's grammar/schema
+coverage sweep surfaced, all live-verified against the pinned
+`finos/legend-engine-server:4.113.0` engine.
+
+### Added
+
+- *(purecard)* admit scalar/date initializers in `let` bindings, not only
+  pipelines (issue [#352](https://github.com/tsouza/pure-analyzer/issues/352),
+  [#360](https://github.com/tsouza/pure-analyzer/pull/360))
+
+### Fixed
+
+- *(purecard)* re-anchor L2 trie narrowing past a fused leading-whitespace run
+  — a byte-BPE vocabulary that spells a phantom member with a leading space
+  (`$x. zzz`) previously bypassed L2 narrowing entirely (issue
+  [#353](https://github.com/tsouza/pure-analyzer/issues/353),
+  [#362](https://github.com/tsouza/pure-analyzer/pull/362))
+- *(purecard)* narrow member access after a class-typed lambda binder whose
+  annotation resolves in the schema, rather than admitting every name (issue
+  [#354](https://github.com/tsouza/pure-analyzer/issues/354),
+  [#363](https://github.com/tsouza/pure-analyzer/pull/363))
+- *(purecard)* **[breaking]** narrow arm-R `~`-column positions
+  (`over(...)`, `rename(...)`, `sort(...)`, `groupBy(...)`) to exclude a
+  lambda column L1 previously over-admitted there — `Frame` is now
+  `#[non_exhaustive]` (mirroring `State`), which is itself the breaking
+  change forcing this minor version bump: adding `Frame::RelColBracket`
+  without it would have been a breaking `enum_variant_added`, and marking a
+  previously-exhaustive public enum `#[non_exhaustive]` for the first time
+  is a breaking change in its own right, caught by `cargo semver-checks`
+  against the live crates.io baseline (issue
+  [#361](https://github.com/tsouza/pure-analyzer/issues/361),
+  [#364](https://github.com/tsouza/pure-analyzer/pull/364))
+
 ## [0.2.2](https://github.com/tsouza/pure-analyzer/compare/purecard-v0.2.1...purecard-v0.2.2) - 2026-09-02
 
 No functional changes to `purecard` itself. `pyproject.toml`'s `dynamic`
