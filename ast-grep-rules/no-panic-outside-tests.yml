@@ -8,6 +8,14 @@
 # `unreachable!` to slip a by-construction-impossible branch past that gate.
 # Tests are exempt (a panic there is a legitimate assertion failure), matching
 # the `no-unwrap-outside-tests` exemption shape.
+#
+# Deliberately not extended to `fuzz/**` (unlike the sibling
+# `no-unwrap-outside-tests` and `no-postponed-markers` rules, issue #298): a
+# `panic!` is libFuzzer's crash-reporting mechanism, not a control-flow bug —
+# `fuzz_target!` catches it and reports the input as a finding, the same
+# reason `**/benches/**` is already ignored above. Fuzz harnesses still lose
+# `.unwrap()`/`.expect()` (no-unwrap-outside-tests), which forces a
+# descriptive `panic!("...: {error}")` in its place.
 id: no-panic-outside-tests
 message: "Do not use panic!/dbg! outside tests — return a Result or restructure so the branch cannot occur."
 severity: error

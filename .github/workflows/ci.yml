@@ -103,9 +103,16 @@ jobs:
           python-version: "3.12"
       - uses: taiki-e/install-action@fcf5432d9f50d67e37ee6e29bdb7a224ff67b4a7 # v2.86.8
         with:
-          tool: cargo-nextest
+          tool: cargo-nextest,just
       - name: cargo xtask ci
         run: cargo xtask ci
+      # `fuzz/` declares its own `[workspace]` (cargo-fuzz needs its own
+      # lockfile/libfuzzer-sys pin), so `cargo xtask ci`'s workspace-wide
+      # clippy above never sees it (issue #298). Stable clippy compiles it
+      # fine — only the nightly-only sanitizer build in the `fuzz-smoke` job
+      # below needs nightly.
+      - name: clippy the excluded fuzz crate
+        run: just lint-fuzz
 
   # --- Coverage floor (cargo-llvm-cov) -------------------------------------
   coverage:
