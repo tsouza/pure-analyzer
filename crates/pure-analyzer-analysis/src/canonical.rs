@@ -11,12 +11,10 @@ use pure_analyzer_diagnostics::ReasonCode;
 use crate::relational::MAX_RELATIONAL_RECURSION_DEPTH;
 use crate::{
     ColumnId, IrOrigin, Knowledge, NormalizationBudget, NormalizationOutcome, NormalizedQuery,
-    RelationExpression, RelationFacts, RelationOperator, RelationSchema, RelationSource,
-    RelationalOutcome, RowSemantics, ScalarExpression, ScalarLiteral, ScalarOperator,
-    SortDirection, normalize_relational_query_with_budget,
+    ProjectionKind, RelationExpression, RelationFacts, RelationOperator, RelationSchema,
+    RelationSource, RelationalOutcome, RowSemantics, ScalarExpression, ScalarLiteral,
+    ScalarOperator, SortDirection, normalize_relational_query_with_budget,
 };
-
-const MAP_OUTPUT_NAME: &str = "value";
 
 /// Deterministic Pure text emitted from a supported relational normal form.
 ///
@@ -225,9 +223,11 @@ impl Emitter {
             RelationOperator::Filter { input, predicate } => {
                 self.filter(expression, input, predicate)
             }
-            RelationOperator::Project { input, projections } => {
-                self.project(expression, input, projections)
-            }
+            RelationOperator::Project {
+                input,
+                projections,
+                kind,
+            } => self.project(expression, input, projections, *kind),
             RelationOperator::Join {
                 kind,
                 left,
@@ -289,6 +289,7 @@ impl Emitter {
         expression: &RelationExpression,
         input_expression: &RelationExpression,
         projections: &[crate::Projection],
+        kind: ProjectionKind,
     ) -> EmissionResult<EmittedRelation> {
         let input = self.relation(input_expression)?;
         if !facts_are_unknown(expression.facts()) || !project_shape_matches(expression, projections)
@@ -296,8 +297,16 @@ impl Emitter {
             return Err(EmissionFailure::unsupported(expression.origin()));
         }
 
-        let use_map = is_map_shape(expression, projections);
-        if use_map && input.binding != BindingKind::None {
+        // `kind` — not a schema/name heuristic — is the sole authority on
+        // which construct to emit: a `Scalar`-kind node came from `->map`/
+        // `.property` and must never be re-emitted as `->project(~[...])`
+        // (a `Relation<>`), and vice versa. Either arm fails closed
+        // (Indecisive) rather than falling through to the other's emission
+        // when its own preconditions are not met.
+        if kind == ProjectionKind::Scalar {
+            if !is_map_shape(projections) || input.binding == BindingKind::None {
+                return Err(EmissionFailure::unsupported(expression.origin()));
+            }
             let binder = self.binder(expression.origin())?;
             let references =
                 references_for_binding(input.binding, input_expression.schema(), &binder)
@@ -553,13 +562,12 @@ fn project_shape_matches(
             .all(|(projection, column)| projection.column() == column.id())
 }
 
-fn is_map_shape(expression: &RelationExpression, projections: &[crate::Projection]) -> bool {
+/// Structural precondition for `->map(f)` emission: exactly one output
+/// column. The map-vs-project *construct* itself is decided by the caller
+/// from the IR's own [`ProjectionKind`], never from this shape or a column
+/// name — a user-chosen alias carries no semantic weight (issue #264).
+fn is_map_shape(projections: &[crate::Projection]) -> bool {
     projections.len() == 1
-        && expression
-            .schema()
-            .columns()
-            .first()
-            .is_some_and(|column| column.name().as_str() == MAP_OUTPUT_NAME)
 }
 
 fn join_schema_matches(

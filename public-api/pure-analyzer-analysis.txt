@@ -551,6 +551,47 @@ impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::OutputSchemaField
 pub unsafe fn pure_analyzer_analysis::OutputSchemaField::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for pure_analyzer_analysis::OutputSchemaField
 pub fn pure_analyzer_analysis::OutputSchemaField::from(T) -> T
+pub enum pure_analyzer_analysis::ProjectionKind
+pub pure_analyzer_analysis::ProjectionKind::Relation
+pub pure_analyzer_analysis::ProjectionKind::Scalar
+impl core::clone::Clone for pure_analyzer_analysis::ProjectionKind
+pub fn pure_analyzer_analysis::ProjectionKind::clone(&self) -> pure_analyzer_analysis::ProjectionKind
+impl core::cmp::Eq for pure_analyzer_analysis::ProjectionKind
+impl core::cmp::PartialEq for pure_analyzer_analysis::ProjectionKind
+pub fn pure_analyzer_analysis::ProjectionKind::eq(&self, &pure_analyzer_analysis::ProjectionKind) -> bool
+impl core::fmt::Debug for pure_analyzer_analysis::ProjectionKind
+pub fn pure_analyzer_analysis::ProjectionKind::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for pure_analyzer_analysis::ProjectionKind
+impl core::marker::StructuralPartialEq for pure_analyzer_analysis::ProjectionKind
+impl core::marker::Freeze for pure_analyzer_analysis::ProjectionKind
+impl core::marker::Send for pure_analyzer_analysis::ProjectionKind
+impl core::marker::Sync for pure_analyzer_analysis::ProjectionKind
+impl core::marker::Unpin for pure_analyzer_analysis::ProjectionKind
+impl core::marker::UnsafeUnpin for pure_analyzer_analysis::ProjectionKind
+impl core::panic::unwind_safe::RefUnwindSafe for pure_analyzer_analysis::ProjectionKind
+impl core::panic::unwind_safe::UnwindSafe for pure_analyzer_analysis::ProjectionKind
+impl<T, U> core::convert::Into<U> for pure_analyzer_analysis::ProjectionKind where U: core::convert::From<T>
+pub fn pure_analyzer_analysis::ProjectionKind::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for pure_analyzer_analysis::ProjectionKind where U: core::convert::Into<T>
+pub type pure_analyzer_analysis::ProjectionKind::Error = never
+pub fn pure_analyzer_analysis::ProjectionKind::try_from(U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for pure_analyzer_analysis::ProjectionKind where U: core::convert::TryFrom<T>
+pub type pure_analyzer_analysis::ProjectionKind::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn pure_analyzer_analysis::ProjectionKind::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for pure_analyzer_analysis::ProjectionKind where T: core::clone::Clone
+pub type pure_analyzer_analysis::ProjectionKind::Owned = T
+pub fn pure_analyzer_analysis::ProjectionKind::clone_into(&self, &mut T)
+pub fn pure_analyzer_analysis::ProjectionKind::to_owned(&self) -> T
+impl<T> core::any::Any for pure_analyzer_analysis::ProjectionKind where T: 'static + ?core::marker::Sized
+pub fn pure_analyzer_analysis::ProjectionKind::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for pure_analyzer_analysis::ProjectionKind where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::ProjectionKind::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for pure_analyzer_analysis::ProjectionKind where T: ?core::marker::Sized
+pub fn pure_analyzer_analysis::ProjectionKind::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for pure_analyzer_analysis::ProjectionKind where T: core::clone::Clone
+pub unsafe fn pure_analyzer_analysis::ProjectionKind::clone_to_uninit(&self, *mut u8)
+impl<T> core::convert::From<T> for pure_analyzer_analysis::ProjectionKind
+pub fn pure_analyzer_analysis::ProjectionKind::from(T) -> T
 pub enum pure_analyzer_analysis::RelationExpressionError
 pub pure_analyzer_analysis::RelationExpressionError::ColumnMetadataMismatch(pure_analyzer_analysis::ColumnId)
 pub pure_analyzer_analysis::RelationExpressionError::ComparisonTypeMismatch
@@ -630,6 +671,7 @@ pub pure_analyzer_analysis::RelationOperator::Join::left: alloc::boxed::Box<pure
 pub pure_analyzer_analysis::RelationOperator::Join::right: alloc::boxed::Box<pure_analyzer_analysis::RelationExpression>
 pub pure_analyzer_analysis::RelationOperator::Project
 pub pure_analyzer_analysis::RelationOperator::Project::input: alloc::boxed::Box<pure_analyzer_analysis::RelationExpression>
+pub pure_analyzer_analysis::RelationOperator::Project::kind: pure_analyzer_analysis::ProjectionKind
 pub pure_analyzer_analysis::RelationOperator::Project::projections: alloc::vec::Vec<pure_analyzer_analysis::Projection>
 pub pure_analyzer_analysis::RelationOperator::Scan(pure_analyzer_analysis::RelationSource)
 pub pure_analyzer_analysis::RelationOperator::Sort

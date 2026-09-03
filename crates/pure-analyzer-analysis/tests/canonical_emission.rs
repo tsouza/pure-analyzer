@@ -3,9 +3,9 @@
 
 use pure_analyzer_analysis::{
     AnalysisInput, CandidateKey, CanonicalEmissionOutcome, Column, ColumnId, Knowledge,
-    NormalizationBudget, NormalizationOutcome, Nullability, Projection, RelationExpression,
-    RelationFacts, RelationOperator, RelationSchema, RelationalOutcome, RelationalQuery,
-    ScalarExpression, ScalarLiteral, ScalarOperator, emit_canonical_lowered_query,
+    NormalizationBudget, NormalizationOutcome, Nullability, Projection, ProjectionKind,
+    RelationExpression, RelationFacts, RelationOperator, RelationSchema, RelationalOutcome,
+    RelationalQuery, ScalarExpression, ScalarLiteral, ScalarOperator, emit_canonical_lowered_query,
     emit_canonical_lowered_query_with_budget, emit_canonical_normal_form,
     emit_canonical_normalization, lower_m3_query, normalize_relational_query,
     normalize_relational_query_with_budget,
@@ -158,6 +158,89 @@ fn emits_quoted_terminal_aliases_without_claiming_a_lossless_layout() {
     assert_eq!(original.equivalence_key(), replayed.equivalence_key());
 }
 
+/// Regression fixture for
+/// https://github.com/tsouza/pure-analyzer/issues/264: emission must decide
+/// `->map` vs `->project(~[...])` from the IR's own `ProjectionKind`, never
+/// from the output column's name. This does not assert on
+/// `equivalence_key()` — that comparison is exactly the artifact the
+/// companion issue (#263) fixes to stop conflating the two constructs, so
+/// asserting on it here would be circular. It instead pins the emitted text
+/// directly and confirms the re-lowered replay keeps the same
+/// `ProjectionKind`.
+#[test]
+fn canonical_emission_never_turns_a_map_into_a_project_by_column_name() {
+    let model = model();
+    // `p.name` is projected under the literal alias `value`, the same name
+    // lowering assigns a `->map` result — a naive name-based heuristic would
+    // misread this as a map.
+    let source = "model::Person.all()->project(~[value: p | $p.name])";
+    let original = normal_form(source, &model);
+
+    let text = emitted_text(emit_canonical_normal_form(&original));
+
+    assert_eq!(
+        text,
+        "model::Person.all()->project(~[value: v0 | $v0.name])"
+    );
+    assert!(
+        matches!(
+            original.root().operator(),
+            RelationOperator::Project {
+                kind: ProjectionKind::Relation,
+                ..
+            }
+        ),
+        "the source normal form must keep its explicit Relation kind"
+    );
+    let replayed = normal_form(&text, &model);
+    assert!(
+        matches!(
+            replayed.root().operator(),
+            RelationOperator::Project {
+                kind: ProjectionKind::Relation,
+                ..
+            }
+        ),
+        "re-lowering the emitted text must not flip the construct to Scalar"
+    );
+}
+
+/// Companion to the fixture above: a `->map` result must stay a `->map`
+/// even though its single output column happens to be named `value`
+/// internally, matching the name a hand-written `project(~[value: ...])`
+/// would use.
+#[test]
+fn canonical_emission_never_turns_a_property_map_into_a_project() {
+    let model = model();
+    let source = "model::Person.all()->map(p| $p.name)";
+    let original = normal_form(source, &model);
+
+    let text = emitted_text(emit_canonical_normal_form(&original));
+
+    assert_eq!(text, "model::Person.all()->map(v0| $v0.name)");
+    assert!(
+        matches!(
+            original.root().operator(),
+            RelationOperator::Project {
+                kind: ProjectionKind::Scalar,
+                ..
+            }
+        ),
+        "the source normal form must keep its Scalar kind"
+    );
+    let replayed = normal_form(&text, &model);
+    assert!(
+        matches!(
+            replayed.root().operator(),
+            RelationOperator::Project {
+                kind: ProjectionKind::Scalar,
+                ..
+            }
+        ),
+        "re-lowering the emitted text must not flip the construct to Relation"
+    );
+}
+
 #[test]
 fn normalization_failure_is_preserved_without_partial_text() {
     let model = model();
@@ -276,6 +359,7 @@ fn a_scalar_form_without_supported_pure_syntax_is_refused() {
         RelationOperator::Project {
             input: Box::new(input.clone()),
             projections: vec![Projection::new(output.id(), scalar)],
+            kind: ProjectionKind::Scalar,
         },
         RelationSchema::new(vec![output]).expect("fixture schema must be valid"),
         RelationFacts::unknown(),

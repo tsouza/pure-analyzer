@@ -1,14 +1,18 @@
 //! End-to-end contracts for fail-closed structural relational comparison.
 
 use pure_analyzer_analysis::{
-    Column, ColumnId, ComparisonOutcome, IrOrigin, Knowledge, NormalizationBudget, Nullability,
-    OpaqueOutcome, RelationExpression, RelationFacts, RelationOperator, RelationSchema,
-    RelationSource, RelationalOutcome, RelationalQuery, ScalarExpression, ScalarLiteral,
-    ScalarOperator, SourceSpan, StructuralDifferenceKind, Totality, compare_lowered_queries,
-    compare_relational_queries, compare_relational_queries_with_budget,
+    AnalysisInput, Column, ColumnId, ComparisonOutcome, IrOrigin, Knowledge, NormalizationBudget,
+    Nullability, OpaqueOutcome, RelationExpression, RelationFacts, RelationOperator,
+    RelationSchema, RelationSource, RelationalOutcome, RelationalQuery, ScalarExpression,
+    ScalarLiteral, ScalarOperator, SourceSpan, StructuralDifferenceKind, Totality,
+    compare_lowered_queries, compare_relational_queries, compare_relational_queries_with_budget,
+    lower_m3_query,
 };
 use pure_analyzer_diagnostics::{FileId, ReasonCode, TextRange, TextSize};
-use pure_analyzer_model::{Multiplicity, PmcdDocument, QName, TypeRef, load_pmcd_documents};
+use pure_analyzer_model::{
+    ModelGraph, Multiplicity, PmcdDocument, QName, TypeRef, load_pmcd_documents,
+};
+use pure_analyzer_parser::parse_query;
 use pure_analyzer_resolve::{Resolution, ResolvedClass, Resolver};
 
 const FIRST_FILE: u32 = 71;
@@ -461,5 +465,112 @@ fn opaque_lowering_outcomes_remain_indecisive_before_normalization() {
     assert_eq!(
         indecision.origin().source().file(),
         FileId::new(FIRST_FILE + 1)
+    );
+}
+
+const SOURCE_LOWERING_TEST_FILE: u32 = 91;
+
+fn person_model_with_name() -> ModelGraph {
+    let source = r#"{
+        "_type": "data",
+        "elements": [
+            {
+                "_type": "class",
+                "package": "model",
+                "name": "Person",
+                "stereotypes": [],
+                "superTypes": [],
+                "properties": [
+                    {
+                        "name": "name",
+                        "genericType": {"rawType": "String", "typeArguments": []},
+                        "multiplicity": {"lowerBound": 1, "upperBound": 1}
+                    }
+                ],
+                "qualifiedProperties": []
+            }
+        ]
+    }"#;
+    load_pmcd_documents(&[PmcdDocument::new("comparison-source-fixture", source)])
+        .expect("fixture model must load")
+}
+
+fn lower_source(source: &str, model: &ModelGraph, file: u32) -> RelationalQuery {
+    let parsed =
+        parse_query(source, FileId::new(file)).expect("regression fixture source must parse");
+    let outcome = lower_m3_query(AnalysisInput::new(
+        FileId::new(file),
+        source,
+        &parsed.green,
+        &parsed.diagnostics,
+        Some(model),
+    ));
+    let RelationalOutcome::Supported(query) = outcome else {
+        panic!("regression fixture must lower through the supported core: {outcome:#?}");
+    };
+    *query
+}
+
+/// Regression fixture for
+/// https://github.com/tsouza/pure-analyzer/issues/263: `->map(f)` and
+/// `->project(~[value: f])` lower to structurally identical schemas (both
+/// produce one column literally named `value`, the internal name lowering
+/// assigns a `->map` result), but the former is Legend's `String[*]` and the
+/// latter is a `Relation<(value:String)>` — genuinely different result
+/// types. The comparator must never call these `Equivalent`.
+#[test]
+fn map_and_a_project_named_value_are_never_equivalent() {
+    let model = person_model_with_name();
+    let map_query = lower_source(
+        "model::Person.all()->map(p| $p.name)",
+        &model,
+        SOURCE_LOWERING_TEST_FILE,
+    );
+    let project_query = lower_source(
+        "model::Person.all()->project(~[value: p | $p.name])",
+        &model,
+        SOURCE_LOWERING_TEST_FILE + 1,
+    );
+
+    let forward = compare_relational_queries(&map_query, &project_query);
+    let reverse = compare_relational_queries(&project_query, &map_query);
+    assert_eq!(
+        forward, reverse,
+        "the map/project construct refutation must not depend on argument order"
+    );
+    assert_ne!(
+        forward,
+        ComparisonOutcome::Equivalent,
+        "a scalar collection and a relation must never compare as equivalent, got {forward:#?}"
+    );
+}
+
+/// Companion regression fixture: `.property` navigation is exactly as
+/// scalar-shaped as `->map`, and must not compare equivalent to an explicit
+/// `->project(~[...])` that merely happens to share its output column name.
+#[test]
+fn property_navigation_and_a_project_sharing_its_column_name_are_never_equivalent() {
+    let model = person_model_with_name();
+    let navigation_query = lower_source(
+        "model::Person.all().name",
+        &model,
+        SOURCE_LOWERING_TEST_FILE + 2,
+    );
+    let project_query = lower_source(
+        "model::Person.all()->project(~[name: p | $p.name])",
+        &model,
+        SOURCE_LOWERING_TEST_FILE + 3,
+    );
+
+    let forward = compare_relational_queries(&navigation_query, &project_query);
+    let reverse = compare_relational_queries(&project_query, &navigation_query);
+    assert_eq!(
+        forward, reverse,
+        "the navigation/project construct refutation must not depend on argument order"
+    );
+    assert_ne!(
+        forward,
+        ComparisonOutcome::Equivalent,
+        "a scalar collection and a relation must never compare as equivalent, got {forward:#?}"
     );
 }
