@@ -3,9 +3,18 @@
 
 const inCI = Boolean(process.env.GITHUB_ACTIONS);
 
+/**
+ * Print an error annotation without exiting. For a run that must collect
+ * several failures across a full scan and report them together — e.g. every
+ * unclassifiable issue in a labeler backfill — before dying once at the end.
+ */
+export function error(message) {
+  console.error(inCI ? `::error::${message}` : `✖ ${message}`);
+}
+
 /** Print an error and exit non-zero (default code 1). */
 export function die(message, { code = 1 } = {}) {
-  console.error(inCI ? `::error::${message}` : `✖ ${message}`);
+  error(message);
   process.exit(code);
 }
 
