@@ -3,7 +3,7 @@
 use pure_analyzer_diagnostics::{DiagCode, Diagnostic, Label, Severity};
 use pure_analyzer_syntax::{GreenElement, GreenNode, SyntaxKind};
 
-use crate::{AnalysisInput, AnalysisPass};
+use crate::{AnalysisInput, AnalysisPass, cst_util::is_trivia};
 
 /// Validates parser recovery findings and the intentionally permissive CST
 /// shapes that Legend rejects without consulting a model.
@@ -163,13 +163,6 @@ impl GuardWalker<'_> {
                 .build(),
         );
     }
-}
-
-const fn is_trivia(kind: SyntaxKind) -> bool {
-    matches!(
-        kind,
-        SyntaxKind::WHITESPACE | SyntaxKind::LINE_COMMENT | SyntaxKind::BLOCK_COMMENT
-    )
 }
 
 /// Reports whether `kind` is one of the three date-literal token kinds Pure's

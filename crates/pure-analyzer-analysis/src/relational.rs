@@ -14,10 +14,17 @@ use pure_analyzer_resolve::{
     ResolvedMember, ResolvedMemberKind,
 };
 
-const BOOLEAN_TYPE: &str = "Boolean";
-const EXACTLY_ONE: u32 = 1;
-const INTEGER_TYPE: &str = "Integer";
-const STRING_TYPE: &str = "String";
+/// Primitive M3 type names and the `1..1` multiplicity bound this crate
+/// checks scalar and navigation facts against.
+///
+/// These previously existed as independently declared copies in `lowering`
+/// (which also spelled the multiplicity bound `ONE` rather than
+/// `EXACTLY_ONE`, though it was the same value). Consolidated here since
+/// every consumer already depends on this module.
+pub(crate) const BOOLEAN_TYPE: &str = "Boolean";
+pub(crate) const EXACTLY_ONE: u32 = 1;
+pub(crate) const INTEGER_TYPE: &str = "Integer";
+pub(crate) const STRING_TYPE: &str = "String";
 
 /// The single output column name lowering assigns a `->map(f)` result.
 ///
