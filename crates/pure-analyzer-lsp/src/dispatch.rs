@@ -13,6 +13,7 @@ use crate::{
 const INVALID_REQUEST_CODE: i64 = -32_600;
 const METHOD_NOT_FOUND_CODE: i64 = -32_601;
 const INVALID_PARAMS_CODE: i64 = -32_602;
+const SERVER_NOT_INITIALIZED_CODE: i64 = -32_002;
 
 pub(crate) fn handle<W: Write>(
     server: &mut Server,
@@ -27,6 +28,9 @@ pub(crate) fn handle<W: Write>(
     let method = object.get("method").and_then(Value::as_str);
     let id = object.get("id").cloned();
     let params = object.get("params");
+    if !lifecycle_permits(server, method, id.as_ref(), writer)? {
+        return Ok(None);
+    }
     match method {
         Some("initialize") => initialize(server, id, writer),
         Some("shutdown") => shutdown(server, id, writer),
@@ -68,6 +72,56 @@ pub(crate) fn handle<W: Write>(
             Ok(None)
         }
         None => Ok(None),
+    }
+}
+
+/// Gates dispatch on the server's `Lifecycle`, per the LSP spec's bootstrap
+/// and teardown windows: every method except `initialize`/`exit` is refused
+/// before `initialize` and after `shutdown`.
+///
+/// Before `initialize`: a request (an `id` is present) gets `-32002
+/// ServerNotInitialized`; a notification is dropped without a response, since
+/// the spec forbids erroring a notification. Dropping here — before any
+/// handler runs — is also what stops a pre-initialize `didOpen` from
+/// publishing diagnostics ahead of the `initialize` response.
+///
+/// After `shutdown` (state `ShuttingDown`, until `exit`): a request other
+/// than `shutdown` itself (left to its own once-only check) gets `-32600
+/// InvalidRequest`; notifications still pass through, unaffected by this gate.
+///
+/// Returns `true` when `method` may proceed to its normal handler.
+fn lifecycle_permits<W: Write>(
+    server: &Server,
+    method: Option<&str>,
+    id: Option<&Value>,
+    writer: &mut W,
+) -> io::Result<bool> {
+    match (server.lifecycle, method) {
+        (_, Some("initialize" | "exit")) => Ok(true),
+        (Lifecycle::New, _) => {
+            if let Some(id) = id {
+                send_error(
+                    writer,
+                    id.clone(),
+                    SERVER_NOT_INITIALIZED_CODE,
+                    "server not initialized",
+                )?;
+            }
+            Ok(false)
+        }
+        (Lifecycle::ShuttingDown, Some("shutdown")) => Ok(true),
+        (Lifecycle::ShuttingDown, _) => {
+            if let Some(id) = id {
+                send_error(
+                    writer,
+                    id.clone(),
+                    INVALID_REQUEST_CODE,
+                    "request received after shutdown",
+                )?;
+            }
+            Ok(false)
+        }
+        (Lifecycle::Running, _) => Ok(true),
     }
 }
 
