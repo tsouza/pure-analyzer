@@ -10,7 +10,7 @@ macro_rules! define_syntax_kinds {
         /// The stable token-ID namespace is `0x0000..=0x7fff`; current
         /// assignments are contiguous at `0x0000..=0x0031`. The stable node-ID
         /// namespace is the disjoint `0x8000..=0xffff`; current assignments are
-        /// `0x8000..=0x8030`. Existing assignments do not change.
+        /// `0x8000..=0x8031`. Existing assignments do not change.
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
         #[repr(u16)]
         #[allow(non_camel_case_types, missing_docs)]
@@ -152,6 +152,7 @@ define_syntax_kinds! {
         DOMAIN_OPAQUE_NODE = 0x802e,
         DOMAIN_OPAQUE_BODY = 0x802f,
         DOMAIN_PROFILE_SECTION = 0x8030,
+        DOMAIN_IGNORED_TOP_LEVEL = 0x8031,
     }
 }
 

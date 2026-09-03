@@ -241,12 +241,6 @@ impl FragmentElement {
             Self::Association(association) => association.source,
         }
     }
-
-    pub(super) fn mark_coverage_gap(&mut self) {
-        if let Self::Class(class) = self {
-            class.mark_coverage_gap();
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -264,8 +258,6 @@ pub(super) struct AssocDraft {
 pub(super) struct ModelFragment {
     pub(super) elements: BTreeMap<QName, FragmentElement>,
     pub(super) diagnostics: Vec<Diagnostic>,
-    /// Whether this source leaves all loaded class facts open-world.
-    pub(super) coverage_gap: bool,
 }
 
 #[derive(Debug, Default)]
@@ -273,7 +265,6 @@ struct ModelMerger {
     elements: BTreeMap<QName, FragmentElement>,
     sources: Vec<ModelSourceInfo>,
     diagnostics: Vec<Diagnostic>,
-    has_global_coverage_gap: bool,
 }
 
 impl ModelMerger {
@@ -286,7 +277,6 @@ impl ModelMerger {
         let fragment = ModelFragment {
             elements: parse_document(&label, json, source)?,
             diagnostics: Vec::new(),
-            coverage_gap: false,
         };
         self.ingest_fragment(source, label, Provenance::Pmcd, fragment);
         Ok(())
@@ -303,6 +293,12 @@ impl ModelMerger {
         Ok(())
     }
 
+    /// Merges one source's already-lowered elements into the graph.
+    ///
+    /// Each element's `coverage_gap` was decided by its own source alone
+    /// (see [`crate::pure::parse_pure_document`]): an open-world class from
+    /// one source must never contaminate an unrelated, already-ingested or
+    /// later-ingested element from a different source (issue #267).
     fn ingest_fragment(
         &mut self,
         source: SourceId,
@@ -313,21 +309,11 @@ impl ModelMerger {
         let ModelFragment {
             elements,
             diagnostics,
-            coverage_gap,
         } = fragment;
         self.sources
             .push(ModelSourceInfo::new(source, label.clone(), provenance));
         self.diagnostics.extend(diagnostics);
-        self.has_global_coverage_gap |= coverage_gap;
-        if self.has_global_coverage_gap {
-            for element in self.elements.values_mut() {
-                element.mark_coverage_gap();
-            }
-        }
-        for (path, mut replacement) in elements {
-            if self.has_global_coverage_gap {
-                replacement.mark_coverage_gap();
-            }
+        for (path, replacement) in elements {
             if let Some(previous) = self.elements.insert(path.clone(), replacement) {
                 let diagnostic = self.merge_diagnostic(&path, previous.source(), source, &label);
                 self.diagnostics.push(diagnostic);

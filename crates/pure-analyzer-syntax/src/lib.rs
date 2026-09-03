@@ -18,13 +18,14 @@ pub use ast::{
     AllExpression, ArrowCall, AstNode, BinaryExpression, BracketIndex, CallArguments,
     CastExpression, CodeBlock, CollectionLiteral, ColumnInfo, ColumnName, ColumnSpec,
     ColumnSpecArray, DomainAssociationDeclaration, DomainClassDeclaration, DomainExtendsClause,
-    DomainFile, DomainMultiplicity, DomainOpaqueBody, DomainOpaqueNode, DomainParameterDeclaration,
-    DomainProfileDeclaration, DomainProfileSection, DomainPropertyDeclaration, DomainQualifiedName,
-    DomainQualifiedPropertyDeclaration, DomainStereotypeApplications, DomainStereotypeDeclaration,
-    DomainTypeReference, ErrorNode, FunctionCall, Island, LambdaExpression, LambdaParameters,
-    LetStatement, LiteralExpression, Multiplicity, NavigationPathIsland, NewInstanceExpression,
-    OpaqueIsland, ParenthesizedExpression, PropertyNavigation, QualifiedName, QueryExpression,
-    RelationType, Root, StoreTablePointer, TypeReference, UnaryExpression, VariableExpression,
+    DomainFile, DomainIgnoredTopLevel, DomainMultiplicity, DomainOpaqueBody, DomainOpaqueNode,
+    DomainParameterDeclaration, DomainProfileDeclaration, DomainProfileSection,
+    DomainPropertyDeclaration, DomainQualifiedName, DomainQualifiedPropertyDeclaration,
+    DomainStereotypeApplications, DomainStereotypeDeclaration, DomainTypeReference, ErrorNode,
+    FunctionCall, Island, LambdaExpression, LambdaParameters, LetStatement, LiteralExpression,
+    Multiplicity, NavigationPathIsland, NewInstanceExpression, OpaqueIsland,
+    ParenthesizedExpression, PropertyNavigation, QualifiedName, QueryExpression, RelationType,
+    Root, StoreTablePointer, TypeReference, UnaryExpression, VariableExpression,
 };
 pub use builder::{BuildError, Checkpoint, Event, GreenNodeBuilder};
 pub use green::{GreenElement, GreenNode, GreenToken, TokenIter};
