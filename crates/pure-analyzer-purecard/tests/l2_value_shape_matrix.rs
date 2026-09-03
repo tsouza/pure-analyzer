@@ -2,28 +2,28 @@
 //! narrowing rule which admits an open-ended literal class (a milestoning date,
 //! a `$`-bound variable, a string, a number, a member identifier) admits *every*
 //! grammar-legal shape of that class, byte-by-byte, not only the 2-3 witnesses
-//! its own introducing PR happened to pick (`docs/spec/schema.md` §6.7, third
-//! invariant).
+//! its own introducing PR happened to pick (`docs/spec/schema.md` §6.8, the
+//! third L2 invariant).
 //!
 //! **The gap this closes.** `L2 ⊆ L1` (G4, `docs/spec/schema.md` §6.5) says the
 //! overlay may never *widen* L1; the completed-term half of §6.7 says a rule
 //! that permits a class by its *opening* byte may not clear every way of
-//! *ending* the term it opened. Neither statement covers issue #391's shape: a
-//! rule that permits a lexeme class (`Lexeme::Date`) by classifying a
-//! **candidate token's whole bytes** is only correct when it is re-armed once
-//! per fresh value slot. `L2Position::SourceMethodArg`'s arity narrowing
-//! (issue #384/#387) re-arms on every byte a milestoned `all()` call's date
-//! argument occupies, so a single-byte vocabulary (the adversarial,
-//! byte-granular case every real BPE tokenizer's alphabet coverage implies —
-//! `docs/spec/schema.md` §6.7) re-classifies the *second* digit of
-//! `%2026-01-15` as a bare `Lexeme::Number` candidate rather than a date-literal
-//! continuation, and masks it. `%latest` and a short `$var` never hit this: both
-//! are two bytes past their opener before the byte-PDA even reaches a
-//! re-armable state. The rule's own unit test
-//! (`fill_source_method_arg`'s `source_method_arg_keeps_the_closer_and_milestone_dates_but_masks_a_phantom_argument`)
-//! built its date witness as a *single whole-token* candidate, so it could not
-//! see this either — a single-shot `narrow_into` call is definitionally immune
-//! to a bug that only exists in re-arming across steps of one open value.
+//! *ending* the term it opened. Neither statement covered issue #391's shape
+//! (fixed by PR #393, merged the same day): `ScopeTracker::source_method_arg_sep`/
+//! `property_method_arg_sep` fire — correctly — at every byte-PDA state a
+//! milestoning date/variable argument can be *mid-lexeme* at (`InDateLit`,
+//! `InDateTime`, `InDateFrac`, `InMilestoneLit`, `InMemberIdent`), to decide the
+//! `,`-vs-`)` separator right after a *completed* argument. Before #393,
+//! `fill_source_method_arg_sep` applied that arity-gated separator set to
+//! *every* byte reached at those states, continuation bytes included — so a
+//! bare-year date literal's second digit (`%2026-01-15`'s own `0`) was treated
+//! as if it had to close or extend the argument list, rather than merely
+//! continue the still-open lexeme underneath it. `%latest` and a single-char
+//! `$d` never hit this: `%latest` folds every byte straight through
+//! `InMilestoneLit` to a value-terminal state in one step, and `$d` never
+//! revisits `InMemberIdent` a second time — the exact two shapes #387's own
+//! tests covered, and the exact two shapes too short to expose a bug that only
+//! exists in re-visiting an open lexeme's state a second time.
 //!
 //! **What this lane does differently.** For every L2 position that admits an
 //! open-ended literal class, it drives a real, multi-step [`DecoderSession`]
@@ -127,26 +127,23 @@ fn sweep(prefix: &str, witnesses: &[&str], suffix: &str) {
 }
 
 // ---------------------------------------------------------------------------
-// SourceMethodArg / SourceMethodArgSep (S1, issue #384/#387/#391) — the
-// pipeline source's own `all(...)` milestoning call.
+// SourceMethodArg / SourceMethodArgSep (S1, issue #384/#387; the regression
+// PR #393 fixed was issue #391) — the pipeline source's own `all(...)`
+// milestoning call.
 //
-// **Known failure (issue #391, tracked, not a new gap this sweep discovered
-// silently).** Four tests below are `#[ignore = "..."]`-marked, each citing
-// #391: `fill_source_method_arg` (`src/schema/narrow.rs`) reclassifies every
-// candidate token from a fresh, whole-token `classify` read each time
-// `L2Position::SourceMethodArg`/`PropertyMethodArg` is re-armed, which happens
-// once per byte a byte-granular vocabulary spends inside an already-open date
-// literal — so a single digit survives (`%1`, `%latest`'s own first byte) but a
-// second digit does not (`%20`, and #391's own reported `%2026-01-15`). The
-// *sibling* rule `PropertyMethodArg` (S3, issue #386) is marked the same way
-// below, for the identical reason, and is **not** a second, separately-filed
-// defect: its
-// own doc comment states it "shares `fill_source_method_arg`'s fill" with
-// `SourceMethodArg` verbatim, so the two positions run the exact same function
-// on the exact same bug — one fix (#391) resolves both, and filing a second
-// issue for the second call site of the same function would just fork one
-// defect into two trackers. Un-ignore all four once #391 lands; the matrix
-// itself needs no changes to become the regression pin.
+// **Formerly a known failure (issue #391), now the fix's own acceptance
+// check.** Before #393, `fill_source_method_arg_sep` gated a byte at
+// `InDateLit`/`InDateTime`/`InMemberIdent` by the arity decision alone,
+// treating a date literal's *own continuation byte* as if it had to be the
+// owed separator — so a single digit survived (`%1`, `%latest`'s own first
+// byte) but a second digit did not (`%20`, and #391's own reported
+// `%2026-01-15`). #393 fixed it by reading the byte-PDA's own transition
+// table at that state, so a continuation byte defers to L1 regardless of the
+// arity gate. The four tests below (plus `PropertyMethodArg`'s three, its
+// shared-code sibling one section down) were `#[ignore = "..."]`-marked while
+// #391 was still open; now that #393 has merged, they run for real and are
+// this fix's own acceptance check — the exact shape #387's own tests never
+// covered (a real multi-digit date, not just `%latest`/`$d`).
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -161,9 +158,6 @@ fn source_method_arg_unannotated_admits_every_date_and_dollar_shape() {
 }
 
 #[test]
-#[ignore = "issue #391: fill_source_method_arg re-classifies a date literal's \
-            second byte onward as a fresh candidate once SourceMethodArg is \
-            re-armed for a required-arity class, masking it"]
 fn source_method_arg_business_temporal_admits_every_date_and_dollar_shape_as_its_one_argument() {
     // `Biz` is business-temporal (arity 1) — issue #391's exact class: every
     // date shape must survive as the call's sole argument, not just `%latest`.
@@ -173,9 +167,6 @@ fn source_method_arg_business_temporal_admits_every_date_and_dollar_shape_as_its
 }
 
 #[test]
-#[ignore = "issue #391: fill_source_method_arg re-classifies a date literal's \
-            second byte onward as a fresh candidate once SourceMethodArg is \
-            re-armed for a required-arity class, masking it"]
 fn source_method_arg_processing_temporal_admits_every_date_and_dollar_shape_as_its_one_argument() {
     sweep("|t::milestoning::Proc.all(", DATE_WITNESSES, ")");
     sweep("|t::milestoning::Proc.all(", &[MILESTONE_WITNESS], ")");
@@ -183,9 +174,6 @@ fn source_method_arg_processing_temporal_admits_every_date_and_dollar_shape_as_i
 }
 
 #[test]
-#[ignore = "issue #391: fill_source_method_arg re-classifies a date literal's \
-            second byte onward as a fresh candidate once SourceMethodArg is \
-            re-armed for a required-arity class, masking it"]
 fn source_method_arg_bitemporal_admits_every_date_and_dollar_shape_in_either_argument_slot() {
     // `Bi` is bitemporal (arity 2): every shape is walked once as the *first*
     // comma-separated argument (exercising `SourceMethodArgSep { remaining:
@@ -213,16 +201,13 @@ fn source_method_arg_bitemporal_admits_every_date_and_dollar_shape_in_either_arg
 
 // ---------------------------------------------------------------------------
 // PropertyMethodArg / PropertyMethodArgSep (S3, issue #386) — a milestoned
-// property navigation's own call, one position past S1. Shares
-// `fill_source_method_arg` with `SourceMethodArg` above verbatim, so it
-// inherits issue #391's exact defect at the identical byte offset — see the
-// block comment above `SourceMethodArg`'s own tests for why this is one bug
-// tracked once, not two.
+// property navigation's own call, one position past S1. Shared
+// `fill_source_method_arg_sep` with `SourceMethodArg` above verbatim, so #393
+// fixed both at once — see the block comment above `SourceMethodArg`'s own
+// tests for why this was one bug tracked once, not two.
 // ---------------------------------------------------------------------------
 
 #[test]
-#[ignore = "issue #391 (shared fill_source_method_arg — see the SourceMethodArg \
-            block comment above)"]
 fn property_method_arg_business_temporal_admits_every_date_and_dollar_shape() {
     let prefix = "|t::milestoning::Plain.all()->filter(y|$y.biz(";
     sweep(prefix, DATE_WITNESSES, ")");
@@ -231,8 +216,6 @@ fn property_method_arg_business_temporal_admits_every_date_and_dollar_shape() {
 }
 
 #[test]
-#[ignore = "issue #391 (shared fill_source_method_arg — see the SourceMethodArg \
-            block comment above)"]
 fn property_method_arg_processing_temporal_admits_every_date_and_dollar_shape() {
     let prefix = "|t::milestoning::Plain.all()->filter(y|$y.proc(";
     sweep(prefix, DATE_WITNESSES, ")");
@@ -241,8 +224,6 @@ fn property_method_arg_processing_temporal_admits_every_date_and_dollar_shape() 
 }
 
 #[test]
-#[ignore = "issue #391 (shared fill_source_method_arg — see the SourceMethodArg \
-            block comment above)"]
 fn property_method_arg_bitemporal_admits_every_date_and_dollar_shape_in_either_argument_slot() {
     let prefix = "|t::milestoning::Plain.all()->filter(y|$y.bi(";
     for witness in DATE_WITNESSES

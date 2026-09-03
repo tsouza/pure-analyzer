@@ -768,21 +768,26 @@ boundary.
 ### 6.8 The value-shape matrix — a third invariant, one step past liveness
 
 §6.7's two invariants (non-empty mask; every terminator admitted at a completed
-term) both concern *whether a mask is stuck*. Issue #391 was neither: the mask
-at `Class.all(%2` (a business-temporal class, issue #384's arity narrowing)
-stayed non-empty — whitespace and the call's own closer both survived — so
-liveness held, and yet the stream could not spell the date literal its own
-schema had just legalised. A rule that classifies a candidate token's *whole
-bytes* (`classify`, `src/schema/scope.rs`) is only correct when it is re-armed
-exactly once per fresh value slot; `fill_source_method_arg`
-(`src/schema/narrow.rs`) is instead re-armed once per byte the byte-PDA spends
-inside an already-open date literal, so a byte-granular vocabulary — the
-adversarial case §6.7 already establishes as the shipping-relevant one —
-reclassifies the literal's second byte onward as a *fresh* candidate rather
-than a continuation, and masks it. `%latest` and a short `$var` never
-triggered this: both clear their own re-armable state before a second byte
-ever gets reclassified, which is exactly why two hand-picked witnesses per
-rule were not enough to catch it.
+term) both concern *whether a mask is stuck*. Issue #391 (fixed by PR #393)
+was neither: the mask at `Class.all(%2` (a business-temporal class, issue
+#384's arity narrowing) stayed non-empty — whitespace and the call's own
+closer both survived — so liveness held, and yet the stream could not spell
+the date literal its own schema had just legalised. The rule that decides the
+`,`-vs-`)` separator right after a *completed* milestoning argument
+(`fill_source_method_arg_sep`, `src/schema/narrow.rs`) also fires — correctly
+— at every byte-PDA state a date/milestone/variable argument can be
+**mid-lexeme** at (`InDateLit`, `InDateTime`, `InDateFrac`, `InMilestoneLit`,
+`InMemberIdent`), since a bare-year date's own digit run self-loops on that
+same state one byte at a time. Before #393 it applied its arity-gated
+separator set to every byte reached at those states without distinguishing a
+lexeme's own continuation byte from the byte that actually closes it, so a
+byte-granular vocabulary — the adversarial case §6.7 already establishes as
+the shipping-relevant one — masked a bare-year date's second digit onward.
+`%latest` and a single-character `$d` never triggered this: `%latest` folds
+every byte straight through its own state to a value-terminal one in a single
+step, and `$d` never revisits `InMemberIdent` a second time — the exact two
+shapes the arity-narrowing PR's own tests covered, and exactly why two
+hand-picked witnesses per rule were not enough to catch it.
 
 **The invariant.** At a position whose narrowing rule admits an open-ended
 literal class (a milestoning date, a `$`-bound variable, a string, a number, a
@@ -806,19 +811,16 @@ narrowing positions key on a finite name/operator set with no shape axis to
 sweep, and are already held to a real-vs-phantom witness by
 `tests/l2_precision.rs`'s frozen-kill probes.
 
-Issue #391 itself (and its shared-code sibling, `PropertyMethodArg`) is pinned
-as a known-failure witness inside this suite rather than left as a silent gap:
-the matrix already carries every shape the fix needs to keep admitting, so
-un-ignoring the four affected tests is the fix's own acceptance check, not a
-follow-up test-writing task.
+Issue #391 itself (and its shared-code sibling, `PropertyMethodArg`, which
+reads the identical `fill_source_method_arg_sep`) is pinned inside this suite
+as the fix's own acceptance check: the matrix already carried every shape #393
+needed to keep admitting once it read the byte-PDA's own transition table at
+these states instead of gating on arity alone.
 
 `tests/l2_value_shape_properties.rs` complements the fixed matrix with a
 `proptest`-generated one, over the same grammar productions and `drive`
 primitive, scoped to the two shape families most worth exploring beyond a
-curated list (date-literal digit/separator layout; identifier length/alphabet)
-and to positions the fixed matrix already found sound — generating witnesses
-against a position already pinned as a known #391 failure would just
-rediscover it every run rather than searching where nobody has looked yet.
+curated list (date-literal digit/separator layout; identifier length/alphabet).
 
 ---
 

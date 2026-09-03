@@ -6,15 +6,12 @@
 //! same [`byte_walk::drive`] primitive, so a counterexample here is exactly as
 //! locatable (witness text, byte offset) as a fixed-matrix failure.
 //!
-//! Deliberately scoped to positions the fixed matrix already found sound
-//! (`Plain`'s unannotated `SourceMethodArg`, `ReValue(Temporal)`, `RefVar`) —
-//! not the four issue #391 positions `l2_value_shape_matrix.rs` already pins as
-//! a known, tracked failure. Generating random witnesses against an
-//! *already-known-broken* position would just rediscover #391 on every run
-//! (and, worse, persist a `tests/proptest-regressions/` seed for a gap already
-//! tracked by its own GitHub issue) rather than searching for a shape nobody
-//! has looked at yet — the actual value a property test adds over a curated
-//! matrix (constitution §4, no gamed/tautological coverage).
+//! Covers both the ordinary comparison-operand position (`Plain`'s
+//! `ReValue(Temporal)`) and the milestoning-arity position issue #391 broke
+//! (`Biz`'s business-temporal `SourceMethodArg`, PR #393) — now that #393 has
+//! landed, randomized exploration of the exact position the regression lived
+//! in is a genuine, standing regression guard against it recurring, not a
+//! rediscovery of an already-tracked gap.
 //!
 //! Uses `proptest`'s fixed, committed config with default source-parallel
 //! failure persistence, matching `tests/mask_properties.rs`'s own convention
@@ -93,6 +90,22 @@ proptest! {
         let grammar = CompiledGrammar::compile(vocab);
         let schema = load_schema(DB);
         let text = format!("|t::milestoning::Plain.all()->filter(x|$x.dVal == {date})");
+        drive(&grammar, &schema, &text);
+    }
+
+    /// Every generated `dateLit` streams to completion as a business-temporal
+    /// class's own sole milestoning argument — the exact position and shape
+    /// axis issue #391 broke (a bare-year date's second digit onward masked),
+    /// fixed by PR #393. A standing regression guard: randomized exploration
+    /// of this position recurring in CI is what catches a future re-break of
+    /// the same fix that a fixed matrix entry alone would not, if the
+    /// regression were narrower than any single curated witness.
+    #[test]
+    fn every_generated_date_literal_streams_as_a_single_temporal_argument(date in date_literal_strategy()) {
+        let (vocab, _eos) = byte_vocab();
+        let grammar = CompiledGrammar::compile(vocab);
+        let schema = load_schema(DB);
+        let text = format!("|t::milestoning::Biz.all({date})");
         drive(&grammar, &schema, &text);
     }
 

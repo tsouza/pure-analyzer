@@ -1,6 +1,6 @@
 //! A curated, comprehensive matrix of L1-legal **value literal shapes**, keyed
 //! by the lexeme class an L2 narrowing rule admits — the fixed complement to
-//! `tests/l2_value_shape_matrix.rs`'s sweep (`docs/spec/schema.md` §6.7's
+//! `tests/l2_value_shape_matrix.rs`'s sweep (`docs/spec/schema.md` §6.8's
 //! third invariant, issue #391).
 //!
 //! The recurring failure pattern across issues #367/#377/#385/#391: a new L2
@@ -8,12 +8,14 @@
 //! witness shapes the author thought of (`%latest`, a short `$var`, one short
 //! date), but a *different* L1-legal shape at the same lexeme class — a
 //! longer date literal, a date-time, a longer identifier, a string with a
-//! doubled quote — never gets exercised. Issue #391 shipped exactly that way:
-//! `fill_source_method_arg`'s own unit test built a single-token
-//! `b"%2018-01-01"` candidate, never a *byte-granular* walk through one, so the
-//! per-byte reclassification bug (`classify` reading each single-byte
-//! candidate as a fresh token rather than a date-literal continuation) had no
-//! test that could see it.
+//! doubled quote — never gets exercised. Issue #391 shipped exactly that way
+//! (fixed by PR #393): `fill_source_method_arg_sep`'s own unit tests exercised
+//! only `%latest` (a one-step fold to a value-terminal state) and a
+//! single-character `$d`, never a real multi-digit/multi-char lexeme that
+//! revisits its own byte-PDA state a second time — which is exactly where the
+//! bug lived (the separator rule applied its arity-gated set to a
+//! *continuation* byte of a still-open lexeme, not only to the byte that
+//! actually closes it).
 //!
 //! Every witness here is cited against its own grammar production
 //! (`docs/spec/grammar.md` §5.4's `literal`/`dateLit`/`strlit`/`number`/`refVar`
