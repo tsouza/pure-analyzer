@@ -4,6 +4,19 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/) and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.1](https://github.com/tsouza/pure-analyzer/compare/purecard-v0.3.0...purecard-v0.3.1) - 2026-09-03
+
+### Fixed
+
+- *(purecard)* require a call after every ->-step target name ([#375](https://github.com/tsouza/pure-analyzer/pull/375))
+- *(purecard)* close arm-R's typed-binder colon gap #364 left open ([#376](https://github.com/tsouza/pure-analyzer/pull/376))
+- *(purecard)* admit a $-variable at the milestoning date argument of all() ([#373](https://github.com/tsouza/pure-analyzer/pull/373))
+
+### Other
+
+- *(purecard)* add the missing #356/#351 entry to the 0.3.0 changelog ([#370](https://github.com/tsouza/pure-analyzer/pull/370))
+- *(purecard)* backfill the 0.3.0 changelog entry ([#365](https://github.com/tsouza/pure-analyzer/pull/365))
+
 ## [0.3.0](https://github.com/tsouza/pure-analyzer/compare/purecard-v0.2.2...purecard-v0.3.0) - 2026-09-03
 
 <!--
