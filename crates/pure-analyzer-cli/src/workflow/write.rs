@@ -1149,10 +1149,11 @@ mod tests {
         .expect("a later run must not be blocked by the crash's leftovers");
         assert_eq!(fixture.read(&first), "final one");
         assert_eq!(fixture.read(&second), "final two");
-        let still_present = orphaned_stage_artifacts(&[
+        let mut still_present = orphaned_stage_artifacts(&[
             replacement(&first, "final one", "irrelevant"),
             replacement(&second, "final two", "irrelevant"),
         ]);
+        still_present.sort();
         assert_eq!(
             still_present, expected,
             "leftovers from the crash are surfaced, never silently removed by a later run"
