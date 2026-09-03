@@ -215,6 +215,41 @@ fn n1_masks_a_phantom_property_after_a_bound_var() {
     assert_frozen("n1-member");
 }
 
+/// `AfterDot` self-loops on whitespace (`docs/spec/schema.md` §6.5), so a real
+/// byte-BPE vocabulary routinely fuses that filler to the property name that
+/// follows it into a single token (`" z"`, `" the"`, …). [`is_candidate`]
+/// (`src/schema/narrow.rs`) reads only a token's first byte, so a
+/// whitespace-led token was misread as a whole non-candidate — kept
+/// unconditionally at the anchor, exactly like a bare structural opener —
+/// instead of as whitespace *followed by* a candidate that still owes the
+/// trie walk. A phantom was therefore reachable under L2 by spelling it with
+/// a leading space (issue #353): `admit(" sallary") == admit("sallary")`, not
+/// unconditionally `true`.
+#[test]
+fn n1_masks_a_phantom_property_led_by_fused_leading_whitespace() {
+    let prefix = "|spider::car_1::model::default::CarsData.all()->filter(x|$x.";
+    let verdict = admissible_after(
+        "car_1",
+        prefix,
+        &[b"cylinders", b"sallary", b" sallary", b" cylinders", b"\n"],
+    );
+    assert!(verdict[0], "a real property stays admissible, bare");
+    assert!(!verdict[1], "a bare phantom is masked");
+    assert!(
+        !verdict[2],
+        "L2 SOUNDNESS (issue #353): a whitespace-led phantom must be masked \
+         exactly like its bare form"
+    );
+    assert!(
+        verdict[3],
+        "a whitespace-led real property stays admissible"
+    );
+    assert!(
+        verdict[4],
+        "whitespace alone remains legal filler at the anchor"
+    );
+}
+
 /// Byte-level BPE fuses the navigation `.` with the property's first character
 /// into a single token (`.z`, `.theme`, `.maker` are each one token). N1 must
 /// narrow the post-dot identifier even when it rides in on the dot's token —

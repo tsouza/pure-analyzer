@@ -29,7 +29,7 @@
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
-use crate::grammar::pda::{TERM_END_BYTES, is_ident_start, is_ident_tail};
+use crate::grammar::pda::{TERM_END_BYTES, is_ident_start, is_ident_tail, is_ws};
 use crate::mask::BitMask;
 use crate::schema::model::{Schema, TypeClass};
 use crate::schema::scope::{
@@ -1672,7 +1672,8 @@ fn completes_step_arrow(bytes: &[u8]) -> bool {
 /// `cursor` sits relative to a whole name ([`NamePoint`]).
 ///
 /// A *non-candidate* (a structural/whitespace token the rule does not govern) is
-/// kept at the anchor and after a free-standing whole name, exactly as the
+/// kept at the anchor (subject to [`keeps_anchor_noncandidate`]'s whitespace-fusion
+/// check, below) and after a free-standing whole name, exactly as the
 /// whole-lexeme narrower kept every non-`Ident`/`Str` lexeme. It is **cleared**
 /// at a [`NamePoint::Partial`] cursor: the rule's own lexeme is open on a strict
 /// prefix of some legal name, so a boundary token would end the lexeme on a name
@@ -1701,7 +1702,8 @@ fn fill_trie(
             match point {
                 NamePoint::Partial => false,
                 NamePoint::WholeMustFollow(owed) => bytes.first() == Some(&owed),
-                NamePoint::Anchor | NamePoint::Whole => true,
+                NamePoint::Whole => true,
+                NamePoint::Anchor => keeps_anchor_noncandidate(bytes, kind, trie),
             }
         };
         if keep {
@@ -1711,6 +1713,41 @@ fn fill_trie(
     if point.admits_eos() {
         dst.set(eos_bit);
     }
+}
+
+/// Whether a token that [`is_candidate`] rejects outright is nonetheless legal
+/// at the trie's **root** — no lexeme open yet, the one [`NamePoint`] where
+/// arbitrary inter-token whitespace is always legal filler (`docs/spec/schema.md`
+/// §6.5; `AfterDot` self-loops on whitespace, and every other trie rule's own
+/// anchor state does the same).
+///
+/// Under byte-level BPE that filler routinely arrives **fused** to the very
+/// identifier/string it precedes (`" z"` is one token over a real byte-BPE
+/// vocabulary) — the shape issue #353 reports. [`is_candidate`] reads only
+/// `bytes[0]`, so a whitespace-led token is misread as a whole non-candidate
+/// (kept unconditionally, exactly like a bare `"("`) instead of as whitespace
+/// *followed by* a candidate that still owes a trie walk. This closes that gap
+/// the same way the vocabulary is otherwise invariant to chunking: strip the
+/// token's leading whitespace run and re-test the remainder as a fresh
+/// candidate from the root, so `admit(" z") == admit("z")` exactly as it does
+/// for a vocabulary that never fuses the two. A token with no leading
+/// whitespace at all (a bare structural opener the rule does not govern, e.g.
+/// `"("` or `"$"`) has an empty stripped run and reduces to the original
+/// unconditional keep.
+fn keeps_anchor_noncandidate(bytes: &[u8], kind: TrieKind, trie: &Trie) -> bool {
+    let rest = skip_leading_ws(bytes);
+    if is_candidate(rest, kind, false) {
+        keeps_candidate(trie, trie.root(), rest, kind.shape())
+    } else {
+        true
+    }
+}
+
+/// `bytes` with its leading run of [`is_ws`] bytes removed — the automaton's own
+/// whitespace notion, not a re-derived one (constitution §4, DRY).
+fn skip_leading_ws(bytes: &[u8]) -> &[u8] {
+    let n = bytes.iter().take_while(|&&b| is_ws(b)).count();
+    &bytes[n..]
 }
 
 /// Whether a *candidate* token may be kept from `cursor`: it either stays on a
@@ -2405,6 +2442,107 @@ mod tests {
         assert!(
             bit(&second, 1) && !bit(&second, 0),
             "after clear the second stream keeps 'ghost' and masks 'cnt' (a no-op clear would return the stale 'cnt' mask)"
+        );
+    }
+
+    /// The regression lane issue #353 itself proposes: for a representative
+    /// spread of candidate identifiers (real members and phantoms alike) and
+    /// every leading-whitespace run the byte-PDA's own `WS` alphabet offers
+    /// (`docs/spec/schema.md` §6.5; `pda::WS` is exactly ` \t\n\r`), admission
+    /// must be invariant to whether the vocabulary happens to fuse that
+    /// whitespace onto the identifier's front or spells it as a separate token.
+    #[test]
+    fn member_admission_is_invariant_to_a_fused_leading_whitespace_run() {
+        const WS_RUNS: &[&[u8]] = &[b"", b" ", b"\t", b"\n", b"\r", b"  ", b" \t"];
+        const IDENTS: &[&[u8]] = &[b"country", b"countryName", b"zzz", b"c", b"z"];
+        for &ws in WS_RUNS {
+            for &ident in IDENTS {
+                let mut fused = ws.to_vec();
+                fused.extend_from_slice(ident);
+                let v = vocab(&[ident, &fused]);
+                let (_, mask) = run(&L2Position::Member("A".to_owned()), &[], v);
+                assert_eq!(
+                    bit(&mask, 0),
+                    bit(&mask, 1),
+                    "admit({:?}) must equal admit({:?}) (issue #353)",
+                    String::from_utf8_lossy(&fused),
+                    String::from_utf8_lossy(ident),
+                );
+            }
+        }
+    }
+
+    /// Issue #353: a token whose first byte is whitespace is not exempt from a
+    /// trie rule just because [`is_candidate`] cannot see past that first byte.
+    /// `is_candidate(" z", Ident, _)` is `false` (its first byte is not
+    /// ident-tail), which used to fall straight to the anchor's unconditional
+    /// keep — the same keep a genuinely structural non-candidate (`"("`, `"$"`)
+    /// gets. `" z"` is not structural: stripping its leading whitespace leaves
+    /// `"z"`, itself a candidate the trie must still walk. `admit(" z")` must
+    /// therefore equal `admit("z")`, exactly as it already equals `admit("zz")`
+    /// for `admit(" zz")` and `admit("country")` for `admit(" country")`.
+    #[test]
+    fn a_whitespace_led_token_is_narrowed_exactly_like_its_bare_form() {
+        // class A members: country, countryName. `zzz` begins no member.
+        let v = vocab(&[b"country", b"zzz", b" z", b" country", b" ", b"\n"]);
+        let (applied, mask) = run(&L2Position::Member("A".to_owned()), &[], v);
+        assert!(applied);
+        assert!(bit(&mask, 0), "the bare real member `country` is kept");
+        assert!(!bit(&mask, 1), "the bare phantom `zzz` is masked");
+        assert!(
+            !bit(&mask, 2),
+            "the whitespace-led phantom ` z` must be masked exactly like `zzz`"
+        );
+        assert!(
+            bit(&mask, 3),
+            "the whitespace-led real member ` country` stays admitted"
+        );
+        assert!(
+            bit(&mask, 4) && bit(&mask, 5),
+            "a token that is purely whitespace remains legal anchor filler"
+        );
+    }
+
+    /// The end-to-end port of issue #353's reproduction through a real
+    /// [`crate::DecoderSession`]: a one-class, one-member schema, driven up to
+    /// `$x.` exactly as the issue's Python repro drives it, over a vocabulary
+    /// that includes the exact offending token (`" z"`) alongside its bare form
+    /// and a whitespace-led *real* member. The prefix is supplied as a single
+    /// multi-lexeme vocab token, so the byte-PDA's own per-byte stepping
+    /// (`ScopeTracker::observe`) — not the test — is what reaches `AfterDot`.
+    #[test]
+    fn session_masks_a_whitespace_led_phantom_member_end_to_end() {
+        let schema = Schema::from_json(
+            r#"{
+              "db_id": "t", "db_path": "t::Db",
+              "classes": { "t::A": { "simple_name": "A",
+                "properties": [{"name": "alpha", "type": {"kind": "primitive", "name": "Integer"}, "mult": {"lower": 1, "upper": 1}}] } },
+              "associations": [], "enums": {}
+            }"#,
+        )
+        .expect("parses");
+        let v = vocab(&[
+            b"|t::A.all()->filter(x|$x.", // 0: the prefix, one fused vocab token
+            b"alpha",                     // 1: real member
+            b"zzz",                       // 2: bare phantom
+            b" z",                        // 3: whitespace-led phantom (issue #353)
+            b" alpha",                    // 4: whitespace-led real member
+        ]);
+        let grammar = CompiledGrammar::compile(v);
+        let mut session =
+            crate::DecoderSession::with_schema(&grammar, schema).expect("grammar is fixed-engine");
+        session.accept_token(0).expect("prefix admissible under L1");
+
+        let mask = session.allowed_mask().clone();
+        assert!(bit(&mask, 1), "the real member `alpha` is admitted");
+        assert!(!bit(&mask, 2), "the bare phantom `zzz` is masked");
+        assert!(
+            !bit(&mask, 3),
+            "L2 SOUNDNESS (issue #353): the whitespace-led phantom ` z` must be masked"
+        );
+        assert!(
+            bit(&mask, 4),
+            "the whitespace-led real member ` alpha` stays admitted"
         );
     }
 }
