@@ -205,6 +205,20 @@ describe("inferType", () => {
     expect(inferType("BUG: shouty still matches")).toBe("bug");
   });
 
+  test("bug:/flake: fallback also matches a scoped title (regression, issue #391)", () => {
+    // #391's title used "bug(l2): …" — the scope is not a Conventional-Commit
+    // type/scope (labelsForTitle's CC delegation doesn't map "bug" to a
+    // label), so this fallback is the only path that can classify it, and it
+    // originally required a bare "bug:"/"flake:" with no scope. That left
+    // #391 fully unclassified and failed the issue-label workflow.
+    expect(
+      inferType(
+        "bug(l2): with a class temporal set, the all(...) arity rule masks a date literal after its first digit (only %latest survives)",
+      ),
+    ).toBe("bug");
+    expect(inferType("flake(purecard): narrow arm-R colName positions")).toBe("bug");
+  });
+
   test("CC delegation wins over the bug:/flake: fallback when both could apply", () => {
     // Not a realistic title, but proves the precedence is CC-first.
     expect(inferType("fix: bug: nested")).toBe("bug"); // CC `fix:` -> bug anyway, same answer either path
