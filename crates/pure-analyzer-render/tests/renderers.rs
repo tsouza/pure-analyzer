@@ -18,8 +18,14 @@ use serde_json::Value;
 use libpure::{SourceInput, SourceStore};
 
 const TEMP_FILE_PREFIX: &str = "pure-analyzer-render-test";
-const TERMINAL_CONTROLS: &str = "\0\t\x1b]8;;https://example.invalid\x07\r\u{009b}β";
-const ESCAPED_TERMINAL_CONTROLS: &str = r"\0\t\u{1b}]8;;https://example.invalid\u{7}\r\u{9b}β";
+// The bidi-control suffix (RLO, an LRI isolate, and the LRM mark) covers the
+// Trojan Source class (CVE-2021-42574): non-`char::is_control()` code points
+// that can silently reorder how surrounding text *displays* in a terminal.
+// See the Unicode `Bidi_Control` property in `PropList.txt`.
+const TERMINAL_CONTROLS: &str =
+    "\0\t\x1b]8;;https://example.invalid\x07\r\u{009b}β\u{202e}\u{2066}\u{200e}";
+const ESCAPED_TERMINAL_CONTROLS: &str =
+    r"\0\t\u{1b}]8;;https://example.invalid\u{7}\r\u{9b}β\u{202e}\u{2066}\u{200e}";
 const TERMINAL_CONTROL_TARGET: &str = "target";
 
 static TEMP_FILE_COUNTER: AtomicUsize = AtomicUsize::new(0);
@@ -889,7 +895,7 @@ fn color_policy_respects_tty_and_controls_ansi_sequences() {
 }
 
 #[test]
-fn human_renderer_escapes_untrusted_terminal_controls() {
+fn human_renderer_escapes_untrusted_terminal_controls_and_bidi_overrides() {
     let (sources, diagnostics) = terminal_control_fixture();
     let input = RenderInput::new(&sources, &diagnostics);
 
@@ -973,15 +979,40 @@ fn assert_plain_human_output_escapes_terminal_controls(plain: &str) {
         " ".repeat(escaped_prefix.chars().count()),
         "^".repeat(TERMINAL_CONTROL_TARGET.len())
     )));
+    assert_plain_human_output_leaks_no_raw_terminal_or_bidi_characters(plain);
+}
+
+fn assert_plain_human_output_leaks_no_raw_terminal_or_bidi_characters(plain: &str) {
     assert!(!plain.contains('\x1b'));
     assert!(!plain.contains('\x07'));
     assert!(!plain.contains('\r'));
+    assert!(!plain.contains('\u{202e}'), "raw RLO override leaked");
+    assert!(!plain.contains('\u{2066}'), "raw LRI isolate leaked");
+    assert!(!plain.contains('\u{200e}'), "raw LRM mark leaked");
     assert!(
         plain
             .chars()
             .all(|character| character == '\n' || !character.is_control()),
         "plain output must contain only renderer-owned line breaks: {plain:?}"
     );
+    assert!(
+        plain.chars().all(|character| !is_bidi_control(character)),
+        "plain output must not contain raw Unicode Bidi_Control code points: {plain:?}"
+    );
+}
+
+/// Independent (test-side) check for the Unicode `Bidi_Control` property —
+/// deliberately not reusing the renderer's own `is_bidi_control`, so this
+/// assertion verifies behavior from outside rather than trusting the same
+/// classification the implementation uses.
+fn is_bidi_control(character: char) -> bool {
+    matches!(
+        character,
+        '\u{061c}'
+            | '\u{200e}'..='\u{200f}'
+            | '\u{202a}'..='\u{202e}'
+            | '\u{2066}'..='\u{2069}'
+    )
 }
 
 fn assert_colored_human_output_has_only_renderer_ansi(colored: &str) {
@@ -992,6 +1023,10 @@ fn assert_colored_human_output_has_only_renderer_ansi(colored: &str) {
         colored.chars().all(|character| {
             character == '\n' || character == '\x1b' || !character.is_control()
         })
+    );
+    assert!(
+        colored.chars().all(|character| !is_bidi_control(character)),
+        "colored output must not contain raw Unicode Bidi_Control code points: {colored:?}"
     );
 }
 
