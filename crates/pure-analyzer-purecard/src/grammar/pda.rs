@@ -108,27 +108,6 @@ pub enum State {
     /// After a completed binder name: whitespace then the single `=` that opens the
     /// binding's right-hand-side value (`let m = …`). A second name is dead.
     AfterBinder,
-    /// After a `let` binder's `=`: its value begins here. `letBinding`'s value is
-    /// `pipeline | scalarExpr` (`docs/spec/grammar.md` §5.1) — unlike
-    /// [`ExpectSource`](State::ExpectSource), which only ever opens a bare
-    /// `pipeline` — so this hub admits the identifier a source classpath opens on
-    /// *and* the `%` a date literal or `%latest` opens on.
-    ExpectBinderValue,
-    /// Inside the identifier a `let` binder's value opens on. Identical to
-    /// [`InSourceIdent`](State::InSourceIdent) except that a `(` may also follow
-    /// the name directly, opening `scalarExpr`'s other admitted shape — a
-    /// *zero-argument* scalar call (`today()`, `now()`). The two shapes share
-    /// every byte up to that point, so the machine reads the identifier once and
-    /// lets the next byte disambiguate: a `.`/`::`/`-` continues a pipeline
-    /// `source`, a `(` opens the call — no look-ahead needed.
-    InBinderValueIdent,
-    /// A `let` binder value's scalar call has just opened its `(`; only
-    /// whitespace then the closing `)` may follow — the call is nullary, so
-    /// `today(1)`/`today(x)` are dead states here. (A milestoning *argument*
-    /// position, e.g. `.all(today())`, is the unrelated generic value hub and
-    /// stays fully permissive — only this scalarExpr call position is
-    /// arity-restricted.)
-    ExpectBinderCallClose,
     /// Right after a `[` that holds a `*` multiplicity token: only the closing `]`
     /// may follow, so `[*]` is the only shape `*` reaches (never `take(*)`).
     InMultiplicity,
@@ -383,6 +362,32 @@ pub enum State {
     /// single-quoted string is a column reference (`~Week` / `~'Gross Credits'`).
     /// Nothing else — including whitespace — may follow, so `~ )` and `~~` die.
     SawTilde,
+    // Kept at the tail (issue #352 review) so these additive states do not
+    // renumber any pre-existing variant's implicit discriminant —
+    // `cargo-semver-checks` tracks that even though `State` carries no
+    // explicit `#[repr]`, exactly as `SyntaxKind`'s own tail-kept `ASSIGN`
+    // (`pure-analyzer-lexer/src/lib.rs`) documents for its `repr(u16)`.
+    /// After a `let` binder's `=`: its value begins here. `letBinding`'s value is
+    /// `pipeline | scalarExpr` (`docs/spec/grammar.md` §5.1) — unlike
+    /// [`ExpectSource`](State::ExpectSource), which only ever opens a bare
+    /// `pipeline` — so this hub admits the identifier a source classpath opens on
+    /// *and* the `%` a date literal or `%latest` opens on.
+    ExpectBinderValue,
+    /// Inside the identifier a `let` binder's value opens on. Identical to
+    /// [`InSourceIdent`](State::InSourceIdent) except that a `(` may also follow
+    /// the name directly, opening `scalarExpr`'s other admitted shape — a
+    /// *zero-argument* scalar call (`today()`, `now()`). The two shapes share
+    /// every byte up to that point, so the machine reads the identifier once and
+    /// lets the next byte disambiguate: a `.`/`::`/`-` continues a pipeline
+    /// `source`, a `(` opens the call — no look-ahead needed.
+    InBinderValueIdent,
+    /// A `let` binder value's scalar call has just opened its `(`; only
+    /// whitespace then the closing `)` may follow — the call is nullary, so
+    /// `today(1)`/`today(x)` are dead states here. (A milestoning *argument*
+    /// position, e.g. `.all(today())`, is the unrelated generic value hub and
+    /// stays fully permissive — only this scalarExpr call position is
+    /// arity-restricted.)
+    ExpectBinderCallClose,
 }
 
 impl State {
