@@ -765,6 +765,61 @@ position at all, and **T7** because the engine accepts the shape it proposed to
 mask (§6.6 T7). `src/schema/narrow.rs` is authoritative for the executable
 boundary.
 
+### 6.8 The value-shape matrix — a third invariant, one step past liveness
+
+§6.7's two invariants (non-empty mask; every terminator admitted at a completed
+term) both concern *whether a mask is stuck*. Issue #391 was neither: the mask
+at `Class.all(%2` (a business-temporal class, issue #384's arity narrowing)
+stayed non-empty — whitespace and the call's own closer both survived — so
+liveness held, and yet the stream could not spell the date literal its own
+schema had just legalised. A rule that classifies a candidate token's *whole
+bytes* (`classify`, `src/schema/scope.rs`) is only correct when it is re-armed
+exactly once per fresh value slot; `fill_source_method_arg`
+(`src/schema/narrow.rs`) is instead re-armed once per byte the byte-PDA spends
+inside an already-open date literal, so a byte-granular vocabulary — the
+adversarial case §6.7 already establishes as the shipping-relevant one —
+reclassifies the literal's second byte onward as a *fresh* candidate rather
+than a continuation, and masks it. `%latest` and a short `$var` never
+triggered this: both clear their own re-armable state before a second byte
+ever gets reclassified, which is exactly why two hand-picked witnesses per
+rule were not enough to catch it.
+
+**The invariant.** At a position whose narrowing rule admits an open-ended
+literal class (a milestoning date, a `$`-bound variable, a string, a number, a
+member identifier — as opposed to a rule that narrows to a *fixed, finite* name
+or operator set), every grammar-legal shape of that class must stream to
+completion once its first byte is admitted — not only the shapes a rule's own
+introducing PR happened to pick as witnesses. `tests/l2_value_shape_matrix.rs`
+pins it: `tests/support/value_shapes.rs` curates a shape matrix straight off
+each literal's own grammar production (§5.4's `literal`/`dateLit`/`strlit`/
+`number`/`refVar`/`ident`, including the shapes a human would not think to
+add — a leap-day date, a doubled-quote string, a `.5` leading-dot float, a
+`1.5e-3` scientific literal), and the shared `tests/support/byte_walk.rs`
+`drive` primitive (factored out of this section's own `tests/l2_liveness.rs`)
+walks each shape byte-by-byte over the single-byte vocabulary, failing loudly
+at the exact witness and byte offset a masked shape is found at. It is applied
+to every rule that narrows an open-ended literal —
+**SourceMethodArg**/**SourceMethodArgSep**, **PropertyMethodArg**/
+**PropertyMethodArgSep**, **StoreMethodArg**, **ExtentMethodArg**, **ReValue**
+— plus the identifier-length axis for **Member** and **RefVar**. The remaining
+narrowing positions key on a finite name/operator set with no shape axis to
+sweep, and are already held to a real-vs-phantom witness by
+`tests/l2_precision.rs`'s frozen-kill probes.
+
+Issue #391 itself (and its shared-code sibling, `PropertyMethodArg`) is pinned
+as a known-failure witness inside this suite rather than left as a silent gap:
+the matrix already carries every shape the fix needs to keep admitting, so
+un-ignoring the four affected tests is the fix's own acceptance check, not a
+follow-up test-writing task.
+
+`tests/l2_value_shape_properties.rs` complements the fixed matrix with a
+`proptest`-generated one, over the same grammar productions and `drive`
+primitive, scoped to the two shape families most worth exploring beyond a
+curated list (date-literal digit/separator layout; identifier length/alphabet)
+and to positions the fixed matrix already found sound — generating witnesses
+against a position already pinned as a known #391 failure would just
+rediscover it every run rather than searching where nobody has looked yet.
+
 ---
 
 ## 7. The L1↔L2 consistency-contract table
