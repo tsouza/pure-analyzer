@@ -19,6 +19,17 @@ const EXACTLY_ONE: u32 = 1;
 const MIXED_REWRITE_NORMALIZATION_STEPS: usize = 8;
 const SEMANTIC_CORPUS_CASES: &str = include_str!("../corpus/legend-4.113.0/cases.jsonl");
 
+/// The three rewrites `normalizer.rs`'s guards recognize by IR shape.
+///
+/// All three are exercised here via hand-built IR (see `identity_project`,
+/// `filter`, `repeated_distinct` below), which is a legitimate way to unit
+/// test rewrite *logic* in isolation. It does not by itself mean lowering can
+/// ever produce that shape: `IdentityProject` currently cannot — every real
+/// `Project` output column gets a fresh `ColumnId` that never coincides with
+/// the input column it reads, so `is_identity_project` is frozen pending
+/// issue #410. `LiteralTrueFilter` and `RepeatedDistinct` are both reachable
+/// from real lowered IR (the latter since issue #281); see
+/// `tests/comparison.rs`'s production-path regressions for those two.
 #[derive(Clone, Copy)]
 enum IntrinsicRewrite {
     IdentityProject,
@@ -745,7 +756,7 @@ fn aliases_and_output_column_order_are_not_identity_projects() {
 }
 
 #[test]
-fn pinned_repeated_distinct_witness_drives_normalization() {
+fn pinned_repeated_distinct_witness_collapses_across_distinct_origins() {
     let witness = semantic_witness("repeated-distinct-is-idempotent");
     assert_eq!(
         witness.get("candidate").and_then(Value::as_str),
@@ -768,29 +779,37 @@ fn pinned_repeated_distinct_witness_drives_normalization() {
         witness.pointer("/right/result")
     );
 
+    // Each level below proves its own `RelationFacts` from its own distinct
+    // source span, exactly as `lower_bare_distinct` does for a real
+    // `->distinct()->distinct()` chain — never one `RelationFacts` value
+    // shared across levels, which no real lowering call site produces. See
+    // `tests/comparison.rs`'s `repeated_distinct_collapses_from_real_lowered_source`
+    // for the same claim proven through real Pure source and lowering.
     let source = origin(FILE, 1, 20, Vec::new());
     let base = query(&[3, 8], &["left", "right"], source.clone());
-    let bag_facts = RelationFacts::new(
-        Knowledge::unknown(),
-        Knowledge::proven(RowSemantics::Bag, origin(FILE, 21, 25, Vec::new())),
-    );
+    let bag_facts_at = |start: u32, end: u32| {
+        RelationFacts::new(
+            Knowledge::unknown(),
+            Knowledge::proven(RowSemantics::Bag, origin(FILE, start, end, Vec::new())),
+        )
+    };
     let (class, _) = classes();
     let bag_input = RelationExpression::new(
         RelationOperator::Scan(RelationSource::Class(class)),
         base.output().clone(),
-        bag_facts.clone(),
+        bag_facts_at(21, 25),
         origin(FILE, 21, 25, Vec::new()),
     )
     .expect("bag fixture scan is valid");
     let single = distinct(
         bag_input,
-        bag_facts.clone(),
-        origin(FILE, 21, 25, Vec::new()),
+        bag_facts_at(26, 30),
+        origin(FILE, 26, 30, Vec::new()),
     );
     let nested = RelationalQuery::new(distinct(
         single.clone(),
-        bag_facts,
-        origin(FILE, 26, 30, Vec::new()),
+        bag_facts_at(31, 35),
+        origin(FILE, 31, 35, Vec::new()),
     ));
 
     let normalized = normalized(&nested);
@@ -808,27 +827,33 @@ fn pinned_repeated_distinct_witness_drives_normalization() {
 fn repeated_distinct_preserves_matching_facts_and_full_input_provenance() {
     let source = origin(FILE, 1, 20, Vec::new());
     let base = query(&[3, 8], &["left", "right"], source.clone());
-    let fact_origin = origin(FILE, 21, 24, Vec::new());
-    let facts = RelationFacts::new(
-        Knowledge::proven(
-            vec![CandidateKey::new(vec![base.output().columns()[0].id()])],
-            fact_origin.clone(),
-        ),
-        Knowledge::proven(RowSemantics::Set, fact_origin),
-    );
+    let candidate_key = || vec![CandidateKey::new(vec![base.output().columns()[0].id()])];
+    let facts_at = |start: u32, end: u32| {
+        let fact_origin = origin(FILE, start, end, Vec::new());
+        RelationFacts::new(
+            Knowledge::proven(candidate_key(), fact_origin.clone()),
+            Knowledge::proven(RowSemantics::Set, fact_origin),
+        )
+    };
+    // The inner and both outer wrappers each prove the identical
+    // (candidate-key, row-semantics) conclusion from their own distinct
+    // origin, matching what real per-node lowering produces — collapsing
+    // must retain the surviving inner node's own facts/provenance, not the
+    // discarded outer node's, even though the two are `matches()`-equal.
+    let inner_facts = facts_at(21, 24);
     let inner = distinct(
         base.root().clone(),
-        facts.clone(),
+        inner_facts.clone(),
         origin(FILE, 25, 29, Vec::new()),
     );
     let first = RelationalQuery::new(distinct(
         inner.clone(),
-        facts.clone(),
+        facts_at(30, 34),
         origin(FILE, 30, 34, Vec::new()),
     ));
     let second = RelationalQuery::new(distinct(
         inner,
-        facts.clone(),
+        facts_at(35, 39),
         origin(FILE, 35, 39, Vec::new()),
     ));
 
@@ -839,7 +864,13 @@ fn repeated_distinct_preserves_matching_facts_and_full_input_provenance() {
         RelationOperator::Distinct { input } if matches!(input.operator(), RelationOperator::Scan(_))
     ));
     assert_eq!(first_normalized.root().schema(), first.output());
-    assert_eq!(first_normalized.root().facts(), &facts);
+    assert_eq!(
+        first_normalized.root().facts(),
+        &inner_facts,
+        "collapsing the redundant outer Distinct must retain the surviving \
+         inner node's own facts and provenance, not the discarded outer \
+         node's merely-matching facts"
+    );
     assert_eq!(
         first_normalized.equivalence_key(),
         second_normalized.equivalence_key()
@@ -856,12 +887,16 @@ fn repeated_distinct_preserves_matching_facts_and_full_input_provenance() {
 }
 
 #[test]
-fn repeated_distinct_requires_exact_relation_facts() {
+fn repeated_distinct_requires_matching_relation_facts_value() {
+    // A same-VALUE, different-origin pair now collapses (issue #281); only a
+    // genuine value mismatch — here Bag vs. Set row semantics — must still
+    // block the rewrite. `RelationFacts::matches` is origin-insensitive, not
+    // a rubber stamp.
     let source = origin(FILE, 1, 20, Vec::new());
     let base = query(&[3, 8], &["left", "right"], source.clone());
     let inner_facts = RelationFacts::new(
         Knowledge::unknown(),
-        Knowledge::proven(RowSemantics::Set, origin(FILE, 21, 25, Vec::new())),
+        Knowledge::proven(RowSemantics::Bag, origin(FILE, 21, 25, Vec::new())),
     );
     let outer_facts = RelationFacts::new(
         Knowledge::unknown(),
