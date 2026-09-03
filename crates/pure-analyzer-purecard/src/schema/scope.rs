@@ -2168,14 +2168,16 @@ impl ScopeTracker {
         self.pending_arrow_receiver = None;
     }
 
-    /// Whether `state` is a value anchor sitting **directly inside** an arm-R
-    /// tilde bracket (`~[Week, Segment]`, and the name before the `:` in
-    /// `~[Week: …]`) — the position an arm-R column *key* opens at. The first key
-    /// opens at `ExpectValue`, a key after a comma at `ExpectValueReq`; both
-    /// count. Body identifiers sit behind a `$`/`.`/`|`, never at a bracket-level
-    /// value anchor, so they are not keys.
+    /// Whether `state` is a column-spec anchor sitting **directly inside** an
+    /// arm-R tilde bracket (`~[Week, Segment]`, and the name before the `:` in
+    /// `~[Week: …]`) — the position an arm-R column *key* opens at. The first
+    /// key opens at `ExpectRelColSpec`, a key after a comma at
+    /// `ExpectRelColSpecReq` (issue #361 narrowed both off the generic
+    /// `ExpectValue`/`ExpectValueReq` value hub); both count. Body identifiers
+    /// sit behind a `$`/`.`/`|`, never at a bracket-level column-spec anchor,
+    /// so they are not keys.
     fn in_tilde_key(&self, state: State) -> bool {
-        matches!(state, State::ExpectValue | State::ExpectValueReq)
+        matches!(state, State::ExpectRelColSpec | State::ExpectRelColSpecReq)
             && self.tilde_open.last() == Some(&true)
     }
 
@@ -2336,6 +2338,12 @@ impl ScopeTracker {
                 }
             }
             State::ExpectValue | State::ExpectValueReq => self.value_opening_position(state),
+            // An arm-R `~[…]` bracket-item anchor (issue #361's narrower
+            // states) is a value anchor too — routed through the same
+            // cascade, which reads `in_tilde_key` for exactly this pair.
+            State::ExpectRelColSpec | State::ExpectRelColSpecReq => {
+                self.value_opening_position(state)
+            }
             // A bare word also opens a value straight after a lambda arrow (the
             // body) or after an operator that has its own intermediate state
             // because it may still grow into a longer one (`<` `>` `-` `|`) —
@@ -3210,7 +3218,7 @@ mod tests {
             b"A",
         ];
         let (tracker, pda) = run(sort_ref);
-        assert_eq!(pda.state(), State::InIdent, "mid `~A` column name");
+        assert_eq!(pda.state(), State::InRelColIdent, "mid `~A` column name");
         assert_eq!(tracker.position(pda.state()), L2Position::None);
 
         // The `~[` column-set opener and its `Col` name in `project(~[Col: …])`:
@@ -3220,7 +3228,7 @@ mod tests {
         let (tracker, pda) = run(project_set);
         assert_eq!(
             pda.state(),
-            State::InIdent,
+            State::InRelColIdent,
             "mid `Col` relation column name"
         );
         assert_eq!(tracker.position(pda.state()), L2Position::None);

@@ -257,12 +257,13 @@ impl<T> pyo3::marker::Ungil for purecard::grammar::compiled::CompiledGrammar whe
 pub mod purecard::grammar::emitted_subset
 pub const purecard::grammar::emitted_subset::EMITTED_SUBSET_SPEC: &str
 pub mod purecard::grammar::pda
-pub enum purecard::grammar::pda::Frame
+#[non_exhaustive] pub enum purecard::grammar::pda::Frame
 pub purecard::grammar::pda::Frame::Brace
 pub purecard::grammar::pda::Frame::BraceLambda
 pub purecard::grammar::pda::Frame::Bracket
 pub purecard::grammar::pda::Frame::Group
 pub purecard::grammar::pda::Frame::Paren
+pub purecard::grammar::pda::Frame::RelColBracket
 impl purecard::grammar::pda::Frame
 pub const fn purecard::grammar::pda::Frame::name(self) -> &'static str
 impl core::clone::Clone for purecard::grammar::pda::Frame
@@ -319,6 +320,7 @@ pub purecard::grammar::pda::State::AfterDollar
 pub purecard::grammar::pda::State::AfterDot
 pub purecard::grammar::pda::State::AfterMemberName
 pub purecard::grammar::pda::State::AfterName
+pub purecard::grammar::pda::State::AfterRelColName
 pub purecard::grammar::pda::State::AfterStrLit
 pub purecard::grammar::pda::State::AfterValue
 pub purecard::grammar::pda::State::AfterValueColon
@@ -335,6 +337,8 @@ pub purecard::grammar::pda::State::ExpectBinderMult
 pub purecard::grammar::pda::State::ExpectBinderValue
 pub purecard::grammar::pda::State::ExpectBraceBinder
 pub purecard::grammar::pda::State::ExpectLambdaBody
+pub purecard::grammar::pda::State::ExpectRelColSpec
+pub purecard::grammar::pda::State::ExpectRelColSpecReq
 pub purecard::grammar::pda::State::ExpectSource
 pub purecard::grammar::pda::State::ExpectValue
 pub purecard::grammar::pda::State::ExpectValueReq
@@ -353,6 +357,9 @@ pub purecard::grammar::pda::State::InMilestoneLit
 pub purecard::grammar::pda::State::InMultiplicity
 pub purecard::grammar::pda::State::InNumberFrac
 pub purecard::grammar::pda::State::InNumberInt
+pub purecard::grammar::pda::State::InRelColIdent
+pub purecard::grammar::pda::State::InRelColStrLit
+pub purecard::grammar::pda::State::InRelColStrLit::escaped: bool
 pub purecard::grammar::pda::State::InSourceIdent
 pub purecard::grammar::pda::State::InStrLit
 pub purecard::grammar::pda::State::InStrLit::escaped: bool

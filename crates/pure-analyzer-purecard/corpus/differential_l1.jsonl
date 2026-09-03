@@ -70,6 +70,8 @@
 {"q":"|Person.all()->project(~[fullName: x|$x.first + ' ' + $x.last])->rename(~fullName, ~name)","legend":"parse_ok","dimension":"arm-r-relation-api","note":"project then rename chained on relation"}
 {"q":"|Trade.all()->groupBy(~[~product], ~[t: x|$x.q : y|$y->sum()])","legend":"parse_fail","dimension":"arm-r-relation-api","note":"nested ~ inside ~[] grouping array (double tilde)"}
 {"q":"|Trade.all()->sort([ascending(~a), ascending(~b), descending(~c)])","legend":"parse_ok","dimension":"arm-r-relation-api","note":"sort with three ordered column specs"}
+{"q":"|t::A.all()->project(~[a: x|$x.a, k: x|$x.k])->extend(over(~[t|$t.k]), ~[b: r|$r.a])","legend":"parse_fail","dimension":"arm-r-relation-api","note":"issue #361: a lambda column (~[t|$t.k]) as over()'s partition, not a bare colName or colName:lambda spec"}
+{"q":"|t::A.all()->project(~[a: x|$x.a, k: x|$x.k])->extend(over(~k), ~[b: {p,w,r|$r.a}])","legend":"parse_ok","dimension":"arm-r-relation-api","note":"issue #361: the genuine bare-colRef partition the previous line's lambda column was confused for"}
 {"q":"|Firm.all()->filter(x|$x.name == 'Acme')","legend":"parse_ok","dimension":"literals-and-dates","note":"basic single-quoted string literal"}
 {"q":"|Firm.all()->filter(x|$x.name == 'Comp. Sci.')","legend":"parse_ok","dimension":"literals-and-dates","note":"string with dots and spaces"}
 {"q":"|Firm.all()->filter(x|$x.note == 'a''b')","legend":"parse_fail","dimension":"literals-and-dates","note":"embedded doubled single-quote escape"}

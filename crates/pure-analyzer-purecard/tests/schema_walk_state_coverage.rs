@@ -64,10 +64,13 @@ const STRUCTURAL_BYTES: &[u8] = b"abXY1_ |{}()[].,;:$%'-><=!&+*/";
 ///   translations) contain one, and the walker only draws numeric tokens from
 ///   corpus lexemes plus `STRUCTURAL_BYTES`, neither of which supplies an `e`
 ///   exponent shape.
-/// - `SawTilde`: the arm-R Relation/Function API sigil (`~Col`, `~[…]`). None
-///   of the 8 `FIXTURE_DBS` gold corpora contain an arm-R construct (arm-R is
-///   exercised elsewhere, e.g. `l2_precision.rs`'s hand-written queries, not
-///   through this generator).
+/// - `SawTilde`, and the six states only `SawTilde` reaches
+///   (`InRelColIdent`/`InRelColStrLit`/`AfterRelColName`/`ExpectRelColSpec`/
+///   `ExpectRelColSpecReq`, issue #361's narrower arm-R colName positions): the
+///   arm-R Relation/Function API sigil (`~Col`, `~[…]`). None of the 8
+///   `FIXTURE_DBS` gold corpora contain an arm-R construct (arm-R is exercised
+///   elsewhere, e.g. `l2_precision.rs`'s hand-written queries, not through this
+///   generator).
 /// - `SourceColon`/`SourceColon2`: the `::` separator *inside* a source
 ///   classpath, as a token-boundary state. This vocabulary is built at **whole
 ///   lexeme granularity** (`support/l2.rs`), so every real classpath
@@ -109,6 +112,12 @@ const EXPECTED_UNREACHABLE: &[&str] = &[
     "NeedExpDigit",
     "InExp",
     "SawTilde",
+    "InRelColIdent",
+    "InRelColStrLit",
+    "InRelColStrLit(pendingQuote)",
+    "AfterRelColName",
+    "ExpectRelColSpec",
+    "ExpectRelColSpecReq",
     "SourceColon",
     "SourceColon2",
     "MilestoneL",

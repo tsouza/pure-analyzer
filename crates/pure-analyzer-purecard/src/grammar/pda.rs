@@ -388,6 +388,38 @@ pub enum State {
     /// stays fully permissive — only this scalarExpr call position is
     /// arity-restricted.)
     ExpectBinderCallClose,
+    /// An identifier reached from the `SawTilde` anchor — arm-R's own colName
+    /// position (bare `~ident`, or the head of a `~[…]` bracket item).
+    /// Distinct from [`InIdent`](State::InIdent): a `~`-column reference is
+    /// never itself a lambda binder, unlike a term-start name (issue #361).
+    InRelColIdent,
+    /// A single-quoted colName reached from the `SawTilde` anchor
+    /// (`~'Gross Credits'`, or a quoted `~[…]` bracket item) — the
+    /// string-literal sibling of [`InRelColIdent`](State::InRelColIdent), for
+    /// the identical reason (issue #361).
+    InRelColStrLit {
+        /// The previous byte was an unpaired `'` — mirrors
+        /// [`InStrLit`](State::InStrLit)'s own escape flag.
+        escaped: bool,
+    },
+    /// A completed colName reached from `SawTilde`
+    /// ([`InRelColIdent`](State::InRelColIdent) or
+    /// [`InRelColStrLit`](State::InRelColStrLit)): admits the `:` that opens a
+    /// `colLambda`/`mapLambda`/`frameLambda` body, or anything else a
+    /// completed value admits — but never the `|` that would make this name a
+    /// lambda binder or a boolean operand (issue #361).
+    AfterRelColName,
+    /// Just opened a `~[` relation column-set: the position a bracket item
+    /// starts at, admitting a colName (bare or quoted) or the closing `]`
+    /// (`~[]`, the empty key set — legal for `groupBy`'s aggregate-over-all).
+    /// Distinct from [`ExpectValue`](State::ExpectValue) so a bare lambda
+    /// (`~[t|$t.k]`) cannot open an item here (issue #361).
+    ExpectRelColSpec,
+    /// [`ExpectRelColSpec`](State::ExpectRelColSpec) reached past a `,`: the
+    /// next bracket item is required, so an immediate `]` is a dead state (no
+    /// trailing `~[a,]`) — mirrors [`ExpectValueReq`](State::ExpectValueReq)'s
+    /// relationship to [`ExpectValue`](State::ExpectValue).
+    ExpectRelColSpecReq,
 }
 
 impl State {
@@ -476,6 +508,12 @@ impl State {
             State::SawLt => "SawLt",
             State::SawAmp => "SawAmp",
             State::SawTilde => "SawTilde",
+            State::InRelColIdent => "InRelColIdent",
+            State::InRelColStrLit { escaped: false } => "InRelColStrLit",
+            State::InRelColStrLit { escaped: true } => "InRelColStrLit(pendingQuote)",
+            State::AfterRelColName => "AfterRelColName",
+            State::ExpectRelColSpec => "ExpectRelColSpec",
+            State::ExpectRelColSpecReq => "ExpectRelColSpecReq",
         }
     }
 
@@ -568,28 +606,38 @@ impl State {
             State::ExpectBinderValue => 74,
             State::InBinderValueIdent => 75,
             State::ExpectBinderCallClose => 76,
+            State::InRelColIdent => 77,
+            State::InRelColStrLit { escaped: false } => 78,
+            State::InRelColStrLit { escaped: true } => 79,
+            State::AfterRelColName => 80,
+            State::ExpectRelColSpec => 81,
+            State::ExpectRelColSpecReq => 82,
         }
     }
 
     /// The number of distinct automaton states — the length a per-state cache
     /// (`Vec<_>` keyed by [`index`](State::index)) must have. One more than the
     /// largest [`index`](State::index).
-    pub const COUNT: usize = 77;
+    pub const COUNT: usize = 83;
 
     /// Whether this state is a **completed-term hub** — an inter-lexeme position
     /// the automaton reaches by finishing a term, whichever kind of term it was.
     ///
-    /// The four differ only in what may *follow* them (a call's `(`, a classpath
-    /// `::`), never in whether a term is behind them, so every consumer that asks
-    /// "is a term complete here" — [`Pda::is_accepting`], and the L2 scope
-    /// tracker's operand rules — asks it once, here (constitution §4). A new
-    /// terminal hub is then a one-line change, not a hunt for enumerations that
-    /// silently take a rule dark.
+    /// The five differ only in what may *follow* them (a call's `(`, a
+    /// classpath `::`, a `~`-column's own `:`), never in whether a term is
+    /// behind them, so every consumer that asks "is a term complete here" —
+    /// [`Pda::is_accepting`], and the L2 scope tracker's operand rules — asks
+    /// it once, here (constitution §4). A new terminal hub is then a one-line
+    /// change, not a hunt for enumerations that silently take a rule dark.
     #[must_use]
     pub(crate) const fn completes_a_term(self) -> bool {
         matches!(
             self,
-            State::AfterValue | State::AfterName | State::AfterMemberName | State::AfterStrLit
+            State::AfterValue
+                | State::AfterName
+                | State::AfterMemberName
+                | State::AfterStrLit
+                | State::AfterRelColName
         )
     }
 
@@ -651,7 +699,8 @@ impl State {
             | State::InBinderTypePath
             | State::LetL
             | State::LetLe
-            | State::LetLet => Some(LexKind::Ident),
+            | State::LetLet
+            | State::InRelColIdent => Some(LexKind::Ident),
             State::SawNumSign
             | State::InNumberInt
             | State::NeedFracDigit
@@ -672,7 +721,7 @@ impl State {
             | State::MilestoneLate
             | State::MilestoneLates
             | State::InMilestoneLit => Some(LexKind::Date),
-            State::InStrLit { .. } => Some(LexKind::Str),
+            State::InStrLit { .. } | State::InRelColStrLit { .. } => Some(LexKind::Str),
             _ => None,
         }
     }
@@ -697,12 +746,13 @@ pub(crate) enum LexKind {
 /// decide whether a byte that dies against an *empty* local scratch would have
 /// lived against *some* ambient frame (i.e. its admissibility is
 /// stack-dependent).
-const ALL_FRAMES: [Frame; 5] = [
+const ALL_FRAMES: [Frame; 6] = [
     Frame::Paren,
     Frame::Group,
     Frame::Bracket,
     Frame::Brace,
     Frame::BraceLambda,
+    Frame::RelColBracket,
 ];
 
 /// A stack frame: an open delimiter awaiting its match.
@@ -713,7 +763,18 @@ const ALL_FRAMES: [Frame; 5] = [
 /// The three delimiter kinds are the whole stack alphabet — pipeline `->` chains
 /// and lambda bodies need no resume marker because the [`State::ExpectValue`] /
 /// [`State::AfterValue`] hubs already encode "what may come next" without one.
+///
+/// `#[non_exhaustive]`, mirroring [`State`]: the variant set is the decoder's
+/// internal stack alphabet, exposed only so a caller can *observe* the open
+/// delimiter (via [`Pda::stack_top`]) — it is not a stability contract. Issue
+/// #361 added [`RelColBracket`](Frame::RelColBracket) and, absent this
+/// attribute, `cargo-semver-checks` correctly flagged that addition as a major
+/// break (`enum_variant_added`) — the exact discriminant/exhaustiveness hazard
+/// [`State`] already guards against; a downstream match on `Frame` must carry a
+/// `_` arm rather than break on each addition. In-crate exhaustive matches
+/// (`close_to`, `Frame::name`) are unaffected.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Frame {
     /// An open `(` that follows a *name* — a call's own argument list, the only
     /// `(` whose contents are a comma-separated element list.
@@ -733,6 +794,14 @@ pub enum Frame {
     /// frame from [`Brace`](Frame::Brace) so a lone `=` inside the lambda body is
     /// not mistaken for a block-query `let` binder.
     BraceLambda,
+    /// An open `~[` relation column-set (`project(~[…])`, `over(~[…])`,
+    /// `groupBy(~[…], …)`). A distinct frame from [`Bracket`](Frame::Bracket) so
+    /// an item *after the first* — reached past a `,`, with no fresh `~` in
+    /// front of it — still opens at the restricted [`State::ExpectRelColSpec`]
+    /// column-name position rather than the fully generic value hub: live
+    /// -attested, `over(~[a, t|$t.k])`'s second item is "no viable alternative"
+    /// right at the `t|` exactly as its first item would be (issue #361).
+    RelColBracket,
 }
 
 impl Frame {
@@ -748,6 +817,7 @@ impl Frame {
             Frame::Bracket => "Bracket",
             Frame::Brace => "Brace",
             Frame::BraceLambda => "BraceLambda",
+            Frame::RelColBracket => "RelColBracket",
         }
     }
 }
@@ -815,8 +885,9 @@ const MILESTONE_LATEST: &[u8] = b"latest";
 
 /// Whether `top` is a frame whose contents are a **comma-separated element
 /// list** — a call's argument list ([`Frame::Paren`]), a collection or
-/// multiplicity bracket ([`Frame::Bracket`]), or a brace lambda's typed-binder
-/// list ([`Frame::BraceLambda`]).
+/// multiplicity bracket ([`Frame::Bracket`]), a relation column-set
+/// ([`Frame::RelColBracket`]), or a brace lambda's typed-binder list
+/// ([`Frame::BraceLambda`]).
 ///
 /// The three excluded configurations are the ones where a `,` has no list to
 /// separate: an empty stack (a simple query's top level), [`Frame::Brace`] (a
@@ -833,7 +904,7 @@ const MILESTONE_LATEST: &[u8] = b"latest";
 const fn separates_elements(top: Option<Frame>) -> bool {
     matches!(
         top,
-        Some(Frame::Paren | Frame::Bracket | Frame::BraceLambda)
+        Some(Frame::Paren | Frame::Bracket | Frame::BraceLambda | Frame::RelColBracket)
     )
 }
 
@@ -859,7 +930,7 @@ const fn holds_a_lambda_slot(top: Option<Frame>) -> bool {
 const fn close_to(top: Option<Frame>, byte: u8, resume: State) -> Step {
     match (top, byte) {
         (Some(Frame::Paren | Frame::Group), b')')
-        | (Some(Frame::Bracket), b']')
+        | (Some(Frame::Bracket | Frame::RelColBracket), b']')
         | (Some(Frame::Brace), b'}')
         | (Some(Frame::BraceLambda), b'}') => Step::Pop(resume),
         _ => Step::Dead,
@@ -923,6 +994,38 @@ fn value_position(stack_top: Option<Frame>, byte: u8, allow_close: bool) -> Step
         b')' | b']' | b'}' if allow_close => close(stack_top, byte),
         _ => Step::Dead,
     }
+}
+
+/// The shared body of the two arm-R column-spec hubs: the position a `~[…]`
+/// bracket item starts at, right after the `[` ([`State::ExpectRelColSpec`],
+/// `allow_close = true` — `~[]` is a legal empty key set) or right after a `,`
+/// ([`State::ExpectRelColSpecReq`], `allow_close = false` — no trailing
+/// `~[a,]`). Unlike [`value_position`], this admits only a colName's two
+/// spellings — a bare identifier or a single-quoted string — and the bracket's
+/// own closer; never a digit, `$`, `~`, `(`, `[`, `{`, or bare `|`, none of
+/// which the engine's `relationalColumnSpecification` production admits
+/// (issue #361).
+fn rel_col_spec_position(stack_top: Option<Frame>, byte: u8, allow_close: bool) -> Step {
+    let ws_state = if allow_close {
+        State::ExpectRelColSpec
+    } else {
+        State::ExpectRelColSpecReq
+    };
+    match byte {
+        b if is_ws(b) => Step::Next(ws_state),
+        b if is_ident_start(b) => Step::Next(State::InRelColIdent),
+        b'\'' => Step::Next(State::InRelColStrLit { escaped: false }),
+        b']' if allow_close => close(stack_top, byte),
+        _ => Step::Dead,
+    }
+}
+
+fn step_expect_rel_col_spec(stack_top: Option<Frame>, byte: u8) -> Step {
+    rel_col_spec_position(stack_top, byte, true)
+}
+
+fn step_expect_rel_col_spec_req(stack_top: Option<Frame>, byte: u8) -> Step {
+    rel_col_spec_position(stack_top, byte, false)
 }
 
 /// The shared body of the two block-statement states. A block query is
@@ -1054,6 +1157,15 @@ fn step_after_value(stack_top: Option<Frame>, byte: u8) -> Step {
         // block query's own [`Frame::Brace`], whose statements are `;`-separated.
         // Live-attested: `{|…::Countrylanguage.all(),'Language_T2'}` →
         // "Unexpected token ','".
+        //
+        // A `~[…]` item *after* the first opens at the restricted column-name
+        // hub, not the generic one: an item past a `,` has no fresh `~` in
+        // front of it, so without this arm a second bracket item would fall
+        // through to the same over-admission `over(~[a, t|$t.k])`'s first item
+        // was narrowed against (issue #361). Checked before the generic arm
+        // below, whose `separates_elements` is also true for
+        // `Frame::RelColBracket`.
+        b',' if stack_top == Some(Frame::RelColBracket) => Step::Next(State::ExpectRelColSpecReq),
         b',' if separates_elements(stack_top) => Step::Next(State::ExpectValueReq),
         // A `;` ends a block-query statement; the next `let` binding or the final
         // pipeline follows, but the block may also close immediately (`;}`), so
@@ -1127,6 +1239,56 @@ fn step_after_str_lit(stack_top: Option<Frame>, byte: u8) -> Step {
         b if is_ws(b) => Step::Next(State::AfterStrLit),
         b'|' => Step::Next(State::SawPipe),
         b':' => Step::Next(State::AfterColon),
+        _ => step_after_value(stack_top, byte),
+    }
+}
+
+// An identifier reached from the `SawTilde` anchor — arm-R's own colName
+// position (bare `~ident`, or the head of a `~[…]` bracket item). The one
+// name-only continuation is [`step_after_rel_col_name`], not
+// [`step_after_name`]: unlike a term-start name, a `~`-column reference is
+// never itself a lambda binder (issue #361).
+fn step_in_rel_col_ident(stack_top: Option<Frame>, byte: u8) -> Step {
+    if is_ident_tail(byte) {
+        Step::Next(State::InRelColIdent)
+    } else {
+        step(State::AfterRelColName, stack_top, byte)
+    }
+}
+
+// A single-quoted colName reached from `SawTilde` (`~'Gross Credits'`, or a
+// quoted `~[…]` bracket item) — [`step_in_str_lit`]'s sibling, ending at
+// [`step_after_rel_col_name`] rather than [`State::AfterStrLit`] for the same
+// reason `InRelColIdent` diverges from `InIdent` (issue #361).
+fn step_in_rel_col_str_lit(escaped: bool, stack_top: Option<Frame>, byte: u8) -> Step {
+    if escaped {
+        if byte == b'\'' {
+            Step::Next(State::InRelColStrLit { escaped: false })
+        } else {
+            step(State::AfterRelColName, stack_top, byte)
+        }
+    } else if byte == b'\'' {
+        Step::Next(State::InRelColStrLit { escaped: true })
+    } else {
+        Step::Next(State::InRelColStrLit { escaped: false })
+    }
+}
+
+// A completed colName reached from `SawTilde`
+// ([`InRelColIdent`](State::InRelColIdent) or
+// [`InRelColStrLit`](State::InRelColStrLit)): the `:` that opens a
+// `colLambda`/`mapLambda`/`frameLambda` body, or anything a completed value
+// admits (a separator, a closer, `->…` — `~k->ascending()`) — but never the
+// `|` that would make this name a lambda binder. Live-attested behind
+// `over(`/`rename(`/`sort(`/`groupBy(~[…])` alike: `~a|$a.b`, `~old|$x.a`,
+// `~[a|$a.b]` are each "no viable alternative" right at the `|` — the
+// tilde-column production is a disjoint sub-grammar from the generic
+// value/expression hub, not a value a `|` can attach to (issue #361).
+fn step_after_rel_col_name(stack_top: Option<Frame>, byte: u8) -> Step {
+    match byte {
+        b if is_ws(b) => Step::Next(State::AfterRelColName),
+        b':' => Step::Next(State::AfterColon),
+        b'|' => Step::Dead,
         _ => step_after_value(stack_top, byte),
     }
 }
@@ -1788,9 +1950,9 @@ fn step_saw_amp(byte: u8) -> Step {
 
 fn step_saw_tilde(byte: u8) -> Step {
     match byte {
-        b'[' => Step::Push(Frame::Bracket, State::ExpectValue),
-        b'\'' => Step::Next(State::InStrLit { escaped: false }),
-        b if is_ident_start(b) => Step::Next(State::InIdent),
+        b'[' => Step::Push(Frame::RelColBracket, State::ExpectRelColSpec),
+        b'\'' => Step::Next(State::InRelColStrLit { escaped: false }),
+        b if is_ident_start(b) => Step::Next(State::InRelColIdent),
         _ => Step::Dead,
     }
 }
@@ -1882,6 +2044,11 @@ pub fn step(state: State, stack_top: Option<Frame>, byte: u8) -> Step {
         State::SawLt => step_saw_lt(stack_top, byte),
         State::SawAmp => step_saw_amp(byte),
         State::SawTilde => step_saw_tilde(byte),
+        State::InRelColIdent => step_in_rel_col_ident(stack_top, byte),
+        State::InRelColStrLit { escaped } => step_in_rel_col_str_lit(escaped, stack_top, byte),
+        State::AfterRelColName => step_after_rel_col_name(stack_top, byte),
+        State::ExpectRelColSpec => step_expect_rel_col_spec(stack_top, byte),
+        State::ExpectRelColSpecReq => step_expect_rel_col_spec_req(stack_top, byte),
     }
 }
 
@@ -2202,6 +2369,12 @@ pub const ALL_STATES: [State; State::COUNT] = [
     State::SawLt,
     State::SawAmp,
     State::SawTilde,
+    State::InRelColIdent,
+    State::InRelColStrLit { escaped: false },
+    State::InRelColStrLit { escaped: true },
+    State::AfterRelColName,
+    State::ExpectRelColSpec,
+    State::ExpectRelColSpecReq,
 ];
 
 #[cfg(test)]
@@ -3305,6 +3478,68 @@ mod tests {
     }
 
     #[test]
+    fn a_rel_col_position_admits_only_a_column_never_a_lambda() {
+        // Issue #361: a `~`-column reference/key is never itself a lambda —
+        // live-verified against the pinned 4.113.0 engine, every one of these
+        // is "no viable alternative" right at the `|` that would make the
+        // preceding name a lambda binder.
+        assert!(dies(
+            "|t::A.all()->project(~[a: x|$x.a, k: x|$x.k])->extend(over(~[t|$t.k]), ~[b: r|$r.a])"
+        ));
+        // The same shape rejected at a bare (non-bracketed) colRef, at every
+        // arm-R construct that opens one.
+        assert!(dies(
+            "|X.all()->project(~[a: x|$x.a])->extend(over(~a|$a.b), ~[c: r|$r.a])"
+        ));
+        assert!(dies(
+            "|X.all()->project(~[a: x|$x.a])->rename(~old|$x.a, ~new)"
+        ));
+        assert!(dies(
+            "|X.all()->project(~[a: x|$x.a])->sort([ascending(~a|$a.b)])"
+        ));
+        assert!(dies(
+            "|X.all()->groupBy(~[a|$a.b], ~'s': x|$x.a : y|$y->sum())"
+        ));
+        // And a bracket item *past a comma* — no fresh `~` reopens the sigil
+        // there, so this shape had to be narrowed at the bracket-frame level,
+        // not only at `SawTilde` itself.
+        assert!(dies(
+            "|X.all()->project(~[a: x|$x.a, k: x|$x.k])->extend(over(~[a, t|$t.k]), ~[b: r|$r.a])"
+        ));
+        // A quoted colName is equally restricted.
+        assert!(dies("|X.all()->project(~['a'|$a.b])"));
+        // No trailing comma in a relation column-set (mirrors a plain list).
+        assert!(dies(
+            "|X.all()->project(~[a: x|$x.a])->extend(over(~[a,]), ~[b: r|$r.a])"
+        ));
+
+        // Genuine column specifications at the same `over(...)` position stay
+        // admitted (the issue's `good` line, plus the multi-column and empty
+        // forms the live engine also accepts).
+        assert!(accepts(
+            "|t::A.all()->project(~[a: x|$x.a, k: x|$x.k])->extend(over(~k), ~[b: {p,w,r|$r.a}])"
+        ));
+        assert!(accepts(
+            "|X.all()->project(~[a: x|$x.a, k: x|$x.k])->extend(over(~[a, k]), ~[b: {p,w,r|$r.a}])"
+        ));
+        assert!(accepts(
+            "|X.all()->project(~[a: x|$x.a])->extend(over(~[]), ~[b: {p,w,r|$r.a}])"
+        ));
+        assert!(accepts(
+            "|X.all()->project(~[a: x|$x.a])->extend(over(~a->ascending()), ~[b: {p,w,r|$r.a}])"
+        ));
+        // The `rows(...)`/`range(...)` frame forms live in `over(...)`'s own
+        // `Paren`, past the partition's `,` — untouched by this narrowing
+        // (they carry no `~` at all, so they never reach `SawTilde`).
+        assert!(accepts(
+            "|X.all()->project(~[a: x|$x.a])->extend(over(~a, rows(-2, 0)), ~[b: {p,w,r|$r.a}])"
+        ));
+        assert!(accepts(
+            "|X.all()->project(~[a: x|$x.a])->extend(over(~a, range(-2, 0)), ~[b: {p,w,r|$r.a}])"
+        ));
+    }
+
+    #[test]
     fn a_tilde_sigil_must_be_followed_by_a_column_set_or_reference() {
         // `~` opens `~[`, `~ident`, or `~'str'`; nothing else — not whitespace, not
         // a closer, not another `~` — may follow.
@@ -3320,15 +3555,15 @@ mod tests {
     fn saw_tilde_dispatches_column_sets_and_references() {
         assert!(matches!(
             step(State::SawTilde, None, b'['),
-            Step::Push(Frame::Bracket, State::ExpectValue)
+            Step::Push(Frame::RelColBracket, State::ExpectRelColSpec)
         ));
         assert!(matches!(
             step(State::SawTilde, None, b'\''),
-            Step::Next(State::InStrLit { escaped: false })
+            Step::Next(State::InRelColStrLit { escaped: false })
         ));
         assert!(matches!(
             step(State::SawTilde, None, b'W'),
-            Step::Next(State::InIdent)
+            Step::Next(State::InRelColIdent)
         ));
         assert!(matches!(step(State::SawTilde, None, b' '), Step::Dead));
         assert!(matches!(step(State::SawTilde, None, b')'), Step::Dead));
@@ -3341,13 +3576,15 @@ mod tests {
             step(State::ExpectValue, Some(Frame::Paren), b'~'),
             Step::Next(State::SawTilde)
         ));
-        // A `{` after a typed/relation colon opens a brace lambda.
+        // A `{` after a typed/relation colon opens a brace lambda — the real
+        // frame a `~[agg: {p,w,r|…}]` winAggSpec sits under is
+        // `RelColBracket`, not the generic `Bracket`.
         assert!(matches!(
-            step(State::AfterColon, Some(Frame::Bracket), b'{'),
+            step(State::AfterColon, Some(Frame::RelColBracket), b'{'),
             Step::Push(Frame::BraceLambda, State::ExpectBraceBinder)
         ));
         assert!(matches!(
-            step(State::AfterColonWs, Some(Frame::Bracket), b'{'),
+            step(State::AfterColonWs, Some(Frame::RelColBracket), b'{'),
             Step::Push(Frame::BraceLambda, State::ExpectBraceBinder)
         ));
     }
