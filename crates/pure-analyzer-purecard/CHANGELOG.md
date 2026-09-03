@@ -4,6 +4,38 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/) and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.4.0](https://github.com/tsouza/pure-analyzer/compare/purecard-v0.3.1...purecard-v0.4.0) - 2026-09-03
+
+Milestoning-arity narrowing, closing out the last major error class the
+downstream NL-to-Pure consumer's coverage sweep surfaced. Minor bump (not
+patch): the schema contract gains a genuinely new, backward-compatible
+capability. No breaking changes — `State`/`L2Position` were already
+`#[non_exhaustive]`/`#[doc(hidden)]`, and every existing schema JSON blob
+keeps deserializing unchanged (`temporal` is `#[serde(default)]`).
+
+### Added
+
+- *(purecard)* an optional per-class `temporal` field in the L2 schema
+  contract (`"business"`, `"processing"`, or `"bitemporal"`), and a
+  narrowing rule for the pipeline source's own `Class.all(...)` call: once
+  a class's milestoning stereotype is known, the number of comma-separated
+  date arguments is narrowed to exactly what that stereotype requires
+  (issue [#384](https://github.com/tsouza/pure-analyzer/issues/384),
+  [#387](https://github.com/tsouza/pure-analyzer/pull/387))
+- *(purecard)* the same arity rule at a milestoned property/association
+  navigation's own call (`$x.prop(%latest)`), keyed off the navigated-to
+  class rather than the pipeline source (issue
+  [#386](https://github.com/tsouza/pure-analyzer/issues/386),
+  [#389](https://github.com/tsouza/pure-analyzer/pull/389))
+
+### Fixed
+
+- *(purecard)* admit a `$`-variable at a milestoned property navigation's
+  own date-argument call, the sibling of the milestoning-source fix
+  shipped in 0.3.1 (issue
+  [#385](https://github.com/tsouza/pure-analyzer/issues/385),
+  [#388](https://github.com/tsouza/pure-analyzer/pull/388))
+
 ## [0.3.1](https://github.com/tsouza/pure-analyzer/compare/purecard-v0.3.0...purecard-v0.3.1) - 2026-09-03
 
 Six more fixes for gaps a downstream NL-to-Pure consumer's grammar/schema
