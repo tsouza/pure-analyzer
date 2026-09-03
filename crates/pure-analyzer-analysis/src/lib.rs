@@ -44,10 +44,10 @@ pub use pass::{
 };
 pub use relational::{
     CandidateKey, Column, ColumnId, IrOrigin, JoinKind, Knowledge, ModelOrigin, ModelOriginKind,
-    Nullability, OpaqueOutcome, Projection, RelationExpression, RelationExpressionError,
-    RelationFacts, RelationOperator, RelationSchema, RelationSource, RelationalOutcome,
-    RelationalQuery, ResolvedNavigation, RowSemantics, ScalarExpression, ScalarLiteral,
-    ScalarOperator, SchemaError, SortDirection, SortKey, SourceSpan, Totality,
+    Nullability, OpaqueOutcome, Projection, ProjectionKind, RelationExpression,
+    RelationExpressionError, RelationFacts, RelationOperator, RelationSchema, RelationSource,
+    RelationalOutcome, RelationalQuery, ResolvedNavigation, RowSemantics, ScalarExpression,
+    ScalarLiteral, ScalarOperator, SchemaError, SortDirection, SortKey, SourceSpan, Totality,
 };
 pub use validate::ValidatePass;
 

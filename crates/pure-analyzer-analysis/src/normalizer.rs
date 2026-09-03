@@ -19,9 +19,9 @@ use pure_analyzer_resolve::{DefinitionAnchor, ResolvedClass, ResolvedMember, Res
 use crate::relational::MAX_RELATIONAL_RECURSION_DEPTH;
 use crate::{
     CandidateKey, Column, ColumnId, IrOrigin, JoinKind, Knowledge, ModelOrigin, ModelOriginKind,
-    Nullability, Projection, RelationExpression, RelationFacts, RelationOperator, RelationSchema,
-    RelationSource, RelationalQuery, RowSemantics, ScalarExpression, ScalarLiteral, ScalarOperator,
-    SortDirection, SortKey, Totality,
+    Nullability, Projection, ProjectionKind, RelationExpression, RelationFacts, RelationOperator,
+    RelationSchema, RelationSource, RelationalQuery, RowSemantics, ScalarExpression, ScalarLiteral,
+    ScalarOperator, SortDirection, SortKey, Totality,
 };
 
 /// Default upper bound on relation and scalar nodes visited by normalization.
@@ -293,7 +293,11 @@ impl Normalizer {
                     origin,
                 )
             }
-            RelationOperator::Project { input, projections } => {
+            RelationOperator::Project {
+                input,
+                projections,
+                kind,
+            } => {
                 let input = self.relation(input)?;
                 let projections = projections
                     .iter()
@@ -311,6 +315,7 @@ impl Normalizer {
                     RelationOperator::Project {
                         input: Box::new(input),
                         projections,
+                        kind: *kind,
                     },
                     expression.schema().clone(),
                     expression.facts().clone(),
@@ -516,8 +521,24 @@ impl KeyEncoder {
                 self.relation(input);
                 self.scalar(predicate, &ColumnScope::from_schema(input.schema()));
             }
-            RelationOperator::Project { input, projections } => {
+            RelationOperator::Project {
+                input,
+                projections,
+                kind,
+            } => {
                 write_fragment(&mut self.output, "project");
+                // A scalar-collection projection (`->map`, `.property`) and an
+                // explicit `->project(~[...])` can otherwise produce identical
+                // schemas and scalar expressions; without this fragment they
+                // would collide in the same equivalence key despite carrying
+                // different Legend result types (see issue #263).
+                write_fragment(
+                    &mut self.output,
+                    match kind {
+                        ProjectionKind::Scalar => "scalar",
+                        ProjectionKind::Relation => "relation",
+                    },
+                );
                 self.relation(input);
                 let input_scope = ColumnScope::from_schema(input.schema());
                 write_usize(&mut self.output, projections.len());
