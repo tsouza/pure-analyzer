@@ -778,7 +778,7 @@ impl<'model> NavigationResolver<'model> {
                 expected,
                 generated_milestoned: matches!(
                     member.kind(),
-                    ResolvedMemberKind::Qualified(QpKind::MilestonedPoint | QpKind::EdgePoint)
+                    ResolvedMemberKind::Qualified(QpKind::MilestonedPoint)
                 ),
                 definition: Some(member.definition()),
             };
@@ -859,7 +859,7 @@ fn expected_argument_count(
         }
         ResolvedMemberKind::Qualified(QpKind::AllVersions) => Ok(NO_ARGUMENTS),
         ResolvedMemberKind::Qualified(QpKind::AllVersionsInRange) => Ok(RANGE_CONTEXT_ARGUMENTS),
-        ResolvedMemberKind::Qualified(QpKind::MilestonedPoint | QpKind::EdgePoint) => member
+        ResolvedMemberKind::Qualified(QpKind::MilestonedPoint) => member
             .target_temporal_arity()
             .map(usize::from)
             .ok_or_else(|| {

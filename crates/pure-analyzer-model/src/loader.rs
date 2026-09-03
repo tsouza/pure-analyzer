@@ -10,9 +10,9 @@ use crate::raw::{
     RawStereotype,
 };
 use crate::stereotypes::{
-    ALL_VERSIONS_IN_RANGE_SUFFIX, ALL_VERSIONS_SUFFIX, BITEMPORAL, BUSINESS_TEMPORAL,
-    GENERATED_MILESTONING_PROPERTY, MILESTONING_PROFILE, MILESTONING_PROFILE_PROTOCOL,
-    PROCESSING_TEMPORAL, TEMPORAL_PROFILE, TEMPORAL_PROFILE_PROTOCOL,
+    BITEMPORAL, BUSINESS_TEMPORAL, GENERATED_MILESTONING_PROPERTY, MILESTONING_PROFILE,
+    MILESTONING_PROFILE_PROTOCOL, PROCESSING_TEMPORAL, TEMPORAL_PROFILE, TEMPORAL_PROFILE_PROTOCOL,
+    classify_qualified_property,
 };
 use crate::{
     AssocInfo, AssociationEndInfo, ClassId, ClassInfo, MODEL_MERGE_CONFLICT, ModelGraph,
@@ -603,7 +603,8 @@ fn lower_qualified_property(raw: RawQualifiedProperty) -> Result<QpInfo, ModelEr
     let name = Name::new(raw.name)?;
     let target = lower_type_ref(raw.return_generic_type)?;
     let multiplicity = lower_multiplicity(raw.return_multiplicity)?;
-    let kind = classify_qualified_property(&name, multiplicity, &raw.stereotypes);
+    let generated = is_generated_milestoning_property(&raw.stereotypes);
+    let kind = classify_qualified_property(&name, generated);
     let signature = if kind == QpKind::UserQualified {
         lower_signature(raw.parameters)?
     } else {
@@ -625,26 +626,11 @@ fn lower_signature(
         .transpose()
 }
 
-fn classify_qualified_property(
-    name: &Name,
-    multiplicity: Multiplicity,
-    stereotypes: &[RawStereotype],
-) -> QpKind {
-    let generated = stereotypes.iter().any(|stereotype| {
+fn is_generated_milestoning_property(stereotypes: &[RawStereotype]) -> bool {
+    stereotypes.iter().any(|stereotype| {
         is_milestoning_profile(&stereotype.profile)
             && stereotype.value == GENERATED_MILESTONING_PROPERTY
-    });
-    if generated && name.as_str().ends_with(ALL_VERSIONS_IN_RANGE_SUFFIX) {
-        QpKind::AllVersionsInRange
-    } else if generated && name.as_str().ends_with(ALL_VERSIONS_SUFFIX) {
-        QpKind::AllVersions
-    } else if generated && multiplicity.is_unbounded() {
-        QpKind::EdgePoint
-    } else if generated {
-        QpKind::MilestonedPoint
-    } else {
-        QpKind::UserQualified
-    }
+    })
 }
 
 fn is_milestoning_profile(profile: &str) -> bool {
@@ -1000,88 +986,42 @@ mod tests {
     };
 
     #[test]
-    fn qualified_property_classification_has_explicit_precedence() {
+    fn generated_milestoning_stereotype_detection_matches_profile_and_value() {
+        // The name/multiplicity-driven classification precedence itself is
+        // covered once, in `crate::stereotypes`, shared by both loaders.
+        // This test covers only what is specific to the PMCD stereotype-list
+        // shape: which profile spellings and stereotype values count as the
+        // engine-asserted "generated" fact.
         let generated = [RawStereotype {
             profile: MILESTONING_PROFILE.to_owned(),
             value: GENERATED_MILESTONING_PROPERTY.to_owned(),
         }];
-        let bounded = Multiplicity::new(0, Some(1)).expect("valid");
-        let unbounded = Multiplicity::new(0, None).expect("valid");
-        assert_eq!(
-            classify_qualified_property(&Name::new("orders").expect("valid"), bounded, &generated),
-            QpKind::MilestonedPoint
-        );
-        assert_eq!(
-            classify_qualified_property(
-                &Name::new("ordersAllVersions").expect("valid"),
-                unbounded,
-                &generated
-            ),
-            QpKind::AllVersions
-        );
-        assert_eq!(
-            classify_qualified_property(
-                &Name::new("ordersEdge").expect("valid"),
-                unbounded,
-                &generated
-            ),
-            QpKind::EdgePoint
-        );
-        assert_eq!(
-            classify_qualified_property(
-                &Name::new("ordersAllVersionsInRange").expect("valid"),
-                bounded,
-                &generated
-            ),
-            QpKind::AllVersionsInRange
-        );
-        assert_eq!(
-            classify_qualified_property(
-                &Name::new("ordersAllVersions").expect("valid"),
-                bounded,
-                std::slice::from_ref(&USER_STEREOTYPE)
-            ),
-            QpKind::UserQualified
-        );
-
-        let other_milestoning = [RawStereotype {
-            profile: MILESTONING_PROFILE.to_owned(),
-            value: "notgenerated".to_owned(),
-        }];
-        assert_eq!(
-            classify_qualified_property(
-                &Name::new("orders").expect("valid"),
-                bounded,
-                &other_milestoning
-            ),
-            QpKind::UserQualified
-        );
-
-        let generated_value_in_another_profile = [RawStereotype {
-            profile: "example::profile".to_owned(),
-            value: GENERATED_MILESTONING_PROPERTY.to_owned(),
-        }];
-        assert_eq!(
-            classify_qualified_property(
-                &Name::new("orders").expect("valid"),
-                bounded,
-                &generated_value_in_another_profile
-            ),
-            QpKind::UserQualified
-        );
+        assert!(is_generated_milestoning_property(&generated));
 
         let short_generated = [RawStereotype {
             profile: MILESTONING_PROFILE_PROTOCOL.to_owned(),
             value: GENERATED_MILESTONING_PROPERTY.to_owned(),
         }];
-        assert_eq!(
-            classify_qualified_property(
-                &Name::new("orders").expect("valid"),
-                bounded,
-                &short_generated
-            ),
-            QpKind::MilestonedPoint
-        );
+        assert!(is_generated_milestoning_property(&short_generated));
+
+        let other_milestoning = [RawStereotype {
+            profile: MILESTONING_PROFILE.to_owned(),
+            value: "notgenerated".to_owned(),
+        }];
+        assert!(!is_generated_milestoning_property(&other_milestoning));
+
+        let generated_value_in_another_profile = [RawStereotype {
+            profile: "example::profile".to_owned(),
+            value: GENERATED_MILESTONING_PROPERTY.to_owned(),
+        }];
+        assert!(!is_generated_milestoning_property(
+            &generated_value_in_another_profile
+        ));
+
+        assert!(!is_generated_milestoning_property(std::slice::from_ref(
+            &USER_STEREOTYPE
+        )));
+        assert!(!is_generated_milestoning_property(&[]));
     }
 
     #[test]

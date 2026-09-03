@@ -7,9 +7,9 @@ use pure_analyzer_syntax::{GreenElement, GreenNode, GreenToken, SyntaxKind};
 use crate::error::ModelError;
 use crate::loader::{AssocDraft, FragmentElement, ModelFragment};
 use crate::stereotypes::{
-    ALL_VERSIONS_IN_RANGE_SUFFIX, ALL_VERSIONS_SUFFIX, BITEMPORAL, BUSINESS_TEMPORAL,
-    GENERATED_MILESTONING_PROPERTY, MILESTONING_PROFILE, MILESTONING_PROFILE_PROTOCOL,
-    PROCESSING_TEMPORAL, TEMPORAL_PROFILE, TEMPORAL_PROFILE_PROTOCOL,
+    BITEMPORAL, BUSINESS_TEMPORAL, GENERATED_MILESTONING_PROPERTY, MILESTONING_PROFILE,
+    MILESTONING_PROFILE_PROTOCOL, PROCESSING_TEMPORAL, TEMPORAL_PROFILE, TEMPORAL_PROFILE_PROTOCOL,
+    classify_qualified_property,
 };
 use crate::{
     ClassInfo, Multiplicity, Name, PropInfo, Provenance, QName, QpInfo, QpKind, SourceId, Temporal,
@@ -536,7 +536,7 @@ fn lower_qualified_property(
     let multiplicity = direct_nodes(node, SyntaxKind::DOMAIN_MULTIPLICITY)
         .next()
         .and_then(multiplicity_from_node)?;
-    let kind = classify_pure_qualified_property(&name, multiplicity, annotations.generated);
+    let kind = classify_qualified_property(&name, annotations.generated);
     let signature = if kind == QpKind::UserQualified {
         Some(lower_signature(node, context)?)
     } else {
@@ -568,24 +568,6 @@ fn lower_signature(node: &GreenNode, context: LoweringContext<'_>) -> Option<Vec
         signature.push(ty);
     }
     Some(signature)
-}
-
-fn classify_pure_qualified_property(
-    name: &Name,
-    multiplicity: Multiplicity,
-    generated: bool,
-) -> QpKind {
-    if generated && name.as_str().ends_with(ALL_VERSIONS_IN_RANGE_SUFFIX) {
-        QpKind::AllVersionsInRange
-    } else if generated && name.as_str().ends_with(ALL_VERSIONS_SUFFIX) {
-        QpKind::AllVersions
-    } else if generated && multiplicity.is_unbounded() {
-        QpKind::EdgePoint
-    } else if generated {
-        QpKind::MilestonedPoint
-    } else {
-        QpKind::UserQualified
-    }
 }
 
 fn declaration_path(node: &GreenNode) -> Option<(QName, usize)> {

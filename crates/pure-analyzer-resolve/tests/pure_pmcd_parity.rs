@@ -292,7 +292,7 @@ fn confirmed_class_members_have_pmcd_pure_resolution_parity() {
                         true,
                         &[],
                     ),
-                    pmcd_qualified_property("pointEdge", "model::Target", 0, None, true, &[]),
+                    pmcd_qualified_property("pointUnbounded", "model::Target", 0, None, true, &[]),
                     pmcd_qualified_property(
                         "userAllVersions",
                         "model::Target",
@@ -319,7 +319,7 @@ Class model::Holder
   <<milestoning.generatedmilestoningproperty>>
   pointAllVersionsInRange(): model::Target[1..*] {};
   <<milestoning.generatedmilestoningproperty>>
-  pointEdge(): model::Target[*] {};
+  pointUnbounded(): model::Target[*] {};
   userAllVersions(asOf: StrictDate[1], enabled: Boolean[1]): model::Target[1..2] {};
 }
 "#,
@@ -346,8 +346,8 @@ Class model::Holder
             None,
         ),
         (
-            "pointEdge",
-            ResolvedMemberKind::Qualified(QpKind::EdgePoint),
+            "pointUnbounded",
+            ResolvedMemberKind::Qualified(QpKind::MilestonedPoint),
             0,
             None,
         ),
@@ -375,7 +375,7 @@ Class model::Holder
         ("point", 2),
         ("pointAllVersions", 0),
         ("pointAllVersionsInRange", 2),
-        ("pointEdge", 2),
+        ("pointUnbounded", 2),
         ("userAllVersions", 2),
     ] {
         let pmcd_member = found_navigation_member(&pmcd, "Holder", name, argument_count);
