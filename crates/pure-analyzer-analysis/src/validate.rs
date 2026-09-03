@@ -102,11 +102,7 @@ impl GuardWalker<'_> {
                 )
             })
             .collect::<Vec<_>>();
-        if values.len() > 2
-            && values
-                .iter()
-                .all(|token| token.kind() == SyntaxKind::LATEST_DATE)
-        {
+        if values.len() > 2 && values.iter().all(|token| is_date_literal(token.kind())) {
             self.error(
                 DiagCode::MalformedMilestoningArguments,
                 arguments.text_range(),
@@ -173,6 +169,18 @@ const fn is_trivia(kind: SyntaxKind) -> bool {
     matches!(
         kind,
         SyntaxKind::WHITESPACE | SyntaxKind::LINE_COMMENT | SyntaxKind::BLOCK_COMMENT
+    )
+}
+
+/// Reports whether `kind` is one of the three date-literal token kinds Pure's
+/// milestoning surface admits (`%2020-01-01T…`, `%2020-01-01`, `%latest`).
+/// The engine caps milestoning arity at two dates regardless of which kind is
+/// spelled — bitemporal, the widest stereotype, takes exactly two — so this
+/// helper backs a model-free ceiling, not a claim about any one kind alone.
+const fn is_date_literal(kind: SyntaxKind) -> bool {
+    matches!(
+        kind,
+        SyntaxKind::DATE_TIME | SyntaxKind::STRICT_DATE | SyntaxKind::LATEST_DATE
     )
 }
 
@@ -289,9 +297,36 @@ mod tests {
             "f(a, b)",
             "f((a, b))",
             "$x.prop(%latest, %latest)",
+            "$x.prop(%2020-01-01, %2020-01-02)",
+            "$x.prop(%2020-01-01T12:30:00, %latest)",
             "#>{db::testDB.left}#->join(#>{db::testDB.right}#, JoinKind.LEFT, {x,y| $x == $y})",
         ] {
             assert!(codes(source).is_empty(), "{source}");
+        }
+    }
+
+    #[test]
+    fn milestoning_arity_guard_fires_for_every_date_token_kind_and_every_mix_of_them() {
+        // Regression for #284: the guard's condition must agree with its own
+        // message ("at most two date arguments") for STRICT_DATE and
+        // DATE_TIME literals, not only the LATEST_DATE (`%latest`) kind it
+        // originally special-cased. Bitemporal milestoning — the widest
+        // stereotype the engine recognizes — never legally takes more than
+        // two dates, and that ceiling does not depend on which date-literal
+        // kind is spelled, so three-deep combinations of all three kinds
+        // must all raise PUR1204.
+        for source in [
+            "$x.prop(%2020-01-01, %2020-01-02, %2020-01-03)",
+            "$x.prop(%2020-01-01T12:30:00, %2020-01-02T12:30:00, %2020-01-03T12:30:00)",
+            "$x.prop(%2020-01-01, %2020-01-02, %latest)",
+            "$x.prop(%2020-01-01T12:30:00, %latest, %latest)",
+            "$x.prop(%latest, %2020-01-01, %2020-01-01T12:30:00)",
+        ] {
+            assert_eq!(
+                codes(source),
+                [DiagCode::MalformedMilestoningArguments],
+                "{source}"
+            );
         }
     }
 
