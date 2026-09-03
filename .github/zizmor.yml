@@ -4,9 +4,16 @@ rules:
   # actions/labeler uses the base branch's pinned action and label config; it
   # never checks out or executes pull-request code. pull_request_target is
   # required so fork PRs can receive labels with the narrowly scoped job token.
+  #
+  # pr-type-label.yml is the same shape: its event job reads the PR TITLE
+  # from the trusted webhook payload and runs only the in-repo, base-ref
+  # `scripts/label/pr-label.mjs` — it never checks out or executes PR head
+  # code either. pull_request_target is required for the same reason: a
+  # fork PR still needs a base-ref job token that can write the label.
   dangerous-triggers:
     ignore:
       - labeler.yml
+      - pr-type-label.yml
 
   # release-plz must retain Git credentials to push its release branch and tags.
   artipacked:
