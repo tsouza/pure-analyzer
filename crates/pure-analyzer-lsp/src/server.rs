@@ -316,6 +316,23 @@ mod tests {
     }
 
     #[test]
+    fn malformed_params_yield_invalid_params_for_every_request_kind() {
+        let (mut client, _events, _release, server) = start_session(RequestId::Number(2));
+        initialize_session(&mut client);
+
+        client.send(invalid_hover_request(10));
+        assert_error(&client.response(10), -32_602, "invalid params");
+
+        client.send(invalid_definition_request(11));
+        assert_error(&client.response(11), -32_602, "invalid params");
+
+        client.send(invalid_code_action_request(12));
+        assert_error(&client.response(12), -32_602, "invalid params");
+
+        finish_clean(client, server);
+    }
+
+    #[test]
     fn active_request_identifiers_are_unique_and_reusable_after_completion() {
         let (mut client, events, release, server) = start_session(RequestId::Number(2));
         initialize_session(&mut client);
@@ -643,10 +660,22 @@ mod tests {
     }
 
     fn invalid_hover_request(id: i64) -> Value {
+        invalid_request(id, "textDocument/hover")
+    }
+
+    fn invalid_definition_request(id: i64) -> Value {
+        invalid_request(id, "textDocument/definition")
+    }
+
+    fn invalid_code_action_request(id: i64) -> Value {
+        invalid_request(id, "textDocument/codeAction")
+    }
+
+    fn invalid_request(id: i64, method: &str) -> Value {
         object([
             ("jsonrpc", string("2.0")),
             ("id", number(id)),
-            ("method", string("textDocument/hover")),
+            ("method", string(method)),
         ])
     }
 

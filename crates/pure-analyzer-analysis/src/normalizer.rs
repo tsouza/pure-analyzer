@@ -16,6 +16,7 @@ use pure_analyzer_diagnostics::ReasonCode;
 use pure_analyzer_model::{Multiplicity, Provenance, QpKind, Temporal, TypeRef};
 use pure_analyzer_resolve::{DefinitionAnchor, ResolvedClass, ResolvedMember, ResolvedMemberKind};
 
+use crate::relational::MAX_RELATIONAL_RECURSION_DEPTH;
 use crate::{
     CandidateKey, Column, ColumnId, IrOrigin, JoinKind, Knowledge, ModelOrigin, ModelOriginKind,
     Nullability, Projection, RelationExpression, RelationFacts, RelationOperator, RelationSchema,
@@ -195,6 +196,7 @@ pub fn normalize_relational_query_with_budget(
 ) -> NormalizationOutcome {
     let mut normalizer = Normalizer {
         remaining_steps: budget.max_steps(),
+        depth: 0,
     };
     let root = match normalizer.relation(query.root()) {
         Ok(root) => root,
@@ -220,6 +222,10 @@ pub fn normalize_relational_query_with_budget(
 
 struct Normalizer {
     remaining_steps: usize,
+    /// Live relation/scalar call-stack depth, bounded independently of
+    /// `remaining_steps`: a node budget caps total work, not stack depth. See
+    /// [`MAX_RELATIONAL_RECURSION_DEPTH`].
+    depth: usize,
 }
 
 impl Normalizer {
@@ -231,11 +237,38 @@ impl Normalizer {
         Ok(())
     }
 
+    /// Claim one stack-depth slot, refusing once [`MAX_RELATIONAL_RECURSION_DEPTH`]
+    /// live frames are already open.
+    ///
+    /// Every claim is matched by exactly one `self.depth -= 1` in the calling
+    /// wrapper (`relation`/`scalar`), which runs after the recursive body
+    /// returns regardless of whether it succeeded — so the budget never leaks
+    /// past its owning call without needing a borrowing RAII guard, which
+    /// would conflict with the further `&mut self` calls the body itself
+    /// makes.
+    fn enter(&mut self, origin: &IrOrigin) -> Result<(), NormalizationFailure> {
+        if self.depth >= MAX_RELATIONAL_RECURSION_DEPTH {
+            return Err(NormalizationFailure::missing_rewrite(origin.clone()));
+        }
+        self.depth += 1;
+        Ok(())
+    }
+
     fn relation(
         &mut self,
         expression: &RelationExpression,
     ) -> Result<RelationExpression, NormalizationFailure> {
         self.consume(expression.origin())?;
+        self.enter(expression.origin())?;
+        let result = self.relation_at_depth(expression);
+        self.depth -= 1;
+        result
+    }
+
+    fn relation_at_depth(
+        &mut self,
+        expression: &RelationExpression,
+    ) -> Result<RelationExpression, NormalizationFailure> {
         let origin = expression.origin().clone();
         match expression.operator() {
             RelationOperator::Scan(_) => Ok(expression.clone()),
@@ -347,6 +380,16 @@ impl Normalizer {
         expression: &ScalarExpression,
     ) -> Result<ScalarExpression, NormalizationFailure> {
         self.consume(expression.origin())?;
+        self.enter(expression.origin())?;
+        let result = self.scalar_at_depth(expression);
+        self.depth -= 1;
+        result
+    }
+
+    fn scalar_at_depth(
+        &mut self,
+        expression: &ScalarExpression,
+    ) -> Result<ScalarExpression, NormalizationFailure> {
         match expression.operator() {
             ScalarOperator::Column(_) | ScalarOperator::Literal(_) => {}
             ScalarOperator::Navigation { input, .. } | ScalarOperator::Not { input } => {

@@ -200,10 +200,12 @@ mod tests {
 
     #[test]
     fn version_matches_workspace_version() {
-        // Asserting non-emptiness alone doesn't kill a mutant that replaces
-        // the return value with a different non-empty string (`xyzzy`); pin
-        // the exact value instead.
-        assert_eq!(version(), "0.1.0");
+        // `env!` here is evaluated independently of the `version()` body
+        // being tested, so this stays a real oracle instead of a tautology:
+        // a mutant that swaps `version()`'s return value still fails this
+        // assertion, and unlike a hardcoded literal it never goes stale on
+        // a workspace version bump.
+        assert_eq!(version(), env!("CARGO_PKG_VERSION"));
     }
 
     fn kinds(text: &str) -> Vec<SyntaxKind> {

@@ -18,10 +18,30 @@ The final-query span PureCARD constrains is a Pure lambda. Two envelopes occur i
 query        = simpleQuery | blockQuery ;
 simpleQuery  = "|" pipeline ;                          (* the common case: 98.6% of gold *)
 blockQuery   = "{|" { letBinding ";" } pipeline "}" ;  (* let-scoped block: 69 gold (1.4%) *)
-letBinding   = "let" ident "=" pipeline ;              (* a named sub-pipeline, referenced as $ident *)
+letBinding   = "let" ident "=" ( pipeline | scalarExpr ) ;  (* a named sub-pipeline or scalar, referenced as $ident *)
+scalarExpr   = scalarCall | dateLit | milestoneLit ;   (* issue #352: a bound scalar, typically a milestoning date *)
+scalarCall   = ident "(" ")" ;                         (* a bare, unqualified, zero-argument call: today(), now() *)
 ```
 
-`blockQuery` binds one or more sub-pipelines with `let` and returns a final `pipeline`; a `let`-bound name is referenced later as a `$ident` row/scalar value (e.g. the `->at(0).getString('mps')` scalar-extraction pattern, §5.7). L2's scope machine (§6.4) enters each `pipeline` independently.
+`blockQuery` binds one or more sub-pipelines or scalars with `let` and returns a
+final `pipeline`; a `let`-bound name is referenced later as a `$ident` row/scalar
+value (e.g. the `->at(0).getString('mps')` scalar-extraction pattern, §5.7).
+`scalarExpr` was added by issue #352 for the common query shape that binds a
+business date once and threads it through milestoned navigation
+(`{|let d = today(); T.all($d)->…}`) — a zero-arg call and a date literal were
+already admitted as a milestoning *argument* (`.all(today())`,
+`.all(%2024-01-01)`); the fix is admitting the same two values as the
+initializer too, not a new kind of expression. `scalarCall` is deliberately
+arity-**zero**-only and unqualified: a multi-argument or qualified call
+(`today(1)`, `ns::today()`), and a bare `$ident` initializer referencing an
+outer binding — all real Legend Pure — are outside issue #352's evidenced
+scope and stay unadmitted (`tests/precision_reject.rs`). `milestoneLit`
+(`%latest`) also streams here, but only as the pre-existing residual
+over-approximation §5.6 already documents at every other value position — the
+pinned engine itself rejects a bare `let` value of `%latest`
+("Unexpected token '%latest'"), unlike the live-attested `scalarCall`/`dateLit`
+forms (`corpus/modern_dialect_seeds.jsonl`'s `issue-352/let-scalar:*` rows).
+L2's scope machine (§6.4) enters each `pipeline` independently.
 
 ### 5.2 Pipeline and steps
 
@@ -204,8 +224,10 @@ and each with its rejecting byte pinned in `tests/precision_reject.rs`:
   latter ("Unexpected token '|'. Valid alternatives: \['[', '(', '<'\]").
   (2) `milestoneLit` is admitted wherever a literal is, though the engine takes
   `%latest` only in a milestoning argument slot (`.all(…)` / `.PROP(…)`, one or
-  two arguments); a comparison operand is rejected. Both want a position/sigil
-  phase the current per-byte machine does not track.
+  two arguments); a comparison operand is rejected, and so — live-attested by
+  issue #352 — is a bare `letBinding` value (`{|let d = %latest; …}`,
+  "Unexpected token '%latest'"). Both want a position/sigil phase the current
+  per-byte machine does not track.
 
 - **A call's `(` and a multiplicity `[` bind to a name.** Both are admitted from
   `AfterName` — the state an identifier's completion (past any trailing
@@ -378,6 +400,14 @@ absent here is outside the emitted grammar.
 | `olapGroupBy(...)` / `->rowNumber()` | 3 / 3   | `olapGroupBy` / `reducer`       |
 | `let … = …` block form               | 69      | `blockQuery` / `letBinding`     |
 
+The 69-query count above is exactly the frozen Spider-derived gold corpus's
+`let`-block figure, and every one of those 69 binds a **pipeline** — the
+`scalarExpr` alternative §5.1 added (issue #352) is not corpus-derived and
+contributes 0 to it; it is oracled separately by the modern-dialect seed
+corpus below (`issue-352/let-scalar:*`), the same second-oracle mechanism
+`%latest` (G2) and arm-R (G1) already use for constructs the frozen corpus
+never exercised.
+
 ### 5.8 Modern-dialect seed corpus (a second oracle)
 
 The Spider-derived `corpus/gold_queries.jsonl` (§5.7) is frozen at 5,034 queries;
@@ -402,10 +432,11 @@ that closes the class: `every_modern_dialect_seed_parses_against_the_pinned_engi
 sends every seed through the engine's own `grammarToJson/lambda`, so a seed that
 is not real Pure cannot be committed again.
 
-| Construct                             | Seeds | Grammar production       | Gap report |
-| ------------------------------------- | ----: | ------------------------ | ---------- |
-| `%latest` milestoning                 | 5     | `milestoneLit` (§5.4)    | G2         |
-| `~` Relation/Function API (arm-R)     | 11    | arm-R productions (§5.9) | G1         |
+| Construct                             | Seeds | Grammar production               | Gap report |
+| ------------------------------------- | ----: | -------------------------------- | ---------- |
+| `%latest` milestoning                 | 5     | `milestoneLit` (§5.4)            | G2         |
+| `~` Relation/Function API (arm-R)     | 14    | arm-R productions (§5.9)         | G1         |
+| `letBinding` scalarExpr initializers  | 3     | `letBinding`/`scalarExpr` (§5.1) | issue #352 |
 
 ### 5.9 Arm-R — the Relation/Function API (`~`-column constructs)
 

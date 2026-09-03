@@ -1028,6 +1028,16 @@ pub(crate) struct ScopeTracker {
     /// identifier itself (see the field's use site) and awaiting that binder's
     /// own `|` to bind the pair into [`var_reducer_type`](Self::var_reducer_type).
     pending_binder_element: Option<(String, TypeClass)>,
+    /// A binder name paired with its colon-typed **class** annotation
+    /// (`("y", "t::A")` for `y: t::A[1]|…`), captured at the type identifier
+    /// itself — the class-typed sibling of
+    /// [`pending_binder_element`](Self::pending_binder_element) — and awaiting
+    /// that binder's own `|` to bind the pair into [`var_class`](Self::var_class).
+    /// The annotation is authoritative over the enclosing receiver: a typed
+    /// binder re-types its variable away from the pipeline's own element class
+    /// (a join lambda's second binder is the case this exists for), so `on_pipe`
+    /// reads this ahead of `lambda_first_ident`'s `paren_receiver` default.
+    pending_binder_class: Option<(String, String)>,
     /// T3 is armed: a `->` was just seen right after a bare refVar bound to a
     /// primitive element type, so the next identifier is a reducer-method name
     /// legal only for that type.
@@ -1097,6 +1107,27 @@ pub(crate) struct ScopeTracker {
     /// identifier at the `ExpectValue` key position of the innermost open delimiter
     /// is a column name exactly when the top flag is set.
     tilde_open: Vec<bool>,
+    /// Per-open-delimiter flag: is this delimiter a `{`-opened brace lambda whose
+    /// binder list is still open (its own closing `|` not yet seen)? Pushed and
+    /// popped in lockstep with [`paren_receiver`](Self::paren_receiver); cleared to
+    /// `false` by [`on_pipe`](Self::on_pipe) once that binder-closing `|` fires, so
+    /// it reads `true` for exactly a brace lambda's 2nd-and-on untyped binder
+    /// (`{x,y,z|…}`'s `y`, `z`) and `false` again once its body starts.
+    ///
+    /// The byte-PDA cannot see a brace lambda's binder pipe from its frame alone
+    /// (`separates_elements`'s doc comment, `grammar/pda.rs`): every binder past
+    /// the first reaches the exact same `ExpectValueReq` anchor
+    /// [`value_opening_position`](Self::value_opening_position) stamps
+    /// [`L2Position::ValueIdent`] (N7) at for an ordinary value. N7's own
+    /// continuation set has no reading for a binder list's `,` — a real N7 value
+    /// position that ends on one is a standalone bare word resolving to nothing,
+    /// while a binder name ending one is the grammar's own separator
+    /// (`docs/spec/schema.md` §6's `L2 ⊆ L1` invariant: grammar-only structure L2
+    /// has no rule for). This flag is what lets
+    /// [`opening_position`](Self::opening_position) tell the two apart and pass a
+    /// binder-list position through unconstrained, exactly as the first binder
+    /// already is (issue #351).
+    brace_binder_open: Vec<bool>,
     /// Lambda variables bound to an arm-R **relation row** (a post-establishing-op
     /// row over the emitted-column universe), so `$row.<Col>` is a bare-ident column
     /// access (N6), not a class member navigation.
@@ -1496,12 +1527,17 @@ impl ScopeTracker {
                 }
             }
             Lexeme::Pipe => self.on_pipe(pre_state),
-            Lexeme::Open => self.on_open(pre_state),
+            // `Lexeme::Open` is always exactly the one opener byte (`flush_gap`
+            // never fuses a delimiter with a neighbour), so `bytes[0]` is the
+            // opener `on_open` needs to tell a brace lambda's `{` apart from
+            // every other opener (issue #351).
+            Lexeme::Open => self.on_open(pre_state, bytes[0]),
             Lexeme::Close => self.on_close(),
             Lexeme::Comma => {
                 self.lambda_first_ident = None;
                 self.last_ident = None;
                 self.pending_binder_element = None;
+                self.pending_binder_class = None;
                 if self.store_call_arity.is_some() {
                     self.store_call_commas += 1;
                 }
@@ -1613,14 +1649,26 @@ impl ScopeTracker {
                 self.lambda_first_ident = Some(text.to_owned());
                 self.bind_var(text);
             }
-            // Two binders the grammar fixes by *position*, with no pipe to confirm
-            // them, so neither reaches `on_pipe`'s `lambda_first_ident` path:
-            // `let <name> = …` (which additionally outlives its own statement —
-            // every later statement in the block may reference it, as
-            // `->in($topStates)` does), and a join brace lambda's leading typed
-            // binder (`{row1: …[1], row2: …[1]|…}`, whose *second* binder is caught
-            // by the `ExpectValueReq` arm after the comma).
-            State::ExpectBinder | State::ExpectBraceBinder => {
+            // `let <name> = …` names its binder by *position*, with no pipe to
+            // confirm it, so it never reaches `on_pipe`'s `lambda_first_ident`
+            // path — and it additionally outlives its own statement (every later
+            // statement in the block may reference it, as `->in($topStates)`
+            // does), which `bind_var`'s S2 superset already covers without a
+            // scoped class binding.
+            State::ExpectBinder => {
+                self.bind_var(text);
+            }
+            // A brace lambda's binder — the leading one, or any later one a join
+            // lambda's binder-list comma reintroduces here (`{row1: …[1],
+            // row2: …[1]|…}` parks *both* names at this anchor, not just the
+            // first) — is recorded as `lambda_first_ident` exactly like a plain
+            // lambda's `ExpectValue` binder, so a following `:` type annotation
+            // (below) has a name to pair itself with. Re-setting it on a second
+            // or later binder simply lets that binder's own annotation win at the
+            // next `|` — the same last-binder-wins trade `ExpectValueReq` already
+            // makes for an untyped `{x,y,z|…}`'s later names.
+            State::ExpectBraceBinder => {
+                self.lambda_first_ident = Some(text.to_owned());
                 self.bind_var(text);
             }
             // The arm-R map lambda binds its variable *after* a colon
@@ -1630,21 +1678,32 @@ impl ScopeTracker {
             // re-used name keeps whatever class an earlier `filter(x|…)` lambda bound
             // it to, and N1 unsoundly masks a projected column. A *class-named*
             // identifier here is instead the type of a typed binder
-            // (`row: Person[1]|…`), whose true binder precedes the colon; leaving the
-            // pre-colon candidate in place keeps that narrowing intact. Likewise a
-            // *primitive*-named identifier (`y: Integer[*]|…`, T3's aggregation-reduce
-            // binder) is a type annotation, not the binder. Its multiplicity brackets
+            // (`row: Person[1]|…`), whose true binder precedes the colon and is
+            // already `lambda_first_ident` (set at `ExpectValue`/`ExpectBraceBinder`
+            // above) — paired with the class here (N1/N2 §6.5) rather than left to
+            // fall back to the enclosing pipeline's own class at `on_pipe`, which is
+            // wrong whenever the annotation re-types the binder away from it (a join
+            // lambda's second binder is exactly this). Likewise a *primitive*-named
+            // identifier (`y: Integer[*]|…`, T3's aggregation-reduce binder) is a type
+            // annotation, not the binder. Both annotations' multiplicity brackets
             // (`[*]`) still lie ahead, and `on_open` unconditionally clears
             // `lambda_first_ident` on every opening delimiter (a defensive reset for a
             // *fresh* argument list, which a multiplicity annotation is not) — so the
-            // binder name is read and stashed together with the `TypeClass` *now*,
-            // rather than trusted to survive in `lambda_first_ident` until `on_pipe`.
+            // binder name is read and stashed together with the class/`TypeClass`
+            // *now*, rather than trusted to survive in `lambda_first_ident` until
+            // `on_pipe`. An annotation resolving to neither (`t::NOPE`, an unknown
+            // class) falls through unrecorded, so `on_pipe` keeps its pass-through
+            // default for it (§4: pass through what the corpus does not attest).
             State::AfterColon | State::AfterColonWs => {
                 if let Some(prim) = PrimName::from_ident(text) {
                     if let Some(binder) = &self.lambda_first_ident {
                         self.pending_binder_element = Some((binder.clone(), prim.type_class()));
                     }
-                } else if !schema.has_class(text) {
+                } else if schema.has_class(text) {
+                    if let Some(binder) = &self.lambda_first_ident {
+                        self.pending_binder_class = Some((binder.clone(), text.to_owned()));
+                    }
+                } else {
                     self.lambda_first_ident = Some(text.to_owned());
                     self.bind_var(text);
                 }
@@ -1850,6 +1909,14 @@ impl ScopeTracker {
         if matches!(pre_state, State::Start | State::ExpectSource) {
             return;
         }
+        // This pipe closes the innermost open delimiter's own binder list, if it
+        // has one open at all — a brace lambda's (`{x,y,z|…}`'s own `|`) or an
+        // ordinary lambda's single binder (a no-op past the first pipe, and a
+        // no-op whenever the innermost delimiter never opened one, since the
+        // pushed flag is already `false`).
+        if let Some(open) = self.brace_binder_open.last_mut() {
+            *open = false;
+        }
         // Snapshot the enclosing pipeline's class and arm/relation state as the lambda
         // body begins — before a nested pipeline in the body (`Class.all()` or a
         // navigation-headed subquery) can change them — so the body's delimiter close
@@ -1860,7 +1927,27 @@ impl ScopeTracker {
             prev_rel_explicit: self.rel_explicit,
             prev_saw_tilde_bracket: self.saw_tilde_bracket,
         });
-        if let Some(name) = self.lambda_first_ident.take()
+        if let Some((name, class)) = self.pending_binder_class.take() {
+            // A class-typed binder's own annotation (N1/N2 §6.5) is authoritative
+            // over the enclosing pipeline's element type, so it is read ahead of
+            // `lambda_first_ident` below: an unbracketed annotation
+            // (`row: A|…`) leaves the same name sitting there too, so it is taken
+            // here as well, or that branch would re-bind `name` to the receiver
+            // class right after this sets it correctly.
+            if self.lambda_first_ident.as_deref() == Some(name.as_str()) {
+                self.lambda_first_ident = None;
+            }
+            self.binder_saves.push(BinderSave {
+                depth: self.depth,
+                name: name.clone(),
+                prev_class: self.var_class.get(&name).cloned(),
+                prev_relation_row: self.relation_row_vars.contains(&name),
+                prev_reducer_type: self.var_reducer_type.get(&name).copied(),
+            });
+            self.relation_row_vars.remove(&name);
+            self.var_reducer_type.remove(&name);
+            self.var_class.insert(name, Some(class));
+        } else if let Some(name) = self.lambda_first_ident.take()
             && !name.is_empty()
         {
             // Save the binding this lambda shadows, so the enclosing delimiter's close
@@ -1913,7 +2000,7 @@ impl ScopeTracker {
         }
     }
 
-    fn on_open(&mut self, pre_state: State) {
+    fn on_open(&mut self, pre_state: State, opener: u8) {
         let method = self.last_ident.take();
         self.depth += 1;
         // N3's grammar production constrains `all()`'s argument slot regardless
@@ -1945,6 +2032,10 @@ impl ScopeTracker {
         let is_tilde_bracket = pre_state == State::SawTilde;
         self.saw_tilde_bracket |= is_tilde_bracket;
         self.tilde_open.push(is_tilde_bracket);
+        // A `{` opens a brace lambda with its binder list not yet closed by its
+        // own `|` (issue #351); every other opener never has one, so the flag is
+        // pushed `false` and `on_pipe` never has anything to flip.
+        self.brace_binder_open.push(opener == b'{');
         if let Some(name) = &method {
             if ESTABLISHING_METHODS.contains(&name.as_str()) {
                 self.est_stack.push(self.depth);
@@ -2053,6 +2144,7 @@ impl ScopeTracker {
             self.saw_tilde_bracket = save.prev_saw_tilde_bracket;
         }
         self.tilde_open.pop();
+        self.brace_binder_open.pop();
         if self.ref_stack.last() == Some(&self.depth) {
             self.ref_stack.pop();
         }
@@ -2087,6 +2179,19 @@ impl ScopeTracker {
     fn in_tilde_key(&self, state: State) -> bool {
         matches!(state, State::ExpectRelColSpec | State::ExpectRelColSpecReq)
             && self.tilde_open.last() == Some(&true)
+    }
+
+    /// Whether the innermost open delimiter is a brace lambda whose binder list
+    /// is still open — its own closing `|` (`{x,y,z|…}`'s) not yet seen.
+    ///
+    /// True at exactly the anchor a brace lambda's 2nd-and-on untyped binder
+    /// opens at (`y`, `z` in `{x,y,z|…}`; the first, `x`, opens at
+    /// `ExpectBraceBinder`/`ExpectBinder` instead, already unconstrained — see
+    /// [`opening_position`](Self::opening_position)). [`value_opening_position`](Self::value_opening_position)
+    /// reads it to keep N7 out of a binder-list value position it was never
+    /// written for (issue #351).
+    fn in_open_brace_binder_list(&self) -> bool {
+        self.brace_binder_open.last() == Some(&true)
     }
 
     /// N3h's slot, when `state` is the **first** argument position of an open
@@ -2353,6 +2458,18 @@ impl ScopeTracker {
             // (`schema_walk_rule_coverage.rs`'s `EXPECTED_UNFIRED`), so there is
             // no evidence here for what may follow one — and §4's rule is to
             // invent no constraint the corpus does not exercise.
+            L2Position::None
+        } else if self.in_open_brace_binder_list() {
+            // A brace lambda's 2nd-and-on untyped binder (`{x,y,z|…}`'s `y`,
+            // `z`) reaches this exact anchor too, byte-PDA-indistinguishable
+            // from an ordinary value (the automaton cannot see the binder's own
+            // pipe from the frame alone — `separates_elements`'s doc comment,
+            // `grammar/pda.rs`). N7's "a dangling bare word resolves to
+            // nothing" premise does not hold for a binder name: it is declared,
+            // never resolved, so it needs no continuation to mean something —
+            // exactly as the first binder is already unconstrained. A
+            // parameter-list comma is grammar-only structure L2 has no rule for
+            // (`docs/spec/schema.md` §6, `L2 ⊆ L1`; issue #351).
             L2Position::None
         } else {
             L2Position::ValueIdent
@@ -2854,7 +2971,7 @@ mod tests {
         // `SourceMethodArg` instead of the armed `ReValue` comparison.
         let mut tracker = ScopeTracker::new();
         tracker.last_ident = Some(SOURCE_METHOD.to_owned());
-        tracker.on_open(State::AfterDot);
+        tracker.on_open(State::AfterDot, b'(');
         assert_eq!(
             tracker.opening_position(State::ExpectValue),
             L2Position::SourceMethodArg,
@@ -3378,5 +3495,119 @@ mod tests {
         // continuation leaves the whole `filter` as the open narrowing prefix.
         let (tracker, _) = run(&[b"|", b"A", b".", b"all", b"(", b")", b"->", b"fil", b"ter"]);
         assert_eq!(tracker.narrow_prefix(), b"filter");
+    }
+
+    /// Issue #354: a class-typed brace lambda binder (`filter({y: A[1]|$y.`)
+    /// used to leave `$y.` wholly unnarrowed (`L2Position::None`, every name
+    /// admitted) even though `A` resolves in the schema and its member set is
+    /// therefore fully known — the same position the *untyped* `x|$x.` case
+    /// (`a_bound_var_dot_yields_a_member_position_on_its_class`, above) already
+    /// narrows correctly. Both multiplicities the grammar admits on a typed
+    /// binder (`[1]`, `[*]`) resolve the same way — the narrowing is off the
+    /// class name, never the multiplicity.
+    #[test]
+    fn a_brace_typed_binder_with_a_to_one_class_narrows_to_that_class() {
+        let tokens: &[&[u8]] = &[
+            b"|", b"A", b".", b"all", b"(", b")", b"->", b"filter", b"(", b"{", b"y", b":", b"A",
+            b"[", b"1", b"]", b"|", b"$", b"y", b".",
+        ];
+        let (tracker, pda) = run(tokens);
+        assert_eq!(pda.state(), State::AfterDot);
+        assert_eq!(
+            tracker.position(pda.state()),
+            L2Position::Member("A".to_owned())
+        );
+    }
+
+    #[test]
+    fn a_brace_typed_binder_with_a_to_many_class_narrows_to_that_class() {
+        let tokens: &[&[u8]] = &[
+            b"|", b"A", b".", b"all", b"(", b")", b"->", b"filter", b"(", b"{", b"y", b":", b"A",
+            b"[", b"*", b"]", b"|", b"$", b"y", b".",
+        ];
+        let (tracker, pda) = run(tokens);
+        assert_eq!(pda.state(), State::AfterDot);
+        assert_eq!(
+            tracker.position(pda.state()),
+            L2Position::Member("A".to_owned())
+        );
+    }
+
+    /// The ponytail shape (grammar §5.6): a typed binder's multiplicity is
+    /// optional, so `{y: A|…}` (no `[1]`/`[*]` at all) must narrow exactly like
+    /// the bracketed forms above — the annotation, not the bracket, drives it.
+    #[test]
+    fn a_brace_typed_binder_with_no_multiplicity_still_narrows_to_its_class() {
+        let tokens: &[&[u8]] = &[
+            b"|", b"A", b".", b"all", b"(", b")", b"->", b"filter", b"(", b"{", b"y", b":", b"A",
+            b"|", b"$", b"y", b".",
+        ];
+        let (tracker, pda) = run(tokens);
+        assert_eq!(pda.state(), State::AfterDot);
+        assert_eq!(
+            tracker.position(pda.state()),
+            L2Position::Member("A".to_owned())
+        );
+    }
+
+    /// An unresolved class annotation (`Nope` is not in the schema) must keep
+    /// passing through unconstrained — the issue's own acceptance note. Masking
+    /// here would be inventing a constraint on a binder the overlay cannot
+    /// actually type, which §4 forbids.
+    #[test]
+    fn a_brace_typed_binder_with_an_unresolved_class_passes_through_unconstrained() {
+        let tokens: &[&[u8]] = &[
+            b"|", b"A", b".", b"all", b"(", b")", b"->", b"filter", b"(", b"{", b"y", b":",
+            b"Nope", b"[", b"1", b"]", b"|", b"$", b"y", b".",
+        ];
+        let (tracker, pda) = run(tokens);
+        assert_eq!(pda.state(), State::AfterDot);
+        assert_eq!(tracker.position(pda.state()), L2Position::None);
+    }
+
+    /// The soundness half of the same root cause, caught while fixing #354: a
+    /// *parenthesised* typed binder (`filter(row: A|…)`) previously fell back to
+    /// binding `row` against the **enclosing pipeline's** class whenever the
+    /// annotation carried no multiplicity bracket (nothing ever cleared
+    /// `lambda_first_ident` before `on_pipe` read it) — silently correct only
+    /// when the annotation happened to match the receiver. Here the receiver is
+    /// `B` and the annotation is `A`: the annotation must win, exactly as it
+    /// does for the untyped-vs-typed brace cases above.
+    #[test]
+    fn a_typed_binders_own_class_wins_over_a_mismatched_enclosing_pipeline_class() {
+        let tokens: &[&[u8]] = &[
+            b"|", b"B", b".", b"all", b"(", b")", b"->", b"filter", b"(", b"row", b":", b"A", b"|",
+            b"$", b"row", b".",
+        ];
+        let (tracker, pda) = run(tokens);
+        assert_eq!(pda.state(), State::AfterDot);
+        assert_eq!(
+            tracker.position(pda.state()),
+            L2Position::Member("A".to_owned())
+        );
+    }
+
+    /// Constitution §5 (fix the system, not the instance): the same gap at the
+    /// *other* typed-binder position the grammar admits — a join brace lambda's
+    /// binder list (`{row1: …[1], row2: …[1]|…}`). `on_pipe`'s single-slot
+    /// `lambda_first_ident`/`pending_binder_class` mechanism binds only the
+    /// *last* binder reaching it before the pipe (the same trade an untyped
+    /// `{x,y,z|…}` already makes, documented on
+    /// [`ScopeTracker::bound_vars`]) — so `row2` narrows to its own annotated
+    /// class here. `row1` is left pass-through rather than mis-bound, which is
+    /// the safe direction (§4).
+    #[test]
+    fn a_join_lambdas_second_typed_binder_narrows_to_its_own_class() {
+        let tokens: &[&[u8]] = &[
+            b"|", b"A", b".", b"all", b"(", b")", b"->", b"filter", b"(", b"{", b"row1", b":",
+            b"B", b"[", b"1", b"]", b",", b"row2", b":", b"A", b"[", b"1", b"]", b"|", b"$",
+            b"row2", b".",
+        ];
+        let (tracker, pda) = run(tokens);
+        assert_eq!(pda.state(), State::AfterDot);
+        assert_eq!(
+            tracker.position(pda.state()),
+            L2Position::Member("A".to_owned())
+        );
     }
 }

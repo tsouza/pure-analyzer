@@ -45,8 +45,10 @@ use purecard::{ByteRecognizer, CompiledGrammar, DecodeError, DecoderSession, Voc
 /// shrinking its coverage.
 // Issue #361 added a `Frame::RelColBracket` and six states narrowing arm-R's
 // `~[…]`/bare `~col` column-spec positions off the generic value hub — a real
-// automaton change, reviewed in that PR, not a silent re-pin.
-const EXPECTED_REACHABLE_CONFIGURATIONS: usize = 405;
+// automaton change, reviewed in that PR, not a silent re-pin. (325 was the
+// pre-#361 count, itself already grown from 323 by issue #352's own
+// `let`-binder-value states.)
+const EXPECTED_REACHABLE_CONFIGURATIONS: usize = 407;
 
 /// Arm-A (relational envelope) gold record count (mirrors
 /// `tests/soundness_replay.rs`).
@@ -59,8 +61,9 @@ const EXPECTED_GOLD_RECORDS: usize = GOLD_ARM_A + GOLD_ARM_C;
 /// Arm-A (relational) modern-dialect seed count (mirrors
 /// `tests/modern_dialect_soundness.rs`).
 const SEED_ARM_A: usize = 0;
-/// Arm-C (class-navigation) modern-dialect seed count.
-const SEED_ARM_C: usize = 5;
+/// Arm-C (class-navigation) modern-dialect seed count (mirrors
+/// `tests/modern_dialect_soundness.rs`).
+const SEED_ARM_C: usize = 8;
 /// Arm-R (Relation/Function API) modern-dialect seed count.
 const SEED_ARM_R: usize = 14;
 /// The full modern-dialect seed corpus size.

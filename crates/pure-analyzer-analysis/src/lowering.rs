@@ -1266,10 +1266,46 @@ fn top_level_queries(tree: &GreenNode) -> Vec<GreenNode> {
         .collect()
 }
 
-fn contains_error_node(node: &GreenNode) -> bool {
+/// Longest [`GreenNode`] nesting this crate's syntax-tree walks will descend
+/// before conservatively reporting an error, independent of
+/// [`MAX_RELATIONAL_RECURSION_DEPTH`](crate::relational::MAX_RELATIONAL_RECURSION_DEPTH).
+///
+/// The two budgets protect the same hazard class (unbounded recursion over
+/// untrusted input) but cannot share a value: a syntax tree is structurally
+/// much deeper than the relational IR it lowers to even for ordinary,
+/// non-adversarial source — parenthesized-expression grammar layering alone
+/// measures roughly one `GreenNode` level per paren, and
+/// `pure_analyzer_parser::m3::MAX_PARSE_DEPTH` (256) already lets a query
+/// nest that deep before the parser itself refuses to go further. This
+/// budget must clear that ceiling with margin, or it would reject ordinary
+/// parser-accepted queries; `MAX_RELATIONAL_RECURSION_DEPTH` (32) is instead
+/// sized to the relational walks' own, far more expensive, per-frame stack
+/// cost. Each frame here is a handful of field reads, so a much larger budget
+/// is still cheap on the smallest worker stack in the workspace.
+const MAX_SYNTAX_TREE_DEPTH: usize = 512;
+
+/// Report whether `node` or any descendant is an error node or carries an
+/// error token.
+///
+/// Shared by every pass in this crate that needs to reject unparseable syntax
+/// before treating it as analyzable (lowering, local navigation analysis,
+/// column-selector extraction). Depth is bounded by
+/// [`MAX_SYNTAX_TREE_DEPTH`]: exceeding the budget reports `true` (contains
+/// an error) rather than guessing the tree is clean — the same fail-closed
+/// default every other bounded walk in this crate uses.
+pub(crate) fn contains_error_node(node: &GreenNode) -> bool {
+    contains_error_node_at_depth(node, 0)
+}
+
+fn contains_error_node_at_depth(node: &GreenNode, depth: usize) -> bool {
+    if depth >= MAX_SYNTAX_TREE_DEPTH {
+        return true;
+    }
     node.kind() == SyntaxKind::ERROR_NODE
         || node.tokens().any(|token| token.kind() == SyntaxKind::ERROR)
-        || direct_nodes(node).iter().any(contains_error_node)
+        || direct_nodes(node)
+            .iter()
+            .any(|child| contains_error_node_at_depth(child, depth + 1))
 }
 
 fn require_relation(state: Option<RelationState>) -> Result<RelationState, ReasonCode> {
@@ -2143,6 +2179,53 @@ mod tests {
             lower_m3_query(AnalysisInput::new(FileId::new(91), source, &root, &[], None)),
             RelationalOutcome::Opaque(value) if value.reason() == ReasonCode::IndUnparseable
         ));
+    }
+
+    /// Build `depth` levels of nested `PAREN_EXPR` wrapping one token, so
+    /// [`contains_error_node`]'s own recursion can be exercised at a depth no
+    /// real parse ever reaches (`pure_analyzer_parser::m3::MAX_PARSE_DEPTH`
+    /// already refuses source nested past 256; see `MAX_SYNTAX_TREE_DEPTH`).
+    fn nested_parens(depth: usize) -> GreenNode {
+        let source = "x";
+        let tokens = lex(source);
+        let mut builder = GreenNodeBuilder::new(source, &tokens);
+        builder.open(SyntaxKind::ROOT);
+        for _ in 0..depth {
+            builder.open(SyntaxKind::PAREN_EXPR);
+        }
+        builder.advance();
+        for _ in 0..depth {
+            builder.close();
+        }
+        builder.close();
+        let root = builder.finish().expect("fixture tree must build");
+        direct_nodes(&root)
+            .into_iter()
+            .next()
+            .expect("fixture must contain the outermost paren")
+    }
+
+    #[test]
+    fn contains_error_node_stops_at_its_depth_budget_in_both_directions() {
+        // Pinned exactly, in both directions: lowering the budget would
+        // reject ordinary parser-accepted nesting (see the module doc on
+        // `MAX_SYNTAX_TREE_DEPTH`); raising it defeats the stack-overflow
+        // guard this test exists to prove.
+        const EXPECTED_DEPTH_BUDGET: usize = 512;
+
+        // `EXPECTED_DEPTH_BUDGET` nested nodes put the deepest visited call at
+        // depth `EXPECTED_DEPTH_BUDGET - 1`, one below the `>=` guard.
+        let at_budget = nested_parens(EXPECTED_DEPTH_BUDGET);
+        assert!(
+            !contains_error_node(&at_budget),
+            "nesting exactly inside the budget must not be reported as an error"
+        );
+
+        let over_budget = nested_parens(EXPECTED_DEPTH_BUDGET * 2);
+        assert!(
+            contains_error_node(&over_budget),
+            "nesting past the budget must fail closed as if it were an error, not recurse further"
+        );
     }
 
     #[test]

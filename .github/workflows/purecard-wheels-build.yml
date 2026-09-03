@@ -74,7 +74,7 @@ jobs:
           enable-cache: true
           cache-dependency-glob: crates/pure-analyzer-purecard/uv.lock
       - name: Install just
-        uses: taiki-e/install-action@b6ff580856c41316412a0b9b60540fbc6f8c82cc # v2.86.7
+        uses: taiki-e/install-action@fcf5432d9f50d67e37ee6e29bdb7a224ff67b4a7 # v2.86.8
         with:
           tool: just@1.55.1
       # The functional Python test suite is platform-independent: it exercises
@@ -85,6 +85,15 @@ jobs:
       - name: Test the Python boundary
         if: runner.os == 'Linux' && runner.arch == 'X64'
         run: just test-python
+      # `uv run` above builds `purecard` through its PEP 517 maturin backend
+      # to install it into the ephemeral test venv, and that build's default
+      # output directory is the same `target/wheels/` the release build below
+      # writes to — leaving a second, non-manylinux-tagged `linux_x86_64`
+      # wheel there that PyPI's upload validator hard-rejects. Only this leg
+      # runs the test step, so only this leg needs the sweep.
+      - name: Clear the implicit test-python wheel before the release build
+        if: runner.os == 'Linux' && runner.arch == 'X64'
+        run: rm -rf target/wheels
       - name: Build abi3 wheel
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
@@ -100,6 +109,21 @@ jobs:
           sccache: true
       - name: Smoke-import the built wheel
         run: just wheel-smoke
+      # A stray second wheel here (an unintended local/dev build sharing this
+      # leg's output directory, as `test-python`'s implicit build once did)
+      # would otherwise ride the glob below into the release artifact
+      # unnoticed by every gate except PyPI's own upload validator. Catching
+      # it here makes it a red PR everywhere, not a release-day surprise.
+      - name: Count the wheel this leg produced
+        id: wheel-count
+        shell: bash
+        # BSD `wc -l` (macOS runners) right-pads its count with spaces, unlike
+        # GNU `wc -l` (Linux) — `xargs` with no command reduces to `echo`,
+        # which normalizes that whitespace away on every platform.
+        run: echo "count=$(find target/wheels -maxdepth 1 -name '*.whl' | wc -l | xargs)" >> "$GITHUB_OUTPUT"
+      - name: Fail if this leg produced anything but exactly one wheel
+        if: steps.wheel-count.outputs.count != '1'
+        run: exit 1
       # One artifact per leg: upload-artifact rejects a name collision, and the
       # publish job re-merges them by prefix.
       - name: Upload wheel

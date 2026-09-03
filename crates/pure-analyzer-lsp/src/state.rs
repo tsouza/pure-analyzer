@@ -109,8 +109,8 @@ impl RequestCompletion {
 pub(crate) fn hover_work(
     server: &Server,
     params: Option<&Value>,
-) -> Result<RequestWork, HoverError> {
-    let request = hover_request(params).ok_or(HoverError::InvalidParams)?;
+) -> Result<RequestWork, RequestParamsError> {
+    let request = hover_request(params).ok_or(RequestParamsError::InvalidParams)?;
     Ok(RequestWork::Hover {
         snapshot: AnalysisSnapshot::capture(server),
         uri: request.uri.to_owned(),
@@ -214,18 +214,24 @@ pub(crate) fn update_configuration<W: Write>(
     publish_current_diagnostics(server, writer)
 }
 
-pub(crate) fn definition_work(server: &Server, params: Option<&Value>) -> Option<RequestWork> {
-    let (uri, position) = definition_params(params)?;
-    Some(RequestWork::Definition {
+pub(crate) fn definition_work(
+    server: &Server,
+    params: Option<&Value>,
+) -> Result<RequestWork, RequestParamsError> {
+    let (uri, position) = definition_params(params).ok_or(RequestParamsError::InvalidParams)?;
+    Ok(RequestWork::Definition {
         snapshot: AnalysisSnapshot::capture(server),
         uri: uri.to_owned(),
         position,
     })
 }
 
-pub(crate) fn code_actions_work(server: &Server, params: Option<&Value>) -> Option<RequestWork> {
-    let uri = code_action_uri(params)?;
-    Some(RequestWork::CodeActions {
+pub(crate) fn code_actions_work(
+    server: &Server,
+    params: Option<&Value>,
+) -> Result<RequestWork, RequestParamsError> {
+    let uri = code_action_uri(params).ok_or(RequestParamsError::InvalidParams)?;
+    Ok(RequestWork::CodeActions {
         snapshot: AnalysisSnapshot::capture(server),
         uri: uri.to_owned(),
     })
@@ -331,8 +337,14 @@ struct HoverRequest<'a> {
     position: ProtocolPosition,
 }
 
+/// The reason a request's parameters could not be turned into `RequestWork`.
+///
+/// Shared by every request kind (hover, definition, code actions) so a
+/// malformed request surfaces the same `-32602 invalid params` protocol error
+/// regardless of which handler received it.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum HoverError {
+pub(crate) enum RequestParamsError {
+    /// The request's `params` were missing or did not match the expected shape.
     InvalidParams,
 }
 
@@ -344,12 +356,25 @@ fn hover_request(params: Option<&Value>) -> Option<HoverRequest<'_>> {
     })
 }
 
+/// Compute diagnostics for every open document and publish them.
+///
+/// Unlike hover/definition/codeAction, this runs synchronously on the
+/// coordinator thread: every caller (`open_document`, `change_document`,
+/// `save_document`, `close_document`, `update_configuration`) already holds
+/// `&mut Server` and calls this inline, with no worker thread and no
+/// intervening event-loop turn between the snapshot capture below and the
+/// publish that follows. A currency check against `server` here would
+/// therefore always compare a snapshot to the very immutable borrow it was
+/// taken from — it can never observe a later revision, so one is
+/// deliberately not kept (a check that can never fail reads as protection
+/// it does not provide). This is an accepted asymmetry with the read-only
+/// `RequestScheduler` path: keeping the hottest path (a lint on every edit)
+/// simple and synchronous costs blocking the coordinator loop — including
+/// `$/cancelRequest` handling for other in-flight requests — until the lint
+/// completes.
 fn publish_current_diagnostics<W: Write>(server: &Server, writer: &mut W) -> io::Result<()> {
     let snapshot = AnalysisSnapshot::capture(server);
     let diagnostics = snapshot.diagnostics();
-    if !snapshot.is_current(server) {
-        return Ok(());
-    }
     for document in snapshot.documents.values() {
         let findings = diagnostics
             .get(document.uri())

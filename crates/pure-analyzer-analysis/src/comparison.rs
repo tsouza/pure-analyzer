@@ -7,8 +7,8 @@ use pure_analyzer_model::Provenance;
 
 use crate::{
     Column, IrOrigin, ModelOrigin, ModelOriginKind, NormalizationBudget, NormalizationFailure,
-    NormalizationOutcome, NormalizedQuery, OpaqueOutcome, RelationalOutcome, RelationalQuery,
-    normalize_relational_query_with_budget,
+    NormalizationOutcome, NormalizedQuery, Nullability, OpaqueOutcome, RelationalOutcome,
+    RelationalQuery, normalize_relational_query_with_budget,
 };
 
 /// A sound, deliberately incomplete comparison of two relational queries.
@@ -314,11 +314,25 @@ fn output_column_field_difference(left: &Column, right: &Column) -> Option<Outpu
         Some(OutputSchemaField::Type)
     } else if left.multiplicity() != right.multiplicity() {
         Some(OutputSchemaField::Multiplicity)
-    } else if left.nullability() != right.nullability() {
+    } else if nullability_contradicts(left.nullability(), right.nullability()) {
         Some(OutputSchemaField::Nullability)
     } else {
         None
     }
+}
+
+/// Whether two nullability facts are proven incompatible.
+///
+/// [`Nullability::Unknown`] means the available facts establish nothing, not
+/// that a side differs from the other. Only the genuinely contradictory pair
+/// (`NonNullable` vs `Nullable`) refutes equivalence; any comparison
+/// involving `Unknown` stays inconclusive.
+const fn nullability_contradicts(left: Nullability, right: Nullability) -> bool {
+    matches!(
+        (left, right),
+        (Nullability::NonNullable, Nullability::Nullable)
+            | (Nullability::Nullable, Nullability::NonNullable)
+    )
 }
 
 fn canonical_normalized_origins(
