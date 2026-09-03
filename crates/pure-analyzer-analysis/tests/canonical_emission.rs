@@ -4,8 +4,8 @@
 use pure_analyzer_analysis::{
     AnalysisInput, CandidateKey, CanonicalEmissionOutcome, Column, ColumnId, Knowledge,
     NormalizationBudget, NormalizationOutcome, Nullability, Projection, RelationExpression,
-    RelationFacts, RelationOperator, RelationSchema, RelationalOutcome, ScalarExpression,
-    ScalarLiteral, ScalarOperator, emit_canonical_lowered_query,
+    RelationFacts, RelationOperator, RelationSchema, RelationalOutcome, RelationalQuery,
+    ScalarExpression, ScalarLiteral, ScalarOperator, emit_canonical_lowered_query,
     emit_canonical_lowered_query_with_budget, emit_canonical_normal_form,
     emit_canonical_normalization, lower_m3_query, normalize_relational_query,
     normalize_relational_query_with_budget,
@@ -293,4 +293,71 @@ fn a_scalar_form_without_supported_pure_syntax_is_refused() {
     };
     assert_eq!(indecision.reason(), ReasonCode::IndUnmodeledOp);
     assert_eq!(indecision.origin(), input.origin());
+}
+
+/// `emit_canonical_lowered_query` is the exact boundary `libpure`'s CLI driver
+/// calls for `eq`/`diff` and canonical emission (see
+/// https://github.com/tsouza/pure-analyzer/issues/266): a `->distinct()`
+/// pipe far past `MAX_RELATIONAL_RECURSION_DEPTH` reaching it must return a
+/// typed indecision, not abort the process, on a worker stack smaller than
+/// any default in this workspace. Because this boundary normalizes before it
+/// ever calls into `Emitter`, this exercises the same normalizer depth budget
+/// as `normalizer.rs`'s pipe test; it is kept here too because it pins the
+/// actual CLI-reachable entry point the issue reported, not just the
+/// normalizer in isolation.
+#[test]
+fn a_deep_pipe_through_the_canonical_emission_boundary_is_indecisive_not_an_abort() {
+    let model = model();
+    let base = lower("model::Person.all()", &model);
+    // Far past both MAX_RELATIONAL_RECURSION_DEPTH (32) and
+    // DEFAULT_NORMALIZATION_STEP_LIMIT (4_096).
+    const DEPTH: usize = 50_000;
+    let mut root = base.root().clone();
+    for _ in 0..DEPTH {
+        let schema = root.schema().clone();
+        root = RelationExpression::new(
+            RelationOperator::Distinct {
+                input: Box::new(root),
+            },
+            schema,
+            RelationFacts::unknown(),
+            base.root().origin().clone(),
+        )
+        .expect("fixture distinct layer is valid");
+    }
+    let lowered = RelationalOutcome::supported(RelationalQuery::new(root));
+
+    let outcome = on_a_small_stack(lowered, emit_canonical_lowered_query);
+    let CanonicalEmissionOutcome::Indecisive(indecision) = outcome else {
+        panic!("a pipe far past the depth budget must not emit text, got {outcome:#?}");
+    };
+    assert_eq!(indecision.reason(), ReasonCode::IndMissingRewrite);
+}
+
+/// Run `lookup` on a thread with a smaller stack than any default in this
+/// workspace, so a walk (or a drop of its input) that outgrows its depth
+/// budget aborts here instead of in production. `lowered` is moved into the
+/// thread and dropped there too, before it joins, so this also covers the
+/// `RelationExpression` drop chain on a worker-sized stack.
+///
+/// A debug build is the worst case for per-frame stack cost, so this covers
+/// the release profile a fortiori, mirroring `pure-analyzer-resolve`'s
+/// `on_a_small_stack` precedent (see also `normalizer.rs`'s copy of this
+/// helper, over a different owning type).
+fn on_a_small_stack<T: Send + 'static>(
+    lowered: RelationalOutcome,
+    lookup: impl FnOnce(&RelationalOutcome) -> T + Send + 'static,
+) -> T {
+    const WORKER_STACK_BYTES: usize = 1024 * 1024;
+
+    std::thread::Builder::new()
+        .stack_size(WORKER_STACK_BYTES)
+        .spawn(move || {
+            let result = lookup(&lowered);
+            drop(lowered);
+            result
+        })
+        .expect("worker thread must spawn")
+        .join()
+        .expect("a bounded emission and drop must not abort its thread")
 }

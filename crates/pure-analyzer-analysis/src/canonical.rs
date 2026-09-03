@@ -8,6 +8,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use pure_analyzer_diagnostics::ReasonCode;
 
+use crate::relational::MAX_RELATIONAL_RECURSION_DEPTH;
 use crate::{
     ColumnId, IrOrigin, Knowledge, NormalizationBudget, NormalizationOutcome, NormalizedQuery,
     RelationExpression, RelationFacts, RelationOperator, RelationSchema, RelationSource,
@@ -188,10 +189,37 @@ type EmissionResult<T> = Result<T, EmissionFailure>;
 #[derive(Default)]
 struct Emitter {
     next_binder: usize,
+    /// Live `relation`/`scalar` call-stack depth. See
+    /// [`MAX_RELATIONAL_RECURSION_DEPTH`]: emission walks the same
+    /// potentially-unbounded relational IR that normalization does, and needs
+    /// the identical stack-depth budget rather than a node-count one.
+    depth: usize,
 }
 
 impl Emitter {
+    /// Claim one stack-depth slot; see `Normalizer::enter` for why this
+    /// increments here and is matched by a plain `self.depth -= 1` in each
+    /// wrapper below, rather than an RAII guard (which would hold a `&mut
+    /// Emitter` borrow across the further `&mut self` calls the body makes).
+    fn enter(&mut self, origin: &IrOrigin) -> EmissionResult<()> {
+        if self.depth >= MAX_RELATIONAL_RECURSION_DEPTH {
+            return Err(EmissionFailure::unsupported(origin));
+        }
+        self.depth += 1;
+        Ok(())
+    }
+
     fn relation(&mut self, expression: &RelationExpression) -> EmissionResult<EmittedRelation> {
+        self.enter(expression.origin())?;
+        let result = self.relation_at_depth(expression);
+        self.depth -= 1;
+        result
+    }
+
+    fn relation_at_depth(
+        &mut self,
+        expression: &RelationExpression,
+    ) -> EmissionResult<EmittedRelation> {
         match expression.operator() {
             RelationOperator::Scan(source) => self.scan(expression, source),
             RelationOperator::Filter { input, predicate } => {
@@ -440,6 +468,17 @@ impl Emitter {
     }
 
     fn scalar(
+        &mut self,
+        expression: &ScalarExpression,
+        references: &BTreeMap<ColumnId, String>,
+    ) -> EmissionResult<String> {
+        self.enter(expression.origin())?;
+        let result = self.scalar_at_depth(expression, references);
+        self.depth -= 1;
+        result
+    }
+
+    fn scalar_at_depth(
         &mut self,
         expression: &ScalarExpression,
         references: &BTreeMap<ColumnId, String>,

@@ -1216,6 +1216,101 @@ fn exhausted_budget_is_typed_ind_missing_rewrite() {
     ));
 }
 
+/// A `->distinct()->distinct()->...` pipe of arbitrary length lowers cleanly
+/// (nothing in the parser or lowerer bounds pipe length), so
+/// `DEFAULT_NORMALIZATION_STEP_LIMIT`'s node-count budget alone does not stop
+/// `Normalizer::relation` from recursing once per node: it is a work budget,
+/// not a stack-depth budget, and https://github.com/tsouza/pure-analyzer/issues/266
+/// reproduced a process-aborting stack overflow well inside it, at 450 nested
+/// calls. `Normalizer::relation`/`scalar` now carry an explicit depth budget
+/// (`MAX_RELATIONAL_RECURSION_DEPTH` in `relational.rs`) independent of the
+/// node-count one, and `RelationExpression`'s `Drop` impl unwinds its
+/// `Box` chain iteratively so an unnormalized deep pipe cannot abort on drop
+/// either. This proves both fixes hold on a worker stack smaller than any
+/// default in this workspace.
+#[test]
+fn a_pipe_deeper_than_the_depth_budget_is_a_typed_missing_rewrite_not_an_abort() {
+    // Pinned exactly, in both directions: lowering the budget silently
+    // rejects ordinary short pipes; raising it past the frames
+    // `on_a_small_stack` affords turns the budget into a process abort
+    // instead of a typed result. See `MAX_RELATIONAL_RECURSION_DEPTH`.
+    const EXPECTED_DEPTH_BUDGET: usize = 32;
+    const OVER_BUDGET_DEPTH: usize = EXPECTED_DEPTH_BUDGET * 2;
+    // Comfortably past DEFAULT_NORMALIZATION_STEP_LIMIT (4_096) too, so this
+    // also exercises the `RelationExpression` drop fix at a depth the node
+    // count budget alone would never have reached.
+    const FAR_OVER_BUDGET_DEPTH: usize = 50_000;
+
+    let base = query(&[3], &["value"], origin(FILE, 1, 4, Vec::new()));
+
+    let at_budget = pipe(base.root().clone(), EXPECTED_DEPTH_BUDGET - 1);
+    let outcome = on_a_small_stack(at_budget, normalize_relational_query);
+    assert!(
+        outcome.normalized().is_some(),
+        "a pipe exactly inside the depth budget must normalize, got {outcome:?}"
+    );
+
+    let over_budget = pipe(base.root().clone(), OVER_BUDGET_DEPTH);
+    let outcome = on_a_small_stack(over_budget, normalize_relational_query);
+    let Some(failure) = outcome.failure() else {
+        panic!(
+            "a pipe {OVER_BUDGET_DEPTH} deep must stop at the depth budget instead of aborting, \
+             got {outcome:?}"
+        );
+    };
+    assert_eq!(failure.reason(), ReasonCode::IndMissingRewrite);
+
+    let far_over_budget = pipe(base.root().clone(), FAR_OVER_BUDGET_DEPTH);
+    let outcome = on_a_small_stack(far_over_budget, normalize_relational_query);
+    assert!(
+        outcome.failure().is_some(),
+        "a pipe far past the depth budget must still stop cleanly, got {outcome:?}"
+    );
+}
+
+/// Wrap `root` in `depth` consecutive `->distinct()` layers, iteratively.
+///
+/// This mirrors how the lowerer actually builds a pipe chain (a loop that
+/// wraps the previous relation in a new node, not per-layer recursion), so
+/// building the fixture itself never risks a stack overflow independent of
+/// the code under test.
+fn pipe(mut root: RelationExpression, depth: usize) -> RelationalQuery {
+    let layer_source = origin(FILE, 0, 1, Vec::new());
+    for _ in 0..depth {
+        root = distinct(root, RelationFacts::unknown(), layer_source.clone());
+    }
+    RelationalQuery::new(root)
+}
+
+/// Run `lookup` on a thread with a smaller stack than any default in this
+/// workspace, so a walk (or a drop of its input) that outgrows its depth
+/// budget aborts here instead of in production. `query` is moved into the
+/// thread and dropped there too, before it joins, so this also covers the
+/// `RelationExpression` drop chain on a worker-sized stack rather than only
+/// on the (larger) test-harness main thread.
+///
+/// A debug build is the worst case for per-frame stack cost (see the module
+/// doc on `MAX_RELATIONAL_RECURSION_DEPTH`), so this covers the release
+/// profile a fortiori, mirroring
+/// `pure-analyzer-resolve`'s `on_a_small_stack` precedent.
+fn on_a_small_stack<T: Send + 'static>(
+    query: RelationalQuery,
+    lookup: impl FnOnce(&RelationalQuery) -> T + Send + 'static,
+) -> T {
+    const WORKER_STACK_BYTES: usize = 1024 * 1024;
+
+    std::thread::Builder::new()
+        .stack_size(WORKER_STACK_BYTES)
+        .spawn(move || {
+            let result = lookup(&query);
+            drop(query);
+            result
+        })
+        .expect("worker thread must spawn")
+        .join()
+        .expect("a bounded normalization and drop must not abort its thread")
+}
+
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(32))]
 
