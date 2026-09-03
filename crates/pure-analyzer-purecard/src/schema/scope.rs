@@ -1693,7 +1693,24 @@ impl ScopeTracker {
             // falls through unrecorded, so `on_pipe` keeps its pass-through
             // default for it (§4: pass through what the corpus does not
             // attest).
-            State::AfterColon | State::AfterColonWs => {
+            //
+            // `AfterValueColon` joins the same arm for the identical reason
+            // (issue #377): a winAggSpec/relAggSpec reducer's own colon
+            // (`{p,w,r|…}:y|…`, `mapLambda ":" reduceLambda`) is `step_after_value`'s
+            // `:` arm, reached whenever the colon follows a *completed value*
+            // rather than a bare name — the same production the `groupBy`/`over`
+            // corpus already streams through when whitespace splits the colon
+            // from its binder (`… : y|…`, landing on `AfterColonWs` instead, since
+            // whitespace is `AfterValueColon`'s own self-loop). With no
+            // intervening whitespace (`}:y|…`), `AfterValueColon` is itself the
+            // `pre_state` this identifier arrives at. Both states are a colon off
+            // a completed value/name inside an open lambda slot, disambiguated by
+            // `step_after_colon` identically (issue #372 narrows what *L1*
+            // additionally over-admits there; it does not change which state
+            // this arm needs to treat the same way). Without this arm the
+            // reducer's own binder was never recorded, so `$y` in its body was
+            // masked as an unbound sigil (S2) even though L1 already admits it.
+            State::AfterColon | State::AfterColonWs | State::AfterValueColon => {
                 if let Some(prim) = PrimName::from_ident(text) {
                     if let Some(binder) = &self.lambda_first_ident {
                         self.pending_binder_element = Some((binder.clone(), prim.type_class()));
@@ -3427,6 +3444,41 @@ mod tests {
         // `C` is in the emitted-column universe, so the narrower admits it — the real
         // projected column is never masked.
         assert!(tracker.emitted_columns().contains(&b"C".to_vec()));
+    }
+
+    #[test]
+    fn a_window_reducer_binder_is_bound_at_its_own_no_whitespace_colon() {
+        // Issue #377: a winAggSpec/relAggSpec reducer's own colon, reached
+        // directly off its brace lambda's close with no intervening
+        // whitespace (`{p,w,r|$r.n}:y|…`), lands the PDA on
+        // `AfterValueColon` — not the `AfterColon`/`AfterColonWs` states the
+        // groupBy-shaped sibling test above already covers (there, `: y|…`'s
+        // whitespace splits the colon from the binder). `on_ident`'s
+        // binder-capture match had no arm for `AfterValueColon`, so `y` was
+        // never recorded bound and `$y` in the reducer body streamed as an
+        // unbound sigil (S2).
+        //
+        // `|A.all()->filter(x|$x.n>=0)->project(~[C: x|$x.n])
+        //     ->extend(over(~C), ~[T:{p,w,r|$r.n}:y|$`
+        let tokens: &[&[u8]] = &[
+            b"|", b"A", b".", b"all", b"(", b")", b"->", b"filter", b"(", b"x", b"|", b"$", b"x",
+            b".", b"n", b">=", b"0", b")", b"->", b"project", b"(", b"~", b"[", b"C", b":", b"x",
+            b"|", b"$", b"x", b".", b"n", b"]", b")", b"->", b"extend", b"(", b"over", b"(", b"~",
+            b"C", b")", b",", b"~", b"[", b"T", b":", b"{", b"p", b",", b"w", b",", b"r", b"|",
+            b"$", b"r", b".", b"n", b"}", b":", b"y", b"|", b"$",
+        ];
+        let (tracker, pda) = run(tokens);
+        assert_eq!(
+            pda.state(),
+            State::AfterDollar,
+            "right after the reducer's own `$`"
+        );
+        assert_eq!(tracker.position(pda.state()), L2Position::RefVar);
+        assert!(
+            tracker.bound_variables().iter().any(|v| v == "y"),
+            "the reducer's own binder `y` was not recorded bound: {:?}",
+            tracker.bound_variables()
+        );
     }
 
     #[test]
