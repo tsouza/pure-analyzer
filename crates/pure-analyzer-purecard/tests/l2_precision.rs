@@ -34,7 +34,7 @@ mod lex;
 
 use l2::{TokenVocab, lex, load_schema};
 use l2_rules::{ALL_RULE_KINDS, rule_kind};
-use purecard::{CompiledGrammar, DecoderSession, Schema};
+use purecard::{CompiledGrammar, DecoderSession, Schema, Vocab};
 
 /// Replay a full `query` token-by-token through a schema-aware session for
 /// `db_id`, asserting the killer L2-soundness property on every step: the real
@@ -289,6 +289,119 @@ fn source_method_arg_sep_masks_a_premature_closer_before_the_classs_arity_is_met
 #[test]
 fn property_method_arg_sep_masks_a_premature_closer_before_the_classs_arity_is_met() {
     assert_frozen("property-method-arg-sep");
+}
+
+/// Issue #391 (live regression, purecard 0.4.0): with a class's `temporal`
+/// field set, PR #387's arity narrowing at `all(...)` masked a real date
+/// literal right after its own first digit — `|t::A.all(%2026-01-15)` was cut
+/// to `all(%2  )`, so a real dated as-of query became unwritable, while
+/// `%latest` and the arity COUNT enforcement (`source-method-arg-sep` above)
+/// both kept working. Root cause: `InDateLit`/`InDateTime`/`InDateFrac`/
+/// `InMemberIdent` self-loop on more digits/ident-tail bytes, so
+/// `SourceMethodArgSep`'s position is reached mid-lexeme, not only once a
+/// value has genuinely closed — and the fill function applied the
+/// arity-gated separator set to *every* byte reached there, continuation
+/// bytes included.
+///
+/// Streamed over a single-byte vocabulary (256 tokens, one per byte —
+/// `Vocab::from_byte_tokens`, matching the issue's own Python reproduction
+/// exactly) rather than `TokenVocab`'s lexeme-granular one: the defect is
+/// byte-granular (it masked digit *two* of a date, not the literal as a
+/// whole), so only a byte-granular replay can catch a regression of it. Each
+/// byte up to and including the call's own closing `)` must stay admissible,
+/// proving the *whole* literal streams, not just its opening byte.
+#[test]
+fn source_method_arg_sep_streams_a_full_date_literal_to_completion() {
+    let schema = load_schema("milestoning");
+    let tokens: Vec<Vec<u8>> = (0u8..=255).map(|byte| vec![byte]).collect();
+    let id_of = |byte: u8| {
+        tokens
+            .iter()
+            .position(|token| token[0] == byte)
+            .expect("every byte is its own vocabulary token") as u32
+    };
+    let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens.clone()));
+
+    for query in [
+        // The issue's own witness: a business-temporal class's single
+        // required argument, as a full calendar-date literal.
+        "|t::milestoning::Biz.all(%2026-01-15)->project(~[a: x|$x.a])",
+        // The date-time form the issue reports masked identically.
+        "|t::milestoning::Biz.all(%2026-01-15T00:00:00)->project(~[a: x|$x.a])",
+        // A processing-temporal class takes the identical single-argument
+        // treatment as business-temporal.
+        "|t::milestoning::Proc.all(%2026-01-15)->project(~[a: x|$x.a])",
+        // The bitemporal two-argument form: PR #387's own arity-COUNT fix
+        // must still require exactly two, and both must stream whole — the
+        // regression this fix closes must not loosen that enforcement.
+        "|t::milestoning::Bi.all(%2026-01-15, %2026-02-15)->project(~[a: x|$x.a])",
+    ] {
+        let mut session =
+            DecoderSession::with_schema(&grammar, schema.clone()).expect("grammar is fixed-engine");
+        for (step, byte) in query.bytes().enumerate() {
+            let id = id_of(byte);
+            assert!(
+                session.allowed_mask().test(id),
+                "L2 SOUNDNESS (issue #391): byte {:?} masked at step {step} in:\n  {query}",
+                byte as char
+            );
+            session.accept_token(id).unwrap_or_else(|err| {
+                panic!("real byte rejected at step {step}: {err}\n  {query}")
+            });
+        }
+        assert!(
+            session.is_complete(),
+            "L2 SOUNDNESS (issue #391): pipeline did not complete:\n  {query}"
+        );
+    }
+}
+
+/// Issue #391's regression guard: the arity COUNT enforcement PR #387 shipped
+/// must still reject an under- and over-counted call once this fix's
+/// per-byte continuation exemption is in place — the fix narrows *what
+/// counts as a decided separator byte*, not the arity comparison itself.
+#[test]
+fn source_method_arg_sep_still_rejects_the_wrong_argument_count() {
+    let schema = load_schema("milestoning");
+    let tokens: Vec<Vec<u8>> = (0u8..=255).map(|byte| vec![byte]).collect();
+    let id_of = |byte: u8| {
+        tokens
+            .iter()
+            .position(|token| token[0] == byte)
+            .expect("every byte is its own vocabulary token") as u32
+    };
+    let grammar = CompiledGrammar::compile(Vocab::from_byte_tokens(tokens.clone()));
+
+    // A business/processing class must still refuse a second argument: after
+    // `%latest, ` a fresh value's own opener is masked.
+    let prefix = "|t::milestoning::Biz.all(%latest";
+    let mut session =
+        DecoderSession::with_schema(&grammar, schema.clone()).expect("grammar is fixed-engine");
+    for byte in prefix.bytes() {
+        let id = id_of(byte);
+        assert!(session.allowed_mask().test(id), "prefix must stream");
+        session.accept_token(id).expect("prefix accepts");
+    }
+    assert!(
+        !session.allowed_mask().test(id_of(b',')),
+        "L2 SOUNDNESS (issue #391 regression guard): a single-temporal class's \
+         one-argument arity must still refuse a second `%latest`"
+    );
+
+    // A bitemporal class must still refuse closing after only one argument.
+    let prefix = "|t::milestoning::Bi.all(%latest";
+    let mut session =
+        DecoderSession::with_schema(&grammar, schema.clone()).expect("grammar is fixed-engine");
+    for byte in prefix.bytes() {
+        let id = id_of(byte);
+        assert!(session.allowed_mask().test(id), "prefix must stream");
+        session.accept_token(id).expect("prefix accepts");
+    }
+    assert!(
+        !session.allowed_mask().test(id_of(b')')),
+        "L2 SOUNDNESS (issue #391 regression guard): a bitemporal class's \
+         two-argument arity must still refuse closing after only one"
+    );
 }
 
 /// `$x` is bound to CarsData; `cylinders` is a real property, `sallary` is not.

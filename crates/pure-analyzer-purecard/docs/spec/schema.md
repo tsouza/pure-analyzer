@@ -539,16 +539,34 @@ resolved for S1/N3) and narrows two related positions by it:
   turn, so a bitemporal class's third `%latest` is refused exactly as its
   first missing one is.
 - **The separator right after a completed argument (`SourceMethodArgSep`).**
-  A milestone/date literal and a `$`-variable are both *value-terminal*
-  in-lexeme byte-PDA states (`InDateLit`/`InDateTime`/`InDateFrac`/
-  `InMilestoneLit` for a date, `InMemberIdent` for a variable's own name) —
-  nothing can extend them further, but the automaton's own state name has not
-  yet advanced past the value, so this is the only point the `,`-or-`)` byte
-  can be masked at (waiting for a genuine post-value anchor is too late: that
-  anchor is only reached *after* the separator byte has already been chosen).
-  `remaining: true` keeps `,` and masks `)`; `remaining: false` is the mirror.
-  This is N3d's own `StoreMethodArgSep`/`InStrLit { escaped: true }` precedent,
-  applied to the source method's own call instead of a store method's.
+  A milestone/date literal and a `$`-variable are read at the same in-lexeme
+  byte-PDA states (`InDateLit`/`InDateTime`/`InDateFrac`/`InMilestoneLit` for
+  a date, `InMemberIdent` for a variable's own name), because the automaton's
+  own state name has not yet advanced past the value, so this is the only
+  point the `,`-or-`)` byte can be masked at (waiting for a genuine post-value
+  anchor is too late: that anchor is only reached *after* the separator byte
+  has already been chosen). `remaining: true` keeps `,` and masks `)`;
+  `remaining: false` is the mirror. This is N3d's own
+  `StoreMethodArgSep`/`InStrLit { escaped: true }` precedent, applied to the
+  source method's own call instead of a store method's.
+
+  **Issue #391's correction.** Only `InMilestoneLit` is genuinely
+  *value-terminal* — `%latest` is a fixed keyword, so nothing can extend it
+  further once its last byte lands. `InDateLit`/`InDateTime`/`InDateFrac`
+  self-loop on more digits (and `InMemberIdent` on more ident-tail bytes): a
+  bare-year date sits on `InDateLit` after *every* digit of its date half, not
+  only its first, so this position is reached both for a byte that merely
+  continues the still-open lexeme and for the byte that actually closes it.
+  0.4.0 shipped applying the arity-gated separator set to *every* byte reached
+  here, which masked a real multi-digit date literal right after its own
+  first digit (`|t::A.all(%2026-01-15)` cut to `all(%2  )` once `temporal` was
+  set — live regression, business-temporal verified 3/9 → 0/9 on one real
+  adapter). The fix: `fill_source_method_arg_sep` now also keeps any byte
+  [`step`] says continues the lexeme still open at the current state (the
+  PDA's own transition table, reused rather than re-derived, so the
+  in-lexeme/closing classification cannot drift from what L1 actually does),
+  regardless of the arity gate — the gate governs only the byte that actually
+  closes the value.
 
 **When `required` is `None`** — the schema carries no `temporal` field for the
 class — both positions keep the exact pre-#384 pass-through: any count of
@@ -613,9 +631,10 @@ the just-closed navigation resolved *to* — at `on_open` instead of S1's
   applies the identical owed-closer/met-arity masking.
 - **The separator right after a completed argument
   (`PropertyMethodArgSep`).** The S3 mirror of `SourceMethodArgSep`, reusing
-  its exact fill (a milestone/date literal and a `$`-variable are
-  value-terminal in-lexeme byte-PDA states regardless of which call opened
-  them, so the separator decision is identical).
+  its exact fill and its issue #391 correction (a milestone/date literal and a
+  `$`-variable are read at the same in-lexeme byte-PDA states regardless of
+  which call opened them, so the separator decision — and its continuation
+  exemption — are identical).
 
 **When `required` is `None`** for the navigated-to class, S3 keeps the exact
 pre-#386 pass-through, for the identical "absent means not-yet-stated, never
