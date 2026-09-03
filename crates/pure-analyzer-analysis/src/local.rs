@@ -10,7 +10,7 @@ use pure_analyzer_resolve::{
 };
 use pure_analyzer_syntax::{GreenElement, GreenNode, SyntaxKind, TextRange};
 
-use crate::lowering::contains_error_node;
+use crate::cst_util::{contains_error_node, direct_nodes, is_trivia};
 
 const NAME_KINDS: [SyntaxKind; 6] = [
     SyntaxKind::IDENT,
@@ -404,14 +404,6 @@ impl LocalAnalyzer<'_> {
     }
 }
 
-fn direct_nodes(node: &GreenNode) -> Vec<GreenNode> {
-    node.children()
-        .iter()
-        .filter_map(GreenElement::as_node)
-        .cloned()
-        .collect()
-}
-
 fn qualified_name(node: GreenNode) -> Option<QName> {
     QName::new(compact_text(&node)).ok()
 }
@@ -692,13 +684,6 @@ fn declaration_span(node: &GreenNode) -> Option<TextRange> {
         |token| token.text_range().end(),
     );
     Some(TextRange::new(start, end))
-}
-
-fn is_trivia(kind: SyntaxKind) -> bool {
-    matches!(
-        kind,
-        SyntaxKind::WHITESPACE | SyntaxKind::LINE_COMMENT | SyntaxKind::BLOCK_COMMENT
-    )
 }
 
 #[cfg(test)]

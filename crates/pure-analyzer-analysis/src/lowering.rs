@@ -16,14 +16,13 @@ use crate::{
     RelationExpression, RelationFacts, RelationOperator, RelationSchema, RelationSource,
     RelationalOutcome, RelationalQuery, ResolvedNavigation, RowSemantics, ScalarExpression,
     ScalarLiteral, ScalarOperator, SortDirection, SortKey, SourceSpan, Totality,
-    relational::{MAP_VALUE_COLUMN_NAME, compose_navigation_multiplicity},
+    cst_util::{contains_error_node, direct_nodes, element_is_trivia, is_trivia},
+    relational::{
+        BOOLEAN_TYPE, EXACTLY_ONE, INTEGER_TYPE, MAP_VALUE_COLUMN_NAME, STRING_TYPE,
+        compose_navigation_multiplicity,
+    },
     resolve_relation_column_selectors,
 };
-
-const BOOLEAN_TYPE: &str = "Boolean";
-const INTEGER_TYPE: &str = "Integer";
-const ONE: u32 = 1;
-const STRING_TYPE: &str = "String";
 
 /// Lower one parsed M3 query into the proven relational core or a typed opaque outcome.
 ///
@@ -1272,48 +1271,6 @@ fn top_level_queries(tree: &GreenNode) -> Vec<GreenNode> {
         .collect()
 }
 
-/// Longest [`GreenNode`] nesting this crate's syntax-tree walks will descend
-/// before conservatively reporting an error, independent of
-/// [`MAX_RELATIONAL_RECURSION_DEPTH`](crate::relational::MAX_RELATIONAL_RECURSION_DEPTH).
-///
-/// The two budgets protect the same hazard class (unbounded recursion over
-/// untrusted input) but cannot share a value: a syntax tree is structurally
-/// much deeper than the relational IR it lowers to even for ordinary,
-/// non-adversarial source — parenthesized-expression grammar layering alone
-/// measures roughly one `GreenNode` level per paren, and
-/// `pure_analyzer_parser::m3::MAX_PARSE_DEPTH` (256) already lets a query
-/// nest that deep before the parser itself refuses to go further. This
-/// budget must clear that ceiling with margin, or it would reject ordinary
-/// parser-accepted queries; `MAX_RELATIONAL_RECURSION_DEPTH` (32) is instead
-/// sized to the relational walks' own, far more expensive, per-frame stack
-/// cost. Each frame here is a handful of field reads, so a much larger budget
-/// is still cheap on the smallest worker stack in the workspace.
-const MAX_SYNTAX_TREE_DEPTH: usize = 512;
-
-/// Report whether `node` or any descendant is an error node or carries an
-/// error token.
-///
-/// Shared by every pass in this crate that needs to reject unparseable syntax
-/// before treating it as analyzable (lowering, local navigation analysis,
-/// column-selector extraction). Depth is bounded by
-/// [`MAX_SYNTAX_TREE_DEPTH`]: exceeding the budget reports `true` (contains
-/// an error) rather than guessing the tree is clean — the same fail-closed
-/// default every other bounded walk in this crate uses.
-pub(crate) fn contains_error_node(node: &GreenNode) -> bool {
-    contains_error_node_at_depth(node, 0)
-}
-
-fn contains_error_node_at_depth(node: &GreenNode, depth: usize) -> bool {
-    if depth >= MAX_SYNTAX_TREE_DEPTH {
-        return true;
-    }
-    node.kind() == SyntaxKind::ERROR_NODE
-        || node.tokens().any(|token| token.kind() == SyntaxKind::ERROR)
-        || direct_nodes(node)
-            .iter()
-            .any(|child| contains_error_node_at_depth(child, depth + 1))
-}
-
 fn require_relation(state: Option<RelationState>) -> Result<RelationState, ReasonCode> {
     state.ok_or(ReasonCode::IndUnmodeledOp)
 }
@@ -1849,11 +1806,11 @@ fn local_with_multiplicity(value: &LocalValue, multiplicity: Multiplicity) -> Lo
 }
 
 fn exactly_one() -> Result<Multiplicity, ReasonCode> {
-    Multiplicity::new(ONE, Some(ONE)).map_err(|_| ReasonCode::IndUnmodeledOp)
+    Multiplicity::new(EXACTLY_ONE, Some(EXACTLY_ONE)).map_err(|_| ReasonCode::IndUnmodeledOp)
 }
 
 fn is_exactly_one(multiplicity: Multiplicity) -> bool {
-    multiplicity.lower() == ONE && multiplicity.upper() == Some(ONE)
+    multiplicity.lower() == EXACTLY_ONE && multiplicity.upper() == Some(EXACTLY_ONE)
 }
 
 fn primitive_type(name: &str) -> Result<TypeRef, ReasonCode> {
@@ -1914,22 +1871,8 @@ fn opaque(reason: ReasonCode, origin: IrOrigin) -> RelationalOutcome {
     RelationalOutcome::opaque(OpaqueOutcome::new(reason, origin))
 }
 
-fn direct_nodes(node: &GreenNode) -> Vec<GreenNode> {
-    node.children()
-        .iter()
-        .filter_map(GreenElement::as_node)
-        .cloned()
-        .collect()
-}
-
 fn takes_token(element: Option<&&GreenElement>, kind: SyntaxKind) -> bool {
     matches!(element, Some(GreenElement::Token(token)) if token.kind() == kind)
-}
-
-fn element_is_trivia(element: &GreenElement) -> bool {
-    element
-        .as_token()
-        .is_some_and(|token| is_trivia(token.kind()))
 }
 
 fn significant_tokens(node: &GreenNode) -> Vec<&pure_analyzer_syntax::GreenToken> {
@@ -1953,13 +1896,6 @@ fn compact_text(node: &GreenNode) -> String {
         .filter(|token| !is_trivia(token.kind()))
         .map(|token| token.text())
         .collect()
-}
-
-fn is_trivia(kind: SyntaxKind) -> bool {
-    matches!(
-        kind,
-        SyntaxKind::WHITESPACE | SyntaxKind::LINE_COMMENT | SyntaxKind::BLOCK_COMMENT
-    )
 }
 
 #[cfg(test)]
@@ -2078,7 +2014,8 @@ mod tests {
             .into_iter()
             .find(|node| node.kind() == SyntaxKind::COLUMN_SPEC)
             .expect("fixture must contain a column selector");
-        let multiplicity = Multiplicity::new(ONE, Some(ONE)).expect("fixture multiplicity");
+        let multiplicity =
+            Multiplicity::new(EXACTLY_ONE, Some(EXACTLY_ONE)).expect("fixture multiplicity");
         let type_ref = TypeRef::new(
             QName::new(STRING_TYPE).expect("fixture type path must be valid"),
             Vec::new(),
@@ -2093,7 +2030,7 @@ mod tests {
                 origin(file, selector.text_range(), Vec::new()),
             ),
             Column::new(
-                ColumnId::new(ONE),
+                ColumnId::new(EXACTLY_ONE),
                 Name::new("value").expect("fixture name must be valid"),
                 type_ref,
                 multiplicity,
@@ -2363,7 +2300,8 @@ mod tests {
 
     #[test]
     fn exactly_one_rejects_an_unbounded_value() {
-        let one_or_more = Multiplicity::new(ONE, None).expect("fixture multiplicity must be valid");
+        let one_or_more =
+            Multiplicity::new(EXACTLY_ONE, None).expect("fixture multiplicity must be valid");
 
         assert!(!is_exactly_one(one_or_more));
     }
