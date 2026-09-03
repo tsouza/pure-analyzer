@@ -22,6 +22,7 @@ mod error;
 mod loader;
 mod pure;
 mod raw;
+mod stereotypes;
 mod types;
 
 use pure_analyzer_diagnostics::DiagCode;
