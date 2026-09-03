@@ -462,6 +462,36 @@ a bare `Class.all` is rejected with "Can't find property 'all' in class
 'meta::pure::metamodel::type::Class'", exactly as `Db->tableToTDS` without its
 `()` is.
 
+**S1's argument slot (`SourceMethodArg`).** `all()` ordinarily takes no
+argument at all, but bitemporal milestoning legally passes zero, one, or two
+comma-separated as-of dates there (`Firm.all(%latest)`, `Firm.all(%latest,
+%latest)`, both in the modern-dialect seed corpus). The slot's default is
+therefore inverted from every other narrowing rule here: rather than admit a
+*candidate* shape and mask a wrong one, it has no legal identifier/string/number
+argument at all, and keeps only its own closer, intervening whitespace, and a
+milestone/date literal (`docs/spec/grammar.md`'s `milestoneLit`/`dateLit`) — the
+exact phantom shapes the schema walker was observed emitting elsewhere
+(`Class.all('French')`, `Class.all(all)`) are masked here too, both confirmed
+live to fail Legend compilation.
+
+A `$`-prefixed variable reference is admitted alongside a date literal (issue
+#367): binding an as-of date once (`let d = …; …A.all($d)…`) and passing it to
+every milestoned extent's `all()` is the ordinary way to write a dated query,
+and the schema contract carries no temporal stereotype (§6.2.4's `Milestoning
+target_stereotypes are ignored by L2` note above) that would let this rule tell
+a legal date variable from an illegal one any better than L1 already does — so,
+exactly like a milestone literal, a variable reference is left to the compiler
+oracle rather than modeled here. This is the one position where S2's own two
+narrowings (below) do **not** apply: the sigil-before-any-binder mask does not
+fire, and the identifier after `$` is left fully unconstrained rather than
+narrowed to the stream's bound names, because an as-of date variable ordinarily
+names a binder the stream never sees at all — a function or service parameter,
+or an enclosing `let` — so `SourceMethodArg` is exempt from both rather than
+falsely reading "no name bound here" as "no name could ever be legal here".
+Live-verified: the engine's `grammarToJson/lambda` route compiles
+`|t::A.all($d)->project(~[a: x|$x.alpha])` (issue #367's own reproduction,
+HTTP 200) exactly as it compiles the `%latest` form beside it.
+
 **Mask-aware completion.** L1 acceptance is a lookahead fact — "would a
 value-boundary byte from here reach a value-terminal state?" — and an identifier
 has no self-terminating byte, so *every* partial name satisfies it: a stream
@@ -507,7 +537,11 @@ precise, not less (issue #275):
   the `$`-led tokens at every anchor where a `$` opens a refVar. It is the mirror
   image of the fused nav-dot pass above: that one narrows a token the anchor-read
   rule cannot see *into*, this one narrows the token the rule's position is reached
-  *through*.
+  *through*. Both this sigil pass and the ordinary bound-name narrowing it backs
+  are suspended inside `SourceMethodArg` (issue #367, above): a milestoning date
+  variable ordinarily names a binder outside the stream entirely, so an empty
+  `bound_vars` — or an outer binder that simply is not `d` — is not evidence of a
+  phantom name at this one position.
 - **A binder's *type* path is not a bindable name.** S2 walks its names as plain
   identifiers, so a `::`-joined name is a branch no `$<IDENT>` can ever finish: a
   stream on its live prefix has every continuation cleared as a divergence and
