@@ -4,6 +4,44 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/) and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.1](https://github.com/tsouza/pure-analyzer/compare/purecard-v0.3.0...purecard-v0.3.1) - 2026-09-03
+
+Six more fixes for gaps a downstream NL-to-Pure consumer's grammar/schema
+coverage sweep surfaced, all live-verified against the pinned
+`finos/legend-engine-server:4.113.0` engine. No breaking changes — `State`
+was already `#[non_exhaustive]` (since 0.3.0), so every new variant added
+below is additive.
+
+### Fixed
+
+- *(purecard)* admit a `$`-variable as the milestoning date argument of
+  `all(...)`, alongside the already-admitted `%`-literal forms (issue
+  [#367](https://github.com/tsouza/pure-analyzer/issues/367),
+  [#373](https://github.com/tsouza/pure-analyzer/pull/373))
+- *(purecard)* close arm-R's first `~`-column colon against a typed binder
+  — `over(~[k: t::A[*]|$k.k])`-shaped lambda columns now correctly die
+  (issue [#368](https://github.com/tsouza/pure-analyzer/issues/368),
+  [#376](https://github.com/tsouza/pure-analyzer/pull/376))
+- *(purecard)* require a call after every `->`-step target name — a bare
+  `->name->` pipeline step (the dominant real-world rejection shape under
+  live sampling) is no longer admitted (issue
+  [#369](https://github.com/tsouza/pure-analyzer/issues/369),
+  [#375](https://github.com/tsouza/pure-analyzer/pull/375))
+- *(purecard)* admit a window aggregation's own reducer binder (`$y` in
+  `{p,w,r|...}:y|$y->average()`), previously masked as unbound even though
+  L1 already admitted it (issue
+  [#377](https://github.com/tsouza/pure-analyzer/issues/377),
+  [#380](https://github.com/tsouza/pure-analyzer/pull/380))
+- *(purecard)* narrow a `let` binder's own classpath value against the real
+  schema, closing a fabricated-class-path gap N3 left open there (issue
+  [#371](https://github.com/tsouza/pure-analyzer/issues/371),
+  [#382](https://github.com/tsouza/pure-analyzer/pull/382))
+- *(purecard)* close arm-R's second `~`-column colon (`relAggSpec`/
+  `winAggSpec`'s reducer separator) against a typed binder, the same
+  over-admission #368 closed at the first colon (issue
+  [#372](https://github.com/tsouza/pure-analyzer/issues/372),
+  [#381](https://github.com/tsouza/pure-analyzer/pull/381))
+
 ## [0.3.0](https://github.com/tsouza/pure-analyzer/compare/purecard-v0.2.2...purecard-v0.3.0) - 2026-09-03
 
 <!--
