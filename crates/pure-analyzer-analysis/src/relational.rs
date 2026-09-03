@@ -19,6 +19,27 @@ const EXACTLY_ONE: u32 = 1;
 const INTEGER_TYPE: &str = "Integer";
 const STRING_TYPE: &str = "String";
 
+/// Longest chain of nested relational or scalar IR nodes that any recursive
+/// walk in this crate (normalization, canonical emission, error-node
+/// scanning) will descend before reporting a typed refusal instead of
+/// recursing further.
+///
+/// Real Pure queries are orders of magnitude shallower. The budget exists so
+/// that untrusted or generated input — e.g. a long `->distinct()->distinct()`
+/// pipe chain, which the parser does not itself depth-limit — cannot drive a
+/// recursive walk into a process-aborting stack overflow. It intentionally
+/// mirrors the resolver's `MAX_GENERALIZATION_DEPTH` idiom but carries its own
+/// value: each frame here is measurably more expensive (the walked nodes and
+/// their rebuilt replacements are owned, non-trivial structs), so the same
+/// depth is not safe here. This value was chosen empirically against
+/// `pure-analyzer-resolve`'s smallest constrained worker stack in the
+/// workspace (1 MiB, see `WORKER_STACK_BYTES` in
+/// `pure-analyzer-resolve/tests/model_resolution.rs`): an unbounded walk over
+/// this crate's most expensive recursive frame first aborts a 1 MiB debug
+/// thread near a nesting depth of 50; this budget stays well under that
+/// measured floor. Nothing couples this value to the resolver's.
+pub(crate) const MAX_RELATIONAL_RECURSION_DEPTH: usize = 32;
+
 /// A stable range in a query document loaded by the calling front end.
 ///
 /// This is intentionally distinct from [`DefinitionAnchor`]: query files are
@@ -804,6 +825,88 @@ impl RelationExpression {
     #[must_use]
     pub const fn origin(&self) -> &IrOrigin {
         &self.origin
+    }
+}
+
+/// Drop a relational expression's `Box<RelationExpression>` chain iteratively.
+///
+/// A `->distinct()->distinct()->...` pipe of arbitrary length lowers to a
+/// `RelationExpression` whose `Box` chain is exactly as deep as the source
+/// pipe: nothing in the parser or lowerer bounds that depth (see the module
+/// rustdoc on `MAX_RELATIONAL_RECURSION_DEPTH`). Left to the compiler-derived
+/// destructor, dropping such a value recurses once per relation node and can
+/// abort the process on an ordinary worker stack, independent of whether that
+/// value was ever normalized. This impl instead detaches each node's input(s)
+/// into an explicit worklist before they are dropped, so no single `drop`
+/// call recurses more than one level deep.
+///
+/// Scalar sub-expressions (filter predicates, join conditions, projections)
+/// are not flattened here: they still drop by ordinary recursion. Unlike a
+/// relation pipe, their nesting comes only from the parenthesized/operator
+/// expression grammar, which the parser already bounds
+/// (`pure_analyzer_parser::m3::MAX_PARSE_DEPTH`), so an in-process value can
+/// never carry an unbounded scalar chain the way it can an unbounded relation
+/// chain.
+impl Drop for RelationExpression {
+    fn drop(&mut self) {
+        let seed = leaf_source(self);
+        let mut pending = Vec::new();
+        detach_children(&mut self.operator, &seed, &mut pending);
+        while let Some(mut operator) = pending.pop() {
+            detach_children(&mut operator, &seed, &mut pending);
+            // `operator`'s own inputs were just moved into `pending`, so
+            // dropping it here touches at most one relation node.
+        }
+    }
+}
+
+/// Follow the first input of each node down to a `Scan`, returning its source.
+///
+/// Every relational operator carries at least one input and every input
+/// chain is finite, so this loop always terminates at a `Scan` without
+/// recursion.
+fn leaf_source(expression: &RelationExpression) -> RelationSource {
+    let mut current = expression;
+    loop {
+        match current.operator() {
+            RelationOperator::Scan(source) => return source.clone(),
+            RelationOperator::Filter { input, .. }
+            | RelationOperator::Project { input, .. }
+            | RelationOperator::Distinct { input }
+            | RelationOperator::DistinctOn { input, .. }
+            | RelationOperator::Sort { input, .. } => current = input,
+            RelationOperator::Join { left, .. } => current = left,
+        }
+    }
+}
+
+/// Move each direct relational input out of `operator` into `pending`,
+/// leaving a childless placeholder `Scan(seed)` behind in its place.
+///
+/// The placeholder is never observed: `operator` is dropped, not returned,
+/// once its detached inputs have been queued.
+fn detach_children(
+    operator: &mut RelationOperator,
+    seed: &RelationSource,
+    pending: &mut Vec<RelationOperator>,
+) {
+    let mut take_input = |input: &mut Box<RelationExpression>| {
+        pending.push(std::mem::replace(
+            &mut input.operator,
+            RelationOperator::Scan(seed.clone()),
+        ));
+    };
+    match operator {
+        RelationOperator::Scan(_) => {}
+        RelationOperator::Filter { input, .. }
+        | RelationOperator::Project { input, .. }
+        | RelationOperator::Distinct { input }
+        | RelationOperator::DistinctOn { input, .. }
+        | RelationOperator::Sort { input, .. } => take_input(input),
+        RelationOperator::Join { left, right, .. } => {
+            take_input(left);
+            take_input(right);
+        }
     }
 }
 

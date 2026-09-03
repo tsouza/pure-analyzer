@@ -6,7 +6,7 @@ use pure_analyzer_diagnostics::FileId;
 use pure_analyzer_model::Name;
 use pure_analyzer_syntax::{GreenElement, GreenNode, SyntaxKind};
 
-use crate::{ColumnId, RelationSchema, SourceSpan};
+use crate::{ColumnId, RelationSchema, SourceSpan, lowering::contains_error_node};
 
 /// A column name as it was written in a relation selector.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -457,14 +457,4 @@ fn is_trivia(kind: SyntaxKind) -> bool {
         kind,
         SyntaxKind::WHITESPACE | SyntaxKind::LINE_COMMENT | SyntaxKind::BLOCK_COMMENT
     )
-}
-
-fn contains_error_node(node: &GreenNode) -> bool {
-    node.kind() == SyntaxKind::ERROR_NODE
-        || node.tokens().any(|token| token.kind() == SyntaxKind::ERROR)
-        || node
-            .children()
-            .iter()
-            .filter_map(GreenElement::as_node)
-            .any(contains_error_node)
 }
