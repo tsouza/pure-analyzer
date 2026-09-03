@@ -191,6 +191,23 @@ regressions.
   construction and only the exploration partition is evidence about mask
   precision.
 
+  **Current status (issue #55, closed as achieved; the literal numbers live
+  here so a reader does not import "100%" from that title): `world_1` 54/64
+  = recipe 5/5 + exploration 49/59, `car_1` 46/64 = recipe 7/7 + exploration
+  39/57, aggregate 100/128 = 78.1%** — as of Phase 9/10 (2026-08-30/31).
+  `tests/live_legend_schema_walk_compile.rs`'s `CRITERION_BASELINE`/
+  `GENERALIZATION_BASELINE` constants are the enforced source of truth; update
+  this paragraph only alongside a ratchet there, never on its own. Of the 29
+  exploration failures those floors leave standing:
+  - **11** are a value-position name-narrowing the maintainer declined
+    (#55 Decision 3) — a real product requirement, since novel identifiers
+    from a live LLM host must stay legal.
+  - **Up to 6** need `GrammarSpec` V2's per-frame mutable state (the arm-R
+    and block-statement-`;` ambiguities) — deprioritized, not blocked.
+  - **5** need issue #116's post-accessor type inference.
+  - **Remainder** is irreducible (engine-internal errors with no candidate
+    set to encode) or a correctly-declined arity claim.
+
 All commands run from the monorepo root through the shared `just` frontend.
 
 ## Decoder boundary
