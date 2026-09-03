@@ -72,6 +72,8 @@
 {"q":"|Trade.all()->sort([ascending(~a), ascending(~b), descending(~c)])","legend":"parse_ok","dimension":"arm-r-relation-api","note":"sort with three ordered column specs"}
 {"q":"|t::A.all()->project(~[a: x|$x.a, k: x|$x.k])->extend(over(~[t|$t.k]), ~[b: r|$r.a])","legend":"parse_fail","dimension":"arm-r-relation-api","note":"issue #361: a lambda column (~[t|$t.k]) as over()'s partition, not a bare colName or colName:lambda spec"}
 {"q":"|t::A.all()->project(~[a: x|$x.a, k: x|$x.k])->extend(over(~k), ~[b: {p,w,r|$r.a}])","legend":"parse_ok","dimension":"arm-r-relation-api","note":"issue #361: the genuine bare-colRef partition the previous line's lambda column was confused for"}
+{"q":"|t::A.all()->project(~[a: x|$x.a, k: x|$x.k])->extend(over(~[k: t::A[*]|$k.k]), ~[b: r|$r.a])","legend":"parse_fail","dimension":"arm-r-relation-api","note":"issue #368: a typed-binder lambda column (~[k: t::A[*]|$k.k]) as over()'s partition, the gap #361's untyped-lambda closure left open"}
+{"q":"|t::A.all()->project(~[a: x|$x.a, k: x|$x.k])->extend(over(~[k: t::A[*]|k.k]), ~[b: r|$r.a])","legend":"parse_fail","dimension":"arm-r-relation-api","note":"issue #368: the same typed-binder shape with no `$` on the body variable — still rejected at the type annotation, not the sigil"}
 {"q":"|Firm.all()->filter(x|$x.name == 'Acme')","legend":"parse_ok","dimension":"literals-and-dates","note":"basic single-quoted string literal"}
 {"q":"|Firm.all()->filter(x|$x.name == 'Comp. Sci.')","legend":"parse_ok","dimension":"literals-and-dates","note":"string with dots and spaces"}
 {"q":"|Firm.all()->filter(x|$x.note == 'a''b')","legend":"parse_fail","dimension":"literals-and-dates","note":"embedded doubled single-quote escape"}

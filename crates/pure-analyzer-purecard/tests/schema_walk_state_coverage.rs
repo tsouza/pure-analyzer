@@ -64,12 +64,14 @@ const STRUCTURAL_BYTES: &[u8] = b"abXY1_ |{}()[].,;:$%'-><=!&+*/";
 ///   translations) contain one, and the walker only draws numeric tokens from
 ///   corpus lexemes plus `STRUCTURAL_BYTES`, neither of which supplies an `e`
 ///   exponent shape.
-/// - `SawTilde`, and the six states only `SawTilde` reaches
+/// - `SawTilde`, and the nine states only `SawTilde` reaches
 ///   (`InRelColIdent`/`InRelColStrLit`/`AfterRelColName`/`ExpectRelColSpec`/
-///   `ExpectRelColSpecReq`, issue #361's narrower arm-R colName positions): the
-///   arm-R Relation/Function API sigil (`~Col`, `~[…]`). None of the 8
-///   `FIXTURE_DBS` gold corpora contain an arm-R construct (arm-R is exercised
-///   elsewhere, e.g. `l2_precision.rs`'s hand-written queries, not through this
+///   `ExpectRelColSpecReq`, issue #361's narrower arm-R colName positions, plus
+///   `AfterRelColColon`/`InRelColLambdaBinder`/`AfterRelColLambdaBinder`, issue
+///   #368's narrower arm-R binder-after-colon positions): the arm-R
+///   Relation/Function API sigil (`~Col`, `~[…]`). None of the 8 `FIXTURE_DBS`
+///   gold corpora contain an arm-R construct (arm-R is exercised elsewhere,
+///   e.g. `l2_precision.rs`'s hand-written queries, not through this
 ///   generator).
 /// - `MilestoneL`…`MilestoneLates`/`InMilestoneLit`: the `%latest` keyword chain
 ///   (issue #55 Phase 7). `InMilestoneLit` *was* reached — through `%a`,
@@ -96,6 +98,9 @@ const EXPECTED_UNREACHABLE: &[&str] = &[
     "AfterRelColName",
     "ExpectRelColSpec",
     "ExpectRelColSpecReq",
+    "AfterRelColColon",
+    "InRelColLambdaBinder",
+    "AfterRelColLambdaBinder",
     "MilestoneL",
     "MilestoneLa",
     "MilestoneLat",
