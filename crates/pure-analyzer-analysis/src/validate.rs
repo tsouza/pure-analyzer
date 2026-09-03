@@ -1,7 +1,7 @@
 //! Model-free grammar validation and targeted parser over-admission guards.
 
 use pure_analyzer_diagnostics::{DiagCode, Diagnostic, Label, Severity};
-use pure_analyzer_syntax::{GreenElement, GreenNode, GreenToken, SyntaxKind};
+use pure_analyzer_syntax::{GreenElement, GreenNode, SyntaxKind};
 
 use crate::{AnalysisInput, AnalysisPass};
 
@@ -22,7 +22,6 @@ impl AnalysisPass for ValidatePass {
             diagnostics: &mut diagnostics,
         };
         walker.visit(input.tree(), None);
-        walker.join_kinds(input.tree().tokens());
         diagnostics
     }
 }
@@ -42,6 +41,7 @@ impl GuardWalker<'_> {
             SyntaxKind::PROPERTY_NAV => self.milestoning_arguments(node),
             _ => {}
         }
+        self.join_kind_references(node);
         for child in node.children().iter().filter_map(GreenElement::as_node) {
             self.visit(child, Some(node.kind()));
         }
@@ -115,26 +115,44 @@ impl GuardWalker<'_> {
         }
     }
 
-    fn join_kinds<'tree>(&mut self, tokens: impl Iterator<Item = &'tree GreenToken>) {
-        let tokens = tokens
-            .filter(|token| !is_trivia(token.kind()))
+    /// Flags `JoinKind.<member>` where `<member>` is not a recognized join
+    /// kind, but only when `JoinKind` is a genuine enum reference: a bare
+    /// `QUALIFIED_NAME` immediately followed, among its parent's children, by
+    /// the `PROPERTY_NAV` that reads `.<member>`. A `$`-prefixed variable
+    /// (`$JoinKind`) parses as `VARIABLE_EXPR`, never `QUALIFIED_NAME`, so it
+    /// can never match here regardless of spelling — matching on node kind
+    /// rather than token text is what excludes it.
+    fn join_kind_references(&mut self, node: &GreenNode) {
+        let children = node
+            .children()
+            .iter()
+            .filter_map(GreenElement::as_node)
             .collect::<Vec<_>>();
-        for window in tokens.windows(3) {
-            let [prefix, dot, member] = window else {
+        for pair in children.windows(2) {
+            let [target, property_nav] = pair else {
                 continue;
             };
-            if prefix.kind() == SyntaxKind::IDENT
-                && prefix.text() == "JoinKind"
-                && dot.kind() == SyntaxKind::DOT
-                && member.kind() == SyntaxKind::IDENT
-                && !matches!(member.text(), "INNER" | "LEFT")
-            {
-                self.error(
-                    DiagCode::UnknownJoinKind,
-                    member.text_range(),
-                    "unknown join kind; expected JoinKind.INNER or JoinKind.LEFT",
-                );
+            if property_nav.kind() == SyntaxKind::PROPERTY_NAV && is_bare_join_kind(target) {
+                self.join_kind_member(property_nav);
             }
+        }
+    }
+
+    fn join_kind_member(&mut self, property_nav: &GreenNode) {
+        let Some(member) = property_nav
+            .children()
+            .iter()
+            .filter_map(GreenElement::as_token)
+            .find(|token| !is_trivia(token.kind()) && token.kind() != SyntaxKind::DOT)
+        else {
+            return;
+        };
+        if member.kind() == SyntaxKind::IDENT && !matches!(member.text(), "INNER" | "LEFT") {
+            self.error(
+                DiagCode::UnknownJoinKind,
+                member.text_range(),
+                "unknown join kind; expected JoinKind.INNER or JoinKind.LEFT",
+            );
         }
     }
 
@@ -156,6 +174,24 @@ const fn is_trivia(kind: SyntaxKind) -> bool {
         kind,
         SyntaxKind::WHITESPACE | SyntaxKind::LINE_COMMENT | SyntaxKind::BLOCK_COMMENT
     )
+}
+
+/// Reports whether `node` is an unqualified `JoinKind` reference: a
+/// `QUALIFIED_NAME` whose only non-trivia content is the single identifier
+/// `JoinKind` (no `::` path segments). This is what distinguishes the real
+/// `JoinKind` enum from a `VARIABLE_EXPR` or lambda parameter that merely
+/// spells the same word.
+fn is_bare_join_kind(node: &GreenNode) -> bool {
+    node.kind() == SyntaxKind::QUALIFIED_NAME
+        && matches!(
+            node.children()
+                .iter()
+                .filter_map(GreenElement::as_token)
+                .filter(|token| !is_trivia(token.kind()))
+                .collect::<Vec<_>>()
+                .as_slice(),
+            [token] if token.kind() == SyntaxKind::IDENT && token.text() == "JoinKind"
+        )
 }
 
 #[cfg(test)]
@@ -257,5 +293,31 @@ mod tests {
         ] {
             assert!(codes(source).is_empty(), "{source}");
         }
+    }
+
+    #[test]
+    fn a_variable_or_lambda_parameter_named_joinkind_is_not_the_enum() {
+        // Regression for #283: `join_kinds` must key off the qualified-enum
+        // CST shape, not a flat token scan, so a `$`-variable or lambda
+        // parameter that merely spells "JoinKind" never collides with the
+        // real `meta::pure::functions::relation::JoinKind` enum reference.
+        for source in [
+            "$JoinKind.name",
+            "model::Person.all()->filter(JoinKind| $JoinKind.name == 'x')",
+        ] {
+            assert!(codes(source).is_empty(), "{source}");
+        }
+    }
+
+    #[test]
+    fn a_genuine_joinkind_enum_reference_with_an_unknown_member_still_errors() {
+        // Regression for #283: the fix above must not weaken the guard into
+        // a false negative for the real enum-qualified case.
+        assert_eq!(
+            codes(
+                "#>{db::testDB.left}#->join(#>{db::testDB.right}#, JoinKind.OUTER, {x,y| $x == $y})"
+            ),
+            [DiagCode::UnknownJoinKind]
+        );
     }
 }
