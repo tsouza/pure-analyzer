@@ -441,6 +441,16 @@ impl PropInfo {
 }
 
 /// Semantic classification of a qualified property.
+///
+/// There is no `EdgePoint` variant: an earlier revision inferred an "edge"
+/// navigation from unbounded return multiplicity alone, but multiplicity is
+/// not independent evidence of that shape — a to-many milestoned navigation
+/// (the common case, since `p(businessDate): T[*]` is what the engine
+/// generates for any to-many milestoned association end) is still a point
+/// navigation, not a structurally distinct edge. See issue #300. Every
+/// generated point-in-time navigation, unbounded or not, is
+/// `MilestonedPoint` until a real, non-multiplicity signal for an edge
+/// shape exists (tracked separately).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum QpKind {
     /// User-defined qualified property; validate against its signature only.
@@ -451,8 +461,6 @@ pub enum QpKind {
     AllVersions,
     /// Generated range navigation accepting its two-date range signature.
     AllVersionsInRange,
-    /// Generated unbounded edge navigation using target point arity.
-    EdgePoint,
 }
 
 /// A normalized qualified property.

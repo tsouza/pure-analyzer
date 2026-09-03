@@ -49,8 +49,8 @@ The graph retains:
   qualified properties, source provenance, and coverage policy;
 - property raw types plus generic arguments and validated multiplicities;
 - user-qualified signatures when the source declares parameters;
-- generated milestoning classifications (`MilestonedPoint`, `AllVersions`,
-  `AllVersionsInRange`, and `EdgePoint`);
+- generated milestoning classifications (`MilestonedPoint`, `AllVersions`, and
+  `AllVersionsInRange`);
 - associations with both directed ends. Each property is navigable from the
   class targeted by the opposite end, and is materialized on that owning class;
 - source metadata and structured loader diagnostics.

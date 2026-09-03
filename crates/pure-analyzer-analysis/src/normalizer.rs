@@ -934,7 +934,6 @@ impl KeyEncoder {
                         QpKind::MilestonedPoint => "milestoned-point",
                         QpKind::AllVersions => "all-versions",
                         QpKind::AllVersionsInRange => "all-versions-in-range",
-                        QpKind::EdgePoint => "edge-point",
                     },
                 );
             }

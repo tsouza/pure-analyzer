@@ -182,7 +182,6 @@ impl ModelOrigin {
                     ResolvedMemberKind::Qualified(QpKind::AllVersionsInRange) => {
                         "qualified:all-versions-in-range"
                     }
-                    ResolvedMemberKind::Qualified(QpKind::EdgePoint) => "qualified:edge-point",
                     ResolvedMemberKind::Property => "property",
                     ResolvedMemberKind::AssociationEnd { association } => {
                         return format!(

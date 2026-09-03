@@ -133,7 +133,7 @@
           "parameters": []
         },
         {
-          "name": "quotesEdge",
+          "name": "quotesUnbounded",
           "genericType": {
             "rawType": {
               "_type": "packageableType",

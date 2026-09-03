@@ -138,9 +138,14 @@ fn qualified_properties_preserve_signature_and_classification() {
         properties["quotesAllVersionsInRange"].kind(),
         QpKind::AllVersionsInRange
     );
-    assert_eq!(properties["quotesEdge"].kind(), QpKind::EdgePoint);
+    assert_eq!(
+        properties["quotesUnbounded"].kind(),
+        QpKind::MilestonedPoint,
+        "return multiplicity must not affect classification (#300): a \
+         to-many generated navigation is still a point navigation"
+    );
     assert!(properties["quotes"].signature().is_none());
-    assert!(properties["quotesEdge"].multiplicity().is_unbounded());
+    assert!(properties["quotesUnbounded"].multiplicity().is_unbounded());
 }
 
 #[test]
