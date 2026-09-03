@@ -57,8 +57,14 @@ use purecard::{ByteRecognizer, CompiledGrammar, DecodeError, DecoderSession, Voc
 // into a second `->` with no call in between — a real automaton change,
 // reviewed in that PR, not a silent re-pin. Landed independently of #368 and
 // merged together here, so this count is the two changes' measured
-// intersection, not a sum of their separately-reported deltas.
-const EXPECTED_REACHABLE_CONFIGURATIONS: usize = 442;
+// intersection, not a sum of their separately-reported deltas. Issue #372
+// narrowed `AfterValueColon` itself (no longer a `goto` alias of the generic
+// `AfterColon`) and added `InRelAggReduceBinder`/`AfterRelAggReduceBinder`,
+// closing arm-R's *second* colon — `relAggSpec`/`winAggSpec`'s own
+// `mapLambda ":" reduceLambda` / `frameLambda ":" reduceLambda` separator —
+// to a bare `reduceLambda` binder, mirroring issue #368's own first-colon
+// narrowing. (442 was the pre-#372 count.)
+const EXPECTED_REACHABLE_CONFIGURATIONS: usize = 452;
 
 /// Arm-A (relational envelope) gold record count (mirrors
 /// `tests/soundness_replay.rs`).

@@ -799,21 +799,21 @@
       "accepting": false,
       "rules": [
         {
-          "action": {
-            "kind": "dead"
-          },
           "match": {
-            "byte": 58,
-            "kind": "exact"
+            "kind": "whitespace"
+          },
+          "action": {
+            "kind": "next",
+            "state": "AfterValueColon"
           }
         },
         {
-          "action": {
-            "kind": "goto",
-            "state": "AfterColon"
-          },
           "match": {
-            "kind": "any"
+            "kind": "ident_start"
+          },
+          "action": {
+            "kind": "next",
+            "state": "InRelAggReduceBinder"
           }
         }
       ]
@@ -2970,6 +2970,53 @@
           "action": {
             "kind": "next",
             "state": "AfterRelColLambdaBinder"
+          }
+        },
+        {
+          "match": {
+            "kind": "exact",
+            "byte": 124
+          },
+          "action": {
+            "kind": "next",
+            "state": "SawPipe"
+          }
+        }
+      ]
+    },
+    "InRelAggReduceBinder": {
+      "accepting": false,
+      "rules": [
+        {
+          "match": {
+            "kind": "ident_tail"
+          },
+          "action": {
+            "kind": "next",
+            "state": "InRelAggReduceBinder"
+          }
+        },
+        {
+          "match": {
+            "kind": "any"
+          },
+          "action": {
+            "kind": "goto",
+            "state": "AfterRelAggReduceBinder"
+          }
+        }
+      ]
+    },
+    "AfterRelAggReduceBinder": {
+      "accepting": false,
+      "rules": [
+        {
+          "match": {
+            "kind": "whitespace"
+          },
+          "action": {
+            "kind": "next",
+            "state": "AfterRelAggReduceBinder"
           }
         },
         {

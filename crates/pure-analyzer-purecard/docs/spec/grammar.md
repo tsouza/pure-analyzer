@@ -552,24 +552,40 @@ and the same shape with no `$` on the body variable are each "no viable
 alternative" right past the colon, exactly like the untyped bare-lambda form
 issue #361 closed off `AfterRelColName` itself (issue #368).
 
-Everything else in arm-R — the `:` column-to-lambda separators past the first,
-the `over(~…)` partition otherwise, the `{p,w,r|…}` frame bodies, the
-reducers, the bracket nesting — still reuses the shared value-hub / lambda /
-bracket machinery of §5.2–§5.3. So the grammar still admits a superset of the
-strict productions above (e.g. it does not enforce that a `winAggSpec` colon
-is bare while a `relAggSpec` colon carries a leading `~`, nor that `over(…)`'s
-argument is only ever a `colRef` list rather than the general bracketed
-colSpec form every other arm-R construct shares, nor that a *second*
-lambda-to-lambda colon inside `relAggSpec`/`winAggSpec`
-(`mapLambda ":" reduceLambda`) keeps its own `reduceLambda` binder bare —
-that second colon is reached off a *completed value*, not `AfterRelColName`,
-so it still opens the generic `AfterColon` typed-binder path and is
-out of this issue's scope); the compiler oracle catches that residue, exactly
-as §5.6 sanctions — but a *lambda* standing in for a column name, at any of
-these positions, is no longer part of it. Like every other L1 identifier, a
-`~`-column name is an **L2 pass-through** (it opens at the `SawTilde`/
-`ExpectRelColSpec`/`ExpectRelColSpecReq` anchors, whose rule is `None`), so
-arm-R never masks the model's emitted column names.
+`relAggSpec`/`winAggSpec`'s own *second* colon
+(`mapLambda ":" reduceLambda` / `frameLambda ":" reduceLambda`,
+`~'Agg': x|$x.v : `**`y|$y->sum()`**) is a distinct position from the first:
+it is reached off a *completed value* — the map/frame lambda's own body —
+not off `AfterRelColName`, so it opens the generic `step_after_value`'s `:`
+arm (`AfterValueColon`) rather than `AfterRelColColon`. `reduceLambda`'s own
+`binderVar` is, like every other arm-R lambda's (§5.3), always bare, so
+`AfterValueColon` admits only a bare binder identifier
+(`InRelAggReduceBinder`, closing at `AfterRelAggReduceBinder`, which admits
+only whitespace or its own binder pipe) — never a typed binder's `::`
+classpath/`[` multiplicity, nor a brace lambda: `reduceLambda` has no brace
+form. Live-attested:
+`groupBy(~[a], ~'s': x|$x.a : y::Integer[1]|$y->sum())` is "no viable
+alternative" right past the second colon, mirroring issue #368's own
+first-colon closure (issue #372). Unlike `AfterRelColColon`,
+`AfterValueColon` is not itself gated on having seen a `~` — `step_after_value`
+admits its `:` off *any* completed value inside a lambda-slot frame
+(`holds_a_lambda_slot`, §5.6's residual over-approximation: the byte machine
+cannot see that only arm-R legitimately reaches it) — so narrowing it had to
+leave that admission alone and tighten only what may *follow* the colon.
+
+Everything else in arm-R — the `over(~…)` partition, the `{p,w,r|…}` frame
+bodies, the reducers, the bracket nesting — still reuses the shared
+value-hub / lambda / bracket machinery of §5.2–§5.3. So the grammar still
+admits a superset of the strict productions above (e.g. it does not enforce
+that a `winAggSpec` colon is bare while a `relAggSpec` colon carries a
+leading `~`, nor that `over(…)`'s argument is only ever a `colRef` list
+rather than the general bracketed colSpec form every other arm-R construct
+shares); the compiler oracle catches that residue, exactly as §5.6 sanctions
+— but a *lambda* standing in for a column name, at any of these positions, is
+no longer part of it. Like every other L1 identifier, a `~`-column name is an
+**L2 pass-through** (it opens at the `SawTilde`/`ExpectRelColSpec`/
+`ExpectRelColSpecReq` anchors, whose rule is `None`), so arm-R never masks
+the model's emitted column names.
 
 ### 5.10 Differential gate (L1 vs. the Legend engine)
 

@@ -72,7 +72,15 @@ const STRUCTURAL_BYTES: &[u8] = b"abXY1_ |{}()[].,;:$%'-><=!&+*/";
 ///   Relation/Function API sigil (`~Col`, `~[…]`). None of the 8 `FIXTURE_DBS`
 ///   gold corpora contain an arm-R construct (arm-R is exercised elsewhere,
 ///   e.g. `l2_precision.rs`'s hand-written queries, not through this
-///   generator).
+///   generator). `InRelAggReduceBinder`/`AfterRelAggReduceBinder` (issue #372's
+///   narrower arm-R *second*-colon `reduceLambda`-binder positions) are, unlike
+///   those nine, reachable *without* `SawTilde` at all: `AfterValueColon`'s own
+///   `:` is admitted off **any** completed value inside a lambda-slot frame
+///   (`holds_a_lambda_slot`), arm-R or not (`docs/spec/grammar.md` §5.6's
+///   residual over-approximation — the byte machine cannot see that only
+///   arm-R legitimately reaches it), so an ordinary arm-A/arm-C `filter(…)`/
+///   `extend(…)` argument list's own completed value already offers it, and
+///   the gold corpora exercise it there.
 /// - `MilestoneL`…`MilestoneLates`/`InMilestoneLit`: the `%latest` keyword chain
 ///   (issue #55 Phase 7). `InMilestoneLit` *was* reached — through `%a`,
 ///   `%filter`, `%limit` and friends, every one of which the pinned engine

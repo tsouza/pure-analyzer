@@ -1721,6 +1721,18 @@ impl ScopeTracker {
                 self.lambda_first_ident = Some(text.to_owned());
                 self.bind_var(text);
             }
+            // arm-R's *second* colon — `reduceLambda`'s own binder
+            // (`mapLambda : `**`y`**`|…`), which the byte-PDA parks in an
+            // `InRelAggReduceBinder` reached from `AfterValueColon` (issue
+            // #372: unlike `AfterColon` above, `AfterValueColon`'s only
+            // legitimate reading is this bare `reduceLambda` binder, so
+            // there is no type-annotation case to guard for here either).
+            // Recording it unconditionally rebinds the binder at the
+            // following `|`, exactly like `AfterRelColColon` above.
+            State::AfterValueColon => {
+                self.lambda_first_ident = Some(text.to_owned());
+                self.bind_var(text);
+            }
             _ => {}
         }
         // Record an arm-R column *name* into the emitted-column universe: a bare
