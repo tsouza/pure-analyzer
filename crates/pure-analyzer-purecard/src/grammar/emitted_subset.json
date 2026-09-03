@@ -2752,7 +2752,7 @@
           },
           "action": {
             "kind": "next",
-            "state": "AfterColon"
+            "state": "AfterRelColColon"
           }
         },
         {
@@ -2851,6 +2851,87 @@
           "action": {
             "kind": "next",
             "state": "InRelColStrLit"
+          }
+        }
+      ]
+    },
+    "AfterRelColColon": {
+      "accepting": false,
+      "rules": [
+        {
+          "match": {
+            "kind": "whitespace"
+          },
+          "action": {
+            "kind": "next",
+            "state": "AfterRelColColon"
+          }
+        },
+        {
+          "match": {
+            "kind": "exact",
+            "byte": 123
+          },
+          "action": {
+            "kind": "push",
+            "frame": "BraceLambda",
+            "state": "ExpectBraceBinder"
+          }
+        },
+        {
+          "match": {
+            "kind": "ident_start"
+          },
+          "action": {
+            "kind": "next",
+            "state": "InRelColLambdaBinder"
+          }
+        }
+      ]
+    },
+    "InRelColLambdaBinder": {
+      "accepting": false,
+      "rules": [
+        {
+          "match": {
+            "kind": "ident_tail"
+          },
+          "action": {
+            "kind": "next",
+            "state": "InRelColLambdaBinder"
+          }
+        },
+        {
+          "match": {
+            "kind": "any"
+          },
+          "action": {
+            "kind": "goto",
+            "state": "AfterRelColLambdaBinder"
+          }
+        }
+      ]
+    },
+    "AfterRelColLambdaBinder": {
+      "accepting": false,
+      "rules": [
+        {
+          "match": {
+            "kind": "whitespace"
+          },
+          "action": {
+            "kind": "next",
+            "state": "AfterRelColLambdaBinder"
+          }
+        },
+        {
+          "match": {
+            "kind": "exact",
+            "byte": 124
+          },
+          "action": {
+            "kind": "next",
+            "state": "SawPipe"
           }
         }
       ]

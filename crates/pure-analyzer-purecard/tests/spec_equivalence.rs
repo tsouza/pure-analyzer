@@ -47,8 +47,12 @@ use purecard::{ByteRecognizer, CompiledGrammar, DecodeError, DecoderSession, Voc
 // `~[…]`/bare `~col` column-spec positions off the generic value hub — a real
 // automaton change, reviewed in that PR, not a silent re-pin. (325 was the
 // pre-#361 count, itself already grown from 323 by issue #352's own
-// `let`-binder-value states.)
-const EXPECTED_REACHABLE_CONFIGURATIONS: usize = 407;
+// `let`-binder-value states.) Issue #368 added three more states
+// (`AfterRelColColon`/`InRelColLambdaBinder`/`AfterRelColLambdaBinder`)
+// narrowing arm-R's binder-after-colon position off the generic typed-binder
+// `AfterColon` machinery — another real automaton change, not a re-pin. (407
+// was the pre-#368 count.)
+const EXPECTED_REACHABLE_CONFIGURATIONS: usize = 428;
 
 /// Arm-A (relational envelope) gold record count (mirrors
 /// `tests/soundness_replay.rs`).
