@@ -228,7 +228,8 @@ pub(crate) fn canonical_format(files: &[String], config: &ResolvedConfig) -> Res
     Ok(canonical_emission_exit(output.outcome()))
 }
 
-/// Execute lossless layout formatting, transactionally applying default file inputs.
+/// Execute lossless layout formatting, installing each default file input with its
+/// own atomic, durable exchange.
 pub(crate) fn format(
     files: &[String],
     mode: FormatMode,

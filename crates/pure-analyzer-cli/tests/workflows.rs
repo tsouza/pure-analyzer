@@ -39,7 +39,7 @@ fn top_level_help_lists_every_command_and_the_formatter_write_contract() {
         assert!(help.contains(command), "help omitted {command}: {help}");
     }
     assert!(
-        help.contains("transactional in-place file updates"),
+        help.contains("atomic, per-file in-place updates"),
         "fmt help omitted its write contract: {help}"
     );
 }
