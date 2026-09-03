@@ -330,7 +330,9 @@ pub purecard::grammar::pda::State::DateFrac
 pub purecard::grammar::pda::State::DateSep
 pub purecard::grammar::pda::State::DateTimeSep
 pub purecard::grammar::pda::State::ExpectBinder
+pub purecard::grammar::pda::State::ExpectBinderCallClose
 pub purecard::grammar::pda::State::ExpectBinderMult
+pub purecard::grammar::pda::State::ExpectBinderValue
 pub purecard::grammar::pda::State::ExpectBraceBinder
 pub purecard::grammar::pda::State::ExpectLambdaBody
 pub purecard::grammar::pda::State::ExpectSource
@@ -340,6 +342,7 @@ pub purecard::grammar::pda::State::InBinder
 pub purecard::grammar::pda::State::InBinderMult
 pub purecard::grammar::pda::State::InBinderType
 pub purecard::grammar::pda::State::InBinderTypePath
+pub purecard::grammar::pda::State::InBinderValueIdent
 pub purecard::grammar::pda::State::InDateFrac
 pub purecard::grammar::pda::State::InDateLit
 pub purecard::grammar::pda::State::InDateTime

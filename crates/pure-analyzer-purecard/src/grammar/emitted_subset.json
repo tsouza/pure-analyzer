@@ -47,7 +47,7 @@
         {
           "action": {
             "kind": "next",
-            "state": "ExpectSource"
+            "state": "ExpectBinderValue"
           },
           "match": {
             "byte": 61,
@@ -972,6 +972,34 @@
         }
       ]
     },
+    "ExpectBinderCallClose": {
+      "accepting": false,
+      "rules": [
+        {
+          "action": {
+            "kind": "next",
+            "state": "ExpectBinderCallClose"
+          },
+          "match": {
+            "kind": "whitespace"
+          }
+        },
+        {
+          "action": {
+            "kind": "pop",
+            "state": "AfterValue"
+          },
+          "guard": {
+            "frame": "Paren",
+            "kind": "stack_top_is"
+          },
+          "match": {
+            "byte": 41,
+            "kind": "exact"
+          }
+        }
+      ]
+    },
     "ExpectBinderMult": {
       "accepting": false,
       "rules": [
@@ -1000,6 +1028,39 @@
           },
           "match": {
             "byte": 42,
+            "kind": "exact"
+          }
+        }
+      ]
+    },
+    "ExpectBinderValue": {
+      "accepting": false,
+      "rules": [
+        {
+          "action": {
+            "kind": "next",
+            "state": "ExpectBinderValue"
+          },
+          "match": {
+            "kind": "whitespace"
+          }
+        },
+        {
+          "action": {
+            "kind": "next",
+            "state": "InBinderValueIdent"
+          },
+          "match": {
+            "kind": "ident_start"
+          }
+        },
+        {
+          "action": {
+            "kind": "next",
+            "state": "SawPercent"
+          },
+          "match": {
+            "byte": 37,
             "kind": "exact"
           }
         }
@@ -1472,7 +1533,7 @@
         {
           "action": {
             "kind": "next",
-            "state": "ExpectSource"
+            "state": "ExpectBinderValue"
           },
           "match": {
             "byte": 61,
@@ -1612,6 +1673,61 @@
           "match": {
             "kind": "exact",
             "byte": 91
+          }
+        }
+      ]
+    },
+    "InBinderValueIdent": {
+      "accepting": false,
+      "rules": [
+        {
+          "action": {
+            "kind": "next",
+            "state": "InBinderValueIdent"
+          },
+          "match": {
+            "kind": "ident_tail"
+          }
+        },
+        {
+          "action": {
+            "kind": "next",
+            "state": "AfterDot"
+          },
+          "match": {
+            "byte": 46,
+            "kind": "exact"
+          }
+        },
+        {
+          "action": {
+            "kind": "next",
+            "state": "SourceDash"
+          },
+          "match": {
+            "byte": 45,
+            "kind": "exact"
+          }
+        },
+        {
+          "action": {
+            "kind": "next",
+            "state": "SourceColon"
+          },
+          "match": {
+            "byte": 58,
+            "kind": "exact"
+          }
+        },
+        {
+          "action": {
+            "frame": "Paren",
+            "kind": "push",
+            "state": "ExpectBinderCallClose"
+          },
+          "match": {
+            "byte": 40,
+            "kind": "exact"
           }
         }
       ]

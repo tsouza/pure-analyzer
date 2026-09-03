@@ -974,3 +974,64 @@ fn a_classpath_separator_off_a_name_or_a_string_literal_still_streams() {
         "|X.all()->project(~[N: x|$x.a])->extend(over(~N), ~[agg:{p,w,r|$r.v}:y|$y->sum()])"
     ));
 }
+
+/// `letBinding`'s value is `pipeline | scalarExpr` (issue #352, `docs/spec/grammar.md`
+/// §5.1): a block query that binds a scalar once and threads it through milestoned
+/// navigation (`{|let d = today(); T.all($d)->…}`) used to die at the initializer's
+/// very first byte, even though `$d`, `today()` and a date literal were already
+/// admitted at every *argument* position (`.all($d)`, `.all(today())`,
+/// `.all(%2024-01-01)`). `today()`/`now()`/the date literal are live-attested here —
+/// each round-tripped through the pinned 4.113.0 engine's own
+/// `grammarToJson/lambda` during this fix and reached a real protocol AST, exactly
+/// as `corpus/modern_dialect_seeds.jsonl`'s three new `issue-352/let-scalar:*` rows
+/// record (`modern_dialect_soundness.rs` replays them). `%latest` is different: the
+/// same probe shows the engine rejects it as a bare `let` value ("Unexpected token
+/// '%latest'") — it is admitted here only because `milestoneLit` is *already*
+/// admitted at every value position, `let`'s included, as the pre-existing residual
+/// over-approximation §5.6 documents (the position/sigil phase a byte machine
+/// cannot track); this is that same gap reached through one more hub, not a new one.
+#[test]
+fn a_let_binding_admits_the_scalarexpr_forms_issue_352_asks_for() {
+    // The pre-existing pipeline-valued form still streams (regression anchor).
+    assert!(!dies("{|let a = t::A.all(); $a->filter(x|$x.n > 1);}"));
+    // Live-attested against the pinned engine (see doc comment above).
+    assert!(!dies(
+        "{|let d = today(); t::A.all($d)->filter(x|$x.n > 1);}"
+    ));
+    assert!(!dies("{|let d = now(); t::A.all($d)->filter(x|$x.n > 1);}"));
+    assert!(!dies(
+        "{|let d = %2024-01-01; t::A.all($d)->filter(x|$x.p($d,$d).n > 1);}"
+    ));
+    // `%latest` streams too — the documented over-approximation, not a live-attested
+    // shape (the engine itself rejects a bare `let` value of `%latest`).
+    assert!(!dies(
+        "{|let d = %latest; t::A.all($d)->filter(x|$x.n > 1);}"
+    ));
+}
+
+/// The scalar-call half of `scalarExpr` is deliberately **nullary only** — `let
+/// d = today();`, never `let d = today(1)` or `let d = today($x)`. Unlike most of
+/// this grammar's argument positions (§5.6: arity is generally left to the
+/// compiler), a byte-PDA can enforce "zero arguments" cheaply — require the `)`
+/// immediately — so the tighter, evidence-scoped reading is the one issue #352
+/// actually asks for, not the maximal one. A qualified call (`ns::today()`) and a
+/// bare `$`-var initializer (`let d = $other`) are real Legend Pure too (both
+/// parse against the pinned engine) but are outside the three scalarExpr shapes
+/// issue #352 names, so they stay unadmitted pending their own evidenced ask. A
+/// bare top-level scalar query (`|today()`) stays unadmitted for a different
+/// reason: `simpleQuery` is `pipeline`, never a bare value, and widening the whole
+/// query envelope is no part of this fix.
+#[test]
+fn a_let_binding_scalar_call_stays_arity_and_qualification_restricted() {
+    assert!(dies(
+        "{|let d = today(1); t::A.all($d)->filter(x|$x.n > 1);}"
+    ));
+    assert!(dies(
+        "{|let d = today($x); t::A.all($d)->filter(x|$x.n > 1);}"
+    ));
+    assert!(dies(
+        "{|let d = ns::today(); t::A.all($d)->filter(x|$x.n > 1);}"
+    ));
+    assert!(dies("{|let d = $other; t::A.all($d)->filter(x|$x.n > 1);}"));
+    assert!(dies("|today()"));
+}
