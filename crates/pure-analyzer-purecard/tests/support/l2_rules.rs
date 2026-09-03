@@ -48,7 +48,7 @@ pub const ALL_RULE_KINDS: &[&str] = &[
 #[must_use]
 pub fn rule_kind(pos: &L2Position) -> Option<&'static str> {
     match pos {
-        L2Position::SourceIdent => Some("SourceIdent"),
+        L2Position::SourceIdent | L2Position::BinderValueSourceIdent => Some("SourceIdent"),
         L2Position::SourceMethod => Some("SourceMethod"),
         L2Position::StoreMethod => Some("StoreMethod"),
         L2Position::SourceMethodArg => Some("SourceMethodArg"),

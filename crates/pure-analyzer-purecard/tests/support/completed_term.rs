@@ -38,6 +38,7 @@ pub fn is_completed_term(pos: &L2Position) -> bool {
         | L2Position::StrOperator { after_dash } => !after_dash,
         L2Position::None
         | L2Position::SourceIdent
+        | L2Position::BinderValueSourceIdent
         | L2Position::SourceMethod
         | L2Position::SourceMethodArg
         | L2Position::StoreMethod

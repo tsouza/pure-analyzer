@@ -81,6 +81,36 @@ fn a_full_arm_r_aggregation_pipeline_streams_soundly_under_l2() {
     assert_streams_soundly_under_l2("car_1", query);
 }
 
+/// Issue #371's own soundness edge, discovered while implementing the fix: a
+/// `let` binder's value is `pipeline | scalarExpr` (issue #352/PR #360,
+/// `docs/spec/grammar.md` §5.1), and `scalarExpr`'s nullary `scalarCall`
+/// (`today()`, `now()`) shares the SAME `ExpectBinderValue`/
+/// `InBinderValueIdent` anchor N3's classpath narrowing now also covers. A
+/// first attempt at the fix reused N3's real-classpath trie verbatim at this
+/// anchor, which correctly masked a fabricated `::phantom` classpath
+/// extension but ALSO masked `today`/`now` themselves — neither starts with a
+/// real class/store prefix, so the trie rejected them at their very first
+/// byte, regressing issue #352's own live-attested feature
+/// (`corpus/modern_dialect_seeds.jsonl`'s `issue-352/let-scalar:*` rows). The
+/// shipped fix (`L2Position::BinderValueSourceIdent`,
+/// `TrieKind::ClassPathContinuation`) narrows only the `::`-continuation of an
+/// already-real prefix and leaves every plain identifier byte unconstrained,
+/// so a `scalarCall` name — real, fabricated, or otherwise unenumerable — must
+/// never be masked here.
+#[test]
+fn a_let_binding_scalar_call_stays_sound_after_n3s_binder_value_extension() {
+    assert_streams_soundly_under_l2(
+        "car_1",
+        "{|let d = today(); spider::car_1::model::default::CarsData.all()\
+            ->filter(x|$x.cylinders >= 0);}",
+    );
+    assert_streams_soundly_under_l2(
+        "car_1",
+        "{|let d = now(); spider::car_1::model::default::CarsData.all()\
+            ->filter(x|$x.cylinders >= 0);}",
+    );
+}
+
 #[test]
 fn a_nested_arm_r_subquery_does_not_taint_the_outer_arm_a_pipeline() {
     // Soundness: an arm-A/TDS pipeline whose filter predicate contains an *inner*
@@ -3505,6 +3535,68 @@ fn a_resolved_source_method_admits_nothing_but_its_call() {
 #[test]
 fn n3_masks_a_source_that_is_only_a_prefix_of_the_let_keyword() {
     assert_frozen("n3-let-prefix");
+}
+
+/// Issue #371 — N3's classpath narrowing extends to a `let` binder's own
+/// value, not only the primary pipeline source. `pipeline | scalarExpr`
+/// (issue #352/PR #360) lets a binder's value be a source classpath, and it
+/// opens the identical `source_ident` transition function the primary source
+/// does (`grammar/pda.rs`), `::` continuation included — but until this fix
+/// `ExpectBinderValue`/`InBinderValueIdent` carried no `L2Position`, so a
+/// fabricated `::`-extension of a real class name streamed unmasked
+/// (`spider::world_1::model::default::Country::phantom`, the issue's own
+/// repro). A real class still admits its `.all()` dot; a fabricated `::`
+/// segment glued onto it is now cleared exactly like it already is at the
+/// primary source (`n3_masks_every_fabricated_classpath_extension_walk`).
+#[test]
+fn n3_masks_a_fabricated_let_binder_classpath() {
+    assert_precision(
+        "world_1",
+        "{|let a = spider::world_1::model::default::Country",
+        b".",
+        b":",
+    );
+}
+
+/// The counterpart to the mask above, replaying the issue's full repro
+/// end to end: L1 admits every byte of it (`ExpectBinderValue` places no
+/// grammar-level restriction on the classpath's shape), but a schema-aware
+/// session must never be able to stream the fabricated `::phantom` segment —
+/// the walk cannot be produced token-by-token, and the point it fails is N3
+/// (`rule_kind` reports the closing position as `"SourceIdent"` for both the
+/// primary source and this new `BinderValueSourceIdent` position — the same
+/// rule, at two anchors, `tests/support/l2_rules.rs`), exactly as it would be
+/// for the identical fabrication at the primary source.
+#[test]
+fn n3_rejects_the_full_fabricated_let_binder_classpath_walk() {
+    let (closer, l1_admits) = walk_closer(
+        "world_1",
+        "{|let a = spider::world_1::model::default::Country::phantom.all()->isEmpty();}",
+        "spider::world_1::model::default::Country::phantom",
+    );
+    assert_eq!(
+        closer,
+        Some("SourceIdent"),
+        "N3 should be what closes this walk"
+    );
+    assert!(
+        l1_admits,
+        "the byte-PDA alone must still admit the fabricated path — this is an \
+         L2-only refusal, not an L1 one"
+    );
+}
+
+/// N3's extension to the binder-value position is purely additive: the
+/// primary pipeline source's own narrowing — real class admitted, fabricated
+/// `::` extension cleared — must be completely unaffected by this fix.
+#[test]
+fn n3_primary_source_narrowing_is_unaffected_by_the_binder_value_extension() {
+    assert_precision(
+        "world_1",
+        "|spider::world_1::model::default::Country",
+        b".",
+        b":",
+    );
 }
 
 /// Issue #55 Phase 2, piece 3 — **N7**, a bare unresolved identifier in a value
