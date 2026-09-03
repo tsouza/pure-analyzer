@@ -765,6 +765,63 @@ position at all, and **T7** because the engine accepts the shape it proposed to
 mask (§6.6 T7). `src/schema/narrow.rs` is authoritative for the executable
 boundary.
 
+### 6.8 The value-shape matrix — a third invariant, one step past liveness
+
+§6.7's two invariants (non-empty mask; every terminator admitted at a completed
+term) both concern *whether a mask is stuck*. Issue #391 (fixed by PR #393)
+was neither: the mask at `Class.all(%2` (a business-temporal class, issue
+#384's arity narrowing) stayed non-empty — whitespace and the call's own
+closer both survived — so liveness held, and yet the stream could not spell
+the date literal its own schema had just legalised. The rule that decides the
+`,`-vs-`)` separator right after a *completed* milestoning argument
+(`fill_source_method_arg_sep`, `src/schema/narrow.rs`) also fires — correctly
+— at every byte-PDA state a date/milestone/variable argument can be
+**mid-lexeme** at (`InDateLit`, `InDateTime`, `InDateFrac`, `InMilestoneLit`,
+`InMemberIdent`), since a bare-year date's own digit run self-loops on that
+same state one byte at a time. Before #393 it applied its arity-gated
+separator set to every byte reached at those states without distinguishing a
+lexeme's own continuation byte from the byte that actually closes it, so a
+byte-granular vocabulary — the adversarial case §6.7 already establishes as
+the shipping-relevant one — masked a bare-year date's second digit onward.
+`%latest` and a single-character `$d` never triggered this: `%latest` folds
+every byte straight through its own state to a value-terminal one in a single
+step, and `$d` never revisits `InMemberIdent` a second time — the exact two
+shapes the arity-narrowing PR's own tests covered, and exactly why two
+hand-picked witnesses per rule were not enough to catch it.
+
+**The invariant.** At a position whose narrowing rule admits an open-ended
+literal class (a milestoning date, a `$`-bound variable, a string, a number, a
+member identifier — as opposed to a rule that narrows to a *fixed, finite* name
+or operator set), every grammar-legal shape of that class must stream to
+completion once its first byte is admitted — not only the shapes a rule's own
+introducing PR happened to pick as witnesses. `tests/l2_value_shape_matrix.rs`
+pins it: `tests/support/value_shapes.rs` curates a shape matrix straight off
+each literal's own grammar production (§5.4's `literal`/`dateLit`/`strlit`/
+`number`/`refVar`/`ident`, including the shapes a human would not think to
+add — a leap-day date, a doubled-quote string, a `.5` leading-dot float, a
+`1.5e-3` scientific literal), and the shared `tests/support/byte_walk.rs`
+`drive` primitive (factored out of this section's own `tests/l2_liveness.rs`)
+walks each shape byte-by-byte over the single-byte vocabulary, failing loudly
+at the exact witness and byte offset a masked shape is found at. It is applied
+to every rule that narrows an open-ended literal —
+**SourceMethodArg**/**SourceMethodArgSep**, **PropertyMethodArg**/
+**PropertyMethodArgSep**, **StoreMethodArg**, **ExtentMethodArg**, **ReValue**
+— plus the identifier-length axis for **Member** and **RefVar**. The remaining
+narrowing positions key on a finite name/operator set with no shape axis to
+sweep, and are already held to a real-vs-phantom witness by
+`tests/l2_precision.rs`'s frozen-kill probes.
+
+Issue #391 itself (and its shared-code sibling, `PropertyMethodArg`, which
+reads the identical `fill_source_method_arg_sep`) is pinned inside this suite
+as the fix's own acceptance check: the matrix already carried every shape #393
+needed to keep admitting once it read the byte-PDA's own transition table at
+these states instead of gating on arity alone.
+
+`tests/l2_value_shape_properties.rs` complements the fixed matrix with a
+`proptest`-generated one, over the same grammar productions and `drive`
+primitive, scoped to the two shape families most worth exploring beyond a
+curated list (date-literal digit/separator layout; identifier length/alphabet).
+
 ---
 
 ## 7. The L1↔L2 consistency-contract table

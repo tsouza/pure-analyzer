@@ -16,9 +16,44 @@
           "mult": { "lower": 1, "upper": 1 }
         },
         {
+          "name": "proc",
+          "type": { "kind": "class", "path": "t::milestoning::Proc" },
+          "mult": { "lower": 1, "upper": 1 }
+        },
+        {
           "name": "bi",
           "type": { "kind": "class", "path": "t::milestoning::Bi" },
           "mult": { "lower": 1, "upper": 1 }
+        },
+        {
+          "name": "sVal",
+          "type": { "kind": "primitive", "name": "String" },
+          "mult": { "lower": 1, "upper": 1 }
+        },
+        {
+          "name": "fVal",
+          "type": { "kind": "primitive", "name": "Boolean" },
+          "mult": { "lower": 1, "upper": 1 }
+        },
+        {
+          "name": "dVal",
+          "type": { "kind": "primitive", "name": "StrictDate" },
+          "mult": { "lower": 1, "upper": 1 }
+        },
+        {
+          "name": "someMediumProp",
+          "type": { "kind": "primitive", "name": "String" },
+          "mult": { "lower": 0, "upper": 1 }
+        },
+        {
+          "name": "snake_case_prop_name",
+          "type": { "kind": "primitive", "name": "String" },
+          "mult": { "lower": 0, "upper": 1 }
+        },
+        {
+          "name": "aVeryLongPropertyNameForLengthCoverageTesting",
+          "type": { "kind": "primitive", "name": "String" },
+          "mult": { "lower": 0, "upper": 1 }
         }
       ],
       "qualified_properties": [],
