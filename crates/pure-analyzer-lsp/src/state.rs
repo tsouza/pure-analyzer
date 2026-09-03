@@ -873,7 +873,7 @@ mod tests {
         let document =
             DocumentSnapshot::new("untitled:query".to_owned(), "query".to_owned(), Some(1));
         let diagnostic = Diagnostic::builder(
-            DiagCode::EquivalenceVerdict,
+            DiagCode::UnknownProperty,
             Severity::Info,
             "not used by hover markup",
             Label::new(FileId::new(0), TextRange::new(0.into(), 5.into())),
@@ -886,7 +886,7 @@ mod tests {
             hover["range"],
             value(r#"{"start":{"line":0,"character":0},"end":{"line":0,"character":5}}"#)
         );
-        let diagnostic = explain("PUR3001").expect("registered diagnostic");
+        let diagnostic = explain("PUR2002").expect("registered diagnostic");
         let reason = explain("IND_UNPARSEABLE").expect("registered reason");
         assert_eq!(
             hover["contents"]["value"],

@@ -37,6 +37,7 @@ pub fn ci() -> Result<()> {
     verify_purecard_fuzz_workspace()?;
     check_doc_facts()?;
     crate::explain_docs::check()?;
+    crate::diagnostic_producers::check()?;
     crate::markdown::check_doc_links()?;
     run_cargo_steps(&[
         &["fmt", "--all", "--check"],

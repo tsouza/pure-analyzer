@@ -378,6 +378,12 @@ generate-explain-docs:
 check-explain-docs:
     cargo xtask check-explain-docs
 
+# Fail when a registered DiagCode has no non-test, non-comment constructor
+# anywhere in tracked source (constitution §5: fix the system, not the
+# instance — see issue #287).
+check-diagnostic-producers:
+    cargo xtask check-diagnostic-producers
+
 # Check every tracked Markdown relative file and GitHub-style heading anchor.
 check-doc-links:
     cargo xtask check-doc-links

@@ -15,12 +15,8 @@ A `fundamental` reason marks a soundness boundary, while a `recoverable` reason 
 - [`PUR1210`](PUR1210.md): `parser`. A relation join kind is outside the supported closed set.
 - [`PUR2001`](PUR2001.md): `lint`. A navigation supplies a number of milestoning dates that disagrees with a known target stereotype.
 - [`PUR2002`](PUR2002.md): `lint`. A closed-world source class has no property with the requested name.
-- [`PUR2003`](PUR2003.md): `lint`. Statically known navigation multiplicity disagrees with how a value is consumed.
-- [`PUR2100`](PUR2100.md): `lint`. The model loader synthesized a generated qualified property while normalizing model input.
 - [`PUR2101`](PUR2101.md): `lint`. Local inference cannot determine the source of a navigation.
-- [`PUR3001`](PUR3001.md): `equivalence`. An eq or diff run reports an equivalent, not-equivalent, or indecisive verdict.
 - [`PUR9000`](PUR9000.md): `tool`. A later model input replaces an earlier definition with the same identity.
-- [`PUR9001`](PUR9001.md): `tool`. A command that requires model facts was invoked without a model.
 - [`PUR9002`](PUR9002.md): `tool`. One model source declares the same fact more than once.
 - [`PUR9003`](PUR9003.md): `tool`. A Pure association cannot be materialized without ambiguity.
 
