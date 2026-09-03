@@ -384,7 +384,6 @@ pub fn pure_analyzer_analysis::ModelAvailability::from(T) -> T
 pub enum pure_analyzer_analysis::ModelOriginKind
 pub pure_analyzer_analysis::ModelOriginKind::Class
 pub pure_analyzer_analysis::ModelOriginKind::Member
-pub pure_analyzer_analysis::ModelOriginKind::Unspecified
 impl core::clone::Clone for pure_analyzer_analysis::ModelOriginKind
 pub fn pure_analyzer_analysis::ModelOriginKind::clone(&self) -> pure_analyzer_analysis::ModelOriginKind
 impl core::cmp::Eq for pure_analyzer_analysis::ModelOriginKind
@@ -716,7 +715,6 @@ impl<T> core::convert::From<T> for pure_analyzer_analysis::RelationOperator
 pub fn pure_analyzer_analysis::RelationOperator::from(T) -> T
 pub enum pure_analyzer_analysis::RelationSource
 pub pure_analyzer_analysis::RelationSource::Class(pure_analyzer_resolve::ResolvedClass)
-pub pure_analyzer_analysis::RelationSource::Member(pure_analyzer_resolve::ResolvedMember)
 impl core::clone::Clone for pure_analyzer_analysis::RelationSource
 pub fn pure_analyzer_analysis::RelationSource::clone(&self) -> pure_analyzer_analysis::RelationSource
 impl core::cmp::Eq for pure_analyzer_analysis::RelationSource
@@ -881,9 +879,6 @@ pub unsafe fn pure_analyzer_analysis::ScalarLiteral::clone_to_uninit(&self, *mut
 impl<T> core::convert::From<T> for pure_analyzer_analysis::ScalarLiteral
 pub fn pure_analyzer_analysis::ScalarLiteral::from(T) -> T
 pub enum pure_analyzer_analysis::ScalarOperator
-pub pure_analyzer_analysis::ScalarOperator::And
-pub pure_analyzer_analysis::ScalarOperator::And::left: alloc::boxed::Box<pure_analyzer_analysis::ScalarExpression>
-pub pure_analyzer_analysis::ScalarOperator::And::right: alloc::boxed::Box<pure_analyzer_analysis::ScalarExpression>
 pub pure_analyzer_analysis::ScalarOperator::Column(pure_analyzer_analysis::ColumnId)
 pub pure_analyzer_analysis::ScalarOperator::Equal
 pub pure_analyzer_analysis::ScalarOperator::Equal::left: alloc::boxed::Box<pure_analyzer_analysis::ScalarExpression>
@@ -894,9 +889,6 @@ pub pure_analyzer_analysis::ScalarOperator::Navigation::input: alloc::boxed::Box
 pub pure_analyzer_analysis::ScalarOperator::Navigation::navigation: alloc::boxed::Box<pure_analyzer_analysis::ResolvedNavigation>
 pub pure_analyzer_analysis::ScalarOperator::Not
 pub pure_analyzer_analysis::ScalarOperator::Not::input: alloc::boxed::Box<pure_analyzer_analysis::ScalarExpression>
-pub pure_analyzer_analysis::ScalarOperator::Or
-pub pure_analyzer_analysis::ScalarOperator::Or::left: alloc::boxed::Box<pure_analyzer_analysis::ScalarExpression>
-pub pure_analyzer_analysis::ScalarOperator::Or::right: alloc::boxed::Box<pure_analyzer_analysis::ScalarExpression>
 impl core::clone::Clone for pure_analyzer_analysis::ScalarOperator
 pub fn pure_analyzer_analysis::ScalarOperator::clone(&self) -> pure_analyzer_analysis::ScalarOperator
 impl core::cmp::Eq for pure_analyzer_analysis::ScalarOperator
@@ -1914,7 +1906,6 @@ pub const fn pure_analyzer_analysis::ModelOrigin::definition(&self) -> pure_anal
 pub fn pure_analyzer_analysis::ModelOrigin::from_class(&pure_analyzer_resolve::ResolvedClass) -> Self
 pub fn pure_analyzer_analysis::ModelOrigin::from_member(&pure_analyzer_resolve::ResolvedMember) -> Self
 pub const fn pure_analyzer_analysis::ModelOrigin::kind(&self) -> pure_analyzer_analysis::ModelOriginKind
-pub const fn pure_analyzer_analysis::ModelOrigin::new(pure_analyzer_model::types::Provenance, pure_analyzer_resolve::DefinitionAnchor) -> Self
 pub const fn pure_analyzer_analysis::ModelOrigin::provenance(&self) -> pure_analyzer_model::types::Provenance
 impl core::clone::Clone for pure_analyzer_analysis::ModelOrigin
 pub fn pure_analyzer_analysis::ModelOrigin::clone(&self) -> pure_analyzer_analysis::ModelOrigin

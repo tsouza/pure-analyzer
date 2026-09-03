@@ -1833,9 +1833,7 @@ fn references_column(expression: &ScalarExpression, column: ColumnId) -> bool {
         ScalarOperator::Navigation { input, .. } | ScalarOperator::Not { input } => {
             references_column(input, column)
         }
-        ScalarOperator::Equal { left, right }
-        | ScalarOperator::And { left, right }
-        | ScalarOperator::Or { left, right } => {
+        ScalarOperator::Equal { left, right } => {
             references_column(left, column) || references_column(right, column)
         }
     }
