@@ -218,7 +218,6 @@ fn compare_diagnostics(left: &PreparedDiagnostic<'_>, right: &PreparedDiagnostic
         .then_with(|| left.diagnostic.message.cmp(&right.diagnostic.message))
         .then_with(|| compare_prepared_labels(&left.secondary, &right.secondary))
         .then_with(|| compare_prepared_fixes(left.fix.as_ref(), right.fix.as_ref()))
-        .then_with(|| left.diagnostic.reason.cmp(&right.diagnostic.reason))
         .then_with(|| left.diagnostic.url.cmp(&right.diagnostic.url))
 }
 

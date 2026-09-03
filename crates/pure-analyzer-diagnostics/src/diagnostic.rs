@@ -6,7 +6,6 @@ use text_size::TextRange;
 use crate::code::DiagCode;
 use crate::file::FileId;
 use crate::fix::Fix;
-use crate::verdict::ReasonCode;
 
 /// How serious a [`Diagnostic`] is, independent of which pass produced it.
 ///
@@ -85,9 +84,6 @@ pub struct Diagnostic {
     pub secondary: Vec<Label>,
     /// A structured fix, if one is available.
     pub fix: Option<Fix>,
-    /// Set iff the finding is `Indecisive`/downgraded; carries the reason
-    /// bucket.
-    pub reason: Option<ReasonCode>,
     /// A doc link into `docs/reason-codes/<code>`, if one exists.
     pub url: Option<String>,
 }
@@ -123,7 +119,6 @@ impl DiagnosticBuilder {
                 primary,
                 secondary: Vec::new(),
                 fix: None,
-                reason: None,
                 url: None,
             },
         }
@@ -140,14 +135,6 @@ impl DiagnosticBuilder {
     #[must_use]
     pub fn fix(mut self, fix: Fix) -> Self {
         self.inner.fix = Some(fix);
-        self
-    }
-
-    /// Attach a reason code (set iff the finding is `Indecisive` or
-    /// downgraded under model under-resolution).
-    #[must_use]
-    pub fn reason(mut self, reason: ReasonCode) -> Self {
-        self.inner.reason = Some(reason);
         self
     }
 
@@ -180,7 +167,6 @@ mod tests {
         assert_eq!(d.severity, Severity::Error);
         assert!(d.secondary.is_empty());
         assert!(d.fix.is_none());
-        assert!(d.reason.is_none());
         assert!(d.url.is_none());
     }
 

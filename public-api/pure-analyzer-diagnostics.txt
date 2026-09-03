@@ -579,7 +579,6 @@ pub pure_analyzer_diagnostics::Diagnostic::code: pure_analyzer_diagnostics::Diag
 pub pure_analyzer_diagnostics::Diagnostic::fix: core::option::Option<pure_analyzer_diagnostics::Fix>
 pub pure_analyzer_diagnostics::Diagnostic::message: alloc::string::String
 pub pure_analyzer_diagnostics::Diagnostic::primary: pure_analyzer_diagnostics::Label
-pub pure_analyzer_diagnostics::Diagnostic::reason: core::option::Option<pure_analyzer_diagnostics::ReasonCode>
 pub pure_analyzer_diagnostics::Diagnostic::secondary: alloc::vec::Vec<pure_analyzer_diagnostics::Label>
 pub pure_analyzer_diagnostics::Diagnostic::severity: pure_analyzer_diagnostics::Severity
 pub pure_analyzer_diagnostics::Diagnostic::url: core::option::Option<alloc::string::String>
@@ -628,7 +627,6 @@ pub struct pure_analyzer_diagnostics::DiagnosticBuilder
 impl pure_analyzer_diagnostics::DiagnosticBuilder
 pub fn pure_analyzer_diagnostics::DiagnosticBuilder::build(self) -> pure_analyzer_diagnostics::Diagnostic
 pub fn pure_analyzer_diagnostics::DiagnosticBuilder::fix(self, pure_analyzer_diagnostics::Fix) -> Self
-pub fn pure_analyzer_diagnostics::DiagnosticBuilder::reason(self, pure_analyzer_diagnostics::ReasonCode) -> Self
 pub fn pure_analyzer_diagnostics::DiagnosticBuilder::secondary(self, pure_analyzer_diagnostics::Label) -> Self
 pub fn pure_analyzer_diagnostics::DiagnosticBuilder::url(self, impl core::convert::Into<alloc::string::String>) -> Self
 impl core::clone::Clone for pure_analyzer_diagnostics::DiagnosticBuilder
