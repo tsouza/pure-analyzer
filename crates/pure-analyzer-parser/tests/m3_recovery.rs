@@ -1,7 +1,11 @@
 //! Recovery and arbitrary-input contracts for the M3 parser.
 
+#[path = "support/lexeme_strategy.rs"]
+mod lexeme_strategy;
+
 use std::{ops::Range, panic};
 
+use lexeme_strategy::arbitrary_source;
 use proptest::prelude::*;
 use pure_analyzer_diagnostics::{DiagCode, FileId};
 use pure_analyzer_lexer::lex;
@@ -676,15 +680,41 @@ fn sibling_function_calls_do_not_consume_the_nesting_budget() {
 }
 
 proptest! {
+    // `source in any::<String>()` used to draw from the full Unicode
+    // codepoint space, so the odds of it ever emitting `let`, a balanced
+    // `(`/`)` pair, or an island marker were effectively zero — none of the
+    // recovery machinery this test exists for was ever exercised (issue
+    // #299). `arbitrary_source()` instead samples a weighted sequence over
+    // the parser's real lexeme alphabet, so recovery paths are reached at a
+    // meaningful rate; see `tests/support/lexeme_strategy.rs`.
+    //
+    // The original test also asserted `prop_assert_eq!(&first, &second)`
+    // across two calls to `parse` on the same input — unfalsifiable, since
+    // `parse_query` is a pure function over a `Vec<(TokenKind, TextRange)>`
+    // with no `HashMap` iteration, no threads, and no clock; nothing in the
+    // parser could make two such calls diverge. Deleted rather than kept as
+    // dead weight (issue #299); a real nondeterminism source, if one is ever
+    // introduced, needs its own test built against that source, not a
+    // standing assertion no code path can fail.
     #[test]
-    fn arbitrary_utf8_is_lossless_and_deterministic(source in any::<String>()) {
-        let first = panic::catch_unwind(|| parse(&source));
-        let second = panic::catch_unwind(|| parse(&source));
-        let first = first.expect("parser must not panic");
-        let second = second.expect("parser must not panic");
+    fn arbitrary_token_sequence_is_lossless_and_recovery_safe(source in arbitrary_source()) {
+        let result = panic::catch_unwind(|| parse(&source));
+        let parsed = result.expect("parser must not panic");
 
-        prop_assert_eq!(first.green.text(), source.as_str());
-        prop_assert_eq!(&first, &second);
-        assert_ranges_are_valid(&source, &first);
+        prop_assert_eq!(parsed.green.text(), source.as_str());
+        assert_ranges_are_valid(&source, &parsed);
+
+        // Recovery-safety: every `ERROR_NODE` the parser builds is reached
+        // only through a call path that first pushes a diagnostic explaining
+        // why (`Parser::error_current`/`unterminated_island`/the automatic
+        // `BadToken` push in `Parser::bump` — see `src/m3.rs`), so recovery
+        // never silently swallows an error.
+        if count_kind(&parsed.green, SyntaxKind::ERROR_NODE) > 0 {
+            prop_assert!(
+                !parsed.diagnostics.is_empty(),
+                "an ERROR_NODE was built without any diagnostic explaining it: {:#?}",
+                parsed
+            );
+        }
     }
 }
