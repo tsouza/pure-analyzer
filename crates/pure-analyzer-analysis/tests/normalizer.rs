@@ -4,9 +4,9 @@ use proptest::prelude::*;
 use pure_analyzer_analysis::{
     CandidateKey, Column, ColumnId, ComparisonOutcome, EquivalenceKey, IrOrigin, Knowledge,
     ModelOrigin, NormalizationBudget, NormalizationOutcome, Nullability, Projection,
-    RelationExpression, RelationExpressionError, RelationFacts, RelationOperator, RelationSchema,
-    RelationSource, RelationalQuery, RowSemantics, ScalarExpression, ScalarLiteral, ScalarOperator,
-    SortDirection, SortKey, SourceSpan, Totality, compare_relational_queries,
+    ProjectionKind, RelationExpression, RelationExpressionError, RelationFacts, RelationOperator,
+    RelationSchema, RelationSource, RelationalQuery, RowSemantics, ScalarExpression, ScalarLiteral,
+    ScalarOperator, SortDirection, SortKey, SourceSpan, Totality, compare_relational_queries,
     normalize_relational_query, normalize_relational_query_with_budget,
 };
 use pure_analyzer_diagnostics::{FileId, ReasonCode, TextRange, TextSize};
@@ -219,6 +219,7 @@ fn identity_project_with_metadata(
         RelationOperator::Project {
             input: Box::new(input),
             projections,
+            kind: ProjectionKind::Relation,
         },
         schema,
         facts,
@@ -255,6 +256,7 @@ fn direct_read_subset_project(
         RelationOperator::Project {
             input: Box::new(input),
             projections,
+            kind: ProjectionKind::Relation,
         },
         schema,
         facts,
@@ -484,6 +486,7 @@ fn nested_projection_scopes_alpha_normalize_reused_column_ids() {
                         output.id(),
                         scalar_column(&input_column, source.clone()),
                     )],
+                    kind: ProjectionKind::Relation,
                 },
                 RelationSchema::new(vec![output]).expect("fixture schema is valid"),
                 RelationFacts::unknown(),
@@ -748,6 +751,7 @@ fn aliases_and_output_column_order_are_not_identity_projects() {
                 alias.id(),
                 scalar_column(&first, source.clone()),
             )],
+            kind: ProjectionKind::Relation,
         },
         RelationSchema::new(vec![alias]).expect("fixture schema is valid"),
         RelationFacts::unknown(),
@@ -770,6 +774,7 @@ fn aliases_and_output_column_order_are_not_identity_projects() {
                 Projection::new(second.id(), scalar_column(&second, source.clone())),
                 Projection::new(first.id(), scalar_column(&first, source.clone())),
             ],
+            kind: ProjectionKind::Relation,
         },
         reordered_schema,
         RelationFacts::unknown(),

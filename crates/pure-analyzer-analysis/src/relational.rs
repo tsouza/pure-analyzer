@@ -19,6 +19,18 @@ const EXACTLY_ONE: u32 = 1;
 const INTEGER_TYPE: &str = "Integer";
 const STRING_TYPE: &str = "String";
 
+/// The single output column name lowering assigns a `->map(f)` result.
+///
+/// This previously existed as two independently declared copies
+/// (`lowering::MAP_VALUE_NAME`, `canonical::MAP_OUTPUT_NAME`) that happened to
+/// carry the same literal. It is not a semantic signal: a
+/// [`RelationOperator::Project`] node's [`ProjectionKind`] is what
+/// distinguishes a scalar-collection projection from an explicit
+/// `->project(~[...])`, never this name or any other column name — canonical
+/// emission reads `ProjectionKind` directly and has no remaining need for
+/// this literal.
+pub(crate) const MAP_VALUE_COLUMN_NAME: &str = "value";
+
 /// Longest chain of nested relational or scalar IR nodes that any recursive
 /// walk in this crate (normalization, canonical emission, error-node
 /// scanning) will descend before reporting a typed refusal instead of
@@ -637,6 +649,26 @@ pub enum JoinKind {
     Inner,
 }
 
+/// The source Legend construct a [`RelationOperator::Project`] node was
+/// lowered from.
+///
+/// A `->map(f)` scalar-collection projection and a `->project(~[...])`
+/// relation projection can lower to output schemas that are structurally
+/// identical (same column count, names, and types), so this field is the
+/// *only* sound way to recover which one a node represents: it is set once,
+/// explicitly, at each lowering call site and never re-derived later from a
+/// column name or source span, both of which are surface details a user
+/// chooses freely and that carry no semantic weight.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProjectionKind {
+    /// Lowered from `->map(f)` or `.property` navigation. The Legend result
+    /// type is a scalar collection (`T[*]`), never a `Relation<>`.
+    Scalar,
+    /// Lowered from an explicit `->project(~[alias: row | expr, ...])`. The
+    /// Legend result type is a `Relation<>`.
+    Relation,
+}
+
 /// A projected output-column expression.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Projection {
@@ -732,6 +764,9 @@ pub enum RelationOperator {
         input: Box<RelationExpression>,
         /// Output bindings in schema order.
         projections: Vec<Projection>,
+        /// The source construct this projection was lowered from; see
+        /// [`ProjectionKind`].
+        kind: ProjectionKind,
     },
     /// Combine two inputs with a supported inner-join condition.
     Join {
@@ -1132,7 +1167,9 @@ fn validate_relation_operator(
             validate_scalar(predicate, &[input.schema()])?;
             validate_boolean(predicate)
         }
-        RelationOperator::Project { input, projections } => {
+        RelationOperator::Project {
+            input, projections, ..
+        } => {
             validate_projection_schema(projections, schema)?;
             for (projection, column) in projections.iter().zip(schema.columns()) {
                 validate_scalar(projection.expression(), &[input.schema()])?;
@@ -2057,6 +2094,7 @@ mod tests {
                     .iter()
                     .map(|column| Projection::new(column.id(), scalar_column(column)))
                     .collect(),
+                kind: ProjectionKind::Relation,
             },
             output.clone(),
             RelationFacts::unknown(),
@@ -2069,6 +2107,7 @@ mod tests {
                     output.columns()[0].id(),
                     scalar_column(&output.columns()[0]),
                 )],
+                kind: ProjectionKind::Relation,
             },
             output,
             RelationFacts::unknown(),
@@ -2571,6 +2610,7 @@ mod tests {
             RelationOperator::Project {
                 input: Box::new(input),
                 projections: vec![Projection::new(output_column.id(), scalar)],
+                kind: ProjectionKind::Scalar,
             },
             output_schema,
             RelationFacts::unknown(),
@@ -2640,6 +2680,7 @@ mod tests {
             RelationOperator::Project {
                 input: Box::new(input),
                 projections: vec![Projection::new(output_column.id(), scalar)],
+                kind: ProjectionKind::Scalar,
             },
             RelationSchema::new(vec![output_column]).expect("fixture schema must be valid"),
             RelationFacts::unknown(),
@@ -2706,6 +2747,7 @@ mod tests {
             RelationOperator::Project {
                 input: Box::new(input),
                 projections: vec![Projection::new(output_column.id(), scalar)],
+                kind: ProjectionKind::Scalar,
             },
             RelationSchema::new(vec![output_column]).expect("fixture schema must be valid"),
             RelationFacts::unknown(),

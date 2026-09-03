@@ -3,9 +3,9 @@
 
 use proptest::prelude::*;
 use pure_analyzer_analysis::{
-    AnalysisInput, ColumnId, JoinKind, ModelOrigin, Nullability, RelationOperator, RelationSource,
-    RelationalOutcome, RowSemantics, ScalarLiteral, ScalarOperator, SortDirection, SourceSpan,
-    lower_m3_query,
+    AnalysisInput, ColumnId, JoinKind, ModelOrigin, Nullability, ProjectionKind, RelationOperator,
+    RelationSource, RelationalOutcome, RowSemantics, ScalarLiteral, ScalarOperator, SortDirection,
+    SourceSpan, lower_m3_query,
 };
 use pure_analyzer_diagnostics::{FileId, ReasonCode};
 use pure_analyzer_model::{
@@ -94,7 +94,16 @@ fn map_parts(
     &pure_analyzer_analysis::Projection,
 ) {
     match query.root().operator() {
-        RelationOperator::Project { input, projections } if projections.len() == 1 => {
+        RelationOperator::Project {
+            input,
+            projections,
+            kind,
+        } if projections.len() == 1 => {
+            assert_eq!(
+                *kind,
+                ProjectionKind::Scalar,
+                "a `->map`/property-navigation result must lower as ProjectionKind::Scalar"
+            );
             (input, &projections[0])
         }
         other => panic!("expected one map project, got {other:#?}"),
@@ -440,7 +449,18 @@ fn relation_project_parts(
     &[pure_analyzer_analysis::Projection],
 ) {
     match query.root().operator() {
-        RelationOperator::Project { input, projections } => (input, projections),
+        RelationOperator::Project {
+            input,
+            projections,
+            kind,
+        } => {
+            assert_eq!(
+                *kind,
+                ProjectionKind::Relation,
+                "an explicit `->project(~[...])` must lower as ProjectionKind::Relation"
+            );
+            (input, projections)
+        }
         other => panic!("expected relation project, got {other:#?}"),
     }
 }
@@ -562,7 +582,14 @@ fn relation_project_binds_its_output_as_a_resolved_row_for_following_lambdas() {
     let query = supported(lower(source, Some(&model)));
     let (project, map_projection) = map_parts(&query);
     let (_, projections) = match project.operator() {
-        RelationOperator::Project { input, projections } => (input, projections),
+        RelationOperator::Project {
+            input,
+            projections,
+            kind,
+        } => {
+            assert_eq!(*kind, ProjectionKind::Relation);
+            (input, projections)
+        }
         other => panic!("expected nested relation project, got {other:#?}"),
     };
     assert_eq!(projections.len(), 2);
@@ -1158,9 +1185,19 @@ fn lowers_direct_navigation_as_a_project_not_a_member_scan() {
     let source = "model::Person.all().manager";
     let query = supported(lower(source, Some(&model)));
 
-    let RelationOperator::Project { input, projections } = query.root().operator() else {
+    let RelationOperator::Project {
+        input,
+        projections,
+        kind,
+    } = query.root().operator()
+    else {
         panic!("direct navigation must lower through project");
     };
+    assert_eq!(
+        *kind,
+        ProjectionKind::Scalar,
+        "`.property` navigation is a scalar collection, never a Relation<>"
+    );
     assert_eq!(query.output().columns()[0].id(), ColumnId::new(ONE));
     assert_eq!(query.output().columns()[0].name().as_str(), "manager");
     assert!(matches!(
@@ -1191,9 +1228,13 @@ fn composes_optional_receiver_multiplicity_through_navigation_chain() {
         "model::Person.all()->map(x| $x.manager.team.name)",
         Some(&model),
     ));
-    let RelationOperator::Project { projections, .. } = query.root().operator() else {
+    let RelationOperator::Project {
+        projections, kind, ..
+    } = query.root().operator()
+    else {
         panic!("map must lower to project");
     };
+    assert_eq!(*kind, ProjectionKind::Scalar);
     let scalar = projections[0].expression();
     assert_eq!(scalar.multiplicity().lower(), ZERO);
     assert_eq!(scalar.multiplicity().upper(), Some(ONE));
@@ -1221,9 +1262,13 @@ fn lowers_chained_navigation_from_source_backed_model_with_exact_provenance() {
     );
     let source = "model::Person.all()->map(x| $x.manager.team.name)";
     let query = supported(lower(source, Some(&model)));
-    let RelationOperator::Project { projections, .. } = query.root().operator() else {
+    let RelationOperator::Project {
+        projections, kind, ..
+    } = query.root().operator()
+    else {
         panic!("map must lower to project");
     };
+    assert_eq!(*kind, ProjectionKind::Scalar);
     let resolver = Resolver::new(&model);
     let class = |path: &str| {
         let path = QName::new(path).expect("fixture path must be valid");
@@ -1450,7 +1495,9 @@ fn project_ids(expression: &pure_analyzer_analysis::RelationExpression, ids: &mu
         | RelationOperator::Sort { input, .. } => {
             project_ids(input, ids);
         }
-        RelationOperator::Project { input, projections } => {
+        RelationOperator::Project {
+            input, projections, ..
+        } => {
             project_ids(input, ids);
             ids.extend(projections.iter().map(|projection| projection.column()));
         }

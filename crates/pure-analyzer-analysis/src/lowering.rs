@@ -12,16 +12,16 @@ use pure_analyzer_syntax::{GreenElement, GreenNode, SyntaxKind, TextRange};
 
 use crate::{
     AnalysisInput, Column, ColumnId, ColumnSelectorOpaqueReason, ColumnSelectorOutcome, IrOrigin,
-    JoinKind, Knowledge, ModelOrigin, Nullability, OpaqueOutcome, Projection, RelationExpression,
-    RelationFacts, RelationOperator, RelationSchema, RelationSource, RelationalOutcome,
-    RelationalQuery, ResolvedNavigation, RowSemantics, ScalarExpression, ScalarLiteral,
-    ScalarOperator, SortDirection, SortKey, SourceSpan, Totality,
-    relational::compose_navigation_multiplicity, resolve_relation_column_selectors,
+    JoinKind, Knowledge, ModelOrigin, Nullability, OpaqueOutcome, Projection, ProjectionKind,
+    RelationExpression, RelationFacts, RelationOperator, RelationSchema, RelationSource,
+    RelationalOutcome, RelationalQuery, ResolvedNavigation, RowSemantics, ScalarExpression,
+    ScalarLiteral, ScalarOperator, SortDirection, SortKey, SourceSpan, Totality,
+    relational::{MAP_VALUE_COLUMN_NAME, compose_navigation_multiplicity},
+    resolve_relation_column_selectors,
 };
 
 const BOOLEAN_TYPE: &str = "Boolean";
 const INTEGER_TYPE: &str = "Integer";
-const MAP_VALUE_NAME: &str = "value";
 const ONE: u32 = 1;
 const STRING_TYPE: &str = "String";
 
@@ -599,7 +599,7 @@ impl<'model> QueryLowerer<'model> {
         let scalar = self
             .lower_scalar_query(&lambda.body, &[(&lambda.parameter, element)])
             .map_err(operator_reason)?;
-        let name = Name::new(MAP_VALUE_NAME).map_err(|_| ReasonCode::IndUnmodeledOp)?;
+        let name = Name::new(MAP_VALUE_COLUMN_NAME).map_err(|_| ReasonCode::IndUnmodeledOp)?;
         self.project(state, node, name, scalar)
     }
 
@@ -662,6 +662,7 @@ impl<'model> QueryLowerer<'model> {
             RelationOperator::Project {
                 input: Box::new(state.expression),
                 projections,
+                kind: ProjectionKind::Relation,
             },
             schema,
             RelationFacts::unknown(),
@@ -690,6 +691,10 @@ impl<'model> QueryLowerer<'model> {
         self.project(state, node, navigation.name, navigation.scalar)
     }
 
+    /// Shared by [`Self::lower_map`] and [`Self::project_navigation`]: both
+    /// produce a single-column, scalar-collection result (`->map(f)` and
+    /// `.property` navigation are equally scalar, never a `Relation<>`), so
+    /// every call site here is [`ProjectionKind::Scalar`].
     fn project(
         &mut self,
         state: RelationState,
@@ -721,6 +726,7 @@ impl<'model> QueryLowerer<'model> {
             RelationOperator::Project {
                 input: Box::new(state.expression),
                 projections: vec![Projection::new(column.id(), scalar.expression)],
+                kind: ProjectionKind::Scalar,
             },
             schema,
             RelationFacts::unknown(),
