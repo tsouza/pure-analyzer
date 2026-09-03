@@ -226,6 +226,29 @@ fn unquote(bytes: &[u8]) -> Vec<u8> {
 pub enum L2Position {
     /// N3: the pipeline source classpath must be a real class (or the store).
     SourceIdent,
+    /// N3, armed at a `let` binder's own value (issue #371) instead of the
+    /// primary source. `letBinding`'s value is `pipeline | scalarExpr`
+    /// (`docs/spec/grammar.md` §5.1): it opens the very same `source_ident`
+    /// transition function the primary source does (`grammar/pda.rs`), `::`
+    /// continuation included, but unlike the primary source it may *also* be
+    /// a nullary `scalarCall` (`today()`, `now()`) — an identifier this rule
+    /// has no evidenced universe to validate (`docs/spec/grammar.md` §5.1's
+    /// own "outside issue #352's evidenced scope... left unadmitted only by
+    /// shape, never by name" framing). So this position narrows only the
+    /// `::`-joined continuation of an *already-real* prefix (the shape N3's
+    /// own "Classpath continuation" sub-rule describes, `docs/spec/schema.md`
+    /// §6.5) — masking `Country` + `::phantom` exactly as
+    /// [`SourceIdent`](L2Position::SourceIdent) does — while leaving every
+    /// plain identifier byte, real-prefix or not, fully permissive, so
+    /// `today`/`now`/any other `scalarCall` name stays admissible
+    /// (`schema/narrow.rs`'s `TrieKind::ClassPathContinuation`). Kept as its
+    /// own variant rather than folded into `SourceIdent`: the two anchors
+    /// need genuinely different trie semantics (a plain identifier byte is a
+    /// *candidate* — narrowed — at the primary source, and never one — always
+    /// kept — here), which a shared variant with one `TrieKind` cannot
+    /// express, and `SourceIdent`'s own primary-source narrowing must stay
+    /// exactly as strict as it already is.
+    BinderValueSourceIdent,
     /// S1: the identifier right after a pipeline-source classpath's `.` must be
     /// exactly [`SOURCE_METHOD`] (`all`) — `ClassScope` is only ever entered via
     /// `ClassPath.all()` (`docs/spec/schema.md` §6.4's S1/S3 progression), so
@@ -2352,6 +2375,20 @@ impl ScopeTracker {
             State::ExpectSource | State::BlockStmt | State::BlockStmtClose => {
                 L2Position::SourceIdent
             }
+            // Issue #371: a `let` binder's own value may itself be a source
+            // classpath (`pipeline | scalarExpr`, issue #352/PR #360's grammar) —
+            // `ExpectBinderValue` opens the identical `source_ident` transition
+            // function `ExpectSource`/`BlockStmt`/`BlockStmtClose` do
+            // (`grammar/pda.rs`), including its `::` classpath-continuation shape
+            // (`SourceColon`/`SourceColon2`, both `LexKind::Ident` continuation
+            // states that carry `pending.pos` forward rather than re-deciding it —
+            // see `lexeme_kind`'s doc comment — so this one anchor stamp is all
+            // the rule needs to cover the whole binder-value path). A *separate*
+            // position from the primary source's own [`L2Position::SourceIdent`]
+            // above — see [`BinderValueSourceIdent`](L2Position::BinderValueSourceIdent)'s
+            // own doc comment for why the two cannot share one variant. Purely
+            // additive: the three existing anchors above are untouched.
+            State::ExpectBinderValue => L2Position::BinderValueSourceIdent,
             // S2: a `$` sigil's identifier names a variable, and the only names in
             // the graph are the ones this stream bound.
             //
@@ -2856,6 +2893,25 @@ mod tests {
             L2Position::SourceIdent
         );
         assert_eq!(tracker.position(State::BlockStmt), L2Position::SourceIdent);
+        assert_eq!(
+            tracker.position(State::BlockStmtClose),
+            L2Position::SourceIdent
+        );
+    }
+
+    /// Issue #371: a `let` binder's own value opens its own
+    /// `BinderValueSourceIdent` position — purely additive, so the three
+    /// pre-existing primary-source anchors above must keep reporting
+    /// `SourceIdent` unchanged, and this new position must never be confused
+    /// with it (a shared variant would force the primary source to also
+    /// tolerate `scalarCall` names, which it must never do).
+    #[test]
+    fn binder_value_position_gets_its_own_l2_position() {
+        let tracker = ScopeTracker::new();
+        assert_eq!(
+            tracker.position(State::ExpectBinderValue),
+            L2Position::BinderValueSourceIdent
+        );
     }
 
     #[test]

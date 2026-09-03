@@ -135,18 +135,44 @@ const EXPECTED_UNREACHABLE: &[&str] = &[
 /// (`schema/scope.rs`'s `masks_unbound_sigil` and `opening_position`)
 /// reshuffles the sampler's draws through every `$`-adjacent decision point,
 /// and one of the newly-sampled walks happens to type a `let` binder's own
-/// value as a fresh classpath (`let a = a::a`, `docs/spec/grammar.md`'s
-/// `pipeline | scalarExpr` binder-value shape, admitted since issue #352):
-/// `ExpectBinderValue`/`InBinderValueIdent` land on the *same* shared
-/// `source_ident` transition function `InSourceIdent` does (`grammar/pda.rs`),
-/// but — unlike the primary pipeline source — N3's classpath-continuation rule
-/// was never extended to narrow a binder value's own classpath, so nothing
-/// masks the `:` that opens `SourceColon` there. That gap is real (a
-/// fabricated `let a = spider::…::Battle::phantom` binder value streams
-/// unmasked) but is a distinct N3 scoping question from this issue's
-/// milestoning-date fix, tracked separately as issue #371 rather than folded
-/// in here (constitution §6): this pin only proves the state is — and, absent
-/// that follow-up, remains — reachable, exactly as `DateFrac` above.
+/// value as a fresh classpath (`docs/spec/grammar.md`'s `pipeline | scalarExpr`
+/// binder-value shape, admitted since issue #352): `ExpectBinderValue`/
+/// `InBinderValueIdent` land on the *same* shared `source_ident` transition
+/// function `InSourceIdent` does (`grammar/pda.rs`). At the time issue #367
+/// pinned this walk, N3's classpath-continuation rule had never been extended
+/// to narrow a binder value's own classpath at all, so the walk originally
+/// spelled a fully fabricated `a::a` value — nothing masked the `:` that
+/// opens `SourceColon` there, a real gap tracked separately as issue #371
+/// rather than folded into #367 (constitution §6).
+///
+/// Issue #371 closed that gap: `ExpectBinderValue` now carries its own
+/// `BinderValueSourceIdent` position (`schema/scope.rs`'s `opening_position`),
+/// so a binder value's `::`-joined classpath is narrowed exactly like the
+/// primary source's is — a *distinct* position from N3's own `SourceIdent`,
+/// because `letBinding`'s value may also be an unqualified `scalarCall`
+/// (`today()`, `now()`), whose name this rule must never narrow (`schema/
+/// narrow.rs`'s `TrieKind::ClassPathContinuation`; `l2_precision.rs`'s
+/// `n3_masks_a_fabricated_let_binder_classpath` and
+/// `n3_rejects_the_full_fabricated_let_binder_classpath_walk` prove the
+/// narrowing itself). `a::a` no longer streams — `a` is not a legal prefix of
+/// any of `concert_singer`'s real class/store paths, which all start with the
+/// literal segment `spider`, so reaching `SourceColon`/`SourceColon2` through
+/// this route post-fix needs a *real* prefix spelled one byte at a time. No
+/// gold lexeme supplies `spider` as its own token (`scan_ident`,
+/// `tests/support/lex.rs`, scans a whole `::`-joined classpath as one lexeme,
+/// never a bare prefix of one), and this file's shared `STRUCTURAL_BYTES` —
+/// kept identical across seven sibling test files by house convention — has
+/// no `s`/`p`/`i`/`d`/`e`/`r`. Rather than widen that shared constant for one
+/// probe in one file, this walk alone gets `EXTRA_VOCAB` (below): the six
+/// letters of `spider` and nothing else, added only to *this* walk's own
+/// vocabulary (`grammar_and_schema`'s `extra_bytes` parameter), so the
+/// generated corpus and every other probe still see exactly
+/// `STRUCTURAL_BYTES`. Spelling `spider` byte by byte keeps the trie cursor at
+/// a genuine live prefix the whole way (every real path in this schema starts
+/// `spider::…`), so the two colons that follow are real continuations, not
+/// another exploit of the fixed gap: `SourceColon` on the first, `SourceColon2`
+/// on the second, both reached under N3's live narrowing rather than around
+/// it.
 ///
 /// `AfterArrowName` (issue #369's own new state — the token boundary right after
 /// a completed `->`-step name, past any trailing whitespace, that has not yet
@@ -160,9 +186,16 @@ const EXPECTED_UNREACHABLE: &[&str] = &[
 /// Each walk is a token list over the db's own vocabulary, and every token must be
 /// admissible where it sits: a stale probe reddens the lane instead of quietly
 /// covering nothing.
-const PROBE_WALKS: &[(&str, &[&[u8]])] = &[
+///
+/// One entry: the fixture db, extra per-walk vocabulary bytes beyond
+/// [`STRUCTURAL_BYTES`] (see [`EXTRA_VOCAB`]'s own doc comment; empty for
+/// every walk that does not need one), and the token list itself.
+type ProbeWalk = (&'static str, &'static [u8], &'static [&'static [u8]]);
+
+const PROBE_WALKS: &[ProbeWalk] = &[
     (
         "battle_death",
+        &[],
         &[
             b"|",
             b"spider::battle_death::model::default::Battle",
@@ -178,6 +211,7 @@ const PROBE_WALKS: &[(&str, &[&[u8]])] = &[
     ),
     (
         "battle_death",
+        &[],
         &[
             b"|",
             b"spider::battle_death::model::default::Battle",
@@ -197,6 +231,7 @@ const PROBE_WALKS: &[(&str, &[&[u8]])] = &[
     ),
     (
         "battle_death",
+        &[],
         &[
             b"|",
             b"spider::battle_death::model::default::Battle",
@@ -217,20 +252,67 @@ const PROBE_WALKS: &[(&str, &[&[u8]])] = &[
         // `SourceColon2` -> `InSourceIdent`, the same `source_ident`
         // transition function `grammar/pda.rs` uses for both) — `let` is a
         // whole gold-corpus lexeme only in `concert_singer` among the 8
-        // `FIXTURE_DBS`.
+        // `FIXTURE_DBS`. Post-#371, `a::a` no longer streams (the doc comment
+        // above explains why); the value is instead the real classpath's own
+        // leading segment, `spider`, spelled one `EXTRA_VOCAB` byte at a time
+        // so a token boundary lands on each colon, then the two colons of
+        // `spider::`'s own separator.
         "concert_singer",
+        EXTRA_VOCAB,
         &[
-            b"{", b"|", b"let", b" ", b"a", b" ", b"=", b"a", b":", b":", b"a",
+            b"{", b"|", b"let", b" ", b"a", b" ", b"=", b"s", b"p", b"i", b"d", b"e", b"r", b":",
+            b":",
         ],
     ),
+    (
+        // Issue #371's own new state: `ExpectBinderCallClose`, `scalarExpr`'s
+        // nullary-call shape (`today()`/`now()`, `docs/spec/grammar.md`'s
+        // `scalarCall = ident "(" ")"`). This state was — like `SourceColon`/
+        // `SourceColon2` above — visited only "by chance" pre-#371: with
+        // `ExpectBinderValue` fully unconstrained, `generate_schema_walks`'s
+        // random sampler occasionally spelled a nonsense token there followed
+        // directly by `(`. Post-#371, `BinderValueSourceIdent`'s whole point
+        // is to leave a colon-free identifier fully unconstrained here — it
+        // may be an unenumerable `scalarCall` name, and this rule has no
+        // universe to check one against (`schema/narrow.rs`'s
+        // `TrieKind::ClassPathContinuation`) — so *any* colon-free word works,
+        // and this walk reuses the already-real `let` gold lexeme rather than
+        // needing `EXTRA_VOCAB`: the (semantically empty, but structurally
+        // unblocked) shape `let a = let(`.
+        "concert_singer",
+        &[],
+        &[b"{", b"|", b"let", b" ", b"a", b" ", b"=", b"let", b"("],
+    ),
 ];
+
+/// Extra vocabulary bytes, beyond [`STRUCTURAL_BYTES`], that exactly one
+/// [`PROBE_WALKS`] entry needs — the letters of `spider`, the literal segment
+/// every `FIXTURE_DBS` schema's real class/store paths start with (see that
+/// entry's own comment). Scoped to `grammar_and_schema`'s `extra_bytes`
+/// parameter rather than folded into `STRUCTURAL_BYTES` itself, which stays
+/// byte-for-byte identical to its six sibling test files by house convention
+/// (`fixture_dbs.rs`'s "never partially reuse a support module's neighbor," a
+/// convention about value parity, not about forbidding a second, additive
+/// vocabulary source next to it).
+const EXTRA_VOCAB: &[u8] = b"spider";
 
 fn corpus_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("corpus/gold_queries.jsonl")
 }
 
-fn grammar_and_schema(db_id: &str) -> (CompiledGrammar, purecard::Schema, TokenVocab) {
-    let extra: Vec<Vec<u8>> = STRUCTURAL_BYTES.iter().map(|&byte| vec![byte]).collect();
+/// Build a walk's grammar/schema/vocab, same as [`grammar_and_schema`] but
+/// with `extra_bytes` added to the vocabulary as further single-byte tokens,
+/// beyond [`STRUCTURAL_BYTES`] — additive only, and scoped to the one caller
+/// that needs them (see [`EXTRA_VOCAB`]'s own doc comment).
+fn grammar_and_schema_with_extra(
+    db_id: &str,
+    extra_bytes: &[u8],
+) -> (CompiledGrammar, purecard::Schema, TokenVocab) {
+    let extra: Vec<Vec<u8>> = STRUCTURAL_BYTES
+        .iter()
+        .chain(extra_bytes)
+        .map(|&byte| vec![byte])
+        .collect();
     let queries: Vec<String> = load_gold(&corpus_path())
         .expect("open the committed gold corpus")
         .filter_map(Result::ok)
@@ -247,6 +329,10 @@ fn grammar_and_schema(db_id: &str) -> (CompiledGrammar, purecard::Schema, TokenV
     let grammar = CompiledGrammar::compile(vocab.vocab());
     let schema = load_schema(db_id);
     (grammar, schema, vocab)
+}
+
+fn grammar_and_schema(db_id: &str) -> (CompiledGrammar, purecard::Schema, TokenVocab) {
+    grammar_and_schema_with_extra(db_id, &[])
 }
 
 /// Every [`State`] reachable through the schema-walk generator's own
@@ -286,8 +372,8 @@ fn every_reachable_pda_state_is_visited_at_least_once() {
         }
     }
 
-    for (db_id, walk) in PROBE_WALKS {
-        let (grammar, schema, vocab) = grammar_and_schema(db_id);
+    for (db_id, extra_bytes, walk) in PROBE_WALKS {
+        let (grammar, schema, vocab) = grammar_and_schema_with_extra(db_id, extra_bytes);
         let mut session =
             DecoderSession::with_schema(&grammar, schema.clone()).expect("grammar is fixed-engine");
         for token in *walk {

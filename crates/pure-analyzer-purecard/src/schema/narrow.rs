@@ -79,6 +79,12 @@ struct RuleCache {
 enum CacheKey {
     /// N3 source set — a schema constant.
     Source,
+    /// N3 at a `let` binder's own value (issue #371) — same legal-name set as
+    /// [`Source`](CacheKey::Source), but cached separately because it pairs
+    /// with a different [`TrieKind`] (`ClassPathContinuation`, not
+    /// `ClassPath`), which changes what counts as a candidate token and so
+    /// what the per-cursor mask memo holds.
+    BinderValueSource,
     /// S1 source-method set — always the single name [`SOURCE_METHOD`].
     SourceMethod,
     /// N3c's store-method set — always [`STORE_METHODS`].
@@ -335,6 +341,7 @@ pub(crate) fn narrow_into(
         // behaviourally-equivalent mutants no test can kill.
         L2Position::None
         | L2Position::SourceIdent
+        | L2Position::BinderValueSourceIdent
         | L2Position::SourceMethod
         | L2Position::StoreMethod
         | L2Position::Member(_)
@@ -527,6 +534,16 @@ impl<'a> TrieRule<'a> {
             L2Position::SourceIdent => {
                 (CacheKey::Source, TrieKind::ClassPath, Names::Source(schema))
             }
+            // Issue #371: same legal-name set as the primary source
+            // (`Names::Source`), but a distinct `CacheKey`/`TrieKind` — see
+            // [`L2Position::BinderValueSourceIdent`]'s own doc comment for why a
+            // plain identifier byte must never be a *candidate* here (unlike
+            // `TrieKind::ClassPath` above), only a `:` is.
+            L2Position::BinderValueSourceIdent => (
+                CacheKey::BinderValueSource,
+                TrieKind::ClassPathContinuation,
+                Names::Source(schema),
+            ),
             L2Position::SourceMethod => (
                 CacheKey::SourceMethod,
                 TrieKind::IdentOrStr,
@@ -767,6 +784,7 @@ pub(crate) fn narrow_fused_into(
         // happens to be a no-op then becomes a mutant no test can kill.
         L2Position::None
         | L2Position::SourceIdent
+        | L2Position::BinderValueSourceIdent
         | L2Position::SourceMethod
         | L2Position::StoreMethod
         | L2Position::SourceMethodArg
@@ -991,6 +1009,25 @@ enum TrieKind {
     /// leaving [`walk`] to read the colon as a completed name's boundary — is what
     /// let a fabricated segment (`spider::w::Db` + `::desc`) past N3 entirely.
     ClassPath,
+    /// N3 at a `let` binder's own value (issue #371,
+    /// [`L2Position::BinderValueSourceIdent`]): the same `::`-joined names as
+    /// [`ClassPath`](Self::ClassPath), but a plain identifier-tail byte is
+    /// **never** a candidate here — only a `:`-led token is. `letBinding`'s
+    /// value may also be a `scalarCall` (`docs/spec/grammar.md` §5.1), a bare
+    /// unqualified nullary call over a name this rule has no evidenced
+    /// universe to validate, so a plain identifier must fall through
+    /// unmasked — exactly like a genuinely structural, rule-unrelated token —
+    /// rather than be walked against the classpath trie and cleared the
+    /// moment it fails to match one (`today`, live-attested, `docs/spec/
+    /// grammar.md`'s own `issue-352/let-scalar:*` corpus rows). A `:`-led
+    /// token stays a real candidate: `scalarCall` is unqualified and so never
+    /// contains one (`docs/spec/grammar.md` §5.1: "a … qualified call
+    /// (`ns::today()`) … stay unadmitted"), so seeing one at all already
+    /// commits the value to the classpath branch, where N3's ordinary
+    /// real-prefix check is exactly right — masking a fabricated `::`
+    /// extension of a real class (`Country` + `::phantom`) precisely as
+    /// [`ClassPath`](Self::ClassPath) does for the primary source.
+    ClassPathContinuation,
     /// A quoted string (N6): a candidate token opens a string (`'`) or continues
     /// one already in flight.
     Str,
@@ -1011,7 +1048,7 @@ impl TrieKind {
     /// applies. Only N3's source rule spells `::` inside its names.
     const fn shape(self) -> NameShape {
         match self {
-            Self::ClassPath => NameShape::ClassPath,
+            Self::ClassPath | Self::ClassPathContinuation => NameShape::ClassPath,
             Self::Ident | Self::Str | Self::IdentOrStr => NameShape::Plain,
         }
     }
@@ -1701,6 +1738,14 @@ fn fill_trie(
         let bytes = vocab.bytes(id).unwrap_or(&[]);
         let keep = if is_candidate(bytes, kind, mid) {
             keeps_candidate(trie, cursor, bytes, kind.shape())
+        } else if matches!(kind, TrieKind::ClassPathContinuation) {
+            // `ClassPathContinuation`'s whole point (see its own doc comment):
+            // a non-candidate token here is never a `:`-led one, so it can
+            // only be a plain identifier-tail token (`scalarCall`'s
+            // unenumerable name space) or a genuinely structural one (`(`,
+            // whitespace, …) — kept unconditionally either way, unlike every
+            // other trie kind's `NamePoint`-gated fallback below.
+            true
         } else {
             match point {
                 NamePoint::Partial => false,
@@ -1776,14 +1821,27 @@ fn keeps_candidate(trie: &Trie, cursor: u32, bytes: &[u8], shape: NameShape) -> 
 /// for an `Ident` rule, or a string opener (or any byte once a string is in
 /// flight) for a `Str` rule.
 fn is_candidate(bytes: &[u8], kind: TrieKind, mid_lexeme: bool) -> bool {
-    match bytes.first() {
-        None => false,
-        Some(&first) => match kind {
-            TrieKind::Ident => is_ident_tail(first),
-            TrieKind::ClassPath => is_ident_tail(first) || first == b':',
-            TrieKind::Str => first == b'\'' || mid_lexeme,
-            TrieKind::IdentOrStr => is_ident_tail(first) || first == b'\'' || mid_lexeme,
-        },
+    let Some(&first) = bytes.first() else {
+        return false;
+    };
+    match kind {
+        TrieKind::Ident => is_ident_tail(first),
+        TrieKind::ClassPath => is_ident_tail(first) || first == b':',
+        // Reads the *whole* token, not just `first`, unlike every other kind
+        // here: byte-level BPE (or a lexeme-granular vocabulary, which spells
+        // an entire `::`-joined classpath as one token) can fuse a leading
+        // real segment straight through a fabricated `::` continuation into
+        // one token (`spider::…::Country::phantom`), whose first byte is an
+        // ordinary identifier-tail byte, not `:`. A token that carries a `:`
+        // anywhere is unambiguously classpath-shaped — `scalarCall` is
+        // unqualified and can never contain one (`docs/spec/grammar.md`
+        // §5.1) — so it is the one this rule must still walk against the
+        // trie; a token with no `:` at all keeps every one of
+        // [`TrieKind::ClassPathContinuation`]'s other candidacy exemptions
+        // (see its own doc comment) regardless of length or fusion.
+        TrieKind::ClassPathContinuation => bytes.contains(&b':'),
+        TrieKind::Str => first == b'\'' || mid_lexeme,
+        TrieKind::IdentOrStr => is_ident_tail(first) || first == b'\'' || mid_lexeme,
     }
 }
 
@@ -1984,6 +2042,7 @@ mod tests {
         for pos in [
             L2Position::None,
             L2Position::SourceIdent,
+            L2Position::BinderValueSourceIdent,
             L2Position::Column,
             L2Position::ReValue(TypeClass::Numeric),
         ] {
@@ -2073,6 +2132,74 @@ mod tests {
         assert!(
             !bit(&mask, 1),
             "the arrow is still masked at the shorter one"
+        );
+    }
+
+    /// Issue #371's own soundness edge: a `scalarCall`-shaped name (`today`,
+    /// no relation to any real class/store path) must survive at
+    /// `BinderValueSourceIdent` — the position must not become `SourceIdent`
+    /// in disguise. Neither token here carries a `:`, so
+    /// `TrieKind::ClassPathContinuation`'s `is_candidate` never walks either
+    /// one against the trie at all (see its own doc comment); both are kept
+    /// unconditionally, real class or not — precisely what keeps an
+    /// unenumerable `scalarCall` name from ever being masked.
+    #[test]
+    fn binder_value_source_ident_never_masks_a_colon_free_identifier() {
+        let v = vocab(&[b"today", b"A", b"Zzz", b"("]);
+        let (applied, mask) = run(&L2Position::BinderValueSourceIdent, &[], v);
+        assert!(applied);
+        assert!(bit(&mask, 0), "a scalarCall-shaped name is never masked");
+        assert!(bit(&mask, 1), "a real class name stays admitted");
+        assert!(
+            bit(&mask, 2),
+            "a colon-free phantom name is *also* left alone here — unlike \
+             SourceIdent, this position only ever governs `::` continuation"
+        );
+        assert!(bit(&mask, 3), "a non-candidate token is always kept");
+    }
+
+    /// The issue's own repro, reduced to its decision point: a fabricated `::`
+    /// continuation glued onto an *already-complete* real class must still be
+    /// cleared here exactly as it is at the primary source — this rule is
+    /// additive to a new position, not a loosening of N3's own claim.
+    #[test]
+    fn binder_value_source_ident_masks_a_fabricated_colon_continuation_after_a_real_class() {
+        let v = vocab(&[b".", b":", b"Zzz"]);
+        let (applied, mask) = run_prefix(&L2Position::BinderValueSourceIdent, &[], b"A", v);
+        assert!(applied);
+        assert!(
+            bit(&mask, 0),
+            "a real, complete class keeps its `.all()` dot"
+        );
+        assert!(
+            !bit(&mask, 1),
+            "a `::` continuation glued onto a complete class is masked"
+        );
+        assert!(
+            bit(&mask, 2),
+            "a colon-free token is unaffected by the prefix at all"
+        );
+    }
+
+    /// The fused-token case: a single vocabulary entry that carries a real
+    /// class *and* its fabricated `::` extension in one token — exactly the
+    /// shape a lexeme-granular vocabulary spells the issue's own repro as
+    /// (`spider::…::Country::phantom` is one `lex()` token,
+    /// `tests/support/lex.rs`). `is_candidate` reads the whole token rather
+    /// than only its first byte for exactly this reason; a colon-free token
+    /// stays exempt regardless of length.
+    #[test]
+    fn binder_value_source_ident_masks_a_fused_token_that_embeds_a_phantom_colon() {
+        let v = vocab(&[b"A::phantom", b"today"]);
+        let (applied, mask) = run(&L2Position::BinderValueSourceIdent, &[], v);
+        assert!(applied);
+        assert!(
+            !bit(&mask, 0),
+            "a fused fabricated classpath extension is masked as a whole token"
+        );
+        assert!(
+            bit(&mask, 1),
+            "a colon-free scalarCall-shaped name is unaffected"
         );
     }
 
