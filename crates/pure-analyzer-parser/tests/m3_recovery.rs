@@ -16,6 +16,7 @@ const EXCESSIVE_NESTING: usize = 1_024;
 const LONG_BINARY_CHAIN: usize = 4_096;
 const LONG_MIXED_BINARY_CHAIN: usize = 512;
 const EXCESSIVE_POSTFIX_CHAIN: usize = 320;
+const MANY_SIBLING_FUNCTION_CALLS: usize = 300;
 
 fn parse(source: &str) -> pure_analyzer_parser::Parse {
     parse_query(source, test_file()).expect("small test sources must build a tree")
@@ -653,6 +654,24 @@ fn excessive_postfix_nesting_is_recovered_without_a_stack_overflow() {
             .iter()
             .any(|diagnostic| diagnostic.code == DiagCode::MalformedSyntax)
     );
+    assert_ranges_are_valid(&source, &parsed);
+}
+
+#[test]
+fn sibling_function_calls_do_not_consume_the_nesting_budget() {
+    let items = (0..MANY_SIBLING_FUNCTION_CALLS)
+        .map(|index| format!("f({index})"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let source = format!("[{items}];");
+    let parsed = parse(&source);
+
+    assert!(parsed.diagnostics.is_empty(), "{:#?}", parsed.diagnostics);
+    assert_eq!(
+        count_kind(&parsed.green, SyntaxKind::FUNCTION_CALL),
+        MANY_SIBLING_FUNCTION_CALLS
+    );
+    assert_eq!(max_kind_depth(&parsed.green, SyntaxKind::FUNCTION_CALL), 1);
     assert_ranges_are_valid(&source, &parsed);
 }
 
