@@ -13,10 +13,12 @@ baseline before merge — see that PR for why), so release-plz's automated
 `release-pr` step found nothing left to bump and went straight to tagging and
 publishing the already-committed 0.3.0 without ever writing this entry.
 Backfilled by hand instead, following the same pattern as the 0.2.1/0.2.2
-entries above.
+entries above. The first backfill (this PR's predecessor) missed #356/#351,
+which merged before #360 but after 0.2.2 was cut — issue #366 caught the
+omission.
 -->
 
-Four fixes for gaps a downstream NL-to-Pure consumer's grammar/schema
+Five fixes for gaps a downstream NL-to-Pure consumer's grammar/schema
 coverage sweep surfaced, all live-verified against the pinned
 `finos/legend-engine-server:4.113.0` engine.
 
@@ -28,6 +30,12 @@ coverage sweep surfaced, all live-verified against the pinned
 
 ### Fixed
 
+- *(purecard)* stop N7 masking a brace lambda's 3rd-and-on binder comma — the
+  byte-PDA has no arity cap on a binder list, so `{x,y,z|…}`'s later binders
+  reached the same anchor an ordinary value opens at, and L2's N7 rule masked
+  them like one (issue
+  [#351](https://github.com/tsouza/pure-analyzer/issues/351),
+  [#356](https://github.com/tsouza/pure-analyzer/pull/356))
 - *(purecard)* re-anchor L2 trie narrowing past a fused leading-whitespace run
   — a byte-BPE vocabulary that spells a phantom member with a leading space
   (`$x. zzz`) previously bypassed L2 narrowing entirely (issue
