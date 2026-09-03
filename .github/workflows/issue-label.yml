@@ -1,0 +1,112 @@
+name: issue-label
+
+# Applies a type label (bug/enhancement/…), an area label
+# (purecard/analyzer/corpus/python/security/ci), a `dimension:*` label, and
+# the `consumer-request` / `decision-needed` flags to every ISSUE, derived
+# deterministically from the issue's title and body.
+#
+# `.github/workflows/labeler.yml` labels PULL REQUESTS by changed file paths
+# via `actions/labeler` — that action is PR-only and cannot label issues, so
+# every issue (including #366-#369) sat with zero labels no matter how rich
+# the repo's label taxonomy grew. This workflow is the issue-side
+# counterpart, ported from the sibling `cerberus` repo's own
+# `issue-label.yml` (see that file for the pattern this adapts).
+#
+# ALL of the logic lives in `scripts/label/issue-label.mjs` (mapping tables,
+# inference, the additive/idempotent apply, and the anti-vacuity guards) —
+# per constitution §2, non-trivial CI step logic is a Bun `.mjs` module, not
+# inline YAML. Unlike cerberus's own `pr-label.yml` (which drives the same
+# shape of logic through inline `actions/github-script` blocks), this repo's
+# stricter automation rule reserves that shape for a genuine single-tool
+# pass-through, so every branch/loop here already lives in the `.mjs` file
+# and each job below is a plain `run:` line.
+#
+# Two jobs, one module:
+#   - label    — event-driven: on issues opened / edited / reopened it labels
+#                the one issue in the payload.
+#   - backfill — manual dispatch: walks every OPEN issue and applies any
+#                MISSING label. Re-running it is a no-op on an already-
+#                labeled issue. NOT run automatically as part of landing this
+#                workflow — see the PR body for why: dispatch it by hand
+#                after reviewing a dry run's report of the residue it cannot
+#                yet classify.
+#
+# NOT A GATE. This workflow is automation, not a required status check — it
+# never runs on `pull_request` and is absent from branch protection. Its own
+# correctness is gated by `scripts/label/issue-label.test.mjs`, run on the
+# `test-scripts` lane (`bun test scripts/`).
+#
+# ANTI-VACUITY: the script FAILS the run if it processes zero issues, if a
+# body was never fetched, if any issue matches NONE of its five signals, or
+# if a backfill applies zero labels while unlabeled issues remain. A labeler
+# that silently labels nothing would otherwise be indistinguishable from a
+# green no-op — see the script's own header comment for the full guard list.
+# An `::error::`-terminated run going red on a genuinely unclassifiable issue
+# is therefore expected behavior, not a bug in this workflow: it is the
+# signal that the mapping needs widening, exactly as designed.
+#
+# SECURITY: `issues` is not a fork-controlled trigger — it fires on this
+# repository's own issues and runs the in-repo script from the default
+# branch. No PR head code is ever checked out or executed. Permissions are
+# least-privilege (issues: write only).
+on:
+  issues:
+    types: [opened, edited, reopened]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Compute and report the labels without applying them"
+        type: boolean
+        default: false
+
+permissions: {}
+
+concurrency:
+  # Issue number for the event path; the run id keeps dispatch runs (which
+  # carry no issue number) from cancelling each other.
+  group: issue-label-${{ github.event.issue.number || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  label:
+    name: label
+    if: github.event_name == 'issues'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - run: bun scripts/label/issue-label.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_LABEL_MODE: event
+
+  backfill:
+    name: backfill
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - run: bun scripts/label/issue-label.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_LABEL_MODE: backfill
+          ISSUE_LABEL_DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+
+  no-warnings:
+    needs: [label, backfill]
+    if: always()
+    permissions:
+      actions: read
+      contents: read
+    uses: ./.github/workflows/no-warnings.yml

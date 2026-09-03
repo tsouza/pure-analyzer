@@ -1,0 +1,112 @@
+name: pr-type-label
+
+# Applies exactly one Conventional-Commit type label (bug/enhancement/
+# documentation/ci/test/refactor/performance/chore/build/revert/
+# dependencies) to every PR, derived from the PR TITLE's commitlint prefix
+# (the title IS the squash-merge commit subject, so it always carries the
+# type).
+#
+# This is DIFFERENT from, and complementary to, `.github/workflows/
+# labeler.yml`: that workflow labels a PR by which file paths it CHANGED
+# (rust/documentation/ci/dependencies/purecard/corpus/python/security, via
+# `actions/labeler` + `.github/labeler.yml`'s globs); this one labels a PR by
+# WHAT KIND of change its title declares it to be. Both stay wired — see the
+# PR body for why `labeler.yml` is kept as-is rather than folded into this
+# one.
+#
+# ALL of the logic lives in `scripts/label/pr-label.mjs` and the shared
+# `scripts/label/type-label.mjs` mapping table (also used by
+# `issue-label.mjs`, so the two labelers can never disagree about what a CC
+# prefix means) — per constitution §2, non-trivial CI step logic is a Bun
+# `.mjs` module, not inline YAML. Ported from the sibling `cerberus` repo's
+# own `pr-label.yml` (see that file for the pattern this adapts); unlike
+# cerberus's version, which drives the same shape of logic through inline
+# `actions/github-script` blocks, this repo's stricter automation rule
+# reserves that shape for a genuine single-tool pass-through, so every
+# branch/loop already lives in the `.mjs` file and each job below is a plain
+# `run:` line calling the GitHub REST API directly via Bun's global `fetch`.
+#
+# Two jobs share the ONE mapping module:
+#   - label    — event-driven: on pull_request_target opened/edited/reopened
+#                it labels the one PR in the payload.
+#   - backfill — self-healing: on a cron schedule + manual dispatch it walks
+#                every OPEN PR and applies any MISSING expected label. This
+#                catches a PR whose event-driven run was queued, failed, or
+#                never fired. Idempotent: skips a PR that already carries its
+#                expected label.
+#
+# DEPENDABOT: bot-authored PRs (login ending `[bot]`) are SKIPPED by BOTH
+# jobs — see `scripts/label/pr-label.mjs`'s header for why (Dependabot
+# already self-labels, and a non-Dependabot label edit blocks its
+# auto-rebase).
+#
+# SECURITY: the event trigger is `pull_request_target`, which runs with a
+# write token on the BASE ref. This workflow NEVER checks out or executes PR
+# head code — it reads the PR title from the event payload (event path) or
+# the REST API (backfill) and calls the labels API. The only code it runs is
+# the trusted, in-repo `scripts/label/*.mjs` from the base ref. Permissions
+# are least-privilege (pull-requests: write only).
+on:
+  pull_request_target:
+    types: [opened, edited, reopened]
+  schedule:
+    # A few times a day, on an off-:00 minute to dodge the cron stampede.
+    - cron: "23 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Compute and report the labels without applying them"
+        type: boolean
+        default: false
+
+permissions: {}
+
+concurrency:
+  # PR number for the event path; the run id keeps schedule/dispatch runs
+  # (which carry no PR number) from cancelling each other.
+  group: pr-type-label-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  label:
+    name: label
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - run: bun scripts/label/pr-label.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_LABEL_MODE: event
+
+  backfill:
+    name: backfill
+    if: github.event_name != 'pull_request_target'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - run: bun scripts/label/pr-label.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_LABEL_MODE: backfill
+          PR_LABEL_DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+
+  no-warnings:
+    needs: [label, backfill]
+    if: always()
+    permissions:
+      actions: read
+      contents: read
+    uses: ./.github/workflows/no-warnings.yml
