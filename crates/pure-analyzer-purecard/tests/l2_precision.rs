@@ -378,6 +378,124 @@ fn n1_admits_every_name_after_an_unresolved_class_typed_binder() {
     }
 }
 
+/// Issue #367 (end-to-end mask replay of the issue's own reproduction, a
+/// synthetic single-class schema not tied to any `FIXTURE_DBS` entry): a
+/// variable reference passed as a milestoning date argument
+/// (`Class.all($d)`) must stream exactly as admissibly as the `%`-literal
+/// date forms at the identical position — binding an as-of date once
+/// (`let d = …;`) and passing it to a milestoned extent's `all()` is the
+/// ordinary way to write a dated query, and the schema contract carries no
+/// temporal stereotype that would let L2 type this argument any better than
+/// L1 already does.
+#[test]
+fn source_method_arg_admits_a_milestoning_date_variable() {
+    const SCHEMA_JSON: &str = r#"{
+      "db_id": "t", "db_path": "t::Db",
+      "classes": {
+        "t::A": { "simple_name": "A", "properties": [
+          {"name": "alpha", "type": {"kind": "primitive", "name": "Integer"}, "mult": {"lower": 1, "upper": 1}}
+        ], "qualified_properties": [], "super_types": [] }
+      },
+      "associations": [], "enums": {}
+    }"#;
+    let schema = Schema::from_json(SCHEMA_JSON).expect("synthetic schema parses");
+    // The issue's own four reproduction rows: three `%`-literal date forms
+    // (already admitted before this fix) plus the `$d` variable form (the
+    // regression this fix closes) must all stream to a clean, complete parse.
+    for query in [
+        "|t::A.all(%latest)->project(~[a: x|$x.alpha])",
+        "|t::A.all(%2024-01-01)->project(~[a: x|$x.alpha])",
+        "|t::A.all(%latest, %latest)->project(~[a: x|$x.alpha])",
+        "|t::A.all($d)->project(~[a: x|$x.alpha])",
+    ] {
+        let vocab = TokenVocab::build(&[query], &[]);
+        let grammar = CompiledGrammar::compile(vocab.vocab());
+        let mut session =
+            DecoderSession::with_schema(&grammar, schema.clone()).expect("grammar is fixed-engine");
+        for (step, token) in lex(query).into_iter().enumerate() {
+            let id = vocab
+                .id_of(&token)
+                .unwrap_or_else(|| panic!("token not in vocab: {:?}", bytes_str(&token)));
+            assert!(
+                session.allowed_mask().test(id),
+                "L2 SOUNDNESS (issue #367): a real date/variable argument masked \
+                 at step {step} ({:?}) in:\n  {query}",
+                bytes_str(&token)
+            );
+            session.accept_token(id).unwrap_or_else(|err| {
+                panic!("real token rejected at step {step}: {err}\n  {query}")
+            });
+        }
+        assert!(
+            session.is_complete(),
+            "L2 SOUNDNESS (issue #367): pipeline did not complete:\n  {query}"
+        );
+    }
+}
+
+/// Issue #367's precision half: admitting a `$`-led milestoning date argument
+/// must not reopen the phantom-argument shapes `source-method-arg` already
+/// kills (`Class.all('French')`, `Class.all(all)`) — a variable reference is
+/// the one additional value-start byte this fix admits, not a blanket
+/// pass-through of every value shape at the position.
+#[test]
+fn source_method_arg_still_masks_a_phantom_argument_beside_an_admitted_date_variable() {
+    let prefix = "|spider::car_1::model::default::CarsData.all(";
+    let verdict = admissible_after("car_1", prefix, &[b"$", b"'French'", b"all", b")"]);
+    assert!(
+        verdict[0],
+        "L2 SOUNDNESS (issue #367): a refVar sigil stays admissible"
+    );
+    assert!(!verdict[1], "a string-literal phantom argument is masked");
+    assert!(!verdict[2], "an identifier phantom argument is masked");
+    assert!(verdict[3], "the matching closer stays admissible");
+}
+
+/// Issue #367's binder-scope edge: a nested milestoned source's `$d` argument
+/// must stay admissible even when an *outer* lambda binder is already in
+/// scope — proving the fix reads the position (`SourceMethodArg`), not merely
+/// "no variable bound yet" (which would have coincidentally covered the
+/// issue's own un-nested repro but left this shape masked).
+#[test]
+fn source_method_arg_admits_a_date_variable_beside_an_outer_bound_binder() {
+    const SCHEMA_JSON: &str = r#"{
+      "db_id": "t", "db_path": "t::Db",
+      "classes": {
+        "t::A": { "simple_name": "A", "properties": [
+          {"name": "alpha", "type": {"kind": "primitive", "name": "Integer"}, "mult": {"lower": 1, "upper": 1}}
+        ], "qualified_properties": [], "super_types": [] },
+        "t::B": { "simple_name": "B", "properties": [
+          {"name": "beta", "type": {"kind": "primitive", "name": "Integer"}, "mult": {"lower": 1, "upper": 1}}
+        ], "qualified_properties": [], "super_types": [] }
+      },
+      "associations": [], "enums": {}
+    }"#;
+    let query = "|t::A.all()->filter(x|t::B.all($d)->isEmpty())";
+    let vocab = TokenVocab::build(&[query], &[]);
+    let grammar = CompiledGrammar::compile(vocab.vocab());
+    let schema = Schema::from_json(SCHEMA_JSON).expect("synthetic schema parses");
+    let mut session =
+        DecoderSession::with_schema(&grammar, schema).expect("grammar is fixed-engine");
+    for (step, token) in lex(query).into_iter().enumerate() {
+        let id = vocab
+            .id_of(&token)
+            .unwrap_or_else(|| panic!("token not in vocab: {:?}", bytes_str(&token)));
+        assert!(
+            session.allowed_mask().test(id),
+            "L2 SOUNDNESS (issue #367): a nested date variable masked beside an \
+             outer bound binder at step {step} ({:?}) in:\n  {query}",
+            bytes_str(&token)
+        );
+        session
+            .accept_token(id)
+            .unwrap_or_else(|err| panic!("real token rejected at step {step}: {err}\n  {query}"));
+    }
+    assert!(
+        session.is_complete(),
+        "L2 SOUNDNESS (issue #367): pipeline did not complete:\n  {query}"
+    );
+}
+
 /// Nested navigation: an association step reaches a class, and the *next* nav dot
 /// is fused with the following property. With `$x.fk0DefaultConcert` still open
 /// (the member the coming dot closes), the fused pass must resolve it to Concert

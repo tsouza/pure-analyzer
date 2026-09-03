@@ -71,28 +71,6 @@ const STRUCTURAL_BYTES: &[u8] = b"abXY1_ |{}()[].,;:$%'-><=!&+*/";
 ///   `FIXTURE_DBS` gold corpora contain an arm-R construct (arm-R is exercised
 ///   elsewhere, e.g. `l2_precision.rs`'s hand-written queries, not through this
 ///   generator).
-/// - `SourceColon`/`SourceColon2`: the `::` separator *inside* a source
-///   classpath, as a token-boundary state. This vocabulary is built at **whole
-///   lexeme granularity** (`support/l2.rs`), so every real classpath
-///   (`spider::world_1::model::default::Country`) is one atomic token — and a
-///   measurement across all 8 fixture DBs confirms **zero** vocabulary tokens
-///   are a proper prefix of any source path. A walk could therefore only *land*
-///   between a path's colons by gluing a `:` from `STRUCTURAL_BYTES` onto a
-///   path that had already ended — which is precisely issue #55's bucket-A
-///   fabrication (`spider::…::Battle::LEFT_OUTER`, `spider::…::CarMakers::row2`,
-///   `spider::…::Stadium::isEmpty`), rejected live as "Can't find the
-///   packageable element". Dumping the pre-rule walks that reached these two
-///   states found **every one** of them to be such a fabrication; N3's
-///   classpath-continuation rule now clears that `:`, so the only route this
-///   generator ever had into these states is gone.
-///
-///   They are *not* unreachable in the product: under a real byte-level BPE
-///   vocabulary a classpath does arrive in fragments, the trie keeps every live
-///   prefix admissible, and `bpe_split_soundness.rs` covers exactly that. This
-///   entry records a property of the test vocabulary, not a grammar or product
-///   restriction — so unlike the entries above it would disappear the moment a
-///   path-prefix token entered the corpus.
-///
 /// - `MilestoneL`…`MilestoneLates`/`InMilestoneLit`: the `%latest` keyword chain
 ///   (issue #55 Phase 7). `InMilestoneLit` *was* reached — through `%a`,
 ///   `%filter`, `%limit` and friends, every one of which the pinned engine
@@ -118,8 +96,6 @@ const EXPECTED_UNREACHABLE: &[&str] = &[
     "AfterRelColName",
     "ExpectRelColSpec",
     "ExpectRelColSpecReq",
-    "SourceColon",
-    "SourceColon2",
     "MilestoneL",
     "MilestoneLa",
     "MilestoneLat",
@@ -147,6 +123,25 @@ const EXPECTED_UNREACHABLE: &[&str] = &[
 /// disappear again on the next reshuffle". It is reachable through a lambda body's
 /// `[*]` — this walk reaches it — so a pin is the better remedy than a residue
 /// note, and the list shrinks by one.
+///
+/// `SourceColon`/`SourceColon2` (the `::` separator *inside* a source
+/// classpath, as a token-boundary state) join them for issue #367's own
+/// reason: the S2 sigil exemption `SourceMethodArg`/`AfterDollar` now needs
+/// (`schema/scope.rs`'s `masks_unbound_sigil` and `opening_position`)
+/// reshuffles the sampler's draws through every `$`-adjacent decision point,
+/// and one of the newly-sampled walks happens to type a `let` binder's own
+/// value as a fresh classpath (`let a = a::a`, `docs/spec/grammar.md`'s
+/// `pipeline | scalarExpr` binder-value shape, admitted since issue #352):
+/// `ExpectBinderValue`/`InBinderValueIdent` land on the *same* shared
+/// `source_ident` transition function `InSourceIdent` does (`grammar/pda.rs`),
+/// but — unlike the primary pipeline source — N3's classpath-continuation rule
+/// was never extended to narrow a binder value's own classpath, so nothing
+/// masks the `:` that opens `SourceColon` there. That gap is real (a
+/// fabricated `let a = spider::…::Battle::phantom` binder value streams
+/// unmasked) but is a distinct N3 scoping question from this issue's
+/// milestoning-date fix, tracked separately as issue #371 rather than folded
+/// in here (constitution §6): this pin only proves the state is — and, absent
+/// that follow-up, remains — reachable, exactly as `DateFrac` above.
 ///
 /// `AfterArrowName` (issue #369's own new state — the token boundary right after
 /// a completed `->`-step name, past any trailing whitespace, that has not yet
@@ -208,6 +203,19 @@ const PROBE_WALKS: &[(&str, &[&[u8]])] = &[
             b">",
             b"filter",
             b" ",
+        ],
+    ),
+    (
+        // Issue #367 / #371: a `let` binder's own value is a classpath
+        // grammar shares with the primary pipeline source
+        // (`ExpectBinderValue` -> `InBinderValueIdent` -> `SourceColon` ->
+        // `SourceColon2` -> `InSourceIdent`, the same `source_ident`
+        // transition function `grammar/pda.rs` uses for both) — `let` is a
+        // whole gold-corpus lexeme only in `concert_singer` among the 8
+        // `FIXTURE_DBS`.
+        "concert_singer",
+        &[
+            b"{", b"|", b"let", b" ", b"a", b" ", b"=", b"a", b":", b":", b"a",
         ],
     ),
 ];
