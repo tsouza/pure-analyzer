@@ -306,6 +306,13 @@ pub enum L2Position {
     SourceMethodArgSep {
         /// Whether the call still owes at least one more date argument.
         remaining: bool,
+        /// The byte-PDA state this position was read at — carried through so
+        /// the narrower can tell a genuinely decided separator byte from a
+        /// byte that merely continues the still-open date/milestone/variable
+        /// lexeme sitting on this same state (`ScopeTracker::source_method_arg_sep`'s
+        /// doc comment has the full story of why this position is reached
+        /// mid-lexeme at all).
+        state: State,
     },
     /// Issue #386, the sibling of [`SourceMethodArg`](L2Position::SourceMethodArg)
     /// one position later: a **milestoned property navigation's own call**
@@ -354,6 +361,10 @@ pub enum L2Position {
     PropertyMethodArgSep {
         /// Whether the call still owes at least one more date argument.
         remaining: bool,
+        /// The byte-PDA state this position was read at — the S3 mirror of
+        /// [`SourceMethodArgSep`](L2Position::SourceMethodArgSep)'s own field,
+        /// carried for the identical reason.
+        state: State,
     },
     /// N3c (store arm): the identifier right after a pipeline-source **store**
     /// path's own `->` must name a real store method. A store path denotes a
@@ -2521,18 +2532,29 @@ impl ScopeTracker {
 
     /// Issue #384's separator position, the source-method mirror of
     /// [`store_method_arg_sep`](Self::store_method_arg_sep) and read for the
-    /// identical reason: a milestoning date literal and a `$`-variable are both
-    /// **value-terminal** in-lexeme states — nothing can extend them further
-    /// ([`step_in_milestone_lit`]/[`step_in_member_ident`] in `grammar/pda.rs`
-    /// delegate every other byte straight to the transition table
-    /// `AfterValue`/`AfterMemberName` would use) — but the byte-PDA's own state
-    /// name has not advanced past the value yet, so this is the only point the
-    /// `,`-or-`)` byte can be masked at; waiting for a genuine
+    /// related reason: a milestoning date literal and a `$`-variable are both
+    /// in-lexeme states the byte-PDA's own state name never advances past
+    /// before the separator byte is chosen — waiting for a genuine
     /// [`State::completes_a_term`] anchor is too late, because that anchor is
     /// only reached *after* the separator byte itself has already been chosen
     /// and folded. `InDateLit`/`InDateTime`/`InDateFrac`/`InMilestoneLit` cover
     /// every way a milestone/date literal can end; `InMemberIdent` covers a
     /// `$`-variable's own name.
+    ///
+    /// **Issue #391's correction**: unlike [`InMilestoneLit`](State::InMilestoneLit)
+    /// (a fixed keyword, whose own [`step_in_milestone_lit`] folds *every* next
+    /// byte straight to `AfterValue` — nothing can extend it), the other four
+    /// states self-loop on more digits/ident-tail bytes
+    /// (`step_in_date_lit`/`step_in_date_time`/`step_in_date_frac`/
+    /// `step_in_member_ident`): `%2026-01-15` sits on `InDateLit` after *every*
+    /// digit of its date half, not only its first. This position is therefore
+    /// reached for two different kinds of next byte at once — one that
+    /// continues the still-open lexeme (never arity-gated) and one that
+    /// actually closes it (exactly what the arity gate governs) — and only the
+    /// [`L2Position::SourceMethodArgSep`] payload's own `state` field lets
+    /// [`fill_source_method_arg_sep`](crate::schema::narrow) tell them apart
+    /// per candidate token, deferring to L1 for the former and applying the
+    /// separator set for the latter.
     ///
     /// The value currently resting on one of those states has not been counted
     /// into [`source_method_commas`](Self::source_method_commas) yet — a comma
@@ -2556,13 +2578,15 @@ impl ScopeTracker {
             );
         decided.then(|| L2Position::SourceMethodArgSep {
             remaining: self.source_method_commas + 1 < required,
+            state,
         })
     }
 
     /// Issue #386's separator position — the S3 mirror of
     /// [`source_method_arg_sep`](Self::source_method_arg_sep), read for the
-    /// identical reason and at the identical set of value-terminal in-lexeme
-    /// states, keyed off [`in_property_method_args`](Self::in_property_method_args)/
+    /// identical reason (issue #391's correction included) and at the
+    /// identical set of in-lexeme states, keyed off
+    /// [`in_property_method_args`](Self::in_property_method_args)/
     /// [`property_method_required`](Self::property_method_required)/
     /// [`property_method_commas`](Self::property_method_commas) instead of
     /// their S1 counterparts.
@@ -2582,6 +2606,7 @@ impl ScopeTracker {
             );
         decided.then(|| L2Position::PropertyMethodArgSep {
             remaining: self.property_method_commas + 1 < required,
+            state,
         })
     }
 
@@ -3569,7 +3594,10 @@ mod tests {
         assert_eq!(pda.state(), State::InMilestoneLit);
         assert_eq!(
             tracker.position(pda.state()),
-            L2Position::SourceMethodArgSep { remaining: true }
+            L2Position::SourceMethodArgSep {
+                remaining: true,
+                state: State::InMilestoneLit,
+            }
         );
     }
 
@@ -3588,7 +3616,10 @@ mod tests {
         assert_eq!(pda.state(), State::InMilestoneLit);
         assert_eq!(
             tracker.position(pda.state()),
-            L2Position::SourceMethodArgSep { remaining: false }
+            L2Position::SourceMethodArgSep {
+                remaining: false,
+                state: State::InMilestoneLit,
+            }
         );
     }
 
@@ -3602,7 +3633,10 @@ mod tests {
         assert_eq!(pda.state(), State::InMilestoneLit);
         assert_eq!(
             tracker.position(pda.state()),
-            L2Position::SourceMethodArgSep { remaining: false }
+            L2Position::SourceMethodArgSep {
+                remaining: false,
+                state: State::InMilestoneLit,
+            }
         );
     }
 
@@ -3617,7 +3651,10 @@ mod tests {
         assert_eq!(pda.state(), State::InMemberIdent);
         assert_eq!(
             tracker.position(pda.state()),
-            L2Position::SourceMethodArgSep { remaining: true }
+            L2Position::SourceMethodArgSep {
+                remaining: true,
+                state: State::InMemberIdent,
+            }
         );
     }
 
@@ -3949,7 +3986,10 @@ mod tests {
         assert_eq!(pda.state(), State::InMilestoneLit);
         assert_eq!(
             tracker.position(pda.state()),
-            L2Position::PropertyMethodArgSep { remaining: true }
+            L2Position::PropertyMethodArgSep {
+                remaining: true,
+                state: State::InMilestoneLit,
+            }
         );
     }
 
@@ -3968,7 +4008,10 @@ mod tests {
         assert_eq!(pda.state(), State::InMilestoneLit);
         assert_eq!(
             tracker.position(pda.state()),
-            L2Position::PropertyMethodArgSep { remaining: false }
+            L2Position::PropertyMethodArgSep {
+                remaining: false,
+                state: State::InMilestoneLit,
+            }
         );
     }
 
@@ -3987,7 +4030,10 @@ mod tests {
         assert_eq!(pda.state(), State::InMilestoneLit);
         assert_eq!(
             tracker.position(pda.state()),
-            L2Position::PropertyMethodArgSep { remaining: false }
+            L2Position::PropertyMethodArgSep {
+                remaining: false,
+                state: State::InMilestoneLit,
+            }
         );
     }
 
@@ -4007,7 +4053,10 @@ mod tests {
         assert_eq!(pda.state(), State::InMemberIdent);
         assert_eq!(
             tracker.position(pda.state()),
-            L2Position::PropertyMethodArgSep { remaining: true }
+            L2Position::PropertyMethodArgSep {
+                remaining: true,
+                state: State::InMemberIdent,
+            }
         );
     }
 

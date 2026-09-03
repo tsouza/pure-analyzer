@@ -29,7 +29,9 @@
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
-use crate::grammar::pda::{TERM_END_BYTES, is_ident_start, is_ident_tail, is_ws};
+use crate::grammar::pda::{
+    State, Step, TERM_END_BYTES, is_ident_start, is_ident_tail, is_ws, step,
+};
 use crate::mask::BitMask;
 use crate::schema::model::{Schema, TypeClass};
 use crate::schema::scope::{
@@ -96,8 +98,10 @@ enum CacheKey {
     SourceMethodArg(Option<usize>, usize),
     /// Issue #384's separator set: the source-method mirror of
     /// [`StoreMethodArgSep`](CacheKey::StoreMethodArgSep) below, keyed the
-    /// identical way.
-    SourceMethodArgSep(bool),
+    /// identical way plus the byte-PDA `state` the position was read at
+    /// (issue #391) — the set now also depends on which in-lexeme
+    /// continuation, if any, the current state admits.
+    SourceMethodArgSep(bool, State),
     /// Issue #386: a milestoned property navigation's own call argument-slot
     /// set, keyed by the navigated-to class's `required`/`seen` pair the
     /// identical way [`SourceMethodArg`](CacheKey::SourceMethodArg) is —
@@ -107,8 +111,8 @@ enum CacheKey {
     PropertyMethodArg(Option<usize>, usize),
     /// Issue #386's separator set: the property-navigation mirror of
     /// [`SourceMethodArgSep`](CacheKey::SourceMethodArgSep), keyed the
-    /// identical way.
-    PropertyMethodArgSep(bool),
+    /// identical way (state included, issue #391).
+    PropertyMethodArgSep(bool, State),
     /// N3d's store-method argument-slot set — likewise a whole-vocab constant.
     StoreMethodArg,
     /// N3d's store-method separator set. Whether the call still owes another
@@ -271,14 +275,14 @@ pub(crate) fn narrow_into(
         L2Position::SourceMethodArg { required, seen } => {
             dispatch_source_method_arg(dst, cache, vocab, eos_bit, *required, *seen)
         }
-        L2Position::SourceMethodArgSep { remaining } => {
-            dispatch_source_method_arg_sep(dst, cache, vocab, eos_bit, *remaining)
+        L2Position::SourceMethodArgSep { remaining, state } => {
+            dispatch_source_method_arg_sep(dst, cache, vocab, eos_bit, *remaining, *state)
         }
         L2Position::PropertyMethodArg { required, seen } => {
             dispatch_property_method_arg(dst, cache, vocab, eos_bit, *required, *seen)
         }
-        L2Position::PropertyMethodArgSep { remaining } => {
-            dispatch_property_method_arg_sep(dst, cache, vocab, eos_bit, *remaining)
+        L2Position::PropertyMethodArgSep { remaining, state } => {
+            dispatch_property_method_arg_sep(dst, cache, vocab, eos_bit, *remaining, *state)
         }
         L2Position::StoreMethodArg => with_cache(dst, cache, CacheKey::StoreMethodArg, |dst| {
             fill_store_method_arg(dst, vocab, eos_bit);
@@ -420,10 +424,16 @@ fn dispatch_source_method_arg_sep(
     vocab: &Vocab,
     eos_bit: u32,
     remaining: bool,
+    state: State,
 ) -> bool {
-    with_cache(dst, cache, CacheKey::SourceMethodArgSep(remaining), |dst| {
-        fill_source_method_arg_sep(dst, vocab, eos_bit, remaining);
-    })
+    with_cache(
+        dst,
+        cache,
+        CacheKey::SourceMethodArgSep(remaining, state),
+        |dst| {
+            fill_source_method_arg_sep(dst, vocab, eos_bit, remaining, state);
+        },
+    )
 }
 
 /// Issue #386's [`L2Position::PropertyMethodArg`] dispatch — the S3 mirror of
@@ -455,13 +465,14 @@ fn dispatch_property_method_arg_sep(
     vocab: &Vocab,
     eos_bit: u32,
     remaining: bool,
+    state: State,
 ) -> bool {
     with_cache(
         dst,
         cache,
-        CacheKey::PropertyMethodArgSep(remaining),
+        CacheKey::PropertyMethodArgSep(remaining, state),
         |dst| {
-            fill_source_method_arg_sep(dst, vocab, eos_bit, remaining);
+            fill_source_method_arg_sep(dst, vocab, eos_bit, remaining, state);
         },
     )
 }
@@ -1529,19 +1540,56 @@ const ARG_SEP: u8 = b',';
 /// call.
 const CALL_CLOSE: u8 = b')';
 
+/// Whether `byte` continues the in-lexeme `state` itself rather than falling
+/// through toward [`State::AfterValue`] (issue #391).
+///
+/// [`source_method_arg_sep`](crate::schema::scope)'s doc comment explains why
+/// [`fill_source_method_arg_sep`] is reached at a *self-looping* in-lexeme
+/// state (`InDateLit`/`InDateTime`/`InDateFrac`/`InMemberIdent`) as well as a
+/// genuinely decided one (`InMilestoneLit`, `completes_a_term`): a candidate
+/// byte at that position is either the next digit/ident-tail byte of a
+/// still-open date/variable lexeme (never arity-gated — deferred to L1 by
+/// this returning `true`) or the byte that actually closes it (arity-gated by
+/// the caller instead). [`step`] is the single source of truth for which is
+/// which, reused here rather than re-deriving the transition table:
+/// `stack_top` never affects a *continuing* branch of `step_in_date_lit`/
+/// `step_in_date_time`/`step_in_date_frac`/`step_in_member_ident` (only their
+/// closing fallback — `step(AfterValue, stack_top, byte)` — consults it, and
+/// this function does not care what that fallback resolves to, only that it
+/// left the lexeme's own [`LexKind`](crate::grammar::pda::LexKind)), so `None`
+/// is safe to pass. At a true anchor (`state.lexeme_kind()` is `None` —
+/// `completes_a_term`'s own hubs), there is no open lexeme to continue, so
+/// this is unconditionally `false` and the caller's separator set governs
+/// every candidate exactly as it always has.
+fn continues_open_lexeme(state: State, byte: u8) -> bool {
+    let kind = state.lexeme_kind();
+    kind.is_some()
+        && matches!(step(state, None, byte), Step::Next(next) if next.lexeme_kind() == kind)
+}
+
 /// Refill `dst` with [`L2Position::SourceMethodArgSep`]'s set for a call that
 /// has completed `complete` milestoning arguments, plus EOS: a `,` while a date
 /// argument remains owed, the call's own `)` once the class's declared arity is
-/// met, and whitespace either way — the source-method mirror of
+/// met, whitespace either way, and — issue #391 — any byte that
+/// [`continues_open_lexeme`] says merely extends the date/milestone/variable
+/// lexeme still open at `state` rather than closing it (a bare-year date's
+/// second digit, `%2`'s own `0`, must stay admissible exactly as it would with
+/// no `temporal` field at all). The source-method mirror of
 /// [`fill_store_method_arg_sep`], minus that rule's doubled-quote allowance
 /// (`STR_OPEN`): a milestone/date literal and a `$`-variable have no quoting
 /// ambiguity a date argument's own closing byte could double.
-fn fill_source_method_arg_sep(dst: &mut BitMask, vocab: &Vocab, eos_bit: u32, remaining: bool) {
+fn fill_source_method_arg_sep(
+    dst: &mut BitMask,
+    vocab: &Vocab,
+    eos_bit: u32,
+    remaining: bool,
+    state: State,
+) {
     let owed = if remaining { ARG_SEP } else { CALL_CLOSE };
     dst.clear_all();
     for id in 0..vocab.len() as u32 {
         if opens_with(vocab.bytes(id).unwrap_or(&[]), |byte| {
-            byte.is_ascii_whitespace() || byte == owed
+            byte.is_ascii_whitespace() || byte == owed || continues_open_lexeme(state, byte)
         }) {
             dst.set(id);
         }
@@ -2029,6 +2077,7 @@ fn is_candidate(bytes: &[u8], kind: TrieKind, mid_lexeme: bool) -> bool {
 mod tests {
     use super::{NarrowCache, narrow_into};
     use crate::grammar::compiled::CompiledGrammar;
+    use crate::grammar::pda::State;
     use crate::mask::BitMask;
     use crate::schema::model::{Schema, TypeClass};
     use crate::schema::scope::L2Position;
@@ -2531,7 +2580,10 @@ mod tests {
     fn source_method_arg_sep_admits_only_the_owed_byte() {
         let v = vocab(&[b",", b")", b"  "]);
         let (applied, still_owed) = run(
-            &L2Position::SourceMethodArgSep { remaining: true },
+            &L2Position::SourceMethodArgSep {
+                remaining: true,
+                state: State::InMilestoneLit,
+            },
             &[],
             v.clone(),
         );
@@ -2546,8 +2598,14 @@ mod tests {
         );
         assert!(bit(&still_owed, 2), "whitespace stays legal either way");
 
-        let (applied, arity_met) =
-            run(&L2Position::SourceMethodArgSep { remaining: false }, &[], v);
+        let (applied, arity_met) = run(
+            &L2Position::SourceMethodArgSep {
+                remaining: false,
+                state: State::InMilestoneLit,
+            },
+            &[],
+            v,
+        );
         assert!(applied);
         assert!(
             !bit(&arity_met, 0),
@@ -2558,6 +2616,105 @@ mod tests {
             "the closer is legal once the arity is met"
         );
         assert!(bit(&arity_met, 2), "whitespace stays legal either way");
+    }
+
+    /// Issue #391 regression: unlike `InMilestoneLit` (a fixed keyword, always
+    /// decided), `InDateLit`/`InDateTime`/`InDateFrac`/`InMemberIdent`
+    /// self-loop on more digits/ident-tail bytes — the position is reached
+    /// mid-lexeme, not only once the lexeme has genuinely closed, and a
+    /// byte that merely continues it must stay admissible regardless of the
+    /// arity gate. Live witness: `|t::A.all(%2` masked every byte but `)`/` `
+    /// at byte 12 with `temporal` set — the second digit of `2026` (`0`) was
+    /// wrongly cut.
+    #[test]
+    fn source_method_arg_sep_keeps_a_date_literals_own_continuation_bytes() {
+        let v = vocab(&[b",", b")", b"  ", b"0", b"-", b"T", b":", b"a"]);
+        let (applied, mask) = run(
+            &L2Position::SourceMethodArgSep {
+                remaining: false,
+                state: State::InDateLit,
+            },
+            &[],
+            v,
+        );
+        assert!(applied);
+        assert!(
+            !bit(&mask, 0),
+            "PRE-EXISTING (issue #391): a comma is masked once the arity is met"
+        );
+        assert!(bit(&mask, 1), "the closer is legal once the arity is met");
+        assert!(bit(&mask, 2), "whitespace stays legal either way");
+        assert!(
+            bit(&mask, 3),
+            "L2 SOUNDNESS (issue #391): a bare-year date's second digit must \
+             survive the arity gate — it continues the open literal, it does \
+             not open a fresh argument"
+        );
+        assert!(bit(&mask, 4), "`-` continues a date literal's own fields");
+        assert!(bit(&mask, 5), "`T` hands the literal to its time half");
+        assert!(
+            bit(&mask, 6),
+            "`:` also continues `InDateLit` (`step_in_date_lit` hands it to \
+             `DateTimeSep`, e.g. a bare `%20:18` time-of-day form) — L1's own \
+             transition table, not this test's guess, is the source of truth"
+        );
+        assert!(
+            !bit(&mask, 7),
+            "an ordinary letter neither continues the literal nor is the \
+             owed separator"
+        );
+    }
+
+    /// Issue #391's sibling case at `InDateTime` (past a `T`): the sole state
+    /// where a `.` opens fractional seconds, so it — not `InDateLit`'s own
+    /// set — must additionally survive here.
+    #[test]
+    fn source_method_arg_sep_keeps_a_date_times_own_continuation_bytes() {
+        let v = vocab(&[b",", b"0", b"-", b":", b"."]);
+        let (applied, mask) = run(
+            &L2Position::SourceMethodArgSep {
+                remaining: true,
+                state: State::InDateTime,
+            },
+            &[],
+            v,
+        );
+        assert!(applied);
+        assert!(bit(&mask, 0), "a comma is legal while an argument is owed");
+        assert!(bit(&mask, 1), "a digit continues the time half");
+        assert!(bit(&mask, 2), "`-` opens a timezone offset");
+        assert!(bit(&mask, 3), "`:` separates the time's own fields");
+        assert!(bit(&mask, 4), "`.` opens fractional seconds");
+    }
+
+    /// Issue #391's sibling case at `InMemberIdent`: a multi-character
+    /// `$`-variable name (`$myDate`, not only the single-character `$d` every
+    /// pre-#391 test used) must keep every one of its own ident-tail bytes,
+    /// not only its first.
+    #[test]
+    fn source_method_arg_sep_keeps_a_multi_char_variable_names_own_bytes() {
+        let v = vocab(&[b")", b"  ", b"y", b"1", b"("]);
+        let (applied, mask) = run(
+            &L2Position::SourceMethodArgSep {
+                remaining: false,
+                state: State::InMemberIdent,
+            },
+            &[],
+            v,
+        );
+        assert!(applied);
+        assert!(bit(&mask, 0), "the closer is legal once the arity is met");
+        assert!(bit(&mask, 1), "whitespace stays legal either way");
+        assert!(
+            bit(&mask, 2),
+            "L2 SOUNDNESS (issue #391): a variable name's second letter must \
+             survive the arity gate — `$myDate` is one argument, not two"
+        );
+        assert!(bit(&mask, 3), "a digit is a legal ident-tail byte too");
+        assert!(
+            !bit(&mask, 4),
+            "`(` neither continues an identifier nor is the owed separator"
+        );
     }
 
     #[test]
@@ -2650,7 +2807,10 @@ mod tests {
     fn property_method_arg_sep_admits_only_the_owed_byte() {
         let v = vocab(&[b",", b")", b"  "]);
         let (applied, still_owed) = run(
-            &L2Position::PropertyMethodArgSep { remaining: true },
+            &L2Position::PropertyMethodArgSep {
+                remaining: true,
+                state: State::InMilestoneLit,
+            },
             &[],
             v.clone(),
         );
@@ -2666,7 +2826,10 @@ mod tests {
         assert!(bit(&still_owed, 2), "whitespace stays legal either way");
 
         let (applied, arity_met) = run(
-            &L2Position::PropertyMethodArgSep { remaining: false },
+            &L2Position::PropertyMethodArgSep {
+                remaining: false,
+                state: State::InMilestoneLit,
+            },
             &[],
             v,
         );
@@ -2680,6 +2843,36 @@ mod tests {
             "the closer is legal once the arity is met"
         );
         assert!(bit(&arity_met, 2), "whitespace stays legal either way");
+    }
+
+    /// Issue #391's S3 sibling of
+    /// `source_method_arg_sep_keeps_a_date_literals_own_continuation_bytes`: a
+    /// milestoned property navigation's own call (`$x.facet(%2026-01-15)`)
+    /// must admit a date literal's own continuation bytes exactly as S1's
+    /// `all(...)` call does.
+    #[test]
+    fn property_method_arg_sep_keeps_a_date_literals_own_continuation_bytes() {
+        let v = vocab(&[b",", b")", b"  ", b"0"]);
+        let (applied, mask) = run(
+            &L2Position::PropertyMethodArgSep {
+                remaining: false,
+                state: State::InDateLit,
+            },
+            &[],
+            v,
+        );
+        assert!(applied);
+        assert!(
+            !bit(&mask, 0),
+            "PRE-EXISTING: a comma is masked once the arity is met"
+        );
+        assert!(bit(&mask, 1), "the closer is legal once the arity is met");
+        assert!(bit(&mask, 2), "whitespace stays legal either way");
+        assert!(
+            bit(&mask, 3),
+            "L2 SOUNDNESS (issue #391): a bare-year date's second digit must \
+             survive the arity gate at S3 too"
+        );
     }
 
     #[test]
