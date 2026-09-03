@@ -41,6 +41,7 @@ pub fn is_completed_term(pos: &L2Position) -> bool {
         | L2Position::BinderValueSourceIdent
         | L2Position::SourceMethod
         | L2Position::SourceMethodArg
+        | L2Position::PropertyMethodArg
         | L2Position::StoreMethod
         | L2Position::StoreMethodArg
         | L2Position::StoreMethodArgSep { .. }
