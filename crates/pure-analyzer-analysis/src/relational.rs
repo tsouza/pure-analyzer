@@ -90,8 +90,6 @@ pub enum ModelOriginKind {
     Class,
     /// A resolved property or association end supplied the fact.
     Member,
-    /// A caller supplied an anchor without a more specific category.
-    Unspecified,
 }
 
 /// A resolved model definition that contributed to an IR value.
@@ -110,7 +108,6 @@ pub struct ModelOrigin {
 /// collapsing when IR provenance is merged.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum ModelOriginIdentity {
-    Unspecified,
     Class(QName),
     Member {
         owner: QName,
@@ -120,17 +117,6 @@ enum ModelOriginIdentity {
 }
 
 impl ModelOrigin {
-    /// Construct an uncategorized model-origin fact from its provenance and anchor.
-    #[must_use]
-    pub const fn new(provenance: Provenance, definition: DefinitionAnchor) -> Self {
-        Self {
-            kind: ModelOriginKind::Unspecified,
-            provenance,
-            definition,
-            identity: ModelOriginIdentity::Unspecified,
-        }
-    }
-
     /// Construct an origin from a resolved class.
     #[must_use]
     pub fn from_class(class: &ResolvedClass) -> Self {
@@ -185,7 +171,6 @@ impl ModelOrigin {
     #[must_use]
     pub(crate) fn structural_identity_key(&self) -> String {
         match &self.identity {
-            ModelOriginIdentity::Unspecified => "unspecified".to_owned(),
             ModelOriginIdentity::Class(path) => format!("class:{}", path.as_str()),
             ModelOriginIdentity::Member { owner, name, kind } => {
                 let kind = match kind {
@@ -415,6 +400,17 @@ impl CandidateKey {
 }
 
 /// Whether a scalar expression is proven defined for every input row.
+///
+/// No lowering call site constructs `Knowledge::Proven` for this fact today —
+/// every `Totality` field lowering produces is `Knowledge::unknown()`. A
+/// tempting shortcut (a navigated member's declared multiplicity implies
+/// presence when its lower bound is at least one) is explicitly out of
+/// bounds: issues #51 and #185, which specified this IR, require that
+/// totality never be inferred from association multiplicity alone, since a
+/// model-declared constraint is not the same kind of proof as evidence
+/// recoverable from the query itself. A sound producer needs genuinely
+/// different evidence (e.g. query-structural narrowing); designing and
+/// wiring one is tracked separately rather than attempted here (issue #404).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Totality {
     /// The expression is proven defined for every input row.
@@ -581,12 +577,17 @@ pub enum RelationExpressionError {
 }
 
 /// A resolved scan source in the supported relational core.
+///
+/// `Class` (`SomeClass.all()`) is the only lowered scan source today. A
+/// member-rooted scan (e.g. scanning a to-many association end directly, such
+/// as `$person.orders`, as a relation root rather than through a class scan)
+/// is real, distinct Pure surface that lowering does not yet produce; adding
+/// it is tracked separately rather than represented here ahead of a producer
+/// (issue #405).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RelationSource {
     /// A resolved class source.
     Class(ResolvedClass),
-    /// A resolved member source, retaining the exact association or property identity.
-    Member(ResolvedMember),
 }
 
 /// Resolver-issued evidence for one supported correlated member navigation.
@@ -643,6 +644,13 @@ impl ResolvedNavigation {
 }
 
 /// One supported join form in the initial decidable relational core.
+///
+/// `Inner` is the only variant lowering produces today; `->join` with a
+/// `JoinKind.LEFT`/`JoinKind.OUTER` argument is recognized Pure syntax (see
+/// `validate.rs`) but declines lowering as [`RelationalOutcome::Opaque`].
+/// Non-inner join semantics (nullable columns from the non-matched side) are
+/// real, distinct production work tracked separately rather than represented
+/// here ahead of a producer (issue #407).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum JoinKind {
     /// Rows are emitted only when the join condition holds.
@@ -959,6 +967,11 @@ pub enum ScalarLiteral {
 }
 
 /// The closed supported set of scalar operators.
+///
+/// Boolean `&&`/`||` combinators are real Pure surface (`->and()`/`->or()`),
+/// but the lexer does not yet tokenize them and lowering has no producer for
+/// them; adding that support is tracked separately rather than represented
+/// here ahead of a producer (issue #406).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ScalarOperator {
     /// Read one column by stable identity.
@@ -977,20 +990,6 @@ pub enum ScalarOperator {
     },
     /// Compare two scalar expressions for equality.
     Equal {
-        /// Left operand.
-        left: Box<ScalarExpression>,
-        /// Right operand.
-        right: Box<ScalarExpression>,
-    },
-    /// Require both Boolean operands to hold.
-    And {
-        /// Left operand.
-        left: Box<ScalarExpression>,
-        /// Right operand.
-        right: Box<ScalarExpression>,
-    },
-    /// Require either Boolean operand to hold.
-    Or {
         /// Left operand.
         left: Box<ScalarExpression>,
         /// Right operand.
@@ -1323,13 +1322,6 @@ fn validate_scalar(
             if left.type_ref() != right.type_ref() {
                 return Err(RelationExpressionError::ComparisonTypeMismatch);
             }
-            validate_boolean(expression)
-        }
-        ScalarOperator::And { left, right } | ScalarOperator::Or { left, right } => {
-            validate_scalar(left, input_schemas)?;
-            validate_scalar(right, input_schemas)?;
-            validate_boolean(left)?;
-            validate_boolean(right)?;
             validate_boolean(expression)
         }
         ScalarOperator::Not { input } => {

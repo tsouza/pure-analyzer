@@ -448,6 +448,5 @@ const fn model_origin_kind_name(kind: ModelOriginKind) -> &'static str {
     match kind {
         ModelOriginKind::Class => "class",
         ModelOriginKind::Member => "member",
-        ModelOriginKind::Unspecified => "unspecified",
     }
 }

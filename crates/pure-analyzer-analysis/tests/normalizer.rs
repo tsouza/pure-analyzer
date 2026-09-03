@@ -2,12 +2,12 @@
 
 use proptest::prelude::*;
 use pure_analyzer_analysis::{
-    CandidateKey, Column, ColumnId, ComparisonOutcome, EquivalenceKey, IrOrigin, Knowledge,
-    ModelOrigin, NormalizationBudget, NormalizationOutcome, Nullability, Projection,
-    ProjectionKind, RelationExpression, RelationExpressionError, RelationFacts, RelationOperator,
-    RelationSchema, RelationSource, RelationalQuery, RowSemantics, ScalarExpression, ScalarLiteral,
-    ScalarOperator, SortDirection, SortKey, SourceSpan, Totality, compare_relational_queries,
-    normalize_relational_query, normalize_relational_query_with_budget,
+    CandidateKey, Column, ColumnId, EquivalenceKey, IrOrigin, Knowledge, ModelOrigin,
+    NormalizationBudget, NormalizationOutcome, Nullability, Projection, ProjectionKind,
+    RelationExpression, RelationExpressionError, RelationFacts, RelationOperator, RelationSchema,
+    RelationSource, RelationalQuery, RowSemantics, ScalarExpression, ScalarLiteral, ScalarOperator,
+    SortDirection, SortKey, SourceSpan, Totality, normalize_relational_query,
+    normalize_relational_query_with_budget,
 };
 use pure_analyzer_diagnostics::{FileId, ReasonCode, TextRange, TextSize};
 use pure_analyzer_model::{Multiplicity, PmcdDocument, QName, TypeRef, load_pmcd_documents};
@@ -280,51 +280,6 @@ fn boolean_predicate(
         one(),
         Nullability::NonNullable,
         totality,
-        source,
-    )
-}
-
-fn boolean_expression(operator: ScalarOperator, source: IrOrigin) -> ScalarExpression {
-    ScalarExpression::new(
-        operator,
-        type_ref("Boolean"),
-        one(),
-        Nullability::NonNullable,
-        Knowledge::unknown(),
-        source,
-    )
-}
-
-fn integer_literal(value: i64, source: IrOrigin) -> ScalarExpression {
-    ScalarExpression::new(
-        ScalarOperator::Literal(ScalarLiteral::Integer(value)),
-        type_ref("Integer"),
-        one(),
-        Nullability::NonNullable,
-        Knowledge::unknown(),
-        source,
-    )
-}
-
-fn nullable_complement_predicate(column: &Column, source: IrOrigin) -> ScalarExpression {
-    let equality = boolean_expression(
-        ScalarOperator::Equal {
-            left: Box::new(scalar_column(column, source.clone())),
-            right: Box::new(integer_literal(1, source.clone())),
-        },
-        source.clone(),
-    );
-    let complement = boolean_expression(
-        ScalarOperator::Not {
-            input: Box::new(equality.clone()),
-        },
-        source.clone(),
-    );
-    boolean_expression(
-        ScalarOperator::Or {
-            left: Box::new(equality),
-            right: Box::new(complement),
-        },
         source,
     )
 }
@@ -1108,35 +1063,12 @@ fn pinned_three_valued_witnesses_keep_nullable_forms_frozen_and_indecisive() {
     );
     assert_eq!(rejected, Err(RelationExpressionError::NonBooleanPredicate));
 
-    let nullable_integer =
-        nullable_scalar_input("optional", "Integer", origin(FILE, 30, 39, Vec::new()));
-    let complement = RelationalQuery::new(filter(
-        nullable_integer.clone(),
-        nullable_complement_predicate(
-            &nullable_integer.schema().columns()[0],
-            origin(FILE, 40, 49, Vec::new()),
-        ),
-        RelationFacts::unknown(),
-        origin(FILE, 50, 59, Vec::new()),
-    ));
-    let literal_true = RelationalQuery::new(filter(
-        nullable_integer,
-        true_predicate(origin(FILE, 60, 69, Vec::new())),
-        RelationFacts::unknown(),
-        origin(FILE, 70, 79, Vec::new()),
-    ));
-
-    assert!(matches!(
-        normalized(&complement).root().operator(),
-        RelationOperator::Filter { predicate, .. }
-            if matches!(predicate.operator(), ScalarOperator::Or { .. })
-    ));
-    let ComparisonOutcome::Indecisive(indecision) =
-        compare_relational_queries(&complement, &literal_true)
-    else {
-        panic!("nullable complement must remain indecisive");
-    };
-    assert_eq!(indecision.reason(), ReasonCode::IndMissingRewrite);
+    // The corpus witness above pins that a real Legend Pure engine keeps
+    // `x == 1 || x != 1` indecisive against `true` under three-valued null
+    // semantics. There is no in-process companion check for that scenario:
+    // `||` has no lowering producer (see `ScalarOperator`'s rustdoc), so a
+    // hand-built `Or` predicate would exercise IR the pipeline can never
+    // actually construct.
 }
 
 #[test]

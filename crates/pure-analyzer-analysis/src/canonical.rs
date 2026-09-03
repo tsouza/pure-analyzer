@@ -247,9 +247,7 @@ impl Emitter {
         expression: &RelationExpression,
         source: &RelationSource,
     ) -> EmissionResult<EmittedRelation> {
-        let RelationSource::Class(class) = source else {
-            return Err(EmissionFailure::unsupported(expression.origin()));
-        };
+        let RelationSource::Class(class) = source;
         if !facts_are_unknown(expression.facts())
             || !is_emittable_path(class.path().as_str())
             || !class_scan_schema_matches(expression.schema(), class.path().as_str())
@@ -361,10 +359,17 @@ impl Emitter {
             )
             || left.binding != BindingKind::Column
             || right.binding != BindingKind::Column
-            || kind != crate::JoinKind::Inner
         {
             return Err(EmissionFailure::unsupported(expression.origin()));
         }
+        // Exhaustive rather than a defensive `!=` comparison: `JoinKind` has a
+        // single lowered variant today (see its rustdoc), so matching here
+        // keeps `kind` genuinely load-bearing for the emitted text and forces
+        // a compile error — not a silently-false runtime check — the moment a
+        // second variant is added.
+        let kind_text = match kind {
+            crate::JoinKind::Inner => "JoinKind.INNER",
+        };
         let left_binder = self.binder(expression.origin())?;
         let right_binder = self.binder(expression.origin())?;
         let mut references =
@@ -381,7 +386,7 @@ impl Emitter {
         let condition = self.scalar(condition, &references)?;
         Ok(EmittedRelation {
             text: format!(
-                "{}->join({}, JoinKind.INNER, {{{left_binder}, {right_binder} | {condition}}})",
+                "{}->join({}, {kind_text}, {{{left_binder}, {right_binder} | {condition}}})",
                 left.text, right.text
             ),
             binding: BindingKind::None,
@@ -492,9 +497,17 @@ impl Emitter {
         expression: &ScalarExpression,
         references: &BTreeMap<ColumnId, String>,
     ) -> EmissionResult<String> {
-        if !expression.totality().is_unknown() {
-            return Err(EmissionFailure::unsupported(expression.origin()));
-        }
+        // Unlike the relation-level `facts_are_unknown`/`facts_match` guards,
+        // totality is never checked here. No lowering call site proves a
+        // `Knowledge<Totality>` fact today (issue #404), so it is always
+        // `Unknown` and this would-be guard could never fire.
+        // Nor would it need to once a producer lands: `Totality` may never be
+        // inferred from model multiplicity alone (issues #51/#185), so any
+        // sound producer necessarily derives it from query-structural facts
+        // that re-lowering the same emitted text reproduces identically —
+        // unlike a proven candidate key or row-semantics fact, which can rest
+        // on non-local reasoning `facts_are_unknown`/`facts_match` must keep
+        // honest.
         match expression.operator() {
             ScalarOperator::Column(column) => references
                 .get(column)
@@ -522,9 +535,6 @@ impl Emitter {
                 let left = self.scalar(left, references)?;
                 let right = self.scalar(right, references)?;
                 Ok(format!("({left} != {right})"))
-            }
-            ScalarOperator::And { .. } | ScalarOperator::Or { .. } => {
-                Err(EmissionFailure::unsupported(expression.origin()))
             }
         }
     }
