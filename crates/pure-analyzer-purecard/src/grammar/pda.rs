@@ -257,23 +257,24 @@ pub enum State {
     /// typed-binder colon (`row: …[1]`) or the first `:` of a `::` classpath
     /// separator; a classpath identifier or a second `:` must follow.
     AfterColon,
-    /// Just consumed a single `:` off **any other completed term**. Identical to
-    /// [`AfterColon`](State::AfterColon) except that the `::` classpath separator
-    /// is not among its continuations: a package path is spelled from a bare word
-    /// or a quoted one, never off a call's `)`, a `]`, a number, a date, a
-    /// `$`-variable or a navigated member. Live-attested both ways —
-    /// `…!=mpg::getInteger`, `…!=meta::pure::tds::TDSRow` and
-    /// `…!='europe'::makeId` parse, while `…!=f()::a`, `…!=[1]::a`, `…!=1::a`,
-    /// `…!=$x::a`, `…!=$x.foo::a` and `…!=x->getInteger()::a` are each "no viable
-    /// alternative at input '…::'". The typed-binder arms stay, because arm-R's
-    /// second column colon legitimately follows a completed navigation
-    /// (`~'Agg': x|$x.v : y|$y->sum()`).
+    /// Just consumed a single `:` off **any other completed term** — the *only*
+    /// legitimate reading is arm-R's second column colon, `relAggSpec`'s
+    /// `mapLambda ":" reduceLambda` / `winAggSpec`'s `frameLambda ":"
+    /// reduceLambda` separator (`~'Agg': x|$x.v : `**`y|$y->sum()`**), reached
+    /// once the map/frame lambda's own body value has fully completed (the
+    /// completed-value hub's own `:` arm, gated on holding a lambda slot).
+    /// Every *other* typed-binder colon in the grammar (`row: …[1]|…`, a
+    /// brace lambda's own binders) is spelled off a bare **name**, never a
+    /// completed value — a term-start name's and a string literal's own `:`
+    /// arms route there directly into [`AfterColon`](State::AfterColon),
+    /// which this state never shares.
     ///
-    /// Those binder arms are all this state has left, so it is only *entered*
-    /// where one of them can fire — where a call/collection/group/brace-lambda
-    /// frame is open. With no binder slot the colon has no reading at all and
-    /// dies on the colon itself, at the completed-term hub, rather than reaching
-    /// a configuration from which every byte is dead.
+    /// `reduceLambda`'s own `binderVar` is, like every other arm-R lambda's
+    /// (`docs/spec/grammar.md` §5.3), always a *bare* identifier — never a
+    /// typed one — so unlike `AfterColon` this position admits only a bare
+    /// binder identifier (opening at
+    /// [`InRelAggReduceBinder`](State::InRelAggReduceBinder)), never a `::`
+    /// classpath, a `[` multiplicity, or a `{` brace lambda (issue #372).
     AfterValueColon,
     /// Just consumed the second `:` of a `::` classpath separator; a classpath
     /// identifier must follow. A third `:` is a dead state — `:::` is never valid.
@@ -470,6 +471,24 @@ pub enum State {
     /// complete query either, exactly as the live engine's own grammar requires
     /// the call.
     AfterArrowName,
+    /// arm-R's *second* colon — a `relAggSpec`/`winAggSpec`'s own
+    /// `reduceLambda` binder identifier, reached from
+    /// [`AfterValueColon`](State::AfterValueColon)
+    /// (`mapLambda ":" `**`y`**`|…`). Distinct from
+    /// [`InRelColLambdaBinder`](State::InRelColLambdaBinder) — the *first*
+    /// arm-R colon's own binder (issue #368) — because it opens off a
+    /// completed *value*, not a completed column name; it closes at
+    /// [`AfterRelAggReduceBinder`](State::AfterRelAggReduceBinder), which
+    /// admits only the pipe that opens `reduceLambda`'s body, never the
+    /// `::`/`[`/`{` that would make it a typed or brace-lambda binder (issue
+    /// #372).
+    InRelAggReduceBinder,
+    /// A completed `reduceLambda` binder
+    /// ([`InRelAggReduceBinder`](State::InRelAggReduceBinder)): only
+    /// whitespace or the binder's own pipe may follow — live-attested,
+    /// `groupBy(~[a], ~'s': x|$x.a : y::Integer[1]|$y->sum())` is "no viable
+    /// alternative" right past the second colon (issue #372).
+    AfterRelAggReduceBinder,
 }
 
 impl State {
@@ -569,6 +588,8 @@ impl State {
             State::AfterRelColLambdaBinder => "AfterRelColLambdaBinder",
             State::InArrowIdent => "InArrowIdent",
             State::AfterArrowName => "AfterArrowName",
+            State::InRelAggReduceBinder => "InRelAggReduceBinder",
+            State::AfterRelAggReduceBinder => "AfterRelAggReduceBinder",
         }
     }
 
@@ -672,13 +693,15 @@ impl State {
             State::AfterRelColLambdaBinder => 85,
             State::InArrowIdent => 86,
             State::AfterArrowName => 87,
+            State::InRelAggReduceBinder => 88,
+            State::AfterRelAggReduceBinder => 89,
         }
     }
 
     /// The number of distinct automaton states — the length a per-state cache
     /// (`Vec<_>` keyed by [`index`](State::index)) must have. One more than the
     /// largest [`index`](State::index).
-    pub const COUNT: usize = 88;
+    pub const COUNT: usize = 90;
 
     /// Whether this state is a **completed-term hub** — an inter-lexeme position
     /// the automaton reaches by finishing a term, whichever kind of term it was.
@@ -762,7 +785,8 @@ impl State {
             | State::LetLet
             | State::InRelColIdent
             | State::InRelColLambdaBinder
-            | State::InArrowIdent => Some(LexKind::Ident),
+            | State::InArrowIdent
+            | State::InRelAggReduceBinder => Some(LexKind::Ident),
             State::SawNumSign
             | State::InNumberInt
             | State::NeedFracDigit
@@ -1420,6 +1444,48 @@ fn step_after_rel_col_lambda_binder(byte: u8) -> Step {
     }
 }
 
+// arm-R's *second* colon — a `relAggSpec`/`winAggSpec`'s own
+// `mapLambda ":" reduceLambda` / `frameLambda ":" reduceLambda` separator,
+// reached at `AfterValueColon` once the map/frame lambda's own body value has
+// fully completed (`step_after_value`'s `:` arm). Unlike the generic
+// [`step_after_colon`] this shared state used to delegate to, `reduceLambda`'s
+// own `binderVar` (`docs/spec/grammar.md` §5.3) is always a *bare*
+// identifier, never a typed one and never a brace lambda — so this position
+// may only open a bare binder identifier (`InRelAggReduceBinder`), never the
+// `::` classpath, `[` multiplicity, or `{` brace form a typed/aggregation
+// binder's colon admits elsewhere. Live-attested:
+// `groupBy(~[a], ~'s': x|$x.a : y::Integer[1]|$y->sum())` is "no viable
+// alternative" right past the colon (issue #372).
+fn step_after_value_colon(byte: u8) -> Step {
+    match byte {
+        b if is_ws(b) => Step::Next(State::AfterValueColon),
+        b if is_ident_start(b) => Step::Next(State::InRelAggReduceBinder),
+        _ => Step::Dead,
+    }
+}
+
+// `reduceLambda`'s own binder identifier (`mapLambda : `**`y`**`|…`). Unlike
+// `InBinderType` this name owes nothing but its own pipe: no `::` classpath,
+// no `[` multiplicity, no `{` brace — arm-R's `reduceLambda` binderVar is
+// always bare (issue #372).
+fn step_in_rel_agg_reduce_binder(byte: u8) -> Step {
+    if is_ident_tail(byte) {
+        Step::Next(State::InRelAggReduceBinder)
+    } else {
+        step_after_rel_agg_reduce_binder(byte)
+    }
+}
+
+// A completed `reduceLambda` binder: only whitespace or its own pipe may
+// follow — never the `::`/`[` that would make it a typed binder (issue #372).
+fn step_after_rel_agg_reduce_binder(byte: u8) -> Step {
+    match byte {
+        b if is_ws(b) => Step::Next(State::AfterRelAggReduceBinder),
+        b'|' => Step::Next(State::SawPipe),
+        _ => Step::Dead,
+    }
+}
+
 // The shared body of the two "identifier read as a `let`-value candidate
 // source" states. `allow_call` distinguishes
 // [`State::InBinderValueIdent`] (a `let` binder's value, whose grammar is
@@ -1836,20 +1902,6 @@ fn step_after_colon(stack_top: Option<Frame>, byte: u8) -> Step {
     }
 }
 
-// The same `:` off any *other* completed term — a call's `)`, a `]`, a number, a
-// date, a `$`-variable or a navigated member. A `::` names a package path, and a
-// package path is spelled from a bare word or a quoted one, so that one arm is
-// withdrawn and everything else [`step_after_colon`] admits stays: arm-R's second
-// column colon legitimately follows a completed navigation
-// (`~'Agg': x|$x.v : y|$y->sum()`).
-fn step_after_value_colon(stack_top: Option<Frame>, byte: u8) -> Step {
-    if byte == b':' {
-        Step::Dead
-    } else {
-        step_after_colon(stack_top, byte)
-    }
-}
-
 fn step_after_colon_ws(byte: u8) -> Step {
     match byte {
         b if is_ws(b) => Step::Next(State::AfterColonWs),
@@ -2152,7 +2204,7 @@ pub fn step(state: State, stack_top: Option<Frame>, byte: u8) -> Step {
         State::AfterDot => step_after_dot(byte),
         State::AfterArrow => step_after_arrow(byte),
         State::AfterColon => step_after_colon(stack_top, byte),
-        State::AfterValueColon => step_after_value_colon(stack_top, byte),
+        State::AfterValueColon => step_after_value_colon(byte),
         State::AfterColon2 => step_after_colon2(byte),
         State::InBinderType => step_in_binder_type(byte),
         State::AfterBinderType => step_after_binder_type(byte),
@@ -2184,6 +2236,8 @@ pub fn step(state: State, stack_top: Option<Frame>, byte: u8) -> Step {
         State::AfterRelColLambdaBinder => step_after_rel_col_lambda_binder(byte),
         State::InArrowIdent => step_in_arrow_ident(stack_top, byte),
         State::AfterArrowName => step_after_arrow_name(byte),
+        State::InRelAggReduceBinder => step_in_rel_agg_reduce_binder(byte),
+        State::AfterRelAggReduceBinder => step_after_rel_agg_reduce_binder(byte),
     }
 }
 
@@ -2522,6 +2576,8 @@ pub const ALL_STATES: [State; State::COUNT] = [
     State::AfterRelColLambdaBinder,
     State::InArrowIdent,
     State::AfterArrowName,
+    State::InRelAggReduceBinder,
+    State::AfterRelAggReduceBinder,
 ];
 
 #[cfg(test)]
@@ -3789,6 +3845,69 @@ mod tests {
         // still legitimately opens.
         assert!(accepts(
             "|t::A.all()->project(~[a: x|$x.a, k: x|$x.k])->extend(over(~k), ~[agg: {p,w,r|$r.a}])"
+        ));
+    }
+
+    #[test]
+    fn a_rel_agg_second_colon_admits_only_a_bare_binder_never_a_typed_one() {
+        // Issue #372: arm-R's *second* colon — `relAggSpec`/`winAggSpec`'s own
+        // `mapLambda ":" reduceLambda` / `frameLambda ":" reduceLambda`
+        // separator — is reached off a *completed value* (`step_after_value`'s
+        // `:` arm, `AfterValueColon`), not `AfterRelColName`, so issue #368's
+        // fix at the *first* colon never touched it. `reduceLambda`'s own
+        // `binderVar` is likewise always a *bare* identifier (§5.3) — never a
+        // typed one — so a typed continuation here is equally illegal. The
+        // issue's own witness, `relAggSpec` inside `groupBy`:
+        assert!(dies(
+            "|t::A.all()->project(~[a: x|$x.a])->groupBy(~[a], ~'s': x|$x.a : y::Integer[1]|$y->sum())"
+        ));
+        // Dead at the `::` itself, before the multiplicity bracket even
+        // matters — the classpath continuation is what kills it, exactly as
+        // issue #368 found at the first colon.
+        assert!(dies(
+            "|t::A.all()->project(~[a: x|$x.a])->groupBy(~[a], ~'s': x|$x.a : y::Integer|$y->sum())"
+        ));
+        // The same shape at `winAggSpec` — `extend`'s frame-lambda aggregate,
+        // whose second colon is reached with `RelColBracket` at `stack_top`
+        // rather than `groupBy`'s `Paren`, confirming both routes into the
+        // same single-entry-point `AfterValueColon` state are closed.
+        assert!(dies(
+            "|t::A.all()->project(~[a: x|$x.a])->extend(over(~a), ~[agg: {p,w,r|$r.a} : y::Integer[1]|$y->sum()])"
+        ));
+        // A multiplicity with no `$` on the reduce body — still typed, still
+        // dead at the same `::` byte.
+        assert!(dies(
+            "|t::A.all()->project(~[a: x|$x.a])->groupBy(~[a], ~'s': x|$x.a : y::Integer[1]|y->sum())"
+        ));
+
+        // The legitimate bare-binder `reduceLambda` shape stays admitted —
+        // both at `relAggSpec` (`groupBy`) and `winAggSpec` (`extend`), the
+        // two constructs `arm_r_relation_api_accepts` already pins as
+        // `accepts(...)`.
+        assert!(accepts(
+            "|X.all()->groupBy(~[K], ~'Agg': x|$x.v : y|$y->sum())"
+        ));
+        assert!(accepts(
+            "|X.all()->project(~[N: x|$x.a])->extend(over(~N), ~[agg: {p,w,r|$r.v} : y|$y->sum()])"
+        ));
+
+        // Every OTHER typed-binder position — reached off a completed *name*
+        // (`AfterName`'s own `:` arm, `AfterColon`), never off a completed
+        // *value* (`AfterValueColon`) — is untouched by this narrowing.
+        // A generic Pure typed binder:
+        assert!(accepts(
+            "|t::A.all()->filter(row: meta::pure::tds::TDSRow[1]|$row.getInteger('c') == 1)"
+        ));
+        // A join brace-lambda's own two typed binders:
+        assert!(accepts(concat!(
+            "|t::A.all()->join(t::B.all(), JoinType.INNER, ",
+            "{r1: meta::pure::tds::TDSRow[1], r2: meta::pure::tds::TDSRow[1]|",
+            "$r1.getInteger('a') == $r2.getInteger('a')})"
+        )));
+        // arm-R's own *first* colon (issue #368's fix) still admits only a
+        // bare binder, unaffected by this second-colon narrowing.
+        assert!(dies(
+            "|t::A.all()->project(~[a: x|$x.a, k: x|$x.k])->extend(over(~[k: t::A[*]|$k.k]), ~[b: r|$r.a])"
         ));
     }
 
