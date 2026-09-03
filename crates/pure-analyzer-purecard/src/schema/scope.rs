@@ -1694,23 +1694,18 @@ impl ScopeTracker {
             // default for it (§4: pass through what the corpus does not
             // attest).
             //
-            // `AfterValueColon` joins the same arm for the identical reason
-            // (issue #377): a winAggSpec/relAggSpec reducer's own colon
-            // (`{p,w,r|…}:y|…`, `mapLambda ":" reduceLambda`) is `step_after_value`'s
-            // `:` arm, reached whenever the colon follows a *completed value*
-            // rather than a bare name — the same production the `groupBy`/`over`
-            // corpus already streams through when whitespace splits the colon
-            // from its binder (`… : y|…`, landing on `AfterColonWs` instead, since
-            // whitespace is `AfterValueColon`'s own self-loop). With no
-            // intervening whitespace (`}:y|…`), `AfterValueColon` is itself the
-            // `pre_state` this identifier arrives at. Both states are a colon off
-            // a completed value/name inside an open lambda slot, disambiguated by
-            // `step_after_colon` identically (issue #372 narrows what *L1*
-            // additionally over-admits there; it does not change which state
-            // this arm needs to treat the same way). Without this arm the
-            // reducer's own binder was never recorded, so `$y` in its body was
-            // masked as an unbound sigil (S2) even though L1 already admits it.
-            State::AfterColon | State::AfterColonWs | State::AfterValueColon => {
+            // `AfterValueColon` — a winAggSpec/relAggSpec reducer's own
+            // no-whitespace colon (`{p,w,r|…}:y|…`, issue #377) — does
+            // *not* join this arm, even though it used to need the same
+            // type-vs-binder disambiguation before issue #372 narrowed what
+            // L1 admits there. Its own dedicated arm below now runs
+            // unconditionally, because L1 no longer lets *anything* but a
+            // bare binder reach it: sharing this arm's `PrimName`/
+            // `schema.has_class` checks would misfire and swallow a
+            // real reducer binder that happened to share a primitive's or a
+            // schema class's name (`y` in `~[m: {..}: `**`Integer`**`|
+            // $Integer->sum()]`, a legal — if perverse — Pure identifier).
+            State::AfterColon | State::AfterColonWs => {
                 if let Some(prim) = PrimName::from_ident(text) {
                     if let Some(binder) = &self.lambda_first_ident {
                         self.pending_binder_element = Some((binder.clone(), prim.type_class()));
