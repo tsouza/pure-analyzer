@@ -38,24 +38,12 @@ pub enum DiagCode {
     /// `PUR2002`: a closed-world source class has no such property.
     #[serde(rename = "PUR2002")]
     UnknownProperty,
-    /// `PUR2003`: statically known multiplicity and usage cardinality disagree.
-    #[serde(rename = "PUR2003")]
-    CardinalityMisuse,
-    /// `PUR2100`: the model loader synthesized a generated qualified property.
-    #[serde(rename = "PUR2100")]
-    DerivedQualifiedProperty,
     /// `PUR2101`: local inference cannot determine the navigation source.
     #[serde(rename = "PUR2101")]
     UnknownSource,
-    /// `PUR3001`: an equivalence or difference verdict.
-    #[serde(rename = "PUR3001")]
-    EquivalenceVerdict,
     /// `PUR9000`: later model input replaces an earlier definition.
     #[serde(rename = "PUR9000")]
     ModelMergeConflict,
-    /// `PUR9001`: a command requires a model but none was supplied.
-    #[serde(rename = "PUR9001")]
-    ModelRequired,
     /// `PUR9002`: one model source declares the same fact more than once.
     #[serde(rename = "PUR9002")]
     DuplicateModelDeclaration,
@@ -75,12 +63,8 @@ pub const ALL_DIAG_CODES: &[DiagCode] = &[
     DiagCode::UnknownJoinKind,
     DiagCode::WrongMilestoningArity,
     DiagCode::UnknownProperty,
-    DiagCode::CardinalityMisuse,
-    DiagCode::DerivedQualifiedProperty,
     DiagCode::UnknownSource,
-    DiagCode::EquivalenceVerdict,
     DiagCode::ModelMergeConflict,
-    DiagCode::ModelRequired,
     DiagCode::DuplicateModelDeclaration,
     DiagCode::UnresolvedModelAssociation,
 ];
@@ -99,12 +83,8 @@ impl DiagCode {
             Self::UnknownJoinKind => "PUR1210",
             Self::WrongMilestoningArity => "PUR2001",
             Self::UnknownProperty => "PUR2002",
-            Self::CardinalityMisuse => "PUR2003",
-            Self::DerivedQualifiedProperty => "PUR2100",
             Self::UnknownSource => "PUR2101",
-            Self::EquivalenceVerdict => "PUR3001",
             Self::ModelMergeConflict => "PUR9000",
-            Self::ModelRequired => "PUR9001",
             Self::DuplicateModelDeclaration => "PUR9002",
             Self::UnresolvedModelAssociation => "PUR9003",
         }
@@ -120,14 +100,10 @@ impl DiagCode {
             | Self::IllegalBracketIndex
             | Self::MalformedMilestoningArguments
             | Self::UnknownJoinKind => DiagFamily::Parser,
-            Self::WrongMilestoningArity
-            | Self::UnknownProperty
-            | Self::CardinalityMisuse
-            | Self::DerivedQualifiedProperty
-            | Self::UnknownSource => DiagFamily::Lint,
-            Self::EquivalenceVerdict => DiagFamily::Equivalence,
+            Self::WrongMilestoningArity | Self::UnknownProperty | Self::UnknownSource => {
+                DiagFamily::Lint
+            }
             Self::ModelMergeConflict
-            | Self::ModelRequired
             | Self::DuplicateModelDeclaration
             | Self::UnresolvedModelAssociation => DiagFamily::Tool,
         }
@@ -169,8 +145,6 @@ pub enum DiagFamily {
     Parser,
     /// Resolution and lint diagnostics (`PUR2xxx`).
     Lint,
-    /// Equivalence and difference verdicts (`PUR3xxx`).
-    Equivalence,
     /// Tool, configuration, and model diagnostics (`PUR9xxx`).
     Tool,
 }
@@ -223,20 +197,8 @@ mod tests {
             (DiagCode::UnknownJoinKind, "PUR1210", DiagFamily::Parser),
             (DiagCode::WrongMilestoningArity, "PUR2001", DiagFamily::Lint),
             (DiagCode::UnknownProperty, "PUR2002", DiagFamily::Lint),
-            (DiagCode::CardinalityMisuse, "PUR2003", DiagFamily::Lint),
-            (
-                DiagCode::DerivedQualifiedProperty,
-                "PUR2100",
-                DiagFamily::Lint,
-            ),
             (DiagCode::UnknownSource, "PUR2101", DiagFamily::Lint),
-            (
-                DiagCode::EquivalenceVerdict,
-                "PUR3001",
-                DiagFamily::Equivalence,
-            ),
             (DiagCode::ModelMergeConflict, "PUR9000", DiagFamily::Tool),
-            (DiagCode::ModelRequired, "PUR9001", DiagFamily::Tool),
             (
                 DiagCode::DuplicateModelDeclaration,
                 "PUR9002",
@@ -289,7 +251,6 @@ mod tests {
                 DiagFamily::Lexer => b'0',
                 DiagFamily::Parser => b'1',
                 DiagFamily::Lint => b'2',
-                DiagFamily::Equivalence => b'3',
                 DiagFamily::Tool => b'9',
             };
             assert_eq!(code.as_str().as_bytes()[3], expected_digit);

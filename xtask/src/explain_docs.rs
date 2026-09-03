@@ -32,26 +32,20 @@ struct M4aExplainExample {
 }
 
 /// The deliberately small, independently verified M4a explain set.
-const M4A_EXPLAIN_EXAMPLES: &[M4aExplainExample] = &[
-    M4aExplainExample {
-        corpus_id: "literal-true-filter-is-equivalent",
-        expected_outcome: "equivalent",
-        expected_reason: None,
-        explain_identifiers: &["PUR3001"],
-    },
-    M4aExplainExample {
-        corpus_id: "ordered-project-schema-is-not-equivalent",
-        expected_outcome: "not_equivalent",
-        expected_reason: None,
-        explain_identifiers: &["PUR3001"],
-    },
-    M4aExplainExample {
-        corpus_id: "different-literal-filters-remain-indecisive",
-        expected_outcome: "indecisive",
-        expected_reason: Some("IND_MISSING_REWRITE"),
-        explain_identifiers: &["PUR3001", "IND_MISSING_REWRITE"],
-    },
-];
+///
+/// Only indecisive examples are linkable here: a decisive `equivalent` or
+/// `not_equivalent` outcome has no registered explain identifier of its own
+/// (`DiagCode::EquivalenceVerdict`/`PUR3001` was removed — see issue #287 —
+/// because `eq`/`diff` never actually attaches it to a `Diagnostic`; the
+/// verdict itself is fully covered by `docs/pure-analyzer.md`'s `eq`
+/// reference and the executable M4a corpus). An indecisive result still has
+/// a registered, genuinely producer-backed reason identifier to link.
+const M4A_EXPLAIN_EXAMPLES: &[M4aExplainExample] = &[M4aExplainExample {
+    corpus_id: "different-literal-filters-remain-indecisive",
+    expected_outcome: "indecisive",
+    expected_reason: Some("IND_MISSING_REWRITE"),
+    explain_identifiers: &["IND_MISSING_REWRITE"],
+}];
 
 /// A corpus-backed example with its current one-based source line.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -494,28 +488,6 @@ mod tests {
             }
         }
 
-        let verdict_page = documents
-            .get(&Path::new(EXPLAIN_DIRECTORY).join("PUR3001.md"))
-            .expect("equivalence verdict page exists");
-        assert_eq!(
-            verdict_page
-                .matches("verified `equivalent` verdict")
-                .count(),
-            1
-        );
-        assert_eq!(
-            verdict_page
-                .matches("verified `not_equivalent` verdict")
-                .count(),
-            1
-        );
-        assert_eq!(
-            verdict_page
-                .matches("verified `indecisive` verdict")
-                .count(),
-            1
-        );
-
         let missing_rewrite_page = documents
             .get(&Path::new(EXPLAIN_DIRECTORY).join("IND_MISSING_REWRITE.md"))
             .expect("missing rewrite page exists");
@@ -531,7 +503,7 @@ mod tests {
             corpus_id: "different-literal-filters-remain-indecisive",
             expected_outcome: "indecisive",
             expected_reason: Some("IND_MISSING_REWRITE"),
-            explain_identifiers: &["PUR3001", "IND_MISSING_REWRITE", "IND_UNMODELED_OP"],
+            explain_identifiers: &["PUR2002", "IND_MISSING_REWRITE", "IND_UNMODELED_OP"],
         }];
         let error = validate_m4a_example_identifiers(&contents, &foreign_reason)
             .expect_err("a reason page must not advertise another reason's result");
@@ -542,7 +514,7 @@ mod tests {
             corpus_id: "different-literal-filters-remain-indecisive",
             expected_outcome: "indecisive",
             expected_reason: Some("IND_MISSING_REWRITE"),
-            explain_identifiers: &["PUR3001"],
+            explain_identifiers: &["PUR2002"],
         }];
         let error = validate_m4a_example_identifiers(&contents, &unlinked_reason)
             .expect_err("a verified reason must link its own page");
@@ -559,21 +531,21 @@ mod tests {
             .expect("read committed M4a comparison corpus");
 
         let contradictory_outcome = corpus.replacen(
+            "\"outcome\":\"indecisive\"",
             "\"outcome\":\"equivalent\"",
-            "\"outcome\":\"not_equivalent\"",
             1,
         );
         let outcome_error = resolve_m4a_explain_examples_from_corpus(&contradictory_outcome)
-            .expect_err("contradictory equivalent fixture must be rejected");
+            .expect_err("contradictory indecisive fixture must be rejected");
         assert!(
             outcome_error
                 .to_string()
-                .contains("literal-true-filter-is-equivalent")
+                .contains("different-literal-filters-remain-indecisive")
         );
         assert!(
             outcome_error
                 .to_string()
-                .contains("expected \"equivalent\"")
+                .contains("expected \"indecisive\"")
         );
 
         let contradictory_reason = corpus.replacen(
@@ -600,19 +572,21 @@ mod tests {
         let root = repository_root().expect("test runs inside the repository");
         let expected = expected_documents(&root).expect("verified corpus renders explain pages");
         let mut actual = expected.clone();
-        let verdict_page = Path::new(EXPLAIN_DIRECTORY).join("PUR3001.md");
+        let verdict_page = Path::new(EXPLAIN_DIRECTORY).join("IND_MISSING_REWRITE.md");
         let stale = actual
             .get_mut(&verdict_page)
-            .expect("equivalence verdict page exists");
+            .expect("missing-rewrite reason page exists");
         *stale = stale.replacen(
-            "verified `equivalent` verdict",
+            "verified `indecisive` verdict",
             "verified `not_equivalent` verdict",
             1,
         );
 
         assert_eq!(
             document_problems(&expected, &actual),
-            ["reference page docs/explain/PUR3001.md differs from the shared explain catalog"]
+            [
+                "reference page docs/explain/IND_MISSING_REWRITE.md differs from the shared explain catalog"
+            ]
         );
     }
 

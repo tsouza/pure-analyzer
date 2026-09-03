@@ -41,8 +41,6 @@ pub enum ExplainClassification {
     Parser,
     /// Resolution and lint diagnostics.
     Lint,
-    /// Equivalence and difference verdict diagnostics.
-    Equivalence,
     /// Tool, configuration, and model diagnostics.
     Tool,
     /// A soundness boundary, not an input error.
@@ -59,7 +57,6 @@ impl ExplainClassification {
             Self::Lexer => "lexer",
             Self::Parser => "parser",
             Self::Lint => "lint",
-            Self::Equivalence => "equivalence",
             Self::Tool => "tool",
             Self::Fundamental => "fundamental",
             Self::Recoverable => "recoverable",
@@ -207,24 +204,6 @@ explain_content!(
     "Correct the property name or load the model that defines it."
 );
 explain_content!(
-    PUR2003,
-    "PUR2003",
-    Diagnostic,
-    Lint,
-    "Statically known navigation multiplicity disagrees with how a value is consumed.",
-    "The analyzer reports only determinate declared multiplicity and usage cardinality; it does not guess from data flow.",
-    "Remove a redundant cardinality conversion or make the consumer handle a collection."
-);
-explain_content!(
-    PUR2100,
-    "PUR2100",
-    Diagnostic,
-    Lint,
-    "The model loader synthesized a generated qualified property while normalizing model input.",
-    "This is informational model normalization, not a source-program error or runtime availability guarantee.",
-    "No source edit is required; supply an explicit model definition when that is preferred."
-);
-explain_content!(
     PUR2101,
     "PUR2101",
     Diagnostic,
@@ -234,15 +213,6 @@ explain_content!(
     "Make the source type available through a model or a simpler local binding."
 );
 explain_content!(
-    PUR3001,
-    "PUR3001",
-    Diagnostic,
-    Equivalence,
-    "An eq or diff run reports an equivalent, not-equivalent, or indecisive verdict.",
-    "An indecisive verdict is neither proof of equivalence nor a query error.",
-    "Use the attached reason identifier to understand the available next step."
-);
-explain_content!(
     PUR9000,
     "PUR9000",
     Diagnostic,
@@ -250,15 +220,6 @@ explain_content!(
     "A later model input replaces an earlier definition with the same identity.",
     "This reports input composition; it does not determine whether either definition is semantically correct.",
     "Reconcile duplicate definitions or provide one authoritative model input."
-);
-explain_content!(
-    PUR9001,
-    "PUR9001",
-    Diagnostic,
-    Tool,
-    "A command that requires model facts was invoked without a model.",
-    "This is a command or configuration condition, not a finding about the query text.",
-    "Pass the required model input or choose a model-free command."
 );
 explain_content!(
     PUR9002,
@@ -466,12 +427,8 @@ pub(crate) fn diagnostic_explanation(code: DiagCode) -> &'static ExplainContent 
         DiagCode::UnknownJoinKind => &PUR1210,
         DiagCode::WrongMilestoningArity => &PUR2001,
         DiagCode::UnknownProperty => &PUR2002,
-        DiagCode::CardinalityMisuse => &PUR2003,
-        DiagCode::DerivedQualifiedProperty => &PUR2100,
         DiagCode::UnknownSource => &PUR2101,
-        DiagCode::EquivalenceVerdict => &PUR3001,
         DiagCode::ModelMergeConflict => &PUR9000,
-        DiagCode::ModelRequired => &PUR9001,
         DiagCode::DuplicateModelDeclaration => &PUR9002,
         DiagCode::UnresolvedModelAssociation => &PUR9003,
     }
@@ -512,7 +469,6 @@ mod tests {
             DiagFamily::Lexer => ExplainClassification::Lexer,
             DiagFamily::Parser => ExplainClassification::Parser,
             DiagFamily::Lint => ExplainClassification::Lint,
-            DiagFamily::Equivalence => ExplainClassification::Equivalence,
             DiagFamily::Tool => ExplainClassification::Tool,
         }
     }
