@@ -1,6 +1,6 @@
 //! Deterministic terminal-oriented diagnostic rendering.
 
-use pure_analyzer_diagnostics::{Applicability, FixProvenance, Severity, Verdict};
+use pure_analyzer_diagnostics::{Applicability, FixProvenance, Severity};
 
 use crate::{
     HumanOptions, RenderError, RenderInput,
@@ -65,11 +65,6 @@ fn append_diagnostic(output: &mut String, diagnostic: &PreparedDiagnostic<'_>, c
         for edit in &fix.edits {
             append_edit(output, edit);
         }
-    }
-    if let Some(verdict) = &diagnostic.diagnostic.verdict {
-        output.push_str("    = verdict: ");
-        append_verdict_name(output, verdict);
-        output.push('\n');
     }
     if let Some(reason) = diagnostic.diagnostic.reason {
         output.push_str("    = reason: ");
@@ -193,17 +188,6 @@ const fn provenance_name(provenance: FixProvenance) -> &'static str {
         FixProvenance::SyntaxOnly => "syntax_only",
         FixProvenance::ModelDependent => "model_dependent",
         FixProvenance::SingleArityProven => "single_arity_proven",
-    }
-}
-
-fn append_verdict_name(output: &mut String, verdict: &Verdict) {
-    match verdict {
-        Verdict::Equivalent => output.push_str("equivalent"),
-        Verdict::NotEquivalent { witness } => {
-            output.push_str("not_equivalent; witness: ");
-            append_terminal_text(output, witness);
-        }
-        Verdict::Indecisive => output.push_str("indecisive"),
     }
 }
 

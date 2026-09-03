@@ -4,8 +4,8 @@
 //! The shared `Diagnostic` model.
 //!
 //! Every pass in the analysis engine — the parser's syntax errors, `lint`'s
-//! milestoning-arity findings, `eq`'s verdicts — emits [`Diagnostic`] values
-//! and nothing else. This crate defines that shape and **no renderer**;
+//! milestoning-arity findings — emits [`Diagnostic`] values and nothing else.
+//! This crate defines that shape and **no renderer**;
 //! rendering belongs in front-end crates. Keeping this crate a leaf with a
 //! small, serializable shape keeps diagnostics independent of presentation.
 
@@ -27,4 +27,4 @@ pub use file::FileId;
 pub use fix::{Applicability, Fix, FixProvenance, TextEdit};
 pub use fix_plan::{FixPlan, FixPlanError, PlannedChange, PlannedFile};
 pub use text_size::{TextRange, TextSize};
-pub use verdict::{ALL_REASON_CODES, ReasonBucket, ReasonCode, UnknownReasonCode, Verdict};
+pub use verdict::{ALL_REASON_CODES, ReasonBucket, ReasonCode, UnknownReasonCode};

@@ -102,9 +102,10 @@ gold corpus, specialized tests, fuzz targets, and Python boundary.
 **What it is.** The analyzer output model used by every pass:
 a `code` (`PUR<nnnn>`), `severity`, `message`, a primary + secondary set of
 file/byte-range `Label`s, an optional structured `Fix` (span + replacement
-edits, never a rendered string), an optional `eq`/`diff` `Verdict`, and an
-optional `ReasonCode` explaining an `Indecisive` verdict or a downgrade under
-model under-resolution.
+edits, never a rendered string), and an optional `ReasonCode` explaining an
+`Indecisive` finding or a downgrade under model under-resolution. `eq`/`diff`
+themselves render their M4a `ComparisonOutcome` directly rather than through
+`Diagnostic`.
 
 **Invariants.** `Diagnostic` carries no renderer-specific state — no ANSI
 codes or protocol types. `code` is a closed `DiagCode` enum and `reason` is a
@@ -115,7 +116,7 @@ to renderers; boundary-facing code and reason parsers accept only exact
 registered identifiers.
 
 **Relationships.** Analyzer-only. It is produced by analyzer passes and carries
-parser, analysis, and verdict diagnostics without renderer-specific state.
+parser and analysis diagnostics without renderer-specific state.
 `Label.file`/`.span` use `FileId`/`TextRange` from this crate and `text-size`
 respectively.
 

@@ -5,7 +5,6 @@ use std::cmp::Ordering;
 use libpure::{LineColumn, SourceFile, SourceStore};
 use pure_analyzer_diagnostics::{
     Applicability, Diagnostic, FileId, Fix, FixProvenance, Label, Severity, TextEdit, TextRange,
-    Verdict,
 };
 
 use crate::{RenderError, RenderInput, SpanKind};
@@ -219,12 +218,6 @@ fn compare_diagnostics(left: &PreparedDiagnostic<'_>, right: &PreparedDiagnostic
         .then_with(|| left.diagnostic.message.cmp(&right.diagnostic.message))
         .then_with(|| compare_prepared_labels(&left.secondary, &right.secondary))
         .then_with(|| compare_prepared_fixes(left.fix.as_ref(), right.fix.as_ref()))
-        .then_with(|| {
-            compare_verdicts(
-                left.diagnostic.verdict.as_ref(),
-                right.diagnostic.verdict.as_ref(),
-            )
-        })
         .then_with(|| left.diagnostic.reason.cmp(&right.diagnostic.reason))
         .then_with(|| left.diagnostic.url.cmp(&right.diagnostic.url))
 }
@@ -304,28 +297,4 @@ fn compare_prepared_edit(left: &PreparedEdit<'_>, right: &PreparedEdit<'_>) -> O
         .cmp(&right.source.id())
         .then_with(|| compare_ranges(left.edit.span, right.edit.span))
         .then_with(|| left.edit.new_text.cmp(&right.edit.new_text))
-}
-
-fn compare_verdicts(left: Option<&Verdict>, right: Option<&Verdict>) -> Ordering {
-    match (left, right) {
-        (None, None) => Ordering::Equal,
-        (None, Some(_)) => Ordering::Less,
-        (Some(_), None) => Ordering::Greater,
-        (Some(left), Some(right)) => compare_verdict(left, right),
-    }
-}
-
-fn compare_verdict(left: &Verdict, right: &Verdict) -> Ordering {
-    match (left, right) {
-        (Verdict::Equivalent, Verdict::Equivalent) | (Verdict::Indecisive, Verdict::Indecisive) => {
-            Ordering::Equal
-        }
-        (Verdict::Equivalent, _) => Ordering::Less,
-        (_, Verdict::Equivalent) => Ordering::Greater,
-        (Verdict::NotEquivalent { witness: left }, Verdict::NotEquivalent { witness: right }) => {
-            left.cmp(right)
-        }
-        (Verdict::NotEquivalent { .. }, Verdict::Indecisive) => Ordering::Less,
-        (Verdict::Indecisive, Verdict::NotEquivalent { .. }) => Ordering::Greater,
-    }
 }

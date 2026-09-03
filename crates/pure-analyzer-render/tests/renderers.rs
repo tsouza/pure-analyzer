@@ -7,7 +7,7 @@ use std::{
 
 use pure_analyzer_diagnostics::{
     Applicability, DiagCode, Diagnostic, FileId, Fix, FixProvenance, Label, ReasonCode, Severity,
-    TextEdit, TextRange, Verdict,
+    TextEdit, TextRange,
 };
 use pure_analyzer_render::{
     ColorPolicy, HumanOptions, RenderError, RenderInput, SpanKind, render_human, render_json,
@@ -86,9 +86,6 @@ fn rich_diagnostic() -> Diagnostic {
         "declared here",
     ))
     .fix(fix)
-    .verdict(Verdict::NotEquivalent {
-        witness: "#>{db::T}#".to_owned(),
-    })
     .reason(ReasonCode::IndOpaquePredicate)
     .url("https://example.invalid/PUR2002?x=1&y=2")
     .build()
@@ -223,7 +220,6 @@ fn assert_human_contract(human: &str) {
     assert!(human.contains("secondary: declared here"));
     assert!(human.contains("replace the query symbol"));
     assert!(human.contains(r#"with "γ\n""#));
-    assert!(human.contains("not_equivalent; witness: #>{db::T}#"));
     assert!(human.contains("IND_OPAQUE_PREDICATE"));
     assert!(human.contains("docs: https://example.invalid/PUR2002?x=1&y=2"));
     assert!(human.contains("summary: 1 errors, 0 warnings, 0 info, 0 hints (1 total)"));
@@ -260,8 +256,6 @@ fn assert_json_fix_and_metadata(diagnostic: &Value) {
         (6, 1, 7),
     );
     assert_eq!(diagnostic["fix"]["edits"][0]["replacement"], "γ\n");
-    assert_eq!(diagnostic["verdict"]["verdict"], "not_equivalent");
-    assert_eq!(diagnostic["verdict"]["witness"], "#>{db::T}#");
     assert_eq!(diagnostic["reason"]["id"], "IND_OPAQUE_PREDICATE");
     assert_eq!(diagnostic["url"], "https://example.invalid/PUR2002?x=1&y=2");
 }
@@ -279,7 +273,7 @@ fn assert_sarif_contract(sarif: &str) {
 }
 
 #[test]
-fn sarif_emits_properties_for_a_reason_without_verdict_or_documentation() {
+fn sarif_emits_properties_for_a_reason_without_documentation() {
     let sources = fixture_sources();
     let diagnostics = vec![
         Diagnostic::builder(
@@ -297,7 +291,6 @@ fn sarif_emits_properties_for_a_reason_without_verdict_or_documentation() {
     let properties = &log["runs"][0]["results"][0]["properties"];
 
     assert_eq!(properties["reason"]["id"], "IND_OPAQUE_PREDICATE");
-    assert!(properties.get("verdict").is_none());
     assert!(properties.get("documentationUrl").is_none());
 }
 
@@ -364,7 +357,6 @@ fn assert_sarif_fix_and_metadata(result: &Value) {
         result["fixes"][0]["properties"]["provenance"],
         "single_arity_proven"
     );
-    assert_eq!(result["properties"]["verdict"]["verdict"], "not_equivalent");
     assert_eq!(result["properties"]["reason"]["id"], "IND_OPAQUE_PREDICATE");
     assert_eq!(
         result["properties"]["documentationUrl"],
@@ -944,9 +936,6 @@ fn terminal_control_fixture() -> (SourceStore, Vec<Diagnostic>) {
                 new_text: format!("replacement\"\\{TERMINAL_CONTROLS}"),
             }],
         ))
-        .verdict(Verdict::NotEquivalent {
-            witness: format!("witness{TERMINAL_CONTROLS}"),
-        })
         .url(format!("https://example.invalid/{TERMINAL_CONTROLS}"))
         .build(),
     ];
@@ -966,9 +955,6 @@ fn assert_plain_human_output_escapes_terminal_controls(plain: &str) {
     assert!(plain.contains(&format!("= fix: fix{ESCAPED_TERMINAL_CONTROLS}")));
     assert!(plain.contains(&format!(
         "with \"replacement\\\"\\\\{ESCAPED_TERMINAL_CONTROLS}\""
-    )));
-    assert!(plain.contains(&format!(
-        "not_equivalent; witness: witness{ESCAPED_TERMINAL_CONTROLS}"
     )));
     assert!(plain.contains(&format!(
         "docs: https://example.invalid/{ESCAPED_TERMINAL_CONTROLS}"

@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use libpure::{LineColumn, SourceFile};
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, utf8_percent_encode};
 use pure_analyzer_diagnostics::{
-    Applicability, DiagCode, DiagFamily, FixProvenance, ReasonCode, Severity, TextRange, Verdict,
+    Applicability, DiagCode, DiagFamily, FixProvenance, ReasonCode, Severity, TextRange,
 };
 use serde::Serialize;
 
@@ -203,8 +203,6 @@ struct SarifFixProperties {
 #[serde(rename_all = "camelCase")]
 struct SarifResultProperties<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
-    verdict: Option<&'a Verdict>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     reason: Option<ReasonCode>,
     #[serde(skip_serializing_if = "Option::is_none")]
     documentation_url: Option<&'a str>,
@@ -324,14 +322,10 @@ fn sarif_artifact_change<'a>(edit: &PreparedEdit<'a>) -> SarifArtifactChange<'a>
 
 fn result_properties<'a>(diagnostic: &PreparedDiagnostic<'a>) -> Option<SarifResultProperties<'a>> {
     let properties = SarifResultProperties {
-        verdict: diagnostic.diagnostic.verdict.as_ref(),
         reason: diagnostic.diagnostic.reason,
         documentation_url: diagnostic.diagnostic.url.as_deref(),
     };
-    (properties.verdict.is_some()
-        || properties.reason.is_some()
-        || properties.documentation_url.is_some())
-    .then_some(properties)
+    (properties.reason.is_some() || properties.documentation_url.is_some()).then_some(properties)
 }
 
 fn physical_location(

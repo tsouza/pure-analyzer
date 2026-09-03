@@ -108,10 +108,6 @@
             }
           ],
           "properties": {
-            "verdict": {
-              "verdict": "not_equivalent",
-              "witness": "#>{db::T}#"
-            },
             "reason": {
               "id": "IND_OPAQUE_PREDICATE",
               "bucket": "fundamental",
