@@ -40,8 +40,34 @@ use crate::{
     ScalarOperator, SortDirection, SortKey, Totality,
 };
 
+/// Per-relational-level fan-out `DEFAULT_NORMALIZATION_STEP_LIMIT` assumes is
+/// generous enough for any real query: a `Project`/`Filter`/`DistinctOn`
+/// node's column or predicate list. A `->project(~[...])` with dozens of
+/// output columns is already an unusually wide query; hundreds would be
+/// extraordinary. This is a headroom assumption, not a measurement — unlike
+/// `MAX_RELATIONAL_RECURSION_DEPTH`, which pins its 32 to a stack-overflow
+/// crash boundary actually measured on this workspace's smallest worker
+/// stack (see that constant's own doc and issue #266 / PR #358, the
+/// stack-overflow fix it belongs to).
+const NORMALIZATION_FANOUT_HEADROOM: usize = 128;
+
 /// Default upper bound on relation and scalar nodes visited by normalization.
-pub const DEFAULT_NORMALIZATION_STEP_LIMIT: usize = 4_096;
+///
+/// This is a total-work budget, not a stack-depth budget, and is
+/// deliberately independent of `MAX_RELATIONAL_RECURSION_DEPTH` (see
+/// `Normalizer`'s `depth` field doc): a tree can stay entirely inside the
+/// depth budget while still visiting far more than
+/// `MAX_RELATIONAL_RECURSION_DEPTH` nodes, since every relational level's
+/// `Normalizer::consume` call is charged once per column/predicate/key
+/// scalar node too, not once per level. Sized as
+/// `MAX_RELATIONAL_RECURSION_DEPTH * NORMALIZATION_FANOUT_HEADROOM`
+/// (32 × 128 = 4096): enough for a maximum-depth pipeline where every level
+/// carries `NORMALIZATION_FANOUT_HEADROOM` sibling scalar nodes without
+/// spuriously exhausting the budget on an ordinary (if unusually wide)
+/// query, while still bounding total normalization work to a small, fixed
+/// multiple of the depth budget instead of leaving it unbounded.
+pub const DEFAULT_NORMALIZATION_STEP_LIMIT: usize =
+    MAX_RELATIONAL_RECURSION_DEPTH * NORMALIZATION_FANOUT_HEADROOM;
 
 /// A finite work budget for one normalization request.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

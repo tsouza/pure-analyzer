@@ -1508,10 +1508,14 @@ fn project_ids(expression: &pure_analyzer_analysis::RelationExpression, ids: &mu
     }
 }
 
-proptest! {
-    #[test]
-    fn relation_project_is_deterministic_and_retains_declared_alias_order(reverse in any::<bool>()) {
-        let model = relation_project_model();
+// A plain two-case loop, not a `proptest!` property: `reverse` is a `bool`,
+// a two-element input space, so there is no property space for proptest's
+// generator/shrinker machinery to explore — running it 256 times would just
+// repeat the same two cases hundreds of times over.
+#[test]
+fn relation_project_is_deterministic_and_retains_declared_alias_order() {
+    let model = relation_project_model();
+    for reverse in [false, true] {
         let (source, expected_names) = if reverse {
             (
                 "model::Person.all()->project(~[manager: person | $person.manager, legal: person | $person.name])",
@@ -1523,12 +1527,11 @@ proptest! {
         let first = lower(source, Some(&model));
         let second = lower(source, Some(&model));
 
-        prop_assert_eq!(&first, &second);
+        assert_eq!(first, second, "reverse={reverse}");
         let RelationalOutcome::Supported(query) = first else {
-            prop_assert!(false, "supported relation project lowered opaque: {first:#?}");
-            return Ok(());
+            panic!("supported relation project lowered opaque (reverse={reverse}): {first:#?}");
         };
-        prop_assert_eq!(
+        assert_eq!(
             query
                 .output()
                 .columns()
@@ -1536,11 +1539,20 @@ proptest! {
                 .map(|column| column.name().as_str())
                 .collect::<Vec<_>>(),
             expected_names.to_vec(),
+            "reverse={reverse}",
         );
-        prop_assert!(query.facts().candidate_keys().is_unknown());
-        prop_assert!(query.facts().row_semantics().is_unknown());
+        assert!(
+            query.facts().candidate_keys().is_unknown(),
+            "reverse={reverse}"
+        );
+        assert!(
+            query.facts().row_semantics().is_unknown(),
+            "reverse={reverse}"
+        );
     }
+}
 
+proptest! {
     #[test]
     fn lowering_is_deterministic_for_bounded_supported_pipelines(
         steps in proptest::collection::vec(any::<bool>(), 0..=8),

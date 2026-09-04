@@ -7,7 +7,9 @@ use crate::FileId;
 
 /// How safe a [`Fix`] is to apply automatically.
 ///
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum Applicability {
     /// Safe to apply without review; `--fix` applies these.
@@ -24,7 +26,9 @@ pub enum Applicability {
 /// producer has established the narrow single-arity proof represented by
 /// [`Self::SingleArityProven`].  [`crate::FixPlan`] verifies this invariant
 /// before selecting a machine-applicable fix.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum FixProvenance {
     /// The edit is justified solely by syntax/local source facts.
@@ -54,8 +58,38 @@ pub struct TextEdit {
     pub new_text: String,
 }
 
+impl PartialOrd for TextEdit {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for TextEdit {
+    /// Order by `(file, span start, span end, new_text)`.
+    ///
+    /// `TextRange` has no `Ord` impl of its own (its only ordering method,
+    /// `ordering`, treats overlapping ranges as equal, which is not a total
+    /// order), so this compares its `start()`/`end()` directly — the same
+    /// total, deterministic-only ordering [`crate::Diagnostic`]'s span field
+    /// needs. See that type's `Ord` impl for why this exists.
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        (
+            self.file,
+            self.span.start(),
+            self.span.end(),
+            &self.new_text,
+        )
+            .cmp(&(
+                other.file,
+                other.span.start(),
+                other.span.end(),
+                &other.new_text,
+            ))
+    }
+}
+
 /// A structured, applicable-or-not fix for a [`crate::Diagnostic`].
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 pub struct Fix {
     /// A short human-readable title (e.g. "insert `%latest` argument").
     pub title: String,
