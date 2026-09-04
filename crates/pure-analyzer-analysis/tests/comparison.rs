@@ -709,6 +709,55 @@ fn output_column_mismatch_selects_the_minimum_structural_key_as_primary() {
     );
 }
 
+/// Regression for an `output_column_count_difference` `<=` -> `>` mutant.
+/// `output_column_count_is_a_symmetric_refutation` only checks
+/// `compare(a, b) == compare(b, a)`, which a flip from `<=` to `>` still
+/// satisfies (both branches stay self-consistent under argument-swap, just
+/// consistently picking the *maximum* structural key instead of the
+/// minimum). This pins the actual selection against `StructuralKey`'s own,
+/// unrelated `Ord` impl, the same technique
+/// `output_column_mismatch_selects_the_minimum_structural_key_as_primary`
+/// uses for the sibling field-mismatch path.
+#[test]
+fn output_column_count_mismatch_selects_the_minimum_structural_key_as_primary() {
+    let class = class();
+    let one_column = query(
+        &[(7, "name", "String")],
+        origin(FIRST_FILE, 1, 10),
+        class.clone(),
+    );
+    let two_columns = query(
+        &[(90, "name", "String"), (91, "email", "String")],
+        origin(FIRST_FILE + 1, 101, 120),
+        class,
+    );
+
+    let one_column_key = structural_key_of(&one_column);
+    let two_columns_key = structural_key_of(&two_columns);
+    assert_ne!(
+        one_column_key, two_columns_key,
+        "fixture must have a strict structural-key order for this regression \
+         to be meaningful"
+    );
+    let expected_primary_file = if one_column_key < two_columns_key {
+        FIRST_FILE
+    } else {
+        FIRST_FILE + 1
+    };
+
+    let ComparisonOutcome::NotEquivalent(difference) =
+        compare_relational_queries(&one_column, &two_columns)
+    else {
+        panic!("different output widths must be refuted")
+    };
+    assert_eq!(
+        difference.primary_origin().source().file(),
+        FileId::new(expected_primary_file),
+        "the primary origin must belong to the query with the strictly \
+         smaller structural key, not an argument-order-dependent selection"
+    );
+}
+
 /// Companion regression for the single-origin `canonical_normalized_origin`
 /// `<=` -> `>` mutant, exercised through the unproven-normal-form-difference
 /// indecision path. Same rationale as the test above: symmetry alone does

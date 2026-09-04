@@ -1904,7 +1904,7 @@ mod tests {
     use pure_analyzer_lexer::lex;
     use pure_analyzer_model::ModelGraph;
     use pure_analyzer_parser::parse_query;
-    use pure_analyzer_syntax::GreenNodeBuilder;
+    use pure_analyzer_syntax::{GreenNodeBuilder, TextSize};
 
     use super::*;
 
@@ -2310,5 +2310,253 @@ mod tests {
     fn trivia_classification_retains_whitespace() {
         assert!(is_trivia(SyntaxKind::WHITESPACE));
         assert!(!is_trivia(SyntaxKind::IDENT));
+    }
+
+    /// Build the single outer child of a hand-built fixture tree.
+    fn outer_node(source: &str, build: impl FnOnce(&mut GreenNodeBuilder<'_>)) -> GreenNode {
+        let tokens = lex(source);
+        let mut builder = GreenNodeBuilder::new(source, &tokens);
+        builder.open(SyntaxKind::ROOT);
+        build(&mut builder);
+        builder.close();
+        let root = builder.finish().expect("fixture tree must build");
+        direct_nodes(&root)
+            .into_iter()
+            .next()
+            .expect("fixture must contain its outer node")
+    }
+
+    /// A valid `x:row` column spec's children (alias, colon, lambda), built
+    /// under whatever kind the caller opens. `project_lambda_body` forbids
+    /// direct brace tokens, so this lambda is deliberately brace-free.
+    fn valid_column_spec_children(builder: &mut GreenNodeBuilder<'_>) {
+        builder.open(SyntaxKind::COLUMN_NAME);
+        builder.advance(); // x
+        builder.close();
+        builder.advance(); // :
+        builder.open(SyntaxKind::LAMBDA_EXPR);
+        builder.open(SyntaxKind::LAMBDA_PARAMS);
+        builder.advance(); // row
+        builder.close();
+        builder.open(SyntaxKind::CODE_BLOCK);
+        builder.open(SyntaxKind::QUERY_EXPR);
+        builder.close();
+        builder.close();
+        builder.close();
+    }
+
+    /// Regression for a `project_column_spec` `||` -> `&&` mutant: a
+    /// mislabeled outer node whose children are otherwise a fully valid
+    /// alias/colon/lambda triple must still be rejected on kind alone, not
+    /// silently accepted because no error node happens to be present.
+    #[test]
+    fn project_column_spec_rejects_a_mislabeled_but_otherwise_valid_node() {
+        let node = outer_node("x:row", |builder| {
+            builder.open(SyntaxKind::ARROW_CALL);
+            valid_column_spec_children(builder);
+            builder.close();
+        });
+
+        assert_eq!(node.kind(), SyntaxKind::ARROW_CALL);
+        assert!(matches!(
+            project_column_spec(&node),
+            Err(ReasonCode::IndUnmodeledOp)
+        ));
+    }
+
+    /// Regression for a `project_column_spec_array` `||` -> `&&` mutant: same
+    /// technique, one level up (`~[x:row]` under a mislabeled outer kind).
+    #[test]
+    fn project_column_spec_array_rejects_a_mislabeled_but_otherwise_valid_node() {
+        let node = outer_node("~[x:row]", |builder| {
+            builder.open(SyntaxKind::ARROW_CALL);
+            builder.advance(); // ~
+            builder.advance(); // [
+            builder.open(SyntaxKind::COLUMN_SPEC);
+            valid_column_spec_children(builder);
+            builder.close();
+            builder.advance(); // ]
+            builder.close();
+        });
+
+        assert_eq!(node.kind(), SyntaxKind::ARROW_CALL);
+        assert!(matches!(
+            project_column_spec_array(&node),
+            Err(ReasonCode::IndUnmodeledOp)
+        ));
+    }
+
+    /// Regression for a `project_alias` `||` -> `&&` mutant: a mislabeled
+    /// outer node wrapping one otherwise-valid `IDENT` must still be
+    /// rejected on kind alone.
+    #[test]
+    fn project_alias_rejects_a_mislabeled_but_otherwise_valid_node() {
+        let node = outer_node("foo", |builder| {
+            builder.open(SyntaxKind::ARROW_CALL);
+            builder.advance(); // foo
+            builder.close();
+        });
+
+        assert_eq!(node.kind(), SyntaxKind::ARROW_CALL);
+        assert_eq!(project_alias(&node), None);
+    }
+
+    /// Regression for a `bare_qualified_name` `||` -> `&&` mutant: a
+    /// mislabeled outer node with no nested child nodes, wrapping otherwise
+    /// valid `IDENT` text, must still be rejected on kind alone.
+    #[test]
+    fn bare_qualified_name_rejects_a_mislabeled_but_otherwise_valid_node() {
+        let node = outer_node("Foo", |builder| {
+            builder.open(SyntaxKind::ARROW_CALL);
+            builder.advance(); // Foo
+            builder.close();
+        });
+
+        assert_eq!(node.kind(), SyntaxKind::ARROW_CALL);
+        assert_eq!(bare_qualified_name(&node), None);
+    }
+
+    /// Regression for a `collection_item_groups` `||` -> `&&` mutant: a
+    /// mislabeled outer node wrapping an otherwise well-formed one-element
+    /// bracketed group must still be rejected on kind alone.
+    #[test]
+    fn collection_item_groups_rejects_a_mislabeled_but_otherwise_valid_node() {
+        let node = outer_node("[5]", |builder| {
+            builder.open(SyntaxKind::ARROW_CALL);
+            builder.advance(); // [
+            builder.open(SyntaxKind::LITERAL_EXPR);
+            builder.advance(); // 5
+            builder.close();
+            builder.advance(); // ]
+            builder.close();
+        });
+
+        assert_eq!(node.kind(), SyntaxKind::ARROW_CALL);
+        assert!(collection_item_groups(&node).is_none());
+    }
+
+    /// Regression for a `join_lambda_body` `||` -> `&&` mutant on its
+    /// leading/trailing brace check: a lambda whose *first* significant
+    /// token is not `{` (but whose last is `}`) must still be rejected, not
+    /// accepted just because the closing brace happens to be present.
+    #[test]
+    fn join_lambda_body_rejects_a_missing_open_brace_with_a_present_close_brace() {
+        let node = outer_node("x,y}", |builder| {
+            builder.open(SyntaxKind::LAMBDA_EXPR);
+            builder.open(SyntaxKind::LAMBDA_PARAMS);
+            builder.advance(); // x
+            builder.advance(); // ,
+            builder.advance(); // y
+            builder.close();
+            builder.open(SyntaxKind::CODE_BLOCK);
+            builder.open(SyntaxKind::QUERY_EXPR);
+            builder.close();
+            builder.close();
+            builder.advance(); // }
+            builder.close();
+        });
+
+        assert_eq!(node.kind(), SyntaxKind::LAMBDA_EXPR);
+        assert!(matches!(
+            join_lambda_body(&node),
+            Err(ReasonCode::IndUnmodeledOp)
+        ));
+    }
+
+    /// Regression for a `join_lambda_parameters` `||` -> `&&` mutant: an
+    /// extra, token-free nested node makes `direct_nodes` non-empty while
+    /// leaving the significant `IDENT, COMMA, IDENT` token sequence intact,
+    /// so only the node-emptiness half of the guard can reject it.
+    #[test]
+    fn join_lambda_parameters_rejects_an_extra_empty_child_node() {
+        let node = outer_node("x,y", |builder| {
+            builder.open(SyntaxKind::LAMBDA_PARAMS);
+            builder.advance(); // x
+            builder.advance(); // ,
+            builder.open(SyntaxKind::QUERY_EXPR);
+            builder.close();
+            builder.advance(); // y
+            builder.close();
+        });
+
+        assert_eq!(node.kind(), SyntaxKind::LAMBDA_PARAMS);
+        assert!(!direct_nodes(&node).is_empty());
+        assert_eq!(join_lambda_parameters(&node), None);
+    }
+
+    /// Regression for `call_argument_groups`' comma-arm match-guard becoming
+    /// unconditional: a non-comma separator (`;`) between two argument nodes
+    /// must still be rejected, not silently treated as if it were a comma.
+    #[test]
+    fn call_argument_groups_rejects_a_non_comma_separator() {
+        let node = outer_node("(1;2)", |builder| {
+            builder.open(SyntaxKind::CALL_ARGS);
+            builder.advance(); // (
+            builder.open(SyntaxKind::LITERAL_EXPR);
+            builder.advance(); // 1
+            builder.close();
+            builder.advance(); // ;
+            builder.open(SyntaxKind::LITERAL_EXPR);
+            builder.advance(); // 2
+            builder.close();
+            builder.advance(); // )
+            builder.close();
+        });
+
+        assert_eq!(node.kind(), SyntaxKind::CALL_ARGS);
+        assert!(call_argument_groups(&node).is_none());
+    }
+
+    /// Regression for `collection_item_groups`' comma-arm match-guard
+    /// becoming unconditional: same shape as
+    /// `call_argument_groups_rejects_a_non_comma_separator`, one level up in
+    /// a `COLLECTION_LITERAL`.
+    #[test]
+    fn collection_item_groups_rejects_a_non_comma_separator() {
+        let node = outer_node("[1;2]", |builder| {
+            builder.open(SyntaxKind::COLLECTION_LITERAL);
+            builder.advance(); // [
+            builder.open(SyntaxKind::LITERAL_EXPR);
+            builder.advance(); // 1
+            builder.close();
+            builder.advance(); // ;
+            builder.open(SyntaxKind::LITERAL_EXPR);
+            builder.advance(); // 2
+            builder.close();
+            builder.advance(); // ]
+            builder.close();
+        });
+
+        assert_eq!(node.kind(), SyntaxKind::COLLECTION_LITERAL);
+        assert!(collection_item_groups(&node).is_none());
+    }
+
+    /// Regression for a `references_column` `==` -> `!=` mutant: a column
+    /// read must be reported as referencing exactly the column it names, not
+    /// every column except it.
+    #[test]
+    fn references_column_matches_only_the_named_column_id() {
+        let file = FileId::new(91);
+        let source = origin(
+            file,
+            TextRange::new(TextSize::from(0), TextSize::from(1)),
+            Vec::new(),
+        );
+        let target = ColumnId::new(7);
+        let other = ColumnId::new(8);
+        let expression = ScalarExpression::new(
+            ScalarOperator::Column(target),
+            TypeRef::new(
+                QName::new(STRING_TYPE).expect("fixture type is valid"),
+                Vec::new(),
+            ),
+            Multiplicity::new(EXACTLY_ONE, Some(EXACTLY_ONE)).expect("fixture multiplicity"),
+            Nullability::NonNullable,
+            Knowledge::<Totality>::unknown(),
+            source,
+        );
+
+        assert!(references_column(&expression, target));
+        assert!(!references_column(&expression, other));
     }
 }
