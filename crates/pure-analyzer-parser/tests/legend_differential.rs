@@ -22,6 +22,8 @@ const CANONICAL_FAMILIES: &[&str] = &[
     "zero-argument-navigation",
     "date-navigation",
     "generated-navigation",
+    "relation-type-column",
+    "quoted-column-alias",
 ];
 
 #[derive(Debug, Deserialize)]

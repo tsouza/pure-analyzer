@@ -6,8 +6,10 @@
     "bare-relation-column",
     "zero-argument-navigation",
     "date-navigation",
-    "generated-navigation"
+    "generated-navigation",
+    "relation-type-column",
+    "quoted-column-alias"
   ],
-  "provenance": "Issue #27 M3 grammar-boundary corpus; frozen against the named Legend grammar endpoint.",
-  "update_policy": "Existing version directories are immutable. A Legend version change creates a new legend-<version> directory and is reviewed with its oracle differences."
+  "provenance": "Issue #27 M3 grammar-boundary corpus; frozen against the named Legend grammar endpoint. Breadth and labeling corrections from issue #315's live re-verification against this same pinned build.",
+  "update_policy": "Existing version directories are immutable against engine drift: a Legend version change creates a new legend-<version> directory, reviewed against its oracle differences, rather than silently rewriting a frozen label. A demonstrated labeling mistake in an existing directory — verified live against this exact same pinned engine build, and disclosed with that evidence in the correcting PR — may still be fixed in place through normal review; only `--refresh` is blocked from ever rewriting a label unattended."
 }

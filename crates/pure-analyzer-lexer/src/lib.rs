@@ -151,8 +151,6 @@ pub enum SyntaxKind {
     /// Any byte span `logos` couldn't match to any rule above. `lex` never
     /// panics or drops input on unlexable bytes — this variant, plus total
     /// span coverage, is how that's expressed instead.
-    #[allow(missing_docs)]
-    // rustdoc already sees the doc comment above; the lint just can't tell through the derive macro's expansion
     ERROR,
     // Kept at the tail so this additive token does not renumber existing
     // `repr(u16)` discriminants before the richer syntax layer lands.
@@ -165,9 +163,13 @@ pub enum SyntaxKind {
 /// Coverage is total: the returned spans are contiguous, start at zero, and
 /// sum to `text.len()` — every byte is accounted for, including unlexable
 /// ones, which become [`SyntaxKind::ERROR`] rather than being dropped or
-/// causing a panic. Recovery is local: an unlexable byte costs exactly one
-/// `ERROR` token, and lexing resumes normally from the next byte, so one bad
-/// character never cascades into failure for the rest of the input.
+/// causing a panic. Each contiguous run `logos` fails to match becomes
+/// exactly one `ERROR` token, and lexing resumes normally right after it —
+/// but that run is whatever span the underlying maximal-munch DFA consumed
+/// before giving up, not necessarily one byte. An unterminated string, for
+/// example, has no closing quote to stop the DFA's `[^']*` munch, so the
+/// failed match — and the resulting single `ERROR` token — spans all the
+/// way to EOF rather than just the opening quote.
 #[must_use]
 pub fn lex(text: &str) -> Vec<(SyntaxKind, TextRange)> {
     SyntaxKind::lexer(text)

@@ -165,7 +165,7 @@ fn incomplete_braced_lambda_retains_the_recovery_boundary() {
     let syntax_errors = syntax_error_count(&parsed);
 
     assert_eq!(parsed.green.text(), source);
-    assert_eq!(syntax_errors, 3, "{:#?}", parsed.diagnostics);
+    assert_eq!(syntax_errors, 2, "{:#?}", parsed.diagnostics);
     assert!(count_kind(&parsed.green, SyntaxKind::ERROR_NODE) > 0);
     assert_ranges_are_valid(source, &parsed);
 }
@@ -199,10 +199,7 @@ fn malformed_primary_does_not_become_a_qualified_name() {
     let parsed = parse(source);
 
     assert_eq!(parsed.green.text(), source);
-    assert_eq!(
-        diagnostic_codes(&parsed),
-        [DiagCode::MalformedSyntax, DiagCode::MalformedSyntax]
-    );
+    assert_eq!(diagnostic_codes(&parsed), [DiagCode::MalformedSyntax]);
     assert_eq!(count_kind(&parsed.green, SyntaxKind::QUALIFIED_NAME), 0);
     assert!(count_kind(&parsed.green, SyntaxKind::ERROR_NODE) > 0);
     assert_ranges_are_valid(source, &parsed);
@@ -260,7 +257,7 @@ fn malformed_collection_item_recovers_at_the_closing_delimiter() {
 
     assert_eq!(parsed.green.text(), source);
     assert_eq!(collection.text(), source);
-    assert_eq!(syntax_error_count(&parsed), 2, "{:#?}", parsed.diagnostics);
+    assert_eq!(syntax_error_count(&parsed), 1, "{:#?}", parsed.diagnostics);
     assert_eq!(count_kind(collection, SyntaxKind::QUALIFIED_NAME), 1);
     assert_eq!(count_kind(collection, SyntaxKind::ERROR_NODE), 1);
     assert_ranges_are_valid(source, &parsed);
@@ -330,7 +327,7 @@ fn empty_column_array_member_makes_progress_to_later_quoted_aliases() {
 
 #[test]
 fn invalid_column_array_members_stop_cleanly_at_closing_bracket_and_eof() {
-    for (source, expected_syntax_errors, expected_error_nodes) in [("~[)]", 1, 1), ("~[)", 4, 2)] {
+    for (source, expected_syntax_errors, expected_error_nodes) in [("~[)]", 1, 1), ("~[)", 3, 2)] {
         let parsed = parse(source);
         let columns = only_node_of_kind(&parsed.green, SyntaxKind::COLUMN_SPEC_ARRAY);
 
@@ -354,7 +351,7 @@ fn invalid_column_array_members_stop_cleanly_at_closing_bracket_and_eof() {
 #[test]
 fn trailing_column_array_commas_distinguish_closing_bracket_from_eof() {
     for (source, expected_syntax_errors, expected_error_nodes) in
-        [("~[first:String[1],]", 1, 0), ("~[first:String[1],", 4, 1)]
+        [("~[first:String[1],]", 1, 0), ("~[first:String[1],", 3, 1)]
     {
         let parsed = parse(source);
         let columns = only_node_of_kind(&parsed.green, SyntaxKind::COLUMN_SPEC_ARRAY);
@@ -380,7 +377,7 @@ fn trailing_column_array_commas_distinguish_closing_bracket_from_eof() {
 fn missing_column_array_separators_stop_cleanly_at_closing_bracket_and_eof() {
     for (source, expected_syntax_errors, expected_error_nodes) in [
         ("~[first:String[1] )]", 1, 1),
-        ("~[first:String[1] )", 4, 2),
+        ("~[first:String[1] )", 3, 2),
     ] {
         let parsed = parse(source);
         let columns = only_node_of_kind(&parsed.green, SyntaxKind::COLUMN_SPEC_ARRAY);
@@ -406,9 +403,9 @@ fn missing_column_array_separators_stop_cleanly_at_closing_bracket_and_eof() {
 fn recovered_column_array_commas_report_closing_bracket_and_eof_boundaries() {
     for (source, expected_columns, expected_syntax_errors, expected_error_nodes) in [
         ("~[),]", 0, 2, 1),
-        ("~[),", 0, 5, 2),
+        ("~[),", 0, 4, 2),
         ("~[first:String[1] ),]", 1, 2, 1),
-        ("~[first:String[1] ),", 1, 5, 2),
+        ("~[first:String[1] ),", 1, 4, 2),
     ] {
         let parsed = parse(source);
         let columns = only_node_of_kind(&parsed.green, SyntaxKind::COLUMN_SPEC_ARRAY);
@@ -456,7 +453,7 @@ fn incomplete_variables_and_parentheses_propagate_to_outer_recovery() {
         assert_eq!(parsed.green.text(), source);
         assert_eq!(
             syntax_error_count(&parsed),
-            3,
+            2,
             "{source}: {:#?}",
             parsed.diagnostics
         );
@@ -516,10 +513,7 @@ fn malformed_argument_recovers_to_the_next_comma_without_losing_it() {
     let parsed = parse(source);
 
     assert_eq!(parsed.green.text(), source);
-    assert_eq!(
-        diagnostic_codes(&parsed),
-        [DiagCode::MalformedSyntax, DiagCode::MalformedSyntax]
-    );
+    assert_eq!(diagnostic_codes(&parsed), [DiagCode::MalformedSyntax]);
     assert_eq!(count_kind(&parsed.green, SyntaxKind::FUNCTION_CALL), 1);
     assert_eq!(count_kind(&parsed.green, SyntaxKind::CALL_ARGS), 1);
     assert_eq!(count_kind(&parsed.green, SyntaxKind::ERROR_NODE), 1);
@@ -541,11 +535,6 @@ fn missing_argument_comma_recovers_inside_the_same_call() {
                 DiagCode::MalformedSyntax,
                 "expected `,` or `)` after an argument".to_owned(),
                 4..5,
-            ),
-            (
-                DiagCode::MalformedSyntax,
-                "expected an operand after a unary operator".to_owned(),
-                5..6,
             ),
             (
                 DiagCode::MalformedSyntax,

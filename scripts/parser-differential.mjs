@@ -26,6 +26,8 @@ export const CANONICAL_FAMILIES = Object.freeze([
   "zero-argument-navigation",
   "date-navigation",
   "generated-navigation",
+  "relation-type-column",
+  "quoted-column-alias",
 ]);
 
 /** A connection or timeout prevented an engine request from completing. */
