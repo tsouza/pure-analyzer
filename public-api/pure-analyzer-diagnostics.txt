@@ -8,8 +8,12 @@ pub pure_analyzer_diagnostics::Applicability::Unsafe
 impl core::clone::Clone for pure_analyzer_diagnostics::Applicability
 pub fn pure_analyzer_diagnostics::Applicability::clone(&self) -> pure_analyzer_diagnostics::Applicability
 impl core::cmp::Eq for pure_analyzer_diagnostics::Applicability
+impl core::cmp::Ord for pure_analyzer_diagnostics::Applicability
+pub fn pure_analyzer_diagnostics::Applicability::cmp(&self, &pure_analyzer_diagnostics::Applicability) -> core::cmp::Ordering
 impl core::cmp::PartialEq for pure_analyzer_diagnostics::Applicability
 pub fn pure_analyzer_diagnostics::Applicability::eq(&self, &pure_analyzer_diagnostics::Applicability) -> bool
+impl core::cmp::PartialOrd for pure_analyzer_diagnostics::Applicability
+pub fn pure_analyzer_diagnostics::Applicability::partial_cmp(&self, &pure_analyzer_diagnostics::Applicability) -> core::option::Option<core::cmp::Ordering>
 impl core::fmt::Debug for pure_analyzer_diagnostics::Applicability
 pub fn pure_analyzer_diagnostics::Applicability::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Copy for pure_analyzer_diagnostics::Applicability
@@ -358,8 +362,12 @@ pub const fn pure_analyzer_diagnostics::FixProvenance::permits_machine_applicati
 impl core::clone::Clone for pure_analyzer_diagnostics::FixProvenance
 pub fn pure_analyzer_diagnostics::FixProvenance::clone(&self) -> pure_analyzer_diagnostics::FixProvenance
 impl core::cmp::Eq for pure_analyzer_diagnostics::FixProvenance
+impl core::cmp::Ord for pure_analyzer_diagnostics::FixProvenance
+pub fn pure_analyzer_diagnostics::FixProvenance::cmp(&self, &pure_analyzer_diagnostics::FixProvenance) -> core::cmp::Ordering
 impl core::cmp::PartialEq for pure_analyzer_diagnostics::FixProvenance
 pub fn pure_analyzer_diagnostics::FixProvenance::eq(&self, &pure_analyzer_diagnostics::FixProvenance) -> bool
+impl core::cmp::PartialOrd for pure_analyzer_diagnostics::FixProvenance
+pub fn pure_analyzer_diagnostics::FixProvenance::partial_cmp(&self, &pure_analyzer_diagnostics::FixProvenance) -> core::option::Option<core::cmp::Ordering>
 impl core::fmt::Debug for pure_analyzer_diagnostics::FixProvenance
 pub fn pure_analyzer_diagnostics::FixProvenance::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::Copy for pure_analyzer_diagnostics::FixProvenance
@@ -587,8 +595,12 @@ pub fn pure_analyzer_diagnostics::Diagnostic::builder(pure_analyzer_diagnostics:
 impl core::clone::Clone for pure_analyzer_diagnostics::Diagnostic
 pub fn pure_analyzer_diagnostics::Diagnostic::clone(&self) -> pure_analyzer_diagnostics::Diagnostic
 impl core::cmp::Eq for pure_analyzer_diagnostics::Diagnostic
+impl core::cmp::Ord for pure_analyzer_diagnostics::Diagnostic
+pub fn pure_analyzer_diagnostics::Diagnostic::cmp(&self, &pure_analyzer_diagnostics::Diagnostic) -> core::cmp::Ordering
 impl core::cmp::PartialEq for pure_analyzer_diagnostics::Diagnostic
 pub fn pure_analyzer_diagnostics::Diagnostic::eq(&self, &pure_analyzer_diagnostics::Diagnostic) -> bool
+impl core::cmp::PartialOrd for pure_analyzer_diagnostics::Diagnostic
+pub fn pure_analyzer_diagnostics::Diagnostic::partial_cmp(&self, &pure_analyzer_diagnostics::Diagnostic) -> core::option::Option<core::cmp::Ordering>
 impl core::fmt::Debug for pure_analyzer_diagnostics::Diagnostic
 pub fn pure_analyzer_diagnostics::Diagnostic::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for pure_analyzer_diagnostics::Diagnostic
@@ -778,8 +790,12 @@ pub fn pure_analyzer_diagnostics::Fix::single_arity_proven(impl core::convert::I
 impl core::clone::Clone for pure_analyzer_diagnostics::Fix
 pub fn pure_analyzer_diagnostics::Fix::clone(&self) -> pure_analyzer_diagnostics::Fix
 impl core::cmp::Eq for pure_analyzer_diagnostics::Fix
+impl core::cmp::Ord for pure_analyzer_diagnostics::Fix
+pub fn pure_analyzer_diagnostics::Fix::cmp(&self, &pure_analyzer_diagnostics::Fix) -> core::cmp::Ordering
 impl core::cmp::PartialEq for pure_analyzer_diagnostics::Fix
 pub fn pure_analyzer_diagnostics::Fix::eq(&self, &pure_analyzer_diagnostics::Fix) -> bool
+impl core::cmp::PartialOrd for pure_analyzer_diagnostics::Fix
+pub fn pure_analyzer_diagnostics::Fix::partial_cmp(&self, &pure_analyzer_diagnostics::Fix) -> core::option::Option<core::cmp::Ordering>
 impl core::fmt::Debug for pure_analyzer_diagnostics::Fix
 pub fn pure_analyzer_diagnostics::Fix::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for pure_analyzer_diagnostics::Fix
@@ -871,8 +887,12 @@ pub fn pure_analyzer_diagnostics::Label::with_note(pure_analyzer_diagnostics::Fi
 impl core::clone::Clone for pure_analyzer_diagnostics::Label
 pub fn pure_analyzer_diagnostics::Label::clone(&self) -> pure_analyzer_diagnostics::Label
 impl core::cmp::Eq for pure_analyzer_diagnostics::Label
+impl core::cmp::Ord for pure_analyzer_diagnostics::Label
+pub fn pure_analyzer_diagnostics::Label::cmp(&self, &Self) -> core::cmp::Ordering
 impl core::cmp::PartialEq for pure_analyzer_diagnostics::Label
 pub fn pure_analyzer_diagnostics::Label::eq(&self, &pure_analyzer_diagnostics::Label) -> bool
+impl core::cmp::PartialOrd for pure_analyzer_diagnostics::Label
+pub fn pure_analyzer_diagnostics::Label::partial_cmp(&self, &Self) -> core::option::Option<core::cmp::Ordering>
 impl core::fmt::Debug for pure_analyzer_diagnostics::Label
 pub fn pure_analyzer_diagnostics::Label::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for pure_analyzer_diagnostics::Label
@@ -1000,8 +1020,12 @@ pub pure_analyzer_diagnostics::TextEdit::span: text_size::range::TextRange
 impl core::clone::Clone for pure_analyzer_diagnostics::TextEdit
 pub fn pure_analyzer_diagnostics::TextEdit::clone(&self) -> pure_analyzer_diagnostics::TextEdit
 impl core::cmp::Eq for pure_analyzer_diagnostics::TextEdit
+impl core::cmp::Ord for pure_analyzer_diagnostics::TextEdit
+pub fn pure_analyzer_diagnostics::TextEdit::cmp(&self, &Self) -> core::cmp::Ordering
 impl core::cmp::PartialEq for pure_analyzer_diagnostics::TextEdit
 pub fn pure_analyzer_diagnostics::TextEdit::eq(&self, &pure_analyzer_diagnostics::TextEdit) -> bool
+impl core::cmp::PartialOrd for pure_analyzer_diagnostics::TextEdit
+pub fn pure_analyzer_diagnostics::TextEdit::partial_cmp(&self, &Self) -> core::option::Option<core::cmp::Ordering>
 impl core::fmt::Debug for pure_analyzer_diagnostics::TextEdit
 pub fn pure_analyzer_diagnostics::TextEdit::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for pure_analyzer_diagnostics::TextEdit
