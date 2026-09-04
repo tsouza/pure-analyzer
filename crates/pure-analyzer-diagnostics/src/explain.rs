@@ -551,6 +551,25 @@ mod tests {
     }
 
     #[test]
+    fn explain_kind_as_str_is_exact_for_every_variant() {
+        // Each arm asserted individually (not round-tripped through a shared
+        // fixture) so a mutant that swaps or replaces one arm's literal fails
+        // here even though the other arm's literal happens to stay correct.
+        assert_eq!(ExplainKind::Diagnostic.as_str(), "diagnostic");
+        assert_eq!(ExplainKind::Reason.as_str(), "reason");
+    }
+
+    #[test]
+    fn explain_classification_as_str_is_exact_for_every_variant() {
+        assert_eq!(ExplainClassification::Lexer.as_str(), "lexer");
+        assert_eq!(ExplainClassification::Parser.as_str(), "parser");
+        assert_eq!(ExplainClassification::Lint.as_str(), "lint");
+        assert_eq!(ExplainClassification::Tool.as_str(), "tool");
+        assert_eq!(ExplainClassification::Fundamental.as_str(), "fundamental");
+        assert_eq!(ExplainClassification::Recoverable.as_str(), "recoverable");
+    }
+
+    #[test]
     fn serialized_content_has_the_renderer_neutral_contract() {
         let content = DiagCode::WrongMilestoningArity.explanation();
         let value = serde_json::to_value(content).expect("serialize explain content");
