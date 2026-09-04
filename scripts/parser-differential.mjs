@@ -220,9 +220,10 @@ async function loadCorpus() {
   const fixtures = [...accept, ...reject];
   const ids = new Set();
   for (const fixture of fixtures) {
-    if (!ids.add(fixture.id)) {
+    if (ids.has(fixture.id)) {
       throw new Error(`duplicate fixture id ${JSON.stringify(fixture.id)}`);
     }
+    ids.add(fixture.id);
     if (fixture.endpoint !== metadata.grammar_endpoint) {
       throw new Error(
         `fixture ${fixture.id} uses ${fixture.endpoint}, not pinned ${metadata.grammar_endpoint}`,

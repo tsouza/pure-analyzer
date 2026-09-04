@@ -1,10 +1,16 @@
 //! Front-end-only scheduling for cancellable LSP requests.
+//!
+//! Requests execute on the shared `rayon` global thread pool rather than one
+//! dedicated OS thread per request (see `RequestScheduler::schedule`): the
+//! pool bounds live worker threads to its (CPU-count-sized, by default)
+//! configuration regardless of how many requests a client has in flight,
+//! queuing the rest in memory instead of asking the OS for an unbounded
+//! number of threads.
 
 use std::{
     io::{self, Write},
     panic::{AssertUnwindSafe, catch_unwind},
     sync::mpsc::Sender,
-    thread,
 };
 
 #[cfg(test)]
@@ -117,64 +123,62 @@ impl RequestScheduler {
         self.pending == 0
     }
 
-    /// Spawn detached work, rejecting ambiguous duplicate active identifiers.
+    /// Queue detached work onto the shared pool, rejecting ambiguous
+    /// duplicate active identifiers.
+    ///
+    /// Unlike a dedicated `thread::spawn` per request, queuing onto `rayon`'s
+    /// bounded pool cannot fail the way OS thread creation can once a
+    /// client's in-flight request count grows far past what the host can
+    /// spawn threads for (see the crate-level scheduling note); scheduling is
+    /// therefore infallible.
     pub(crate) fn schedule(
         &mut self,
         server: &Server,
         response_id: Value,
         work: RequestWork,
-    ) -> io::Result<ScheduleResult> {
+    ) -> ScheduleResult {
         let request_id = RequestId::from_json(&response_id);
         let token = match request_id.as_ref() {
             Some(request_id) => match server.cancellation.begin(request_id.clone()) {
                 Some(token) => Some(token),
-                None => return Ok(ScheduleResult::DuplicateIdentifier(response_id)),
+                None => return ScheduleResult::DuplicateIdentifier(response_id),
             },
             None => None,
         };
         let events = self.events.clone();
-        let cancellation = server.cancellation.clone();
         let worker_request_id = request_id.clone();
         let worker_token = token.clone();
         #[cfg(test)]
         let test_barrier = self.test_barrier.clone();
-        let handle = thread::Builder::new()
-            .name("pure-analyzer-lsp-request".to_owned())
-            .spawn(move || {
-                #[cfg(test)]
-                if let Some(test_barrier) = &test_barrier {
-                    test_barrier.before_execute(worker_request_id.as_ref());
-                }
-                let outcome = if worker_token
-                    .as_ref()
-                    .is_some_and(CancellationToken::is_cancelled)
-                {
-                    WorkerOutcome::Cancelled
-                } else {
-                    match catch_unwind(AssertUnwindSafe(|| work.execute())) {
-                        Ok(completion) => WorkerOutcome::Completed(completion),
-                        Err(_) => WorkerOutcome::Panicked,
-                    }
-                };
-                #[cfg(test)]
-                if let Some(test_barrier) = &test_barrier {
-                    test_barrier.before_commit(worker_request_id.as_ref());
-                }
-                let _ = events.send(ServerEvent::Completed(CompletedRequest {
-                    response_id,
-                    request_id: worker_request_id,
-                    token: worker_token,
-                    outcome,
-                }));
-            });
-        if let Err(error) = handle {
-            if let (Some(request_id), Some(token)) = (request_id.as_ref(), token.as_ref()) {
-                let _ = cancellation.finish(request_id, token);
+        rayon::spawn(move || {
+            #[cfg(test)]
+            if let Some(test_barrier) = &test_barrier {
+                test_barrier.before_execute(worker_request_id.as_ref());
             }
-            return Err(error);
-        }
+            let outcome = if worker_token
+                .as_ref()
+                .is_some_and(CancellationToken::is_cancelled)
+            {
+                WorkerOutcome::Cancelled
+            } else {
+                match catch_unwind(AssertUnwindSafe(|| work.execute())) {
+                    Ok(completion) => WorkerOutcome::Completed(completion),
+                    Err(_) => WorkerOutcome::Panicked,
+                }
+            };
+            #[cfg(test)]
+            if let Some(test_barrier) = &test_barrier {
+                test_barrier.before_commit(worker_request_id.as_ref());
+            }
+            let _ = events.send(ServerEvent::Completed(CompletedRequest {
+                response_id,
+                request_id: worker_request_id,
+                token: worker_token,
+                outcome,
+            }));
+        });
         self.pending = self.pending.saturating_add(1);
-        Ok(ScheduleResult::Scheduled)
+        ScheduleResult::Scheduled
     }
 
     /// Commit one completed worker result at the coordinator boundary.
@@ -226,7 +230,7 @@ impl RequestScheduler {
     }
 }
 
-/// Whether scheduling allocated an independent worker.
+/// Whether scheduling queued an independent worker.
 #[derive(Debug)]
 pub(crate) enum ScheduleResult {
     /// The worker owns its response identifier.
@@ -251,15 +255,24 @@ enum WorkerOutcome {
 
 #[cfg(test)]
 mod tests {
-    use std::{io::Cursor, sync::mpsc};
+    use std::{
+        io::Cursor,
+        sync::{
+            Arc, Condvar, Mutex, PoisonError,
+            atomic::{AtomicUsize, Ordering},
+            mpsc,
+        },
+        thread,
+        time::Duration,
+    };
 
     use serde_json::Value;
 
     use super::{
         CompletedRequest, INTERNAL_ERROR_CODE, REQUEST_CANCELLED_CODE, RequestScheduler,
-        WorkerOutcome,
+        ScheduleResult, WorkerOutcome,
     };
-    use crate::{RequestId, Server, frame::read_frame};
+    use crate::{RequestId, Server, frame::read_frame, server::ServerEvent, state};
 
     fn idle_scheduler() -> RequestScheduler {
         let (events, _receiver) = mpsc::channel();
@@ -344,5 +357,120 @@ mod tests {
         let frame = only_frame(&output);
         assert_eq!(frame["error"]["code"], REQUEST_CANCELLED_CODE);
         assert_eq!(frame["error"]["message"], "request cancelled");
+    }
+
+    /// Regression guard for the property `RequestScheduler::schedule` now
+    /// relies on instead of one OS thread per request (issue #429): `rayon`
+    /// bounds truly concurrent execution to its pool size and queues the
+    /// rest, rather than growing OS thread count with the job count.
+    ///
+    /// A prior version spawned a raw `thread::Builder` per request; a local
+    /// load test proved that scales to only tens of thousands of
+    /// concurrently *blocked* requests before `thread::Builder::spawn` starts
+    /// failing outright (observed failure around ~38k concurrent threads on
+    /// an 8-core/31GiB workstation, well within a chatty or buggy client's
+    /// reach once requests take any nonzero time), and that every such
+    /// failure previously terminated the whole `Server::serve` session. This
+    /// test holds `4 * rayon::current_num_threads()` jobs blocked at once —
+    /// deliberately more jobs than the pool has threads — and asserts peak
+    /// concurrent execution never exceeds the pool size, which is the
+    /// mechanism that removes that failure mode.
+    #[test]
+    fn rayon_spawn_bounds_concurrent_execution_to_the_pool_size_not_the_job_count() {
+        let pool_size = rayon::current_num_threads();
+        let jobs = pool_size.saturating_mul(4).max(4);
+        let gate = Arc::new((Mutex::new(false), Condvar::new()));
+        let alive = Arc::new(AtomicUsize::new(0));
+        let peak_alive = Arc::new(AtomicUsize::new(0));
+        let finished = Arc::new((Mutex::new(0usize), Condvar::new()));
+
+        for _ in 0..jobs {
+            let gate = gate.clone();
+            let alive = alive.clone();
+            let peak_alive = peak_alive.clone();
+            let finished = finished.clone();
+            rayon::spawn(move || {
+                let now = alive.fetch_add(1, Ordering::SeqCst) + 1;
+                peak_alive.fetch_max(now, Ordering::SeqCst);
+                let (lock, condvar) = &*gate;
+                let mut released = lock.lock().unwrap_or_else(PoisonError::into_inner);
+                while !*released {
+                    released = condvar
+                        .wait(released)
+                        .unwrap_or_else(PoisonError::into_inner);
+                }
+                drop(released);
+                alive.fetch_sub(1, Ordering::SeqCst);
+                let (count, done) = &*finished;
+                let mut count = count.lock().unwrap_or_else(PoisonError::into_inner);
+                *count += 1;
+                done.notify_all();
+            });
+        }
+
+        // Give the pool a moment to pick up as many jobs as it can run at
+        // once before releasing them, so `peak_alive` reflects genuine
+        // concurrency rather than a lucky single sample.
+        thread::sleep(Duration::from_millis(200));
+        {
+            let (lock, condvar) = &*gate;
+            let mut released = lock.lock().unwrap_or_else(PoisonError::into_inner);
+            *released = true;
+            condvar.notify_all();
+        }
+
+        let (count, done) = &*finished;
+        let mut count = count.lock().unwrap_or_else(PoisonError::into_inner);
+        while *count < jobs {
+            let (guard, timeout) = done
+                .wait_timeout(count, Duration::from_secs(30))
+                .unwrap_or_else(PoisonError::into_inner);
+            count = guard;
+            assert!(!timeout.timed_out(), "jobs must all finish once released");
+        }
+
+        assert!(
+            peak_alive.load(Ordering::SeqCst) <= pool_size,
+            "peak concurrent execution ({}) must never exceed the pool size ({pool_size}) \
+             even though {jobs} jobs were queued at once",
+            peak_alive.load(Ordering::SeqCst)
+        );
+    }
+
+    /// End-to-end regression guard: `RequestScheduler::schedule` itself
+    /// accepts many more concurrent cancellable requests than any realistic
+    /// LSP client would generate, and every one of them completes, with
+    /// scheduling now infallible (no `thread::Builder::spawn` in the path to
+    /// fail once the caller's in-flight count grows large).
+    #[test]
+    fn schedule_accepts_and_completes_many_concurrent_requests() {
+        let requests = 500;
+        let server = Server::new();
+        let (events, receiver) = mpsc::channel();
+        let mut scheduler = RequestScheduler::new(events, None);
+
+        for i in 0..requests {
+            let params: Value = serde_json::from_str(&format!(
+                r#"{{"textDocument":{{"uri":"untitled:load-{i}"}},"position":{{"line":0,"character":0}}}}"#
+            ))
+            .expect("valid params JSON");
+            let work = state::hover_work(&server, Some(&params)).expect("valid hover params");
+            let id = Value::Number(i64::from(i).into());
+            assert!(matches!(
+                scheduler.schedule(&server, id, work),
+                ScheduleResult::Scheduled
+            ));
+        }
+
+        let mut completed = 0;
+        while completed < requests {
+            let ServerEvent::Completed(_) = receiver
+                .recv_timeout(Duration::from_secs(30))
+                .expect("every scheduled request must complete within the timeout")
+            else {
+                panic!("directly-scheduled requests only ever produce Completed events");
+            };
+            completed += 1;
+        }
     }
 }

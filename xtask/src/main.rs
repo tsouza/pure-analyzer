@@ -54,6 +54,12 @@ enum Command {
         #[arg(long)]
         refresh: bool,
     },
+    /// Verify pinned canonical-emission fixtures; `--refresh` also checks them live.
+    AnalysisCanonicalCorpus {
+        /// Verify every fixture's bounded oracle against an exactly pinned Legend engine before replaying.
+        #[arg(long)]
+        refresh: bool,
+    },
     /// Run the default and feature-gated mutation-test passes, unsharded.
     TestMutation,
     /// Run one shard of the workspace-wide mutation pass (CI matrix only).
@@ -128,6 +134,7 @@ fn main() -> Result<()> {
         Command::ParserDifferential { refresh } => tasks::parser_differential(refresh),
         Command::AnalysisSemanticCorpus { refresh } => tasks::analysis_semantic_corpus(refresh),
         Command::AnalysisComparisonCorpus { refresh } => tasks::analysis_comparison_corpus(refresh),
+        Command::AnalysisCanonicalCorpus { refresh } => tasks::analysis_canonical_corpus(refresh),
         Command::TestMutation => tasks::test_mutation(),
         Command::TestMutationShard { index, total } => tasks::test_mutation_shard(index, total),
         Command::TestMutationDiffShard { index, total, diff } => {
