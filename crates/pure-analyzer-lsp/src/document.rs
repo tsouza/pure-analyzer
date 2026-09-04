@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 /// One complete, client-owned document snapshot.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct DocumentSnapshot {
+pub(crate) struct DocumentSnapshot {
     uri: String,
     text: String,
     version: Option<i64>,
@@ -11,25 +11,25 @@ pub struct DocumentSnapshot {
 impl DocumentSnapshot {
     /// Construct a full document snapshot received from the protocol host.
     #[must_use]
-    pub fn new(uri: String, text: String, version: Option<i64>) -> Self {
+    pub(crate) fn new(uri: String, text: String, version: Option<i64>) -> Self {
         Self { uri, text, version }
     }
 
     /// Return the document URI as supplied by the client.
     #[must_use]
-    pub fn uri(&self) -> &str {
+    pub(crate) fn uri(&self) -> &str {
         &self.uri
     }
 
     /// Return the complete UTF-8 document text.
     #[must_use]
-    pub fn text(&self) -> &str {
+    pub(crate) fn text(&self) -> &str {
         &self.text
     }
 
     /// Return the client-assigned document version when supplied.
     #[must_use]
-    pub const fn version(&self) -> Option<i64> {
+    pub(crate) const fn version(&self) -> Option<i64> {
         self.version
     }
 }
@@ -93,7 +93,7 @@ impl ContentChange {
 /// LSP changes at the protocol boundary. Analysis crates only receive complete
 /// snapshots, never protocol positions or edit objects.
 #[derive(Debug, Default)]
-pub struct DocumentStore {
+pub(crate) struct DocumentStore {
     documents: BTreeMap<String, DocumentSnapshot>,
     revision: u64,
 }
@@ -103,7 +103,8 @@ impl DocumentStore {
     ///
     /// A replacement whose client version is not newer than the retained
     /// version is ignored.
-    pub fn insert(&mut self, document: DocumentSnapshot) {
+    #[cfg(test)]
+    pub(crate) fn insert(&mut self, document: DocumentSnapshot) {
         let _ = self.replace(document);
     }
 
@@ -123,7 +124,7 @@ impl DocumentStore {
     }
 
     /// Remove one document by URI.
-    pub fn remove(&mut self, uri: &str) -> Option<DocumentSnapshot> {
+    pub(crate) fn remove(&mut self, uri: &str) -> Option<DocumentSnapshot> {
         if !self.documents.contains_key(uri) || self.advance_revision().is_none() {
             return None;
         }
@@ -132,7 +133,7 @@ impl DocumentStore {
 
     /// Look up a document by URI.
     #[must_use]
-    pub fn get(&self, uri: &str) -> Option<&DocumentSnapshot> {
+    pub(crate) fn get(&self, uri: &str) -> Option<&DocumentSnapshot> {
         self.documents.get(uri)
     }
 
@@ -148,13 +149,14 @@ impl DocumentStore {
 
     /// Return the number of open documents.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.documents.len()
     }
 
     /// Return whether the store contains no documents.
+    #[cfg(test)]
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.documents.is_empty()
     }
 
@@ -286,6 +288,29 @@ mod tests {
         ContentChange, DocumentSnapshot, DocumentStore, ProtocolPosition, ProtocolRange,
         byte_offset, utf16_position,
     };
+
+    #[test]
+    fn document_store_distinguishes_present_and_absent_documents() {
+        let document = DocumentSnapshot::new(
+            "file:///model.pure".to_owned(),
+            "Class A{}".to_owned(),
+            Some(3),
+        );
+        assert_eq!(document.uri(), "file:///model.pure");
+        let mut documents = DocumentStore::default();
+        assert!(documents.is_empty());
+        assert_eq!(documents.len(), 0);
+        assert_eq!(documents.get(document.uri()), None);
+        documents.insert(document.clone());
+        assert!(!documents.is_empty());
+        assert_eq!(documents.len(), 1);
+        assert_eq!(documents.get(document.uri()), Some(&document));
+        assert_eq!(documents.remove(document.uri()), Some(document.clone()));
+        assert!(documents.is_empty());
+        assert_eq!(documents.len(), 0);
+        assert_eq!(documents.get(document.uri()), None);
+        assert_eq!(documents.remove(document.uri()), None);
+    }
 
     #[test]
     fn applies_unicode_utf16_changes_without_accepting_surrogate_halves() {

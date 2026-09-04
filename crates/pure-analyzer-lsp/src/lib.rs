@@ -17,7 +17,9 @@ mod server;
 mod state;
 mod workspace;
 
-pub use cancellation::{CancellationRegistry, RequestId};
-pub use document::{DocumentSnapshot, DocumentStore};
-pub use server::{Server, ServerExit, serve_stdio};
-pub use workspace::WorkspaceConfiguration;
+pub(crate) use cancellation::{CancellationRegistry, RequestId};
+pub(crate) use document::{DocumentSnapshot, DocumentStore};
+pub(crate) use server::Server;
+pub(crate) use workspace::WorkspaceConfiguration;
+
+pub use server::{ServerExit, serve_stdio};

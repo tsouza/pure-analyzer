@@ -32,7 +32,7 @@ impl ModelDocument {
 /// already-open client snapshot; URI suffixes and filesystem paths never infer
 /// its model type.
 #[derive(Debug, Default)]
-pub struct WorkspaceConfiguration {
+pub(crate) struct WorkspaceConfiguration {
     settings: Option<Value>,
     model_documents: Vec<ModelDocument>,
     revision: u64,
@@ -40,13 +40,14 @@ pub struct WorkspaceConfiguration {
 
 impl WorkspaceConfiguration {
     /// Replace the most recently received client workspace settings.
-    pub fn replace(&mut self, settings: Value) {
+    pub(crate) fn replace(&mut self, settings: Value) {
         let _ = self.update(settings);
     }
 
     /// Return the current raw client workspace settings, if any.
+    #[cfg(test)]
     #[must_use]
-    pub const fn settings(&self) -> Option<&Value> {
+    pub(crate) const fn settings(&self) -> Option<&Value> {
         self.settings.as_ref()
     }
 
@@ -102,6 +103,17 @@ mod tests {
     use serde_json::Value;
 
     use super::{ModelDocumentKind, WorkspaceConfiguration};
+
+    #[test]
+    fn workspace_configuration_distinguishes_initial_and_replaced_values() {
+        let mut configuration = WorkspaceConfiguration::default();
+        assert_eq!(configuration.settings(), None);
+        configuration.replace(value(r#"{"maxProblems":20}"#));
+        assert_eq!(
+            configuration.settings(),
+            Some(&value(r#"{"maxProblems":20}"#))
+        );
+    }
 
     #[test]
     fn accepts_only_explicit_unique_model_routes_in_configuration_order() {
