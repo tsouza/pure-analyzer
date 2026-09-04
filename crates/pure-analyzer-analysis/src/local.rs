@@ -816,6 +816,67 @@ mod tests {
         assert!(!is_relation_type(&type_reference));
     }
 
+    fn simple_type_ref_fixture(source: &str) -> GreenNode {
+        let tokens = lex(source);
+        let mut builder = GreenNodeBuilder::new(source, &tokens);
+        builder.open(SyntaxKind::ROOT);
+        builder.open(SyntaxKind::TYPE_REF);
+        builder.open(SyntaxKind::QUALIFIED_NAME);
+        builder.advance();
+        builder.close();
+        builder.close();
+        builder.close();
+        let root = builder.finish().expect("fixture tree must build");
+        direct_nodes(&root)
+            .into_iter()
+            .next()
+            .expect("fixture must contain a type reference")
+    }
+
+    /// Regression for a `is_named_relation_type -> true` mutant: the guard
+    /// must reject any other qualified name, not treat every named type as
+    /// `Relation`.
+    #[test]
+    fn is_named_relation_type_requires_the_literal_name_relation() {
+        assert!(is_named_relation_type(&simple_type_ref_fixture("Relation")));
+        assert!(
+            !is_named_relation_type(&simple_type_ref_fixture("String")),
+            "a type named anything other than Relation must not be treated as one"
+        );
+    }
+
+    /// Regression for a `||` -> `&&` mutant on `type_ref`'s guard: a
+    /// well-formed qualified name inside a hidden recovery node must still be
+    /// rejected, exactly like `relation_column_rejects_a_hidden_recovery_node`
+    /// pins for the sibling `relation_column` guard.
+    #[test]
+    fn type_ref_rejects_a_hidden_recovery_node() {
+        let source = "String";
+        let tokens = lex(source);
+        let mut builder = GreenNodeBuilder::new(source, &tokens);
+        builder.open(SyntaxKind::ROOT);
+        builder.open(SyntaxKind::TYPE_REF);
+        builder.open(SyntaxKind::QUALIFIED_NAME);
+        builder.advance();
+        builder.close();
+        builder.open(SyntaxKind::ERROR_NODE);
+        builder.close();
+        builder.close();
+        builder.close();
+        let root = builder.finish().expect("fixture tree must build");
+        let recovered_type = direct_nodes(&root)
+            .into_iter()
+            .next()
+            .expect("fixture must contain a type reference");
+
+        assert_eq!(
+            type_ref(&recovered_type),
+            None,
+            "a type reference containing a hidden recovery node must not resolve, \
+             even though its qualified name alone is well-formed"
+        );
+    }
+
     #[test]
     fn relation_shaped_non_type_parameter_is_not_bound() {
         let parameters = relation_parameters_fixture(SyntaxKind::PAREN_EXPR, false, true);

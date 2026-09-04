@@ -1,11 +1,11 @@
 //! End-to-end contracts for fail-closed structural relational comparison.
 
 use pure_analyzer_analysis::{
-    AnalysisInput, Column, ColumnId, ComparisonOutcome, IrOrigin, Knowledge, NormalizationBudget,
-    NormalizationOutcome, Nullability, OpaqueOutcome, RelationExpression, RelationFacts,
-    RelationOperator, RelationSchema, RelationSource, RelationalOutcome, RelationalQuery,
-    ScalarExpression, ScalarLiteral, ScalarOperator, SourceSpan, StructuralDifferenceKind,
-    Totality, compare_lowered_queries, compare_relational_queries,
+    AnalysisInput, Column, ColumnId, ComparisonOutcome, IrOrigin, Knowledge, ModelOrigin,
+    NormalizationBudget, NormalizationOutcome, Nullability, OpaqueOutcome, RelationExpression,
+    RelationFacts, RelationOperator, RelationSchema, RelationSource, RelationalOutcome,
+    RelationalQuery, ScalarExpression, ScalarLiteral, ScalarOperator, SourceSpan,
+    StructuralDifferenceKind, Totality, compare_lowered_queries, compare_relational_queries,
     compare_relational_queries_with_budget, lower_m3_query, normalize_relational_query,
 };
 use pure_analyzer_diagnostics::{FileId, ReasonCode, TextRange, TextSize};
@@ -651,5 +651,178 @@ fn identity_shaped_project_stays_frozen() {
         ),
         "an identity-shaped project must stay frozen, not collapse to its input, got {:#?}",
         normalized.root().operator()
+    );
+}
+
+fn structural_key_of(query: &RelationalQuery) -> pure_analyzer_analysis::StructuralKey {
+    match normalize_relational_query(query) {
+        NormalizationOutcome::Normalized(normalized) => normalized.structural_key().clone(),
+        NormalizationOutcome::Indecisive(failure) => {
+            panic!("fixture must normalize: {failure:?}")
+        }
+    }
+}
+
+/// Regression for a `canonical_normalized_origins` `<=` -> `>` mutant. The
+/// existing `ordered_schema_mismatch_is_a_symmetric_span_anchored_refutation`
+/// test only checks `compare(a, b) == compare(b, a)`, which a flip from `<=`
+/// to `>` still satisfies (both branches stay self-consistent under
+/// argument-swap, just consistently picking the *maximum* structural key
+/// instead of the minimum). This pins the actual selection against an
+/// independent oracle: `StructuralKey`'s own, unrelated `Ord` impl.
+#[test]
+fn output_column_mismatch_selects_the_minimum_structural_key_as_primary() {
+    let class = class();
+    let left = query(
+        &[(7, "name", "String")],
+        origin(FIRST_FILE, 1, 10),
+        class.clone(),
+    );
+    let right = query(
+        &[(90, "name", "Integer")],
+        origin(FIRST_FILE + 1, 101, 120),
+        class,
+    );
+
+    let left_structural_key = structural_key_of(&left);
+    let right_structural_key = structural_key_of(&right);
+    assert_ne!(
+        left_structural_key, right_structural_key,
+        "fixture must have a strict structural-key order for this regression \
+         to be meaningful"
+    );
+    let expected_primary_file = if left_structural_key < right_structural_key {
+        FIRST_FILE
+    } else {
+        FIRST_FILE + 1
+    };
+
+    let ComparisonOutcome::NotEquivalent(difference) = compare_relational_queries(&left, &right)
+    else {
+        panic!("a Type field mismatch must be refuted")
+    };
+    assert_eq!(
+        difference.primary_origin().source().file(),
+        FileId::new(expected_primary_file),
+        "the primary origin must belong to the query with the strictly \
+         smaller structural key, not an argument-order-dependent selection"
+    );
+}
+
+/// Companion regression for the single-origin `canonical_normalized_origin`
+/// `<=` -> `>` mutant, exercised through the unproven-normal-form-difference
+/// indecision path. Same rationale as the test above: symmetry alone does
+/// not distinguish "always pick the min" from "always pick the max".
+#[test]
+fn unproven_difference_indecision_selects_the_minimum_structural_key_origin() {
+    let class = class();
+    let base = query(&[(7, "name", "String")], origin(FIRST_FILE, 1, 10), class);
+    let literal_false = filtered(&base, false, origin(FIRST_FILE + 1, 101, 120));
+
+    let base_structural_key = structural_key_of(&base);
+    let literal_false_structural_key = structural_key_of(&literal_false);
+    assert_ne!(
+        base_structural_key, literal_false_structural_key,
+        "fixture must have a strict structural-key order for this regression \
+         to be meaningful"
+    );
+    let expected_file = if base_structural_key < literal_false_structural_key {
+        FIRST_FILE
+    } else {
+        FIRST_FILE + 1
+    };
+
+    let ComparisonOutcome::Indecisive(indecision) =
+        compare_relational_queries(&base, &literal_false)
+    else {
+        panic!("an unproven normal-form difference must stay indecisive")
+    };
+    assert_eq!(
+        indecision.origin().source().file(),
+        FileId::new(expected_file),
+        "the selected origin must belong to the query with the strictly \
+         smaller structural key"
+    );
+}
+
+fn shared_document_classes() -> (ResolvedClass, ResolvedClass) {
+    let source = r#"{
+        "_type": "data",
+        "elements": [
+            {
+                "_type": "class",
+                "package": "model",
+                "name": "Left",
+                "stereotypes": [],
+                "superTypes": [],
+                "properties": [],
+                "qualifiedProperties": []
+            },
+            {
+                "_type": "class",
+                "package": "model",
+                "name": "Right",
+                "stereotypes": [],
+                "superTypes": [],
+                "properties": [],
+                "qualifiedProperties": []
+            }
+        ]
+    }"#;
+    let graph = load_pmcd_documents(&[PmcdDocument::new("comparison-tie-break-fixture", source)])
+        .expect("fixture model loads");
+    let resolver = Resolver::new(&graph);
+    let resolve = |name: &str| match resolver
+        .resolve_class(&QName::new(name).expect("fixture path is valid"))
+    {
+        Resolution::Found(class) => class,
+        outcome => panic!("fixture class resolves: {outcome:?}"),
+    };
+    (resolve("model::Left"), resolve("model::Right"))
+}
+
+/// Regression for a `model_origin_keys -> vec![]` mutant. PMCD definitions
+/// from the same document share one document-level [`DefinitionAnchor`] with
+/// no element span, so two failures that also share the same query source
+/// span can *only* be told apart by their model-origin identity. Without
+/// `model_origin_keys` actually comparing that identity, the tie-break
+/// degenerates to "always equal", which breaks the documented
+/// argument-order-independence contract: swapping inputs then always selects
+/// whichever failure happens to land in the *first* comparator position,
+/// rather than the query's own content.
+#[test]
+fn two_sided_failure_with_a_tied_span_breaks_ties_on_model_origin_identity() {
+    let (left_model, right_model) = shared_document_classes();
+    assert_eq!(
+        left_model.definition(),
+        right_model.definition(),
+        "fixture classes must share one document-level anchor for this \
+         tie-break to be meaningful"
+    );
+
+    let tied_span = FileId::new(FIRST_FILE);
+    let tied_range = TextRange::new(TextSize::from(1), TextSize::from(10));
+    let origin_with =
+        |models: Vec<ModelOrigin>| IrOrigin::new(SourceSpan::new(tied_span, tied_range), models);
+    let class = class();
+    let left = query(
+        &[(7, "name", "String")],
+        origin_with(vec![ModelOrigin::from_class(&left_model)]),
+        class.clone(),
+    );
+    let right = query(
+        &[(90, "name", "String")],
+        origin_with(vec![ModelOrigin::from_class(&right_model)]),
+        class,
+    );
+
+    let budget = NormalizationBudget::new(0);
+    let forward = compare_relational_queries_with_budget(&left, &right, budget);
+    let reverse = compare_relational_queries_with_budget(&right, &left, budget);
+    assert_eq!(
+        forward, reverse,
+        "failure selection must be argument-order independent even when the \
+         two failures tie on reason and source span, and can only be broken \
+         by comparing model-origin identity"
     );
 }
