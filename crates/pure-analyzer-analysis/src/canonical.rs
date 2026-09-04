@@ -1393,6 +1393,41 @@ mod tests {
         assert!(!is_emittable_identifier("9x"));
     }
 
+    // -- `CanonicalPure::as_str` ---------------------------------------------
+
+    /// Regression for `CanonicalPure::as_str` (canonical.rs:32) body =>
+    /// `"xyzzy"`: built from a non-trivial two-operator emission (a
+    /// class scan filtered by a scalar equality), `as_str` must return the
+    /// exact emitted text, not merely some non-empty or otherwise
+    /// mutant-satisfying property of it. Hand-verified: replacing the body
+    /// with the literal `"xyzzy"` makes this test fail; reverting makes it
+    /// pass again.
+    #[test]
+    fn as_str_returns_the_exact_text_of_a_non_trivial_emitted_filter() {
+        let input = class_scan(resolved_class("model", "Person"), 1);
+        let predicate = trivial_equal_condition(&input.schema().columns()[0].clone());
+        let filter_expression = RelationExpression::new(
+            RelationOperator::Filter {
+                input: Box::new(input.clone()),
+                predicate: predicate.clone(),
+            },
+            input.schema().clone(),
+            RelationFacts::unknown(),
+            origin(),
+        )
+        .expect("fixture filter is valid");
+
+        let Ok(emitted) = Emitter::default().relation(&filter_expression) else {
+            panic!("fixture filter must emit");
+        };
+        let canonical = CanonicalPure { text: emitted.text };
+
+        assert_eq!(
+            canonical.as_str(),
+            "model::Person.all()->filter(v0| ($v0 == $v0))"
+        );
+    }
+
     // -- `CanonicalEmissionOutcome` accessors --------------------------------
 
     /// Regression for `CanonicalEmissionOutcome::emitted` (canonical.rs:81)
