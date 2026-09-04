@@ -42,6 +42,27 @@ pub struct Label {
     pub note: String,
 }
 
+impl PartialOrd for Label {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Label {
+    /// Order by `(file, span start, span end, note)`.
+    ///
+    /// `TextRange` has no `Ord` impl (see [`crate::fix::TextEdit`]'s `Ord`
+    /// impl for why), so this compares `span.start()`/`span.end()` directly.
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        (self.file, self.span.start(), self.span.end(), &self.note).cmp(&(
+            other.file,
+            other.span.start(),
+            other.span.end(),
+            &other.note,
+        ))
+    }
+}
+
 impl Label {
     /// Construct a `Label` with an empty note.
     #[must_use]
@@ -70,7 +91,17 @@ impl Label {
 /// Findings flow one way, from passes to renderers, so this type is
 /// intentionally serialization-only. Its identifiers are closed enums rather
 /// than caller-provided strings.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+///
+/// `PartialOrd`/`Ord` order by every field in declaration order. This is a
+/// deterministic total order, not a human-facing sort: `code` orders by this
+/// enum's declared variant order, not [`DiagCode::as_str`]'s `PUR`-number
+/// text (a caller that wants the human-facing order, e.g. to present
+/// findings grouped by code, should sort on that explicitly rather than rely
+/// on this impl). Its purpose is to give callers like
+/// `pure-analyzer-analysis`'s pass engine a cheap, total tie-breaker for two
+/// diagnostics that share every field a human-facing sort key already
+/// covers, without round-tripping through a serialization format.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
 pub struct Diagnostic {
     /// Stable registered identifier, e.g. [`DiagCode::WrongMilestoningArity`].
     pub code: DiagCode,

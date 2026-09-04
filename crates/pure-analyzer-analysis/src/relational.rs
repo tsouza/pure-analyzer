@@ -637,9 +637,17 @@ pub enum RelationSource {
 
 /// Resolver-issued evidence for one supported correlated member navigation.
 ///
-/// The private receiver preserves the exact local value from which the resolver
-/// selected the member. It prevents callers from combining an arbitrary member
-/// with an unrelated scalar expression in [`ScalarOperator::Navigation`].
+/// The private receiver retains the resolver-selected member's class-typed
+/// local. This crate's navigation validator checks a
+/// [`ScalarOperator::Navigation`]'s input expression against it by class,
+/// multiplicity, and model provenance — not by the exact local value: two
+/// distinct locals of the same resolved class validate interchangeably
+/// against one `ResolvedNavigation`. That is enough to reject a member
+/// spliced onto an expression of the wrong type, multiplicity, or
+/// provenance, but not enough to reject a same-class local swapped in for a
+/// different one. Strengthening this to exact local identity would need
+/// [`LocalValue`] itself to carry an identity beyond its `kind`/multiplicity
+/// (e.g. a declaration-site token), which it does not today.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResolvedNavigation {
     receiver: LocalValue,

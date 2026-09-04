@@ -143,6 +143,43 @@ fn emits_join_binders_and_selected_output_order_deterministically() {
 }
 
 #[test]
+fn refuses_distinct_on_selectors_over_a_class_extent() {
+    // `Person.all()` is a `Column`-bound class extent (`Person[*]`), not a
+    // `Relation<>` — `~[...]` selector syntax only exists on the latter, even
+    // though this crate's own class-scan schema (one column named after the
+    // scanned class) makes `~[Person]` resolve and lower to `Supported`.
+    // Confirmed live against a pinned Legend 4.113.0 engine: this fails to
+    // compile there too.
+    let model = model();
+    let source = "model::Person.all()->distinct(~[Person])";
+    let original = normal_form(source, &model);
+
+    let outcome = emit_canonical_normal_form(&original);
+
+    assert!(
+        matches!(outcome, CanonicalEmissionOutcome::Indecisive(_)),
+        "distinct(~[...]) over a class extent must not emit: {outcome:#?}"
+    );
+}
+
+#[test]
+fn refuses_sort_selectors_over_a_class_extent() {
+    // Same class-extent-vs-`Relation<>` gap as the `distinct_on` case above,
+    // for `sort`. Confirmed live against Legend 4.113.0: this is rejected
+    // with "Can't find a match for function 'sort(Person[*],SortInfo[1])'".
+    let model = model();
+    let source = "model::Person.all()->sort([ascending(~Person)])";
+    let original = normal_form(source, &model);
+
+    let outcome = emit_canonical_normal_form(&original);
+
+    assert!(
+        matches!(outcome, CanonicalEmissionOutcome::Indecisive(_)),
+        "sort([...]) over a class extent must not emit: {outcome:#?}"
+    );
+}
+
+#[test]
 fn emits_quoted_terminal_aliases_without_claiming_a_lossless_layout() {
     let model = model();
     let source = "model::Person.all()->project(~['Legal Name': person | $person.name])";

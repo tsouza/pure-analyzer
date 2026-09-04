@@ -418,7 +418,15 @@ impl Emitter {
         columns: &[ColumnId],
     ) -> EmissionResult<EmittedRelation> {
         let input = self.relation(input_expression)?;
-        if !facts_are_unknown(expression.facts())
+        // `~[...]` relation-selector syntax below only exists on `Relation<>`
+        // (`Row`, from `project`'s row arm, or `None`, from `join`); a
+        // `Column`-bound input is a class extent (`T[*]`), which has no
+        // schema for the selector to name. Confirmed against a live Legend
+        // 4.113.0 engine: `Person.all()->distinct(~[Person])` fails to
+        // compile there even though this crate's own class-scan schema (one
+        // column named after the scanned class) makes `~[Person]` resolve.
+        if input.binding == BindingKind::Column
+            || !facts_are_unknown(expression.facts())
             || !schema_names_are_unique(input_expression.schema())
         {
             return Err(EmissionFailure::unsupported(expression.origin()));
@@ -449,7 +457,13 @@ impl Emitter {
         keys: &[crate::SortKey],
     ) -> EmissionResult<EmittedRelation> {
         let input = self.relation(input_expression)?;
-        if expression.schema() != input_expression.schema()
+        // Same `~[...]`/`Relation<>` requirement as `distinct_on` above:
+        // confirmed live against Legend 4.113.0, `Person.all()->sort([ascending(~Person)])`
+        // is rejected with "Can't find a match for function
+        // 'sort(Person[*],SortInfo[1])'" — `sort` on a class extent has a
+        // different, binder-based signature (`sort(T[m], Function<...>[0..1])`).
+        if input.binding == BindingKind::Column
+            || expression.schema() != input_expression.schema()
             || !expression.facts().matches(input_expression.facts())
             || !schema_names_are_unique(input_expression.schema())
         {

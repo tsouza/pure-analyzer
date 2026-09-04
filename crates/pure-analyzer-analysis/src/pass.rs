@@ -244,15 +244,17 @@ fn compare_diagnostics(left: &Diagnostic, right: &Diagnostic) -> std::cmp::Order
             right.primary.span.end(),
             right.message.as_str(),
         ))
-        .then_with(|| canonical_diagnostic(left).cmp(&canonical_diagnostic(right)))
-}
-
-fn canonical_diagnostic(diagnostic: &Diagnostic) -> String {
-    // `Diagnostic` is a closed, data-only serializable model: its JSON encoding
-    // contains every field that participates in equality. This tie-breaker
-    // prevents a pass's incidental emission order from leaking into output when
-    // two distinct findings share the human-facing sort fields above.
-    serde_json::to_string(diagnostic).unwrap_or_default()
+        // `Diagnostic`'s derived `Ord` compares every field in declaration
+        // order (code, severity, message, primary, secondary, fix, url).
+        // The tuple above has already established `left`/`right` are equal
+        // on code/severity/primary span/message whenever this branch runs,
+        // so this only ever ends up deciding ties on the fields the tuple
+        // does not cover (`secondary`, `fix`, `url`) — a total, deterministic
+        // tie-break with no fallible round trip through a serialization
+        // format, unlike an earlier `serde_json::to_string(..).unwrap_or_default()`
+        // version of this tie-break, which silently became a no-op (both
+        // sides comparing equal as `""`) on any serialization failure.
+        .then_with(|| left.cmp(right))
 }
 
 const fn severity_rank(severity: Severity) -> u8 {

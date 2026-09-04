@@ -18,7 +18,6 @@ pure-analyzer-model.workspace = true
 pure-analyzer-parser.workspace = true
 pure-analyzer-resolve.workspace = true
 pure-analyzer-syntax.workspace = true
-serde_json.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]

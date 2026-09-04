@@ -1,4 +1,28 @@
-//! Hermetic replay of M4a outcomes against frozen pinned-Legend evidence.
+//! Hermetic replay of M4a outcomes, cross-checked against a bounded Legend
+//! smoke oracle for each pair's declared column shape.
+//!
+//! The M4a `equivalent`/`not_equivalent`/`indecisive` verdicts themselves are
+//! proven entirely by `compare_relational_queries` over the real lowered
+//! `left`/`right` queries — that half needs no engine at all. What the frozen
+//! `Evidence::result` fields add is a much narrower thing: confirmation that
+//! each side's bounded [`Oracle`] (a closed, independently executable
+//! expression Legend actually ran, pinned by
+//! `scripts/analysis-comparison-corpus.mjs --refresh`) really does observe
+//! what its `kind` claims, and `assert_oracle_matches_query` ties that oracle
+//! back to the real lowered query's structural shape (its operator kind, and
+//! for `ordered_columns`, its actual output column order). The frozen
+//! `result`s are never a live oracle *of the `left`/`right` queries
+//! themselves* — Legend cannot execute `test::Row.all()->project(~[...])`
+//! from this corpus at all without a mapping the corpus does not provide
+//! (confirmed live against the pinned 4.113.0 engine: `Row.all()` fails
+//! compilation with "Error mapping not found for class Row"). So for
+//! `ordered-project-schema-is-not-equivalent`, `assert_ne!(left.result,
+//! right.result)` only proves the two frozen literal-list observations
+//! `|['name', 'email']` and `|['email', 'name']` differ, which is true by
+//! construction; it does not by itself prove anything about the `project`
+//! queries. The link back to those queries is entirely
+//! `assert_oracle_matches_query`'s job (a hermetic, engine-free structural
+//! check against this crate's own lowering), not the engine's.
 
 use std::collections::BTreeSet;
 
@@ -578,8 +602,16 @@ fn assert_comparison_outcome(
     }
 }
 
+/// Replay every M4a comparison witness and check its bounded Legend oracle.
+///
+/// This proves the real M4a outcome (via `compare_relational_queries`) for
+/// every witness, and separately confirms that witness's bounded [`Oracle`]
+/// structurally matches its lowered query and that the oracle's own frozen
+/// Legend observation is internally consistent with the witness's declared
+/// outcome. It does not prove the frozen Legend results are an independent
+/// oracle *for the `left`/`right` queries themselves* — see the module doc.
 #[test]
-fn pinned_legend_evidence_and_real_m4a_comparison_agree() {
+fn frozen_witnesses_and_their_bounded_legend_oracles_agree() {
     let mut ids = BTreeSet::new();
     let mut outcomes = BTreeSet::new();
     let mut count = 0;
