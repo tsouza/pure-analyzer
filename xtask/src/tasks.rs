@@ -145,6 +145,20 @@ const PURECARD_FFI_SOURCE: &str = "crates/pure-analyzer-purecard/src/ffi.rs";
 const MUTATION_OUTPUT_ROOT: &str = "target";
 /// Hard ceiling for each cargo build or test command spawned by cargo-mutants.
 const MUTATION_COMMAND_TIMEOUT_SECONDS: &str = "120";
+/// Suppresses cargo-mutants' own `##[warning]`/`::warning` GitHub Actions
+/// annotation for a surviving/timed-out mutant (`--annotations none`,
+/// overriding its CI-detecting `auto` default).
+///
+/// Applied to every workspace-wide (untargeted) mutation pass — full,
+/// FFI, and parser-focused — never to the merge-base-diff-scoped pass. A
+/// diff-scoped survivor is always inside the PR's own change, so its
+/// annotation is precise and its `cargo mutants` exit code already fails
+/// that job on its own; a workspace-wide survivor can be unrelated
+/// pre-existing backlog debt (issue #441), and the repo-wide
+/// warnings-are-errors sweep (`scripts/checks/no-ci-warnings.mjs`) cannot
+/// tell that apart from a genuine tool warning — so it must never reach the
+/// sweep as a `##[warning]` line in the first place.
+const MUTATION_ANNOTATIONS_NONE: [&str; 2] = ["--annotations", "none"];
 
 /// Resolve a path owned by the nested PureCARD crate.
 fn purecard_path(relative: impl AsRef<Path>) -> PathBuf {
@@ -541,6 +555,8 @@ fn mutation_workspace_args(shard: Option<(u32, u32)>, diff: Option<&str>) -> Vec
     if let Some(diff) = diff {
         args.push("--in-diff".to_string());
         args.push(diff.to_string());
+    } else {
+        args.extend(MUTATION_ANNOTATIONS_NONE.map(str::to_string));
     }
     if let Some((index, total)) = shard {
         args.push("--shard".to_string());
@@ -597,6 +613,8 @@ pub fn test_mutation_ffi() -> Result<()> {
             "target/mutants-ffi",
             "--timeout",
             MUTATION_COMMAND_TIMEOUT_SECONDS,
+            MUTATION_ANNOTATIONS_NONE[0],
+            MUTATION_ANNOTATIONS_NONE[1],
             "--",
             "--lib",
         ],
@@ -622,6 +640,8 @@ pub fn test_mutation_parser() -> Result<()> {
             "target/mutants-parser",
             "--timeout",
             MUTATION_COMMAND_TIMEOUT_SECONDS,
+            MUTATION_ANNOTATIONS_NONE[0],
+            MUTATION_ANNOTATIONS_NONE[1],
         ],
     )
 }
@@ -2858,11 +2878,31 @@ mod tests {
             ]
             .map(str::to_string)
         );
+    }
+
+    /// A diff-scoped survivor is always inside the PR's own change and the
+    /// `cargo mutants` exit code already fails that job on its own, so its
+    /// GitHub annotation stays enabled (`auto`, cargo-mutants' own default) —
+    /// only a workspace-wide (untargeted) pass, which can surface unrelated
+    /// pre-existing backlog debt (issue #441), suppresses it.
+    #[test]
+    fn only_workspace_wide_mutation_passes_suppress_github_annotations() {
         assert!(
-            !mutation_workspace_args(Some((0, 1)), None)
+            !mutation_workspace_args(Some((2, 3)), Some("target/mutation-scope.diff"))
                 .iter()
-                .any(|arg| arg == "--in-diff")
+                .any(|arg| arg == "--annotations"),
+            "a diff-scoped shard must keep cargo-mutants' default annotation behavior",
         );
+        for args in [
+            mutation_workspace_args(Some((0, 1)), None),
+            mutation_workspace_args(None, None),
+        ] {
+            assert!(
+                args.windows(2)
+                    .any(|pair| pair == MUTATION_ANNOTATIONS_NONE),
+                "a workspace-wide pass must suppress cargo-mutants' GitHub annotations: {args:?}",
+            );
+        }
     }
 
     /// The completeness lane must exclude exactly the binary the real-model
