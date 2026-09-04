@@ -207,8 +207,19 @@ export function prDiffShardCount(mutantCount) {
   return shardTotal <= PR_DIFF_MAX_SHARDS ? shardTotal : 0;
 }
 
-/** Create the GitHub Actions matrix, including a sentinel for a skipped run. */
-export function mutationMatrix(scope, total) {
+/**
+ * Create the GitHub Actions matrix, including a sentinel for a skipped run.
+ *
+ * `sampleIndex` selects the single full-workspace shard (of `total`, the same
+ * `FULL_MUTATION_SHARDS` the nightly run divides its whole workspace into)
+ * the PR-lane `sample` scope runs — only meaningful when `scope === "sample"`.
+ */
+export function mutationMatrix(scope, total, sampleIndex = 0) {
+  if (scope === "sample") {
+    return {
+      include: [{ diagnostics: "shard", index: sampleIndex, report: "default", scope, total }],
+    };
+  }
   const shardTotal = scope === "skip" ? 1 : total;
   const report = scope === "diff" ? "diff" : scope === "full" ? "default" : "skip";
   const diagnostics = scope === "diff" ? "diff-shard" : scope === "full" ? "shard" : "skip";
@@ -247,6 +258,43 @@ function skippedPlan(reason) {
   };
 }
 
+/**
+ * A bounded, non-empty stand-in for a deferred `full` plan: one deterministic
+ * full-workspace shard (of `FULL_MUTATION_SHARDS`) runs in the PR lane
+ * instead of nothing at all (#276's "the deferred-to-full path itself gets
+ * *some* bounded mutation coverage" criterion). Rotating which shard runs, PR
+ * by PR, gives the deferred-to-full path *some* coverage over time rather
+ * than none.
+ *
+ * This scope's job is wired as advisory, never a `ci-gate` dependency (#441):
+ * an untargeted shard can land on unrelated, pre-existing surviving mutants
+ * (real coverage debt to track, not a defect in the PR that happened to draw
+ * that shard) or hit the same wall-time flakiness the nightly's full run
+ * already has on some shards, and neither may block every future PR. See
+ * `MUTATION_ANNOTATIONS_NONE` (xtask) for how the GitHub-annotation half of
+ * that conflation — cargo-mutants' own `##[warning]` on a survivor, which the
+ * warnings-are-errors sweep otherwise hard-fails on regardless of which job
+ * it came from — is suppressed for this and every other untargeted pass.
+ */
+function samplePlan(reason, sampleIndex) {
+  return {
+    scope: "sample",
+    reason: `deferred-${reason}`,
+    mergeBase: "",
+    headSha: "",
+    diffSha256: "",
+    mutantCount: 0,
+    matrix: mutationMatrix("sample", FULL_MUTATION_SHARDS, sampleIndex),
+  };
+}
+
+/** Deterministic full-workspace shard index derived from a commit SHA. */
+export function sampleShardIndex(sha) {
+  if (typeof sha !== "string" || sha.length === 0) return 0;
+  const seed = Number.parseInt(sha.slice(0, 8), 16);
+  return Number.isSafeInteger(seed) ? seed % FULL_MUTATION_SHARDS : 0;
+}
+
 /** Return an event-level plan when incremental planning is categorically inapplicable. */
 export function eventFallbackPlan(eventName, draft) {
   if (eventName !== "pull_request") return fullPlan("non-pull-request-event");
@@ -255,26 +303,18 @@ export function eventFallbackPlan(eventName, draft) {
 }
 
 /**
- * Apply the bounded direct-PR lane, deferring full proofs to a valid sentinel.
- *
- * A deferred `full` plan collapses to `skip` rather than running any
- * full-workspace coverage inline: an earlier version of this function ran
- * one rotating full-workspace shard instead, but that surfaced two
- * pre-existing problems live on PR #439 — a single full-workspace shard can
- * exceed the job's wall-time budget, and cargo-mutants reports each
- * surviving mutant as a `##[warning]` annotation that the repo-wide
- * warnings-are-errors sweep (`no-ci-warnings.mjs`) then hard-fails on,
- * which would make ci-gate red on every PR until the whole pre-existing
- * surviving-mutant backlog is cleared. See the follow-up issue for the
- * bounded-full-workspace-coverage design this still owes #276.
+ * Apply the bounded direct-PR lane. A deferrable `full` plan becomes a
+ * bounded, rotating single-shard `sample` (see {@link samplePlan}) rather
+ * than a hard `skip`; a `diff` plan that outgrows the PR-lane budget still
+ * defers to `skip`.
  */
-export function deferFullPlan(plan, deferFull = false) {
+export function deferFullPlan(plan, deferFull = false, sampleIndex = 0) {
   if (!deferFull) return plan;
   if (plan.scope === "full") {
     if (!DEFERRED_FULL_REASONS.has(plan.reason)) {
       throw new Error(`full mutation plan is not safely deferrable: ${plan.reason}`);
     }
-    return skippedPlan(`deferred-${plan.reason}`);
+    return samplePlan(plan.reason, sampleIndex);
   }
   if (plan.scope !== "diff") return plan;
 
@@ -496,7 +536,12 @@ export async function planFromEnvironment(environment = process.env, dependencie
     writeDiff: writeMutationDiff = writeDiff,
   } = dependencies;
   const deferFull = environment.MUTATION_DEFER_FULL === "true";
-  const applyDeferral = (plan) => deferFullPlan(plan, deferFull);
+  // Non-PR events (e.g. merge_group) carry no pull-request head SHA; fall
+  // back to the run's own commit so a sampled shard is still deterministic.
+  const sampleIndex = sampleShardIndex(
+    environment.MUTATION_HEAD_SHA || environment.GITHUB_SHA || "",
+  );
+  const applyDeferral = (plan) => deferFullPlan(plan, deferFull, sampleIndex);
   const eventFallback = eventFallbackPlan(
     environment.GITHUB_EVENT_NAME,
     environment.MUTATION_PR_DRAFT,

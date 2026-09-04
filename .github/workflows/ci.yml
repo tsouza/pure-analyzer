@@ -140,16 +140,28 @@ jobs:
         run: cargo xtask coverage
 
   # --- Diff-scoped mutation testing (cargo-mutants) -----------------------
-  # The planner always emits a valid matrix sentinel. A direct PR with a
-  # verified production-source diff (including its own test-file changes —
-  # #276) runs workers on that diff; every other shape (docs, Cargo.toml, a
-  # rename/delete, an inline test surface, a test-only change set, a draft
-  # PR, or a diff too large for its bounded budget) defers to `skip`. The
-  # nightly/manual full run remains the exhaustive backstop for everything
-  # `skip` doesn't cover. #276's deferred-to-full path was meant to also get
-  # some bounded PR-lane coverage instead of a hard skip; a first attempt at
-  # that surfaced pre-existing problems live (see #441) and was reverted
-  # rather than landed half-safe — #441 tracks the redesign.
+  # The planner always emits a valid matrix sentinel, and every PR run leaves
+  # SOME bounded mutation evidence rather than none (#276):
+  #   - scope=diff:   a verified production-source diff (including its own
+  #                    test-file changes) — up to three shards of twelve
+  #                    mutants each, targeted at the PR's own change. Blocks
+  #                    `ci-gate`.
+  #   - scope=sample: any other change shape the diff lane can't safely scope
+  #                    (docs, Cargo.toml, a rename/delete, an inline test
+  #                    surface, a test-only change set, …) — one deterministic
+  #                    full-workspace shard (of the nightly's twelve),
+  #                    rotating by commit SHA so coverage accrues across PRs
+  #                    over time instead of never running at all. A shard run
+  #                    this way is very likely to land on unrelated,
+  #                    pre-existing surviving mutants or the nightly's own
+  #                    wall-time flakiness (#441) — neither of which is this
+  #                    PR's fault — so it is wired advisory: never a
+  #                    `ci-gate` dependency, and its own step is allowed to
+  #                    fail without reddening the job (`continue-on-error`).
+  #   - scope=skip:   a draft PR, or a diff-lane plan that outgrew its bounded
+  #                    shard budget.
+  # The nightly/manual full run remains the exhaustive, blocking-in-its-own-
+  # workflow backstop for both scope=sample and scope=skip.
   mutation-plan:
     name: mutation-plan
     runs-on: ubuntu-latest
@@ -244,6 +256,76 @@ jobs:
         with:
           name: mutation-diagnostics-diff-shard-${{ matrix.index }}
           path: target/mutation-diagnostics-diff-shard-${{ matrix.index }}
+          if-no-files-found: warn
+
+  # A deferred full-scope plan (docs, Cargo.toml, a rename/delete, an inline
+  # test surface, …) runs ONE deterministic full-workspace shard here instead
+  # of nothing (#276's "the deferred-to-full path itself gets some bounded
+  # mutation coverage" criterion). The shard/total pair is the same
+  # `test-mutation-shard` mechanism the nightly full run uses — this job is
+  # just one rotating slice of that same twelve-shard matrix, run inline.
+  #
+  # Advisory, not a gate (#441): `continue-on-error` keeps a survivor or a
+  # wall-time kill from reddening this job, and it is never listed in
+  # `no-warnings`' or `ci-gate`'s `needs:` — an untargeted shard routinely
+  # lands on pre-existing backlog debt or nightly-grade flakiness that is not
+  # this PR's fault. `test-mutation-shard` itself suppresses cargo-mutants'
+  # GitHub annotations for every untargeted pass (`MUTATION_ANNOTATIONS_NONE`
+  # in xtask), so a survivor here can never reach the warnings-are-errors log
+  # sweep as a `##[warning]` in the first place — it stays in this job's own
+  # log and its uploaded `mutants.out` artifact, both still real evidence.
+  mutation-sample:
+    name: mutation (sample ${{ matrix.index }}/${{ matrix.total }})
+    needs: mutation-plan
+    if: >-
+      github.event_name == 'pull_request' &&
+      needs.mutation-plan.result == 'success' &&
+      needs.mutation-plan.outputs.scope == 'sample'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.mutation-plan.outputs.matrix) }}
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: sccache
+      CARGO_INCREMENTAL: "0"
+      MUTATION_SHARD_INDEX: ${{ matrix.index }}
+      MUTATION_SHARD_TOTAL: ${{ matrix.total }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba # v0.0.11
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - uses: taiki-e/install-action@fcf5432d9f50d67e37ee6e29bdb7a224ff67b4a7 # v2.86.8
+        with:
+          tool: cargo-mutants@27.1.0,cargo-nextest,just
+      - name: cargo mutants (sample shard ${{ matrix.index }}/${{ matrix.total }})
+        run: bun scripts/run-mutation-debug.mjs shard "$MUTATION_SHARD_INDEX" "$MUTATION_SHARD_TOTAL"
+      - name: Collect mutation diagnostics
+        if: always()
+        run: bun scripts/run-mutation-debug.mjs --collect shard "$MUTATION_SHARD_INDEX"
+      - name: Upload mutation report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: mutants-out-sample-shard-${{ matrix.index }}
+          path: target/mutants-default-shard-${{ matrix.index }}
+          if-no-files-found: error
+      - name: Upload mutation diagnostics
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: mutation-diagnostics-sample-shard-${{ matrix.index }}
+          path: target/mutation-diagnostics-shard-${{ matrix.index }}
           if-no-files-found: warn
 
   # --- Supply chain: deny + audit + vet + unused deps ----------------------
@@ -424,10 +506,14 @@ jobs:
   # apt, useradd, …). Shared with lint/security/release-plz via the reusable
   # no-warnings workflow so every pipeline is covered by one definition. Runs
   # after everything (their logs must exist); `always()` so it also catches
-  # warnings in a job that failed.
+  # warnings in a job that failed. `mutation-sample` is listed here (so the
+  # sweep waits for its log to exist and actually scans it for a REAL tool
+  # warning) but deliberately not below in `ci-gate`'s own `needs:` — it is
+  # advisory (#441), and `continue-on-error` on that job already means a
+  # sweep triggered solely by its own conclusion can't happen.
   no-warnings:
     name: no-warnings (log sweep)
-    needs: [changes, check, coverage, mutation-plan, mutation, supply-chain, api-stability, structural, docs, fuzz]
+    needs: [changes, check, coverage, mutation-plan, mutation, mutation-sample, supply-chain, api-stability, structural, docs, fuzz]
     if: always()
     permissions:
       actions: read
@@ -435,6 +521,10 @@ jobs:
     uses: ./.github/workflows/no-warnings.yml
 
   # --- Aggregate gate: the single required check ---------------------------
+  # `mutation-sample` is intentionally absent from `needs:` — see its own job
+  # comment and #441: an untargeted full-workspace shard must never gate
+  # every PR on unrelated, pre-existing mutation debt or nightly-grade
+  # wall-time flakiness.
   ci-gate:
     name: ci-gate
     needs: [changes, check, coverage, mutation-plan, mutation, supply-chain, api-stability, structural, docs, fuzz, no-warnings]

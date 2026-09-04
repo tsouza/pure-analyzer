@@ -29,6 +29,7 @@ import {
   planFromClassification,
   prDiffShardCount,
   run,
+  sampleShardIndex,
   writeDiff,
 } from "./mutation-scope.mjs";
 
@@ -371,19 +372,25 @@ test("bounds deferred direct-PR mutation plans and preserves a valid sentinel", 
   const deferred = deferFullPlan(full, true);
   expect(deferred).toMatchObject({
     reason: "deferred-non-pull-request-event",
-    scope: "skip",
+    scope: "sample",
   });
-  expect(deferred.matrix).toEqual(mutationMatrix("skip", 1));
+  expect(deferred.matrix).toEqual(mutationMatrix("sample", FULL_MUTATION_SHARDS, 0));
 
-  // Every other deferrable full reason gets the same skip treatment.
+  // A caller-supplied sample index selects that exact full-workspace shard.
+  expect(deferFullPlan(full, true, 5).matrix).toEqual(
+    mutationMatrix("sample", FULL_MUTATION_SHARDS, 5),
+  );
+
+  // Every other deferrable full reason gets the same bounded-sample treatment.
   for (const reason of [
     "documentation-change",
     "empty-change-set",
     "inline-test-surface",
     "rename-delete-or-type-change",
     "test-only-change-set",
+    "zero-diff-mutant-list",
   ]) {
-    expect(deferFullPlan({ ...full, reason }, true).scope).toBe("skip");
+    expect(deferFullPlan({ ...full, reason }, true).scope).toBe("sample");
   }
 
   expect(prDiffShardCount(0)).toBe(0);
@@ -426,7 +433,7 @@ test("bounds deferred direct-PR mutation plans and preserves a valid sentinel", 
   );
   expect(deferFullPlan(zero, true)).toMatchObject({
     reason: "deferred-zero-diff-mutant-list",
-    scope: "skip",
+    scope: "sample",
   });
   const invalid = planFromClassification(
     { reason: "production-rust-only", scope: "diff" },
@@ -455,18 +462,21 @@ test("deferred CI planning emits sentinels but surfaces planner failures", async
     repoRoot: async () => "/workspace",
   };
 
-  await expect(
-    planFromEnvironment(environment, {
-      ...dependencies,
-      classifyCheckedOutChanges: async () => ({
-        reason: "non-production-or-configuration-change",
-        scope: "full",
-      }),
+  const deferredFull = await planFromEnvironment(environment, {
+    ...dependencies,
+    classifyCheckedOutChanges: async () => ({
+      reason: "non-production-or-configuration-change",
+      scope: "full",
     }),
-  ).resolves.toMatchObject({
-    reason: "deferred-non-production-or-configuration-change",
-    scope: "skip",
   });
+  expect(deferredFull).toMatchObject({
+    reason: "deferred-non-production-or-configuration-change",
+    scope: "sample",
+  });
+  // Deterministic on the event-pinned PR head SHA, not the runner's own state.
+  expect(deferredFull.matrix).toEqual(
+    mutationMatrix("sample", FULL_MUTATION_SHARDS, sampleShardIndex(headSha)),
+  );
 
   await expect(
     planFromEnvironment(environment, {
@@ -488,15 +498,35 @@ test("deferred CI planning emits sentinels but surfaces planner failures", async
     }),
   ).rejects.toThrow("planner unavailable");
 
-  await expect(
-    planFromEnvironment({
-      GITHUB_EVENT_NAME: "merge_group",
-      MUTATION_DEFER_FULL: "true",
-    }),
-  ).resolves.toMatchObject({
-    reason: "deferred-non-pull-request-event",
-    scope: "skip",
+  const mergeGroupPlan = await planFromEnvironment({
+    GITHUB_EVENT_NAME: "merge_group",
+    MUTATION_DEFER_FULL: "true",
   });
+  expect(mergeGroupPlan).toMatchObject({
+    reason: "deferred-non-pull-request-event",
+    scope: "sample",
+  });
+  // No pull-request head SHA and no GITHUB_SHA in this environment: the
+  // sampled shard still falls back to a deterministic index (0), never a
+  // thrown error or a random one.
+  expect(mergeGroupPlan.matrix).toEqual(
+    mutationMatrix("sample", FULL_MUTATION_SHARDS, sampleShardIndex("")),
+  );
+});
+
+test("derives the deterministic sample shard index from a commit SHA prefix", () => {
+  expect(sampleShardIndex("")).toBe(0);
+  expect(sampleShardIndex(undefined)).toBe(0);
+  expect(sampleShardIndex("0".repeat(40))).toBe(0);
+  // Every shard index the function can return is a valid full-workspace shard.
+  for (const sha of [mergeBase, headSha, "1234abcd".repeat(5), "f".repeat(40)]) {
+    const index = sampleShardIndex(sha);
+    expect(Number.isInteger(index)).toBe(true);
+    expect(index).toBeGreaterThanOrEqual(0);
+    expect(index).toBeLessThan(FULL_MUTATION_SHARDS);
+  }
+  // Deterministic: the same SHA always selects the same shard.
+  expect(sampleShardIndex(headSha)).toBe(sampleShardIndex(headSha));
 });
 
 // This is the end-to-end regression test #310 asked for: it calls the same
@@ -728,4 +758,20 @@ test("uses a sentinel matrix for skips and retains every full shard for fallback
   expect(mutationMatrix("full", FULL_MUTATION_SHARDS).include).toHaveLength(
     FULL_MUTATION_SHARDS,
   );
+});
+
+test("a sample matrix runs exactly one full-workspace shard at the given index", () => {
+  expect(mutationMatrix("sample", FULL_MUTATION_SHARDS, 7)).toEqual({
+    include: [
+      {
+        diagnostics: "shard",
+        index: 7,
+        report: "default",
+        scope: "sample",
+        total: FULL_MUTATION_SHARDS,
+      },
+    ],
+  });
+  // Defaults to shard 0 when no index is supplied.
+  expect(mutationMatrix("sample", FULL_MUTATION_SHARDS).include[0].index).toBe(0);
 });
