@@ -8,7 +8,18 @@ const LOWEST_PRECEDENCE: u8 = 0;
 const EQUALITY_PRECEDENCE: u8 = 1;
 const ADDITIVE_PRECEDENCE: u8 = 2;
 const MULTIPLICATIVE_PRECEDENCE: u8 = 3;
-const MAX_PARSE_DEPTH: usize = 256;
+/// Recursion-depth budget for [`Parser::enter_parse_depth`], bounding how
+/// deep `parse_expression` may recurse into itself before recovering
+/// instead of overflowing the call stack.
+const MAX_RECURSION_DEPTH: usize = 256;
+/// Prefix-operator-count budget for `parse_unary_expression`, bounding how
+/// many leading `+`/`-` a single unary chain may accumulate.
+const MAX_UNARY_OPERATOR_COUNT: usize = 256;
+/// Retroactive-wrap budget for `reserve_retroactive_wrap`, bounding how many
+/// times one postfix chain may be nested inside itself (each wrap re-anchors
+/// the whole prior chain, so this — not recursion depth — is what bounds
+/// that particular growth).
+const MAX_RETROACTIVE_WRAP_DEPTH: usize = 256;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum OpaqueIslandDelimiter {
@@ -225,7 +236,7 @@ impl<'tokens> Parser<'tokens> {
         self.consume_trivia();
         let mut unary_count = 0;
         while self.at_any(&[TokenKind::PLUS, TokenKind::MINUS]) {
-            if unary_count == MAX_PARSE_DEPTH {
+            if unary_count == MAX_UNARY_OPERATOR_COUNT {
                 self.error_current("unary-expression nesting limit reached");
                 for _ in 0..unary_count {
                     self.close();
@@ -237,7 +248,7 @@ impl<'tokens> Parser<'tokens> {
             unary_count = unary_count.saturating_add(1);
         }
         let parsed_operand = self.parse_postfix_expression();
-        if !parsed_operand {
+        if !parsed_operand && unary_count > 0 {
             self.error_current("expected an operand after a unary operator");
         }
         for _ in 0..unary_count {
@@ -1307,7 +1318,7 @@ impl<'tokens> Parser<'tokens> {
     }
 
     fn enter_parse_depth(&mut self) -> bool {
-        if self.depth >= MAX_PARSE_DEPTH {
+        if self.depth >= MAX_RECURSION_DEPTH {
             self.error_current("parser nesting limit reached");
             return false;
         }
@@ -1338,7 +1349,7 @@ impl<'tokens> Parser<'tokens> {
     /// real recursion into a new expression (bounded by
     /// [`Self::enter_parse_depth`]) links one chain's depth to another's.
     fn reserve_retroactive_wrap(&mut self, wrap_depth: &mut usize) -> bool {
-        if *wrap_depth >= MAX_PARSE_DEPTH {
+        if *wrap_depth >= MAX_RETROACTIVE_WRAP_DEPTH {
             self.error_current("expression nesting limit reached");
             return false;
         }

@@ -564,7 +564,6 @@ const PROPTEST_CASES: u32 = 256;
 proptest! {
     #![proptest_config(ProptestConfig {
         cases: PROPTEST_CASES,
-        failure_persistence: None,
         ..ProptestConfig::default()
     })]
 

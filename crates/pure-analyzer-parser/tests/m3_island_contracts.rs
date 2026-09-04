@@ -132,7 +132,6 @@ fn store_pointer_component_failures_keep_local_and_outer_diagnostics_distinct() 
             diagnostic_ranges(&parsed),
             vec![
                 (DiagCode::MalformedSyntax, first_range),
-                (DiagCode::MalformedSyntax, eof.clone()),
                 (DiagCode::MalformedSyntax, eof),
             ],
             "{source}",
@@ -157,7 +156,6 @@ fn store_pointer_component_failures_keep_local_and_outer_diagnostics_distinct() 
         diagnostic_ranges(&parsed),
         vec![
             (DiagCode::UnterminatedIsland, eof.clone()),
-            (DiagCode::MalformedSyntax, eof.clone()),
             (DiagCode::MalformedSyntax, eof),
         ],
     );
@@ -225,7 +223,6 @@ fn opaque_island_terminators_and_eof_diagnostics_are_distinct() {
             diagnostic_ranges(&parsed),
             vec![
                 (DiagCode::UnterminatedIsland, eof.clone()),
-                (DiagCode::MalformedSyntax, eof.clone()),
                 (DiagCode::MalformedSyntax, eof),
             ],
             "{source}",
@@ -248,7 +245,6 @@ fn store_recovery_stops_at_semicolon_without_absorbing_it() {
         diagnostic_ranges(&parsed),
         vec![
             (DiagCode::UnterminatedIsland, 20..28),
-            (DiagCode::MalformedSyntax, 33..34),
             (DiagCode::MalformedSyntax, 33..34),
             (DiagCode::MalformedSyntax, 35..42),
         ],
