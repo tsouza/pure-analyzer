@@ -206,6 +206,53 @@ fn malformed_primary_does_not_become_a_qualified_name() {
 }
 
 #[test]
+fn dollar_without_a_name_still_fails_the_enclosing_expression() {
+    // `parse_variable_expression` returns `has_dollar && has_name`: a
+    // mutant weakening the AND to an OR would report success as soon as
+    // the `$` consumed, even with no name after it, which suppresses the
+    // enclosing `parse_query_expression`'s own "expected an expression"
+    // diagnostic and its recovery step — even though `consume_name`
+    // already logged its own "expected a variable name" error.
+    let source = "$";
+    let parsed = parse(source);
+
+    let messages: Vec<&str> = parsed
+        .diagnostics
+        .iter()
+        .map(|diagnostic| diagnostic.message.as_str())
+        .collect();
+    assert!(
+        messages.contains(&"expected a variable name"),
+        "got: {messages:?}"
+    );
+    assert!(
+        messages.contains(&"expected an expression"),
+        "got: {messages:?}"
+    );
+    assert_ranges_are_valid(source, &parsed);
+}
+
+#[test]
+fn unary_operator_without_an_operand_reports_a_dedicated_message() {
+    // `unary_count` only ever grows from 0 via `saturating_add(1)`, so
+    // `unary_count > 0` mutated to `<` compares an unsigned count against
+    // zero the wrong way and can never observe `true` — the dedicated
+    // "expected an operand" diagnostic would simply never fire.
+    let source = "+)";
+    let parsed = parse(source);
+
+    assert!(
+        parsed.diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == DiagCode::MalformedSyntax
+                && diagnostic.message == "expected an operand after a unary operator"
+        }),
+        "expected the unary-operand diagnostic, got: {:#?}",
+        diagnostic_details(&parsed)
+    );
+    assert_ranges_are_valid(source, &parsed);
+}
+
+#[test]
 fn malformed_collection_literal_preserves_the_next_top_level_query() {
     let source = "f([a, ); model::Person.all()";
     let parsed = parse(source);

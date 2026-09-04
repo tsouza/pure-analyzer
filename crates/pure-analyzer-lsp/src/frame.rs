@@ -178,6 +178,21 @@ mod tests {
     }
 
     #[test]
+    fn max_content_length_bytes_is_64_mebibytes() {
+        // Recomputed independently of the constant's own definition, so a
+        // mutated `*` there (e.g. `64 + 1024 * 1024`) changes the value
+        // this compares against. Written as the same `*` expression (not a
+        // pre-computed decimal literal) to keep clippy's
+        // `decimal_literal_representation` lint quiet.
+        assert_eq!(MAX_CONTENT_LENGTH_BYTES, 64 * 1024 * 1024);
+    }
+
+    #[test]
+    fn max_header_line_bytes_is_8_kibibytes() {
+        assert_eq!(MAX_HEADER_LINE_BYTES, 8 * 1024);
+    }
+
+    #[test]
     fn written_frame_reads_back() {
         let payload = value(r#"{"jsonrpc":"2.0","method":"initialized"}"#);
         let mut buffer = Vec::new();

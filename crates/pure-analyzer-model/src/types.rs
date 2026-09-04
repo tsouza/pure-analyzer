@@ -876,6 +876,7 @@ mod tests {
     fn multiplicity_enforces_finite_bounds() {
         let optional = Multiplicity::new(0, Some(1)).expect("valid");
         assert_eq!(optional.upper(), Some(1));
+        assert!(!optional.is_unbounded());
         assert!(optional.is_to_one());
         assert!(Multiplicity::new(0, Some(0)).expect("valid").is_to_one());
         assert!(!Multiplicity::new(0, Some(2)).expect("valid").is_to_one());
