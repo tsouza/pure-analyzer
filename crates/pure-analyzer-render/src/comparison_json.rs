@@ -6,10 +6,9 @@ use serde::Serialize;
 use crate::{
     ComparisonRenderInput, RenderError,
     comparison::{PreparedComparison, PreparedDifference},
+    json_envelope::{JSON_SCHEMA_VERSION, JsonReason},
     origin::{JsonOrigin, json_origin},
 };
-
-const JSON_SCHEMA_VERSION: &str = "1.0";
 
 pub(crate) fn render(input: ComparisonRenderInput<'_>) -> Result<String, RenderError> {
     let comparison = PreparedComparison::new(input)?;
@@ -58,12 +57,6 @@ enum JsonDifference<'a> {
         primary_origin: JsonOrigin<'a>,
         secondary_origin: JsonOrigin<'a>,
     },
-}
-
-#[derive(Serialize)]
-struct JsonReason {
-    id: &'static str,
-    blurb: &'static str,
 }
 
 fn json_envelope<'a>(comparison: &'a PreparedComparison<'a>) -> JsonEnvelope<'a> {

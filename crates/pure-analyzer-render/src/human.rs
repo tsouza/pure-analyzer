@@ -115,8 +115,8 @@ fn annotated_line<'a>(label: &PreparedLabel<'a>) -> (&'a str, usize, usize) {
         .find('\n')
         .map_or(text.len(), |index| start + index);
     let highlighted_end = end.min(line_end);
-    let padding = terminal_text_width(&text[line_start..start]);
-    let width = terminal_text_width(&text[start..highlighted_end]).max(1);
+    let padding = rendered_character_count(&text[line_start..start]);
+    let width = rendered_character_count(&text[start..highlighted_end]).max(1);
     (&text[line_start..line_end], padding, width)
 }
 
@@ -234,11 +234,21 @@ const fn is_bidi_control(character: char) -> bool {
     )
 }
 
-fn terminal_text_width(text: &str) -> usize {
-    text.chars().map(terminal_character_width).sum()
+/// The number of characters [`append_terminal_text`] emits for `text`, used
+/// to pad and size the `^` caret beneath it so the caret lines up with the
+/// escaped form actually printed above, not with `text`'s own length.
+///
+/// This is not terminal column width (`wcwidth`): it counts one unit per
+/// emitted character, so a double-width CJK character or a zero-width
+/// combining mark both count as one, the same as an ordinary narrow
+/// character. The caret can drift out of true visual alignment on such
+/// lines; only the escaped-control-character accounting this function exists
+/// for is exact.
+fn rendered_character_count(text: &str) -> usize {
+    text.chars().map(rendered_character_length).sum()
 }
 
-fn terminal_character_width(character: char) -> usize {
+fn rendered_character_length(character: char) -> usize {
     match character {
         '\0' | '\t' | '\n' | '\r' => 2,
         character if character.is_control() || is_bidi_control(character) => {

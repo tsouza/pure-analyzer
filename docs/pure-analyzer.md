@@ -245,7 +245,9 @@ Formatter diagnostics and every `lint --fix` diagnostic go to standard error.
 `explain` writes one requested explanation to standard output. This leaves
 standard output clean for fixed source, diffs, or script-consumable JSON.
 `--quiet` suppresses normal rendering without changing exit status or requested
-source/diff output.
+source/diff output. `--no-quiet` overrides a configured or environment-supplied
+`quiet = true` back off for one invocation; the two flags conflict and cannot
+both be passed at once.
 
 This makes it safe to route data and diagnostics independently:
 
@@ -253,6 +255,13 @@ This makes it safe to route data and diagnostics independently:
 pure-analyzer lint query.pure --model model.json --fix --diff --format sarif \
   > fixes.diff 2> diagnostics.sarif
 ```
+
+Human and JSON output report each finding's column as a one-based UTF-8
+**byte** offset within its line. SARIF reports a one-based Unicode
+**code-point** column instead, and declares this in its own
+`columnKind: unicodeCodePoints` metadata, per the SARIF 2.1.0 specification.
+The two columns agree wherever a line is pure ASCII and diverge on any line
+with a multi-byte character before the reported position.
 
 ## Exit status
 
@@ -295,9 +304,44 @@ automatically could destroy a different, still-running invocation's live
 staging file — a later run that touches the same directory instead logs a
 warning naming it, so it can be inspected and removed by hand.
 
+The staging file is created at its destination's exact permission bits (on
+platforms with POSIX file modes) from its first instant, before any content
+is written, so a stricter-than-default source file's new content is never
+briefly exposed at a more permissive mode along the way. Extended attributes
+and ACLs beyond the plain permission bits are not preserved.
+
 Formatter recovery diagnostics prevent default file writes. Use `--check`,
 `--stdout`, or `--diff` to inspect input that needs recovery without modifying
 it.
+
+## Language Server
+
+`pure-analyzer-lsp` is a separate stdio Language Server Protocol binary built
+alongside `pure-analyzer`. It shares the same analysis engine through the
+`libpure` facade, so its diagnostics and quick fixes match the CLI's `lint`
+exactly; it adds no analysis behavior of its own.
+
+Point an LSP client at the `pure-analyzer-lsp` executable over stdio. It
+supports:
+
+- `textDocument/didOpen`, `didChange`, `didSave`, and `didClose`, each
+  followed by a synchronous `textDocument/publishDiagnostics` for every open
+  document.
+- `textDocument/hover`, returning the same renderer-neutral explain content as
+  `pure-analyzer explain`.
+- `textDocument/definition`, resolving a supported reference to its model or
+  query declaration.
+- `textDocument/codeAction` with the `quickfix` kind, applying every
+  machine-applicable fix in the requested document as one workspace edit —
+  the same whole-file fix set `pure-analyzer lint --fix` would install, not a
+  single diagnostic scoped to the request's cursor position.
+
+Model routing is workspace configuration, not a CLI flag: send
+`workspace/didChangeConfiguration` with a `modelDocuments` array of
+`{ "uri": string, "kind": "pure" | "pmcd" }` objects, one entry per model
+document already open in the client. A configured URI that is not (yet) an
+open document is not an error; it is simply excluded from analysis until the
+client opens it, and the server logs a warning naming the ignored URI.
 
 ## Common failures
 

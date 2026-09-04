@@ -14,7 +14,7 @@
               "shortDescription": {
                 "text": "unknown property"
               },
-              "helpUri": "https://github.com/tsouza/pure-analyzer/tree/main/docs",
+              "helpUri": "https://github.com/tsouza/pure-analyzer/blob/main/docs/explain/PUR2002.md",
               "defaultConfiguration": {
                 "level": "error"
               },

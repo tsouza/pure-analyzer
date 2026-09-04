@@ -199,23 +199,19 @@ pub(crate) fn lint(
 
 /// Compare two queries through the fail-closed M4a facade and render its exact outcome.
 pub(crate) fn compare(left: &str, right: &str, config: &ResolvedConfig) -> Result<u8, Failure> {
-    if config.output_format() == OutputFormat::Sarif {
-        return Err(Failure::usage(COMPARISON_SARIF_UNSUPPORTED));
-    }
+    let format = non_sarif_format(config, COMPARISON_SARIF_UNSUPPORTED)?;
     let [left, right] = comparison_sources(left, right)?;
     let models = model_sources(config.model_paths())?;
     let request = ComparisonRequest::new(left, right, models);
     let driver = AnalysisDriver;
     let output = driver.compare(&request).map_err(driver_failure)?;
-    emit_comparison(&output, config)?;
+    emit_comparison(&output, format, config)?;
     Ok(comparison_exit(output.outcome()))
 }
 
 /// Emit one proven canonical relational normal form without changing any source file.
 pub(crate) fn canonical_format(files: &[String], config: &ResolvedConfig) -> Result<u8, Failure> {
-    if config.output_format() == OutputFormat::Sarif {
-        return Err(Failure::usage(CANONICAL_EMISSION_SARIF_UNSUPPORTED));
-    }
+    let format = non_sarif_format(config, CANONICAL_EMISSION_SARIF_UNSUPPORTED)?;
     let sources = query_sources(files)?;
     let [source] = sources.as_slice() else {
         return Err(Failure::usage(CANONICAL_EMISSION_INPUT_COUNT));
@@ -224,8 +220,31 @@ pub(crate) fn canonical_format(files: &[String], config: &ResolvedConfig) -> Res
     let request = CanonicalEmissionRequest::new(source.clone(), models);
     let driver = AnalysisDriver;
     let output = driver.emit_canonical(&request).map_err(driver_failure)?;
-    emit_canonical_emission(&output, config)?;
+    emit_canonical_emission(&output, format, config)?;
     Ok(canonical_emission_exit(output.outcome()))
+}
+
+/// The two structured formats `compare` and `canonical_format` can render.
+///
+/// SARIF is a diagnostics-log format with no representation for a proven
+/// comparison or canonical-emission outcome, so it is rejected up front by
+/// [`non_sarif_format`] rather than carried into the renderers below as a
+/// state their `match` must still account for.
+#[derive(Debug, Clone, Copy)]
+enum RenderableFormat {
+    Human,
+    Json,
+}
+
+fn non_sarif_format(
+    config: &ResolvedConfig,
+    unsupported: &'static str,
+) -> Result<RenderableFormat, Failure> {
+    match config.output_format() {
+        OutputFormat::Human => Ok(RenderableFormat::Human),
+        OutputFormat::Json => Ok(RenderableFormat::Json),
+        OutputFormat::Sarif => Err(Failure::usage(unsupported)),
+    }
 }
 
 /// Execute lossless layout formatting, installing each default file input with its
@@ -429,18 +448,21 @@ fn emit_analysis(output: &AnalysisOutput, config: &ResolvedConfig) -> Result<(),
     )
 }
 
-fn emit_comparison(output: &ComparisonOutput, config: &ResolvedConfig) -> Result<(), Failure> {
+fn emit_comparison(
+    output: &ComparisonOutput,
+    format: RenderableFormat,
+    config: &ResolvedConfig,
+) -> Result<(), Failure> {
     if config.quiet() {
         return Ok(());
     }
     let input = ComparisonRenderInput::new(output.sources(), output.outcome());
-    let rendered = match config.output_format() {
-        OutputFormat::Human => render_comparison_human(
+    let rendered = match format {
+        RenderableFormat::Human => render_comparison_human(
             input,
             color_policy(config.color()).resolve(Destination::Stdout.is_terminal()),
         ),
-        OutputFormat::Json => render_comparison_json(input),
-        OutputFormat::Sarif => return Err(Failure::usage(COMPARISON_SARIF_UNSUPPORTED)),
+        RenderableFormat::Json => render_comparison_json(input),
     }
     .map_err(Failure::internal)?;
     write_stdout(&rendered)
@@ -448,19 +470,19 @@ fn emit_comparison(output: &ComparisonOutput, config: &ResolvedConfig) -> Result
 
 fn emit_canonical_emission(
     output: &CanonicalEmissionOutput,
+    format: RenderableFormat,
     config: &ResolvedConfig,
 ) -> Result<(), Failure> {
     if config.quiet() {
         return Ok(());
     }
     let input = CanonicalEmissionRenderInput::new(output.sources(), output.outcome());
-    let rendered = match config.output_format() {
-        OutputFormat::Human => render_canonical_emission_human(
+    let rendered = match format {
+        RenderableFormat::Human => render_canonical_emission_human(
             input,
             color_policy(config.color()).resolve(Destination::Stdout.is_terminal()),
         ),
-        OutputFormat::Json => render_canonical_emission_json(input),
-        OutputFormat::Sarif => return Err(Failure::usage(CANONICAL_EMISSION_SARIF_UNSUPPORTED)),
+        RenderableFormat::Json => render_canonical_emission_json(input),
     }
     .map_err(Failure::internal)?;
     write_stdout(&rendered)
@@ -577,10 +599,12 @@ fn finish_lint_fixes(
     }
 
     if mode.stdout {
+        let query_file_id = request
+            .query_file_id(0)
+            .ok_or_else(|| Failure::internal("lint lost its resolved input"))?;
         let source = output
             .sources()
-            .files()
-            .nth(request.models().len())
+            .get(query_file_id)
             .ok_or_else(|| Failure::internal("lint lost its resolved input"))?;
         let preview_text = changes
             .iter()

@@ -3019,4 +3019,3 @@ pub fn pure_analyzer_syntax::VariableExpression::can_cast(pure_analyzer_syntax::
 pub fn pure_analyzer_syntax::VariableExpression::cast(pure_analyzer_syntax::GreenNode) -> core::option::Option<Self>
 pub fn pure_analyzer_syntax::VariableExpression::syntax(&self) -> &pure_analyzer_syntax::GreenNode
 pub fn pure_analyzer_syntax::VariableExpression::text_range(&self) -> text_size::range::TextRange
-pub fn pure_analyzer_syntax::version() -> &'static str

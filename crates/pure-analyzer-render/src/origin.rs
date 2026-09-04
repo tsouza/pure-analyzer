@@ -1,9 +1,15 @@
 //! Shared validation of source-backed relational origins.
 
-use libpure::{FileId, IrOrigin, LineColumn, SourceFile, SourceOrigin, SourceStore, TextRange};
+use libpure::{IrOrigin, LineColumn, SourceFile, SourceStore};
+use pure_analyzer_diagnostics::{FileId, TextRange};
 use serde::Serialize;
 
-use crate::{RenderError, error::OriginRole, human::append_terminal_text};
+use crate::{
+    RenderError,
+    error::OriginRole,
+    human::append_terminal_text,
+    json_envelope::{JsonFile, JsonRange, json_file, json_range},
+};
 
 /// One validated query origin and its contributing model anchors.
 pub(crate) struct PreparedOrigin<'a> {
@@ -196,26 +202,6 @@ struct JsonModelAnchor<'a> {
     range: Option<JsonRange>,
 }
 
-#[derive(Serialize)]
-struct JsonFile<'a> {
-    id: u32,
-    name: &'a str,
-    origin: &'static str,
-}
-
-#[derive(Serialize)]
-struct JsonRange {
-    start: JsonPosition,
-    end: JsonPosition,
-}
-
-#[derive(Serialize)]
-struct JsonPosition {
-    byte: u32,
-    line: usize,
-    column: usize,
-}
-
 /// Convert one validated origin to the common versioned JSON shape.
 pub(crate) fn json_origin<'a>(origin: &PreparedOrigin<'a>) -> JsonOrigin<'a> {
     JsonOrigin {
@@ -242,36 +228,5 @@ fn json_model_anchor<'a>(anchor: &PreparedModelAnchor<'a>) -> JsonModelAnchor<'a
             file: json_file(source),
             range: Some(json_range(*span, *start, *end)),
         },
-    }
-}
-
-fn json_file(source: &SourceFile) -> JsonFile<'_> {
-    JsonFile {
-        id: source.id().index(),
-        name: source.name(),
-        origin: source_origin_name(source.origin()),
-    }
-}
-
-fn json_range(range: libpure::TextRange, start: LineColumn, end: LineColumn) -> JsonRange {
-    JsonRange {
-        start: json_position(range.start(), start),
-        end: json_position(range.end(), end),
-    }
-}
-
-fn json_position(byte: libpure::TextSize, location: LineColumn) -> JsonPosition {
-    JsonPosition {
-        byte: u32::from(byte),
-        line: location.line,
-        column: location.column,
-    }
-}
-
-const fn source_origin_name(origin: &SourceOrigin) -> &'static str {
-    match origin {
-        SourceOrigin::File { .. } => "file",
-        SourceOrigin::InMemory => "memory",
-        SourceOrigin::Stdin => "stdin",
     }
 }
