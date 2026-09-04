@@ -248,7 +248,7 @@ fn schedule<W: Write>(
     writer: &mut W,
     scheduler: &mut RequestScheduler,
 ) -> io::Result<()> {
-    match scheduler.schedule(server, id, work)? {
+    match scheduler.schedule(server, id, work) {
         ScheduleResult::Scheduled => Ok(()),
         ScheduleResult::DuplicateIdentifier(id) => send_error(
             writer,

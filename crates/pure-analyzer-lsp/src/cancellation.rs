@@ -10,7 +10,7 @@ use serde_json::Value;
 
 /// The JSON-RPC identifier of a cancellable request.
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub enum RequestId {
+pub(crate) enum RequestId {
     /// A string request identifier.
     String(String),
     /// An integer request identifier.
@@ -32,7 +32,7 @@ impl RequestId {
 /// Analysis code receives cancellation decisions from its host rather than
 /// depending on JSON-RPC request identifiers.
 #[derive(Clone, Debug, Default)]
-pub struct CancellationRegistry {
+pub(crate) struct CancellationRegistry {
     active: Arc<Mutex<BTreeMap<RequestId, CancellationToken>>>,
 }
 
@@ -82,15 +82,16 @@ impl CancellationRegistry {
     ///
     /// Unknown or already-completed identifiers are deliberately ignored: a
     /// cancellation notification cannot poison a later reuse of an identifier.
-    pub fn cancel(&self, request: RequestId) {
+    pub(crate) fn cancel(&self, request: RequestId) {
         self.with_active(|active| active.get(&request).cloned())
             .as_ref()
             .map(CancellationToken::cancel);
     }
 
     /// Return whether an active request has been cancelled.
+    #[cfg(test)]
     #[must_use]
-    pub fn is_cancelled(&self, request: &RequestId) -> bool {
+    pub(crate) fn is_cancelled(&self, request: &RequestId) -> bool {
         self.with_active(|active| active.get(request).cloned())
             .is_some_and(|token| token.is_cancelled())
     }
@@ -110,14 +111,16 @@ impl CancellationRegistry {
     }
 
     /// Return the number of active cancellable requests.
+    #[cfg(test)]
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.with_active(|active| active.len())
     }
 
     /// Return whether no request is currently active.
+    #[cfg(test)]
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.with_active(|active| active.is_empty())
     }
 
@@ -212,10 +215,12 @@ mod tests {
     fn cancel_and_is_cancelled_ignore_identifiers_that_are_not_active() {
         let registry = CancellationRegistry::default();
         let id = RequestId::Number(4);
+        let other = RequestId::String("other".to_owned());
 
         assert!(!registry.is_cancelled(&id));
         registry.cancel(id.clone());
         assert!(!registry.is_cancelled(&id));
+        assert!(!registry.is_cancelled(&other));
         assert!(registry.is_empty());
         assert_eq!(registry.len(), 0);
     }
