@@ -7,9 +7,10 @@ use pure_analyzer_analysis::{
     resolve_relation_column_selectors,
 };
 use pure_analyzer_diagnostics::{FileId, TextRange, TextSize};
+use pure_analyzer_lexer::lex;
 use pure_analyzer_model::{Multiplicity, Name, QName, TypeRef};
 use pure_analyzer_parser::parse_query;
-use pure_analyzer_syntax::{GreenElement, GreenNode, SyntaxKind};
+use pure_analyzer_syntax::{GreenElement, GreenNode, GreenNodeBuilder, SyntaxKind};
 
 const FILE: u32 = 83;
 const EXACTLY_ONE: u32 = 1;
@@ -206,6 +207,93 @@ fn preserves_quoted_spelling_while_decoding_doubled_quote_escapes_for_lookup() {
             .map(|selector| selector.column())
             .collect::<Vec<_>>(),
         [ColumnId::new(18), ColumnId::new(37)]
+    );
+}
+
+#[test]
+fn is_quoted_reports_the_selector_spelling_category() {
+    let bare = selector_node("~alpha");
+    let bare_extracted = extract_relation_column_selectors(FileId::new(FILE), &bare)
+        .expect("bare selector must extract");
+    assert!(!bare_extracted.selectors()[0].name().is_quoted());
+
+    let quoted = selector_node("~'alpha'");
+    let quoted_extracted = extract_relation_column_selectors(FileId::new(FILE), &quoted)
+        .expect("quoted selector must extract");
+    assert!(quoted_extracted.selectors()[0].name().is_quoted());
+}
+
+/// Builds a hand-crafted `~alpha` [`SyntaxKind::COLUMN_SPEC`] tree directly
+/// (bypassing the parser) so it carries no diagnostics of its own, with an
+/// extra empty [`SyntaxKind::ERROR_NODE`] hidden as a sibling of its name.
+/// This is the only way to observe `contains_error_node`'s own true/false
+/// boundary independently of parser-emitted diagnostics: every malformed
+/// source the real parser produces also emits a diagnostic, which every
+/// caller in this crate already checks first, so a genuinely
+/// diagnostics-free-but-error-node-bearing tree can only come from a
+/// synthetic fixture, mirroring `pure-analyzer-analysis`'s own
+/// `relation_column_rejects_a_hidden_recovery_node` pattern in `local.rs`.
+fn column_spec_with_hidden_recovery_node() -> GreenNode {
+    let source = "~alpha";
+    let tokens = lex(source);
+    let mut builder = GreenNodeBuilder::new(source, &tokens);
+    builder.open(SyntaxKind::ROOT);
+    builder.open(SyntaxKind::COLUMN_SPEC);
+    builder.advance();
+    builder.open(SyntaxKind::COLUMN_NAME);
+    builder.advance();
+    builder.close();
+    builder.open(SyntaxKind::ERROR_NODE);
+    builder.close();
+    builder.close();
+    builder.close();
+    let root = builder.finish().expect("fixture tree must build");
+    let GreenElement::Node(selector) = &root.children()[0] else {
+        panic!("fixture root must contain the column spec node");
+    };
+    selector.clone()
+}
+
+#[test]
+fn extraction_rejects_a_hidden_recovery_node_even_without_parser_diagnostics() {
+    let selector = column_spec_with_hidden_recovery_node();
+
+    let outcome = extract_relation_column_selectors(FileId::new(FILE), &selector);
+    assert!(
+        matches!(
+            &outcome,
+            Err(opaque) if opaque.reason() == &ColumnSelectorOpaqueReason::Malformed
+        ),
+        "{outcome:#?}"
+    );
+}
+
+#[test]
+fn extract_selector_rejects_a_dangling_colon_with_no_body_node() {
+    let source = "~alpha:";
+    let tokens = lex(source);
+    let mut builder = GreenNodeBuilder::new(source, &tokens);
+    builder.open(SyntaxKind::ROOT);
+    builder.open(SyntaxKind::COLUMN_SPEC);
+    builder.advance(); // `~`
+    builder.open(SyntaxKind::COLUMN_NAME);
+    builder.advance(); // `alpha`
+    builder.close();
+    builder.advance(); // `:`, with no body node following
+    builder.close();
+    builder.close();
+    let root = builder.finish().expect("fixture tree must build");
+    let GreenElement::Node(selector) = &root.children()[0] else {
+        panic!("fixture root must contain the column spec node");
+    };
+
+    let outcome = extract_relation_column_selectors(FileId::new(FILE), selector);
+    assert!(
+        matches!(
+            &outcome,
+            Err(opaque) if opaque.reason() == &ColumnSelectorOpaqueReason::UnsupportedBody
+        ),
+        "{outcome:#?}"
     );
 }
 
