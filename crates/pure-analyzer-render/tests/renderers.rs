@@ -10,8 +10,8 @@ use pure_analyzer_diagnostics::{
     TextRange,
 };
 use pure_analyzer_render::{
-    ColorPolicy, HumanOptions, RenderError, RenderInput, SpanKind, render_human, render_json,
-    render_sarif,
+    CanonicalEmissionOriginRole, ColorPolicy, ComparisonOriginRole, HumanOptions, RenderError,
+    RenderInput, SpanKind, render_human, render_json, render_sarif,
 };
 use serde_json::Value;
 
@@ -1224,6 +1224,43 @@ fn span_kind_display_identifies_every_diagnostic_role() {
     assert_eq!(SpanKind::Primary.to_string(), "primary label");
     assert_eq!(SpanKind::Secondary(2).to_string(), "secondary label #2");
     assert_eq!(SpanKind::FixEdit(3).to_string(), "fix edit #3");
+}
+
+#[test]
+fn comparison_origin_role_display_identifies_every_role() {
+    assert_eq!(
+        ComparisonOriginRole::StructuralPrimary.to_string(),
+        "primary structural"
+    );
+    assert_eq!(
+        ComparisonOriginRole::StructuralSecondary.to_string(),
+        "secondary structural"
+    );
+    assert_eq!(ComparisonOriginRole::Indecision.to_string(), "indecision");
+    assert_eq!(
+        ComparisonOriginRole::StructuralPrimaryModel(1).to_string(),
+        "primary structural model anchor #1"
+    );
+    assert_eq!(
+        ComparisonOriginRole::StructuralSecondaryModel(2).to_string(),
+        "secondary structural model anchor #2"
+    );
+    assert_eq!(
+        ComparisonOriginRole::IndecisionModel(3).to_string(),
+        "indecision model anchor #3"
+    );
+}
+
+#[test]
+fn canonical_emission_origin_role_display_identifies_every_role() {
+    assert_eq!(
+        CanonicalEmissionOriginRole::Indecision.to_string(),
+        "indecision"
+    );
+    assert_eq!(
+        CanonicalEmissionOriginRole::IndecisionModel(4).to_string(),
+        "indecision model anchor #4"
+    );
 }
 
 fn assert_invalid_span_kind(sources: &SourceStore, diagnostics: Vec<Diagnostic>, kind: SpanKind) {

@@ -290,6 +290,19 @@ mod tests {
     };
 
     #[test]
+    fn remove_of_a_missing_document_does_not_advance_the_revision() {
+        // Guards the `!contains_key(uri) || advance_revision().is_none()`
+        // guard's OR: a mutant weakening it to `&&` still evaluates
+        // `advance_revision()` (Rust must, to know the `&&`'s result) even
+        // though the URI is absent, silently bumping the revision counter
+        // for a no-op removal.
+        let mut store = DocumentStore::default();
+        let revision_before = store.revision();
+        assert_eq!(store.remove("untitled:missing"), None);
+        assert_eq!(store.revision(), revision_before);
+    }
+
+    #[test]
     fn document_store_distinguishes_present_and_absent_documents() {
         let document = DocumentSnapshot::new(
             "file:///model.pure".to_owned(),
@@ -526,5 +539,73 @@ mod tests {
             Some(1)
         );
         assert_eq!(documents.revision(), 1);
+    }
+
+    #[test]
+    fn accepts_a_zero_width_range_as_a_pure_insertion() {
+        // Guards `start > end`: a mutant weakening it to `>=` rejects the
+        // equal case, which is exactly how an insertion at a cursor (an
+        // empty selection) is expressed.
+        let uri = "untitled:insertion";
+        let mut documents = DocumentStore::default();
+        documents.insert(DocumentSnapshot::new(
+            uri.to_owned(),
+            "ac".to_owned(),
+            Some(1),
+        ));
+
+        let insertion = ContentChange::new(
+            Some(ProtocolRange::new(
+                ProtocolPosition::new(0, 1),
+                ProtocolPosition::new(0, 1),
+            )),
+            None,
+            "b".to_owned(),
+        );
+        assert!(documents.apply_changes(uri, 2, &[insertion]));
+        assert_eq!(documents.get(uri).map(DocumentSnapshot::text), Some("abc"));
+    }
+
+    #[test]
+    fn full_document_replace_checks_the_range_length_against_the_current_text() {
+        // Guards the whole-document-replace branch's
+        // `utf16_length(text) != Some(length)` check. A mutant flipping it
+        // to `==` inverts both directions: it would reject a replace whose
+        // `range_length` correctly matches, and accept one whose
+        // `range_length` is wrong.
+        let uri = "untitled:query";
+        let mut documents = DocumentStore::default();
+        documents.insert(DocumentSnapshot::new(
+            uri.to_owned(),
+            "abc".to_owned(),
+            Some(1),
+        ));
+
+        assert!(documents.apply_changes(
+            uri,
+            2,
+            &[ContentChange::new(None, Some(3), "xyz".to_owned())],
+        ));
+        assert_eq!(documents.get(uri).map(DocumentSnapshot::text), Some("xyz"));
+
+        assert!(!documents.apply_changes(
+            uri,
+            3,
+            &[ContentChange::new(
+                None,
+                Some(4),
+                "should-not-apply".to_owned()
+            )],
+        ));
+        assert_eq!(documents.get(uri).map(DocumentSnapshot::text), Some("xyz"));
+    }
+
+    #[test]
+    fn utf16_position_refuses_an_offset_that_splits_a_multi_byte_character() {
+        // `offset > text.len() || !text.is_char_boundary(offset)`: a mutant
+        // weakening the OR to `&&` lets an in-bounds, non-boundary offset
+        // (here byte 1 inside the two-byte 'é') fall through to
+        // `text[..offset]`, which panics rather than returning `None`.
+        assert_eq!(utf16_position("é", 1), None);
     }
 }
