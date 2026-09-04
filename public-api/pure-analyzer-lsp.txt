@@ -51,6 +51,8 @@ pub unsafe fn pure_analyzer_lsp::RequestId::deref_mut<'a>(usize) -> &'a mut T
 pub unsafe fn pure_analyzer_lsp::RequestId::drop(usize)
 pub unsafe fn pure_analyzer_lsp::RequestId::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
 impl<T> either::into_either::IntoEither for pure_analyzer_lsp::RequestId
+impl<T> tracing::instrument::Instrument for pure_analyzer_lsp::RequestId
+impl<T> tracing::instrument::WithSubscriber for pure_analyzer_lsp::RequestId
 pub enum pure_analyzer_lsp::ServerExit
 pub pure_analyzer_lsp::ServerExit::Clean
 pub pure_analyzer_lsp::ServerExit::Unclean
@@ -100,6 +102,8 @@ pub unsafe fn pure_analyzer_lsp::ServerExit::deref_mut<'a>(usize) -> &'a mut T
 pub unsafe fn pure_analyzer_lsp::ServerExit::drop(usize)
 pub unsafe fn pure_analyzer_lsp::ServerExit::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
 impl<T> either::into_either::IntoEither for pure_analyzer_lsp::ServerExit
+impl<T> tracing::instrument::Instrument for pure_analyzer_lsp::ServerExit
+impl<T> tracing::instrument::WithSubscriber for pure_analyzer_lsp::ServerExit
 pub struct pure_analyzer_lsp::CancellationRegistry
 impl pure_analyzer_lsp::CancellationRegistry
 pub fn pure_analyzer_lsp::CancellationRegistry::cancel(&self, pure_analyzer_lsp::RequestId)
@@ -149,6 +153,8 @@ pub unsafe fn pure_analyzer_lsp::CancellationRegistry::deref_mut<'a>(usize) -> &
 pub unsafe fn pure_analyzer_lsp::CancellationRegistry::drop(usize)
 pub unsafe fn pure_analyzer_lsp::CancellationRegistry::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
 impl<T> either::into_either::IntoEither for pure_analyzer_lsp::CancellationRegistry
+impl<T> tracing::instrument::Instrument for pure_analyzer_lsp::CancellationRegistry
+impl<T> tracing::instrument::WithSubscriber for pure_analyzer_lsp::CancellationRegistry
 pub struct pure_analyzer_lsp::DocumentSnapshot
 impl pure_analyzer_lsp::DocumentSnapshot
 pub fn pure_analyzer_lsp::DocumentSnapshot::new(alloc::string::String, alloc::string::String, core::option::Option<i64>) -> Self
@@ -200,6 +206,8 @@ pub unsafe fn pure_analyzer_lsp::DocumentSnapshot::deref_mut<'a>(usize) -> &'a m
 pub unsafe fn pure_analyzer_lsp::DocumentSnapshot::drop(usize)
 pub unsafe fn pure_analyzer_lsp::DocumentSnapshot::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
 impl<T> either::into_either::IntoEither for pure_analyzer_lsp::DocumentSnapshot
+impl<T> tracing::instrument::Instrument for pure_analyzer_lsp::DocumentSnapshot
+impl<T> tracing::instrument::WithSubscriber for pure_analyzer_lsp::DocumentSnapshot
 pub struct pure_analyzer_lsp::DocumentStore
 impl pure_analyzer_lsp::DocumentStore
 pub fn pure_analyzer_lsp::DocumentStore::get(&self, &str) -> core::option::Option<&pure_analyzer_lsp::DocumentSnapshot>
@@ -242,6 +250,8 @@ pub unsafe fn pure_analyzer_lsp::DocumentStore::deref_mut<'a>(usize) -> &'a mut 
 pub unsafe fn pure_analyzer_lsp::DocumentStore::drop(usize)
 pub unsafe fn pure_analyzer_lsp::DocumentStore::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
 impl<T> either::into_either::IntoEither for pure_analyzer_lsp::DocumentStore
+impl<T> tracing::instrument::Instrument for pure_analyzer_lsp::DocumentStore
+impl<T> tracing::instrument::WithSubscriber for pure_analyzer_lsp::DocumentStore
 pub struct pure_analyzer_lsp::Server
 impl pure_analyzer_lsp::Server
 pub const fn pure_analyzer_lsp::Server::cancellation(&self) -> &pure_analyzer_lsp::CancellationRegistry
@@ -284,6 +294,8 @@ pub unsafe fn pure_analyzer_lsp::Server::deref_mut<'a>(usize) -> &'a mut T
 pub unsafe fn pure_analyzer_lsp::Server::drop(usize)
 pub unsafe fn pure_analyzer_lsp::Server::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
 impl<T> either::into_either::IntoEither for pure_analyzer_lsp::Server
+impl<T> tracing::instrument::Instrument for pure_analyzer_lsp::Server
+impl<T> tracing::instrument::WithSubscriber for pure_analyzer_lsp::Server
 pub struct pure_analyzer_lsp::WorkspaceConfiguration
 impl pure_analyzer_lsp::WorkspaceConfiguration
 pub fn pure_analyzer_lsp::WorkspaceConfiguration::replace(&mut self, serde_json::value::Value)
@@ -323,4 +335,6 @@ pub unsafe fn pure_analyzer_lsp::WorkspaceConfiguration::deref_mut<'a>(usize) ->
 pub unsafe fn pure_analyzer_lsp::WorkspaceConfiguration::drop(usize)
 pub unsafe fn pure_analyzer_lsp::WorkspaceConfiguration::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
 impl<T> either::into_either::IntoEither for pure_analyzer_lsp::WorkspaceConfiguration
+impl<T> tracing::instrument::Instrument for pure_analyzer_lsp::WorkspaceConfiguration
+impl<T> tracing::instrument::WithSubscriber for pure_analyzer_lsp::WorkspaceConfiguration
 pub fn pure_analyzer_lsp::serve_stdio() -> core::io::error::Result<pure_analyzer_lsp::ServerExit>

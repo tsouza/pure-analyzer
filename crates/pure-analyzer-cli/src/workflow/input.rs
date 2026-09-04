@@ -249,12 +249,30 @@ fn collect_files(
             ))
         })?;
         if kind.is_dir() {
-            collect_files(&entry.path(), argument, files)?;
+            collect_subdirectory(&entry.path(), argument, files);
         } else if kind.is_file() || kind.is_symlink() {
             files.push(entry.path());
         }
     }
     Ok(())
+}
+
+/// Recurse into one subdirectory found while expanding a glob's matched
+/// root, skipping it (with a warning) rather than failing the entire
+/// invocation when this process cannot read it — a permission-denied
+/// subdirectory somewhere beneath a broad `**` pattern should not prevent
+/// every other matching file from being found. A failure to read the
+/// pattern's own root directory is not routed through here and still fails
+/// closed: see `query_sources`'s direct call into [`collect_files`].
+fn collect_subdirectory(directory: &Path, argument: &str, files: &mut Vec<PathBuf>) {
+    if let Err(error) = collect_files(directory, argument, files) {
+        tracing::warn!(
+            directory = %directory.display(),
+            pattern = argument,
+            %error,
+            "could not read a subdirectory while expanding an input pattern; skipped"
+        );
+    }
 }
 
 fn validate_pattern(pattern: &str, argument: &str) -> Result<(), Failure> {
@@ -450,5 +468,45 @@ mod tests {
         assert!(matches!(models[0], ModelInput::Pmcd { .. }));
         assert!(matches!(models[1], ModelInput::Pure { .. }));
         std::fs::remove_dir_all(root).expect("remove fixture directory");
+    }
+
+    #[cfg(any(target_os = "linux", target_vendor = "apple"))]
+    #[test]
+    fn unreadable_subdirectory_is_skipped_rather_than_failing_the_whole_walk() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = std::env::temp_dir().join(format!(
+            "pure-analyzer-glob-permissions-{}-{}",
+            std::process::id(),
+            super::super::test_nonce()
+        ));
+        let readable = root.join("readable");
+        let restricted = root.join("restricted");
+        std::fs::create_dir_all(&readable).expect("create readable subdirectory");
+        std::fs::create_dir_all(&restricted).expect("create restricted subdirectory");
+        std::fs::write(readable.join("found.pure"), "Class A {}").expect("write reachable file");
+        std::fs::write(restricted.join("hidden.pure"), "Class B {}")
+            .expect("write unreachable file");
+        std::fs::set_permissions(&restricted, std::fs::Permissions::from_mode(0o000))
+            .expect("restrict subdirectory permissions");
+
+        // A non-root test runner cannot list `restricted`; running as root
+        // (some CI containers do) bypasses the permission bits entirely, so
+        // the premise this test exercises does not hold — skip rather than
+        // assert something the environment cannot arrange.
+        let restriction_took_effect = std::fs::read_dir(&restricted).is_err();
+
+        let mut files = Vec::new();
+        let result = collect_files(&root, "**/*.pure", &mut files);
+
+        std::fs::set_permissions(&restricted, std::fs::Permissions::from_mode(0o700))
+            .expect("restore subdirectory permissions for cleanup");
+        std::fs::remove_dir_all(&root).expect("remove fixture directory");
+
+        if !restriction_took_effect {
+            return;
+        }
+        result.expect("an unreadable subdirectory must not fail the whole glob expansion");
+        assert_eq!(files, vec![readable.join("found.pure")]);
     }
 }

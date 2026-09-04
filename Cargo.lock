@@ -819,7 +819,6 @@ version = "0.4.1"
 dependencies = [
  "pure-analyzer-analysis",
  "pure-analyzer-diagnostics",
- "pure-analyzer-lexer",
  "pure-analyzer-model",
  "pure-analyzer-parser",
  "pure-analyzer-resolve",
@@ -1176,6 +1175,8 @@ dependencies = [
  "libpure",
  "pure-analyzer-diagnostics",
  "serde_json",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

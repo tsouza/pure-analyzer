@@ -186,29 +186,10 @@ pub fn lex(text: &str) -> Vec<(SyntaxKind, TextRange)> {
         .collect()
 }
 
-/// The crate's semantic version, as declared in `Cargo.toml`.
-///
-/// A trivial, genuinely-used API: `libpure`'s `engine_crate_versions` reports
-/// on every engine crate this way, including this one.
-#[must_use]
-pub fn version() -> &'static str {
-    env!("CARGO_PKG_VERSION")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use text_size::TextSize;
-
-    #[test]
-    fn version_matches_workspace_version() {
-        // `env!` here is evaluated independently of the `version()` body
-        // being tested, so this stays a real oracle instead of a tautology:
-        // a mutant that swaps `version()`'s return value still fails this
-        // assertion, and unlike a hardcoded literal it never goes stale on
-        // a workspace version bump.
-        assert_eq!(version(), env!("CARGO_PKG_VERSION"));
-    }
 
     fn kinds(text: &str) -> Vec<SyntaxKind> {
         lex(text).into_iter().map(|(kind, _)| kind).collect()

@@ -1242,4 +1242,3 @@ impl<T> core::borrow::BorrowMut<T> for pure_analyzer_resolve::TypeScope<'environ
 pub fn pure_analyzer_resolve::TypeScope<'environment>::borrow_mut(&mut self) -> &mut T
 impl<T> core::convert::From<T> for pure_analyzer_resolve::TypeScope<'environment>
 pub fn pure_analyzer_resolve::TypeScope<'environment>::from(T) -> T
-pub fn pure_analyzer_resolve::version() -> &'static str

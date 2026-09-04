@@ -510,7 +510,7 @@ fn malformed_hover_params_receive_a_json_rpc_invalid_params_error() {
 }
 
 #[test]
-fn code_action_transcript_emits_versioned_utf16_workspace_edits_for_every_planned_file() {
+fn code_action_transcript_emits_a_versioned_utf16_workspace_edit_for_only_the_requested_file() {
     let model_uri = "untitled:milestoning-model";
     let first_uri = "untitled:alpha-query";
     let second_uri = "untitled:beta-query";
@@ -535,12 +535,12 @@ fn code_action_transcript_emits_versioned_utf16_workspace_edits_for_every_planne
             .expect("valid multi-file code action transcript"),
         ServerExit::Clean
     );
+    // Both files have a machine-applicable fix, but the request named only
+    // `first_uri`: the response must never bundle an edit to `second_uri`,
+    // a document the client never asked about, into the same action.
     assert_eq!(
         response_for(&responses(&output), 2)["result"],
-        machine_fix_action(vec![
-            machine_fix_document_edit(first_uri, 7, first),
-            machine_fix_document_edit(second_uri, 11, second),
-        ])
+        machine_fix_action(vec![machine_fix_document_edit(first_uri, 7, first)])
     );
 }
 

@@ -5,10 +5,9 @@ use serde::Serialize;
 use crate::{
     CanonicalEmissionRenderInput, RenderError,
     canonical_emission::{PreparedCanonicalEmission, PreparedCanonicalIndecision},
+    json_envelope::{JSON_SCHEMA_VERSION, JsonReason},
     origin::{JsonOrigin, json_origin},
 };
-
-const JSON_SCHEMA_VERSION: &str = "1.0";
 
 pub(crate) fn render(input: CanonicalEmissionRenderInput<'_>) -> Result<String, RenderError> {
     let emission = PreparedCanonicalEmission::new(input)?;
@@ -39,12 +38,6 @@ enum JsonResult<'a> {
         reason: JsonReason,
         origin: JsonOrigin<'a>,
     },
-}
-
-#[derive(Serialize)]
-struct JsonReason {
-    id: &'static str,
-    blurb: &'static str,
 }
 
 fn json_envelope<'a>(emission: &'a PreparedCanonicalEmission<'a>) -> JsonEnvelope<'a> {

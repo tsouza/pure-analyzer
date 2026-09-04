@@ -362,7 +362,7 @@ impl LintRequest {
     #[must_use]
     pub fn model_file_id(&self, index: usize) -> Option<FileId> {
         self.models.get(index)?;
-        request_file_id(index)
+        model_source_file_id(index)
     }
 
     /// Return the request-local source identity of the query input at `index`.
@@ -915,7 +915,10 @@ impl AnalysisDriver {
             .flat_map(|result| result.diagnostics.iter().cloned())
             .filter_map(|diagnostic| finding_policy.apply(diagnostic))
             .collect();
-        let formatted = results.into_iter().map(FormatResult::into_source).collect();
+        let formatted = results
+            .into_iter()
+            .map(FileFormatResult::into_source)
+            .collect();
         Ok(FormatOutput {
             sources,
             formatted,
@@ -1001,12 +1004,12 @@ enum AnalysisKind {
 }
 
 #[derive(Debug)]
-struct FormatResult {
+struct FileFormatResult {
     source: FormattedSource,
     diagnostics: Vec<Diagnostic>,
 }
 
-impl FormatResult {
+impl FileFormatResult {
     fn into_source(self) -> FormattedSource {
         self.source
     }
@@ -1077,6 +1080,20 @@ fn load_canonical_emission_request(
 
 fn request_file_id(index: usize) -> Option<FileId> {
     u32::try_from(index).ok().map(FileId::new)
+}
+
+/// The request-local source identity of the `index`-th model input, whether
+/// or not it is carried by a [`LintRequest`].
+///
+/// Models always occupy the first identities in load order (see
+/// [`LintRequest::model_file_id`]), including in a models-only load with no
+/// accompanying query source, such as [`AnalysisDriver::validate_models`].
+/// This is the one place that ordering is encoded, so a caller building its
+/// own model-to-[`FileId`] map (for example an LSP front end publishing
+/// model diagnostics) never has to re-derive it.
+#[must_use]
+pub fn model_source_file_id(index: usize) -> Option<FileId> {
+    request_file_id(index)
 }
 
 fn load_model(
@@ -1364,7 +1381,7 @@ fn passes(kind: AnalysisKind) -> Vec<Box<dyn AnalysisPass>> {
 fn format_source(
     source: &SourceFile,
     line_width: Option<usize>,
-) -> Result<FormatResult, DriverError> {
+) -> Result<FileFormatResult, DriverError> {
     let formatted = line_width.map_or_else(
         || format_query(source.text(), source.id()),
         |line_width| format_query_with_width(source.text(), source.id(), line_width),
@@ -1372,7 +1389,7 @@ fn format_source(
     formatted
         .map(|formatted| {
             let (text, diagnostics) = formatted.into_parts();
-            FormatResult {
+            FileFormatResult {
                 source: FormattedSource {
                     file: source.id(),
                     text,
