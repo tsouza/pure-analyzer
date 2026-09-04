@@ -1108,6 +1108,7 @@ fn sort_rejects_unproven_forms_and_keeps_resolution_and_parse_failures_typed() {
         "model::Person.all()->sort(x| $x)",
         "model::Person.all()->sort(unknown(~Person))",
         "model::Person.all()->sort([unknown(~Person)])",
+        "model::Person.all()->sort(~Person->unknown())",
     ] {
         assert_reason(lower(source, Some(&model)), ReasonCode::IndUnmodeledOp);
     }
@@ -1134,6 +1135,57 @@ fn sort_lowering_is_deterministic_for_repeated_input() {
     let source = "model::Person.all()->distinct()->sort([descending(~Person)])";
 
     assert_eq!(lower(source, Some(&model)), lower(source, Some(&model)));
+}
+
+#[test]
+fn sort_accepts_direct_comma_separated_call_arguments_without_a_bracket_array() {
+    let model = relation_project_model();
+    let source =
+        format!("{RELATION_PROJECT_SOURCE}->sort(ascending(~legal), descending(~manager))");
+    let query = supported(lower(&source, Some(&model)));
+    let (_, keys) = sort_parts(query.root());
+
+    assert_eq!(keys.len(), 2);
+    assert_eq!(keys[0].column(), ColumnId::new(ONE));
+    assert_eq!(keys[0].direction(), SortDirection::Ascending);
+    assert_eq!(keys[1].column(), ColumnId::new(2));
+    assert_eq!(keys[1].direction(), SortDirection::Descending);
+    assert_eq!(
+        span_text(&source, query.root().origin().source()),
+        "->sort(ascending(~legal), descending(~manager))"
+    );
+}
+
+#[test]
+fn selected_distinct_rebinds_every_selected_column_to_its_own_identity_under_full_reordering() {
+    let model = graph(vec![class(
+        "Person",
+        vec![
+            property("id", "String", ONE, Some(ONE)),
+            property("age", "Integer", ONE, Some(ONE)),
+            property("flag", "Boolean", ONE, Some(ONE)),
+        ],
+    )]);
+    let source = "model::Person.all()->project(~[id: p | $p.id, age: p | $p.age, flag: p | $p.flag])->distinct(~[flag, id, age])";
+
+    for (name, type_name) in [("id", "String"), ("age", "Integer"), ("flag", "Boolean")] {
+        let map_source = format!("{source}->map(row| $row.{name})");
+        let query = supported(lower(&map_source, Some(&model)));
+        let (_, projection) = map_parts(&query);
+        assert_eq!(
+            projection.expression().type_ref().raw_type().as_str(),
+            type_name,
+            "selecting {name} under a full reorder must keep its own column identity"
+        );
+    }
+}
+
+#[test]
+fn inner_join_rejects_a_non_joinkind_qualifier_even_when_the_member_name_matches() {
+    let model = inner_join_model();
+    let source = "model::Person.all()->join(model::Membership.all(), Foo.INNER, {person, membership | $person.personId == $membership.personId})";
+
+    assert_reason(lower(source, Some(&model)), ReasonCode::IndUnmodeledOp);
 }
 
 #[test]

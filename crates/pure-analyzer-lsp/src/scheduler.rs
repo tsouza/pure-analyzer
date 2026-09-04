@@ -248,3 +248,101 @@ enum WorkerOutcome {
     Cancelled,
     Panicked,
 }
+
+#[cfg(test)]
+mod tests {
+    use std::{io::Cursor, sync::mpsc};
+
+    use serde_json::Value;
+
+    use super::{
+        CompletedRequest, INTERNAL_ERROR_CODE, REQUEST_CANCELLED_CODE, RequestScheduler,
+        WorkerOutcome,
+    };
+    use crate::{RequestId, Server, frame::read_frame};
+
+    fn idle_scheduler() -> RequestScheduler {
+        let (events, _receiver) = mpsc::channel();
+        RequestScheduler::new(events, None)
+    }
+
+    fn only_frame(output: &[u8]) -> Value {
+        let mut reader = Cursor::new(output);
+        read_frame(&mut reader)
+            .expect("frame parses")
+            .expect("one frame was written")
+    }
+
+    #[test]
+    fn complete_reports_internal_error_for_a_panicked_worker_without_a_cancellable_identifier() {
+        let server = Server::new();
+        let mut scheduler = idle_scheduler();
+        let mut output = Vec::new();
+        let completed = CompletedRequest {
+            response_id: Value::Number(1.into()),
+            request_id: None,
+            token: None,
+            outcome: WorkerOutcome::Panicked,
+        };
+
+        scheduler
+            .complete(&server, &mut output, completed)
+            .expect("writing the error frame succeeds");
+
+        let frame = only_frame(&output);
+        assert_eq!(frame["error"]["code"], INTERNAL_ERROR_CODE);
+        assert_eq!(frame["error"]["message"], "request failed");
+    }
+
+    #[test]
+    fn complete_reports_cancellation_ahead_of_a_panic_once_the_registry_cancelled_the_request() {
+        let server = Server::new();
+        let id = RequestId::Number(7);
+        let token = server
+            .cancellation
+            .begin(id.clone())
+            .expect("registry accepts a fresh id");
+        server.cancellation.cancel(id.clone());
+        let mut scheduler = idle_scheduler();
+        let mut output = Vec::new();
+        let completed = CompletedRequest {
+            response_id: Value::Number(2.into()),
+            request_id: Some(id),
+            token: Some(token),
+            outcome: WorkerOutcome::Panicked,
+        };
+
+        scheduler
+            .complete(&server, &mut output, completed)
+            .expect("writing the error frame succeeds");
+
+        let frame = only_frame(&output);
+        assert_eq!(frame["error"]["code"], REQUEST_CANCELLED_CODE);
+        assert_eq!(frame["error"]["message"], "request cancelled");
+        assert!(
+            server.cancellation.is_empty(),
+            "the coordinator must finish (and remove) the entry even for a panicked worker"
+        );
+    }
+
+    #[test]
+    fn complete_reports_cancellation_from_the_worker_outcome_without_a_registry_entry() {
+        let server = Server::new();
+        let mut scheduler = idle_scheduler();
+        let mut output = Vec::new();
+        let completed = CompletedRequest {
+            response_id: Value::Number(3.into()),
+            request_id: None,
+            token: None,
+            outcome: WorkerOutcome::Cancelled,
+        };
+
+        scheduler
+            .complete(&server, &mut output, completed)
+            .expect("writing the error frame succeeds");
+
+        let frame = only_frame(&output);
+        assert_eq!(frame["error"]["code"], REQUEST_CANCELLED_CODE);
+        assert_eq!(frame["error"]["message"], "request cancelled");
+    }
+}

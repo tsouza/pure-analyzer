@@ -471,4 +471,35 @@ mod tests {
             Some(5)
         );
     }
+
+    #[test]
+    fn rejects_a_content_change_whose_range_end_precedes_its_start() {
+        let uri = "untitled:reversed-range";
+        let mut documents = DocumentStore::default();
+        documents.insert(DocumentSnapshot::new(
+            uri.to_owned(),
+            "abcdef".to_owned(),
+            Some(1),
+        ));
+
+        let reversed = ContentChange::new(
+            Some(ProtocolRange::new(
+                ProtocolPosition::new(0, 4),
+                ProtocolPosition::new(0, 1),
+            )),
+            None,
+            "x".to_owned(),
+        );
+        assert!(!documents.apply_changes(uri, 2, &[reversed]));
+        assert_eq!(
+            documents.get(uri).map(DocumentSnapshot::text),
+            Some("abcdef"),
+            "a reversed range must leave the document untouched"
+        );
+        assert_eq!(
+            documents.get(uri).and_then(DocumentSnapshot::version),
+            Some(1)
+        );
+        assert_eq!(documents.revision(), 1);
+    }
 }
