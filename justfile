@@ -138,6 +138,16 @@ analysis-comparison-corpus-verify:
 analysis-comparison-corpus-refresh:
     cargo xtask analysis-comparison-corpus --refresh
 
+# Replay pinned canonical-emission fixtures through the real lowering,
+# normalization, and emission pipeline (their own fixed point).
+analysis-canonical-corpus-verify:
+    cargo xtask analysis-canonical-corpus
+
+# Verify every canonical-emission fixture's bounded oracle against an exactly
+# pinned running Legend engine, then replay the frozen fixtures locally.
+analysis-canonical-corpus-refresh:
+    cargo xtask analysis-canonical-corpus --refresh
+
 # Run doctests explicitly: nextest does not execute them. All features remain
 # compile-checked here; PureCARD's environment-bound feature tests are separate
 # integration-test binaries, so they are not executed by this doc-only command.

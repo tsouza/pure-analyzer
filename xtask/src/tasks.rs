@@ -472,6 +472,38 @@ pub fn analysis_comparison_corpus(refresh: bool) -> Result<()> {
     )
 }
 
+/// Replay pinned canonical-emission fixtures against the real Legend API.
+///
+/// With `refresh`, first ask the explicit Bun tool to verify every fixture's
+/// bounded oracle against a running, exactly pinned Legend engine. The normal
+/// path is hermetic: it re-lowers, re-normalizes, and re-emits each fixture's
+/// pinned `source`, without starting or contacting an engine.
+///
+/// # Errors
+///
+/// Returns an error when the optional oracle replay cannot validate the pin,
+/// when a fixture drifts from its own canonical fixed point, or when a
+/// fixture stops lowering to the canonical-emission supported subset.
+pub fn analysis_canonical_corpus(refresh: bool) -> Result<()> {
+    if refresh {
+        run(
+            "bun",
+            &["scripts/analysis-canonical-corpus.mjs", "--refresh"],
+        )?;
+    }
+    run(
+        "cargo",
+        &[
+            "nextest",
+            "run",
+            "-p",
+            "pure-analyzer-analysis",
+            "--test",
+            "canonical_corpus",
+        ],
+    )
+}
+
 /// Run the default workspace-wide mutation pass, excluding PureCARD's
 /// feature-gated FFI source (covered separately by [`test_mutation_ffi`]).
 ///
