@@ -1073,3 +1073,100 @@ fn write_fragment(output: &mut String, value: &str) {
 fn write_usize(output: &mut String, value: usize) {
     write_fragment(output, &value.to_string());
 }
+
+#[cfg(test)]
+mod tests {
+    use pure_analyzer_model::{Name, PmcdDocument, QName, load_pmcd_documents};
+    use pure_analyzer_resolve::{Resolution, Resolver};
+
+    use super::*;
+
+    /// Two distinct resolved members of the same class, used to isolate
+    /// `KeyEncoder::member`/`member_kind` from the rest of a real navigation.
+    fn two_string_properties() -> (ResolvedMember, ResolvedMember) {
+        let source = r#"{
+            "_type": "data",
+            "elements": [
+                {
+                    "_type": "class",
+                    "package": "model",
+                    "name": "Person",
+                    "stereotypes": [],
+                    "superTypes": [],
+                    "properties": [
+                        {
+                            "name": "name",
+                            "genericType": {"rawType": "String", "typeArguments": []},
+                            "multiplicity": {"lowerBound": 1, "upperBound": 1}
+                        },
+                        {
+                            "name": "nickname",
+                            "genericType": {"rawType": "String", "typeArguments": []},
+                            "multiplicity": {"lowerBound": 1, "upperBound": 1}
+                        }
+                    ],
+                    "qualifiedProperties": []
+                }
+            ]
+        }"#;
+        let graph = load_pmcd_documents(&[PmcdDocument::new("key-encoder-fixture", source)])
+            .expect("fixture model loads");
+        let resolver = Resolver::new(&graph);
+        let owner = QName::new("model::Person").expect("fixture path is valid");
+        let resolve = |name: &str| match resolver
+            .resolve_member(&owner, &Name::new(name).expect("fixture name is valid"))
+        {
+            Resolution::Found(member) => member,
+            outcome => panic!("fixture member resolves: {outcome:?}"),
+        };
+        (resolve("name"), resolve("nickname"))
+    }
+
+    /// Regression for a `KeyEncoder::member -> ()` mutant: encoding two
+    /// distinct resolved members (same owner, same type, different name)
+    /// must not produce colliding fragments, or two navigations to different
+    /// properties would silently compare equivalent.
+    #[test]
+    fn key_encoder_member_fragment_differs_by_member() {
+        let (name, nickname) = two_string_properties();
+        let mut first = KeyEncoder::semantic();
+        first.member(&name);
+        let mut second = KeyEncoder::semantic();
+        second.member(&nickname);
+        assert_ne!(
+            first.finish(),
+            second.finish(),
+            "encoding two distinct resolved members must not collide"
+        );
+    }
+
+    /// Regression for a `KeyEncoder::member_kind -> ()` mutant.
+    #[test]
+    fn key_encoder_member_kind_fragment_differs_by_variant() {
+        let mut qualified = KeyEncoder::semantic();
+        qualified.member_kind(&ResolvedMemberKind::Qualified(QpKind::UserQualified));
+        let mut property = KeyEncoder::semantic();
+        property.member_kind(&ResolvedMemberKind::Property);
+        assert_ne!(
+            qualified.finish(),
+            property.finish(),
+            "encoding two distinct resolved-member kinds must not collide"
+        );
+    }
+
+    /// Regression for a `KeyEncoder::provenance -> ()` mutant: only the
+    /// structural (full-provenance) key ever calls this, so it must keep
+    /// PMCD- and Pure-file-sourced model facts distinguishable there.
+    #[test]
+    fn key_encoder_provenance_fragment_differs_by_variant() {
+        let mut pmcd = KeyEncoder::full_provenance();
+        pmcd.provenance(Provenance::Pmcd);
+        let mut pure_file = KeyEncoder::full_provenance();
+        pure_file.provenance(Provenance::PureFile);
+        assert_ne!(
+            pmcd.finish(),
+            pure_file.finish(),
+            "encoding two distinct model provenances must not collide"
+        );
+    }
+}
