@@ -450,3 +450,22 @@ const fn model_origin_kind_name(kind: ModelOriginKind) -> &'static str {
         ModelOriginKind::Member => "member",
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Regression for a `model_origin_kind_name -> ""` / `-> "xyzzy"` mutant:
+    /// each [`ModelOriginKind`] variant must keep its own distinct, stable
+    /// fragment so [`model_origin_keys`]'s ordering and dedup stay
+    /// discriminating rather than collapsing every kind together.
+    #[test]
+    fn model_origin_kind_name_is_stable_per_variant() {
+        assert_eq!(model_origin_kind_name(ModelOriginKind::Class), "class");
+        assert_eq!(model_origin_kind_name(ModelOriginKind::Member), "member");
+        assert_ne!(
+            model_origin_kind_name(ModelOriginKind::Class),
+            model_origin_kind_name(ModelOriginKind::Member)
+        );
+    }
+}

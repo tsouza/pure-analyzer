@@ -1482,3 +1482,300 @@ proptest! {
         prop_assert_eq!(distinct.root().facts(), &distinct_facts);
     }
 }
+
+/// Regression for a `NormalizationOutcome::normalized -> None` mutant: the
+/// accessor must actually expose the `Normalized` payload it was built from,
+/// not silently discard it, and must stay `None` for a genuine failure.
+#[test]
+fn normalization_outcome_accessors_expose_the_correct_variant() {
+    let base = query(&[3], &["value"], origin(FILE, 1, 4, Vec::new()));
+
+    let succeeded = normalize_relational_query(&base);
+    assert!(succeeded.normalized().is_some());
+    assert!(succeeded.failure().is_none());
+
+    let failed = normalize_relational_query_with_budget(&base, NormalizationBudget::new(0));
+    assert!(failed.normalized().is_none());
+    assert!(failed.failure().is_some());
+}
+
+/// Regression for `EquivalenceKey::as_str`/`StructuralKey::as_str` `-> ""`
+/// and `-> "xyzzy"` mutants: both accessors must expose the real encoded
+/// content, not a constant placeholder.
+#[test]
+fn equivalence_and_structural_key_as_str_expose_the_real_encoded_content() {
+    let base = normalized(&query(
+        &[3, 8],
+        &["left", "right"],
+        origin(FILE, 1, 9, Vec::new()),
+    ));
+    let other = normalized(&query(&[3], &["left"], origin(FILE, 1, 9, Vec::new())));
+
+    for placeholder in ["", "xyzzy"] {
+        assert_ne!(base.equivalence_key().as_str(), placeholder);
+        assert_ne!(base.structural_key().as_str(), placeholder);
+    }
+    assert_ne!(
+        base.equivalence_key().as_str(),
+        other.equivalence_key().as_str()
+    );
+    assert_ne!(
+        base.structural_key().as_str(),
+        other.structural_key().as_str()
+    );
+}
+
+/// Regression for a `KeyEncoder::column_id -> ()` mutant and for
+/// `ColumnScope::position -> None`/`Some(0)`/`Some(1)` mutants: a sort key
+/// referencing the first vs. the second output column — identical in every
+/// other respect — must resolve to a different scope position and therefore
+/// a different equivalence key. A stubbed-out column-id (or a constant
+/// position) would make both sorts encode identically despite ordering by
+/// different columns.
+#[test]
+fn sort_key_column_reference_is_position_sensitive() {
+    let source = origin(FILE, 1, 20, Vec::new());
+    let base = query(&[3, 8], &["first", "second"], source.clone());
+    let sort_by = |sort_column: ColumnId| {
+        RelationalQuery::new(
+            RelationExpression::new(
+                RelationOperator::Sort {
+                    input: Box::new(base.root().clone()),
+                    keys: vec![SortKey::new(
+                        sort_column,
+                        SortDirection::Ascending,
+                        source.clone(),
+                    )],
+                },
+                base.output().clone(),
+                RelationFacts::unknown(),
+                source.clone(),
+            )
+            .expect("sort fixture is valid"),
+        )
+    };
+
+    let sorted_by_first = sort_by(base.output().columns()[0].id());
+    let sorted_by_second = sort_by(base.output().columns()[1].id());
+
+    assert_ne!(
+        key(&sorted_by_first),
+        key(&sorted_by_second),
+        "sorting by the first vs. the second output column must not collapse \
+         to the same equivalence key"
+    );
+}
+
+/// Regression for `KeyEncoder::source -> ()` and `KeyEncoder::class -> ()`
+/// mutants: scanning a different resolved class must change the equivalence
+/// key even when the declared output schema and column ids are byte-for-byte
+/// identical.
+#[test]
+fn scans_of_different_classes_never_share_an_equivalence_key() {
+    let (left_class, right_class) = classes();
+    let source = origin(FILE, 1, 9, Vec::new());
+    let left = RelationalQuery::new(scan(&[3], &["value"], source.clone(), left_class));
+    let right = RelationalQuery::new(scan(&[3], &["value"], source, right_class));
+
+    assert_ne!(
+        key(&left),
+        key(&right),
+        "scanning a different resolved class must change the equivalence key"
+    );
+}
+
+/// Regression for a `KeyEncoder::keys -> ()` mutant: a proven candidate key
+/// must change the equivalence key even when row semantics and everything
+/// else about the scan is identical.
+#[test]
+fn candidate_key_facts_alone_change_the_equivalence_key() {
+    let source = origin(FILE, 1, 9, Vec::new());
+    let (class, _) = classes();
+    let schema = RelationSchema::new(vec![column(3, "value", source.clone())])
+        .expect("fixture schema is valid");
+    let key_origin = origin(FILE, 10, 14, Vec::new());
+    let scan_with = |facts: RelationFacts| {
+        RelationalQuery::new(
+            RelationExpression::new(
+                RelationOperator::Scan(RelationSource::Class(class.clone())),
+                schema.clone(),
+                facts,
+                source.clone(),
+            )
+            .expect("fixture scan is valid"),
+        )
+    };
+
+    let with_key = scan_with(RelationFacts::new(
+        Knowledge::proven(vec![CandidateKey::new(vec![ColumnId::new(3)])], key_origin),
+        Knowledge::unknown(),
+    ));
+    let without_key = scan_with(RelationFacts::unknown());
+
+    assert_ne!(
+        key(&with_key),
+        key(&without_key),
+        "a proven candidate key must change the equivalence key on its own"
+    );
+}
+
+/// Regression for a `KeyEncoder::row_semantics -> ()` mutant: row semantics
+/// (Set vs. Bag) must change the equivalence key even when candidate-key
+/// facts and everything else about the scan is identical.
+#[test]
+fn row_semantics_facts_alone_change_the_equivalence_key() {
+    let source = origin(FILE, 1, 9, Vec::new());
+    let (class, _) = classes();
+    let schema = RelationSchema::new(vec![column(3, "value", source.clone())])
+        .expect("fixture schema is valid");
+    let semantics_origin = origin(FILE, 10, 14, Vec::new());
+    let scan_with = |facts: RelationFacts| {
+        RelationalQuery::new(
+            RelationExpression::new(
+                RelationOperator::Scan(RelationSource::Class(class.clone())),
+                schema.clone(),
+                facts,
+                source.clone(),
+            )
+            .expect("fixture scan is valid"),
+        )
+    };
+
+    let set_facts = scan_with(RelationFacts::new(
+        Knowledge::unknown(),
+        Knowledge::proven(RowSemantics::Set, semantics_origin.clone()),
+    ));
+    let bag_facts = scan_with(RelationFacts::new(
+        Knowledge::unknown(),
+        Knowledge::proven(RowSemantics::Bag, semantics_origin),
+    ));
+
+    assert_ne!(
+        key(&set_facts),
+        key(&bag_facts),
+        "row semantics (Set vs. Bag) must change the equivalence key on its own"
+    );
+}
+
+/// Regression for `KeyEncoder::scalar -> ()` and `KeyEncoder::literal -> ()`
+/// mutants: the literal value projected into an output column must change
+/// the equivalence key even when the schema, types, and everything else
+/// about the projection is identical.
+#[test]
+fn projected_literal_value_changes_the_equivalence_key() {
+    let literal_projection = |value: &str, source: IrOrigin| {
+        let (class, _) = classes();
+        let input = scan(&[1], &["seed"], source.clone(), class);
+        let output = column(90, "computed", source.clone());
+        let literal_scalar = ScalarExpression::new(
+            ScalarOperator::Literal(ScalarLiteral::String(value.to_string())),
+            type_ref("String"),
+            one(),
+            Nullability::NonNullable,
+            Knowledge::unknown(),
+            source.clone(),
+        );
+        RelationalQuery::new(
+            RelationExpression::new(
+                RelationOperator::Project {
+                    input: Box::new(input),
+                    projections: vec![Projection::new(output.id(), literal_scalar)],
+                    kind: ProjectionKind::Relation,
+                },
+                RelationSchema::new(vec![output]).expect("fixture schema is valid"),
+                RelationFacts::unknown(),
+                source,
+            )
+            .expect("literal projection fixture is valid"),
+        )
+    };
+
+    let first = literal_projection("alpha", origin(FILE, 1, 9, Vec::new()));
+    let second = literal_projection("beta", origin(FILE, 1, 9, Vec::new()));
+
+    assert_ne!(
+        key(&first),
+        key(&second),
+        "the literal value projected into an output column must change the \
+         equivalence key even when the schema and everything else about the \
+         projection is identical"
+    );
+}
+
+/// Regression for a `KeyEncoder::totality -> ()` mutant: proven totality
+/// evidence (Total vs. Partial) must change the equivalence key even when
+/// the projection is otherwise identity-shaped.
+#[test]
+fn projected_totality_evidence_changes_the_equivalence_key() {
+    let source = origin(FILE, 1, 20, Vec::new());
+    let base = query(&[3, 8], &["left", "right"], source.clone());
+    let evidence_origin = origin(FILE, 21, 24, Vec::new());
+    let total = Knowledge::proven(Totality::Total, evidence_origin.clone());
+    let partial = Knowledge::proven(Totality::Partial, evidence_origin);
+
+    let total_query = RelationalQuery::new(identity_project_with_metadata(
+        base.root().clone(),
+        source.clone(),
+        RelationFacts::unknown(),
+        total,
+    ));
+    let partial_query = RelationalQuery::new(identity_project_with_metadata(
+        base.root().clone(),
+        source,
+        RelationFacts::unknown(),
+        partial,
+    ));
+
+    assert_ne!(
+        key(&total_query),
+        key(&partial_query),
+        "proven totality evidence (Total vs. Partial) must change the \
+         equivalence key even when the projection is otherwise identity-shaped"
+    );
+}
+
+/// Regression for `structural_identity_key -> String::new()`/`"xyzzy".into()`
+/// (relational.rs) and `model_origin_key -> String::new()`/`"xyzzy".into()`
+/// (this module): PMCD definitions from the same document share a
+/// document-level [`DefinitionAnchor`] with no element span (see
+/// `DefinitionAnchor`'s rustdoc), so `structural_identity_key` is the *only*
+/// thing that can tell two same-document classes' model origins apart. A
+/// single differing model origin — same source span, same document, only the
+/// resolved class differs — must still change the structural key, even
+/// though it never changes the (provenance-independent) equivalence key.
+#[test]
+fn distinct_singleton_model_origins_change_the_structural_key() {
+    let (left, right) = classes();
+    assert_eq!(
+        left.definition(),
+        right.definition(),
+        "fixture classes must share one document-level anchor for this \
+         regression to be meaningful"
+    );
+
+    // The *scanned* class is held fixed (always `left`) on both sides, so
+    // the equivalence key's own class encoding cannot be what distinguishes
+    // them. Only the extraneous `model_origins` bookkeeping on the query's
+    // `IrOrigin` — a fact an `IrOrigin` can carry from a definition that
+    // merely contributed to the node without being what it scans — differs.
+    let scanned = left.clone();
+    let left_origin = origin(FILE, 1, 4, vec![ModelOrigin::from_class(&left)]);
+    let right_origin = origin(FILE, 1, 4, vec![ModelOrigin::from_class(&right)]);
+    let with_left = RelationalQuery::new(scan(&[4], &["value"], left_origin, scanned.clone()));
+    let with_right = RelationalQuery::new(scan(&[4], &["value"], right_origin, scanned));
+
+    let with_left = normalized(&with_left);
+    let with_right = normalized(&with_right);
+    assert_eq!(
+        with_left.equivalence_key(),
+        with_right.equivalence_key(),
+        "model provenance must never affect the allocation-independent \
+         semantic identity"
+    );
+    assert_ne!(
+        with_left.structural_key(),
+        with_right.structural_key(),
+        "two singleton model origins that differ only in which same-document \
+         class they name must produce different structural keys"
+    );
+}
