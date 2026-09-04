@@ -1504,6 +1504,16 @@ Class model::Person
         )
     }
 
+    fn definition_query_request(query: &str) -> LintRequest {
+        LintRequest::new(
+            SourceRequest::new([SourceInput::in_memory("query.pure", query)]),
+            [ModelInput::pmcd(SourceInput::in_memory(
+                "model.json",
+                MODEL,
+            ))],
+        )
+    }
+
     fn comparison_request(left: &str, right: &str) -> ComparisonRequest {
         ComparisonRequest::new(
             SourceInput::in_memory("left.pure", left),
@@ -2161,6 +2171,269 @@ Class model::Person
                 source: ModelError::Json { source_name, .. }
             } if source_name == "broken.pmcd"
         ));
+    }
+
+    #[test]
+    fn is_valid_position_is_inclusive_of_the_source_length_and_respects_char_boundaries() {
+        // "aé" is 3 bytes: 'a' (1 byte) then 'é' (2 bytes); byte offset 2 falls
+        // strictly inside 'é' and must be rejected even though it is <= length.
+        let sources =
+            SourceStore::load([SourceInput::in_memory("q.pure", "aé")]).expect("load source");
+        let file = sources
+            .files()
+            .next()
+            .expect("the loaded store retains one source");
+        let length = u32::try_from(file.text().len()).expect("fixture text length fits u32");
+
+        assert!(is_valid_position(file, TextSize::from(0)));
+        assert!(
+            is_valid_position(file, TextSize::from(length)),
+            "an offset exactly at the source length is a valid boundary position"
+        );
+        assert!(
+            !is_valid_position(file, TextSize::from(length + 1)),
+            "an offset past the source length must be rejected"
+        );
+        assert!(
+            !is_valid_position(file, TextSize::from(2)),
+            "an offset splitting a multi-byte UTF-8 character must be rejected"
+        );
+    }
+
+    #[test]
+    fn is_valid_range_is_inclusive_of_an_empty_range_and_rejects_out_of_bounds_or_split_ends() {
+        let text = "aé";
+        assert!(
+            is_valid_range(text, TextRange::new(0.into(), 3.into())),
+            "the full-text range must be valid"
+        );
+        assert!(
+            is_valid_range(text, TextRange::new(1.into(), 1.into())),
+            "an empty range at a valid char boundary must be valid"
+        );
+        assert!(
+            !is_valid_range(text, TextRange::new(0.into(), 4.into())),
+            "a range ending past the source length must be rejected"
+        );
+        assert!(
+            !is_valid_range(text, TextRange::new(1.into(), 2.into())),
+            "a range ending inside a multi-byte character must be rejected"
+        );
+    }
+
+    #[test]
+    fn range_contains_includes_its_start_and_excludes_its_end() {
+        let span = TextRange::new(2.into(), 5.into());
+        assert!(
+            !range_contains(span, TextSize::from(1)),
+            "an offset before the span must not be contained"
+        );
+        assert!(
+            range_contains(span, TextSize::from(2)),
+            "the span's own start offset must be contained"
+        );
+        assert!(
+            range_contains(span, TextSize::from(4)),
+            "an offset strictly inside the span must be contained"
+        );
+        assert!(
+            !range_contains(span, TextSize::from(5)),
+            "the span's own end offset must not be contained"
+        );
+    }
+
+    #[test]
+    fn definition_rejects_an_unknown_file() {
+        let request = definition_query_request("model::Person.all()");
+        let unknown = FileId::new(99);
+
+        let result = AnalysisDriver
+            .definition(&request, DefinitionPosition::new(unknown, 0.into()))
+            .expect("a loaded request always returns a typed definition result");
+
+        assert!(matches!(
+            result,
+            DefinitionResult::Unavailable(DefinitionUnavailable::UnknownFile { file })
+                if file == unknown
+        ));
+    }
+
+    #[test]
+    fn definition_rejects_a_model_file_as_a_non_query_file() {
+        let request = definition_query_request("model::Person.all()");
+        let model_file = request.model_file_id(0).expect("registered model input");
+
+        let result = AnalysisDriver
+            .definition(&request, DefinitionPosition::new(model_file, 0.into()))
+            .expect("a loaded request always returns a typed definition result");
+
+        assert!(matches!(
+            result,
+            DefinitionResult::Unavailable(DefinitionUnavailable::NonQueryFile { file })
+                if file == model_file
+        ));
+    }
+
+    #[test]
+    fn definition_rejects_a_byte_offset_past_the_query_source_length() {
+        let query = "model::Person.all()";
+        let request = definition_query_request(query);
+        let query_file = request.query_file_id(0).expect("registered query input");
+        let past_end = TextSize::from(u32::try_from(query.len()).expect("fits u32") + 1);
+
+        let result = AnalysisDriver
+            .definition(&request, DefinitionPosition::new(query_file, past_end))
+            .expect("a loaded request always returns a typed definition result");
+
+        assert!(matches!(
+            result,
+            DefinitionResult::Unavailable(DefinitionUnavailable::InvalidPosition { file, offset })
+                if file == query_file && offset == past_end
+        ));
+    }
+
+    #[test]
+    fn definition_reports_recovery_for_a_query_with_parser_recovery_findings() {
+        let request = definition_query_request("model::Person.all()->filter(x| $x.name ==)");
+        let query_file = request.query_file_id(0).expect("registered query input");
+
+        let result = AnalysisDriver
+            .definition(&request, DefinitionPosition::new(query_file, 0.into()))
+            .expect("a loaded request always returns a typed definition result");
+
+        assert!(matches!(
+            result,
+            DefinitionResult::Unavailable(DefinitionUnavailable::Recovery)
+        ));
+    }
+
+    #[test]
+    fn definition_reports_no_model_when_no_model_input_was_supplied() {
+        let request = LintRequest::new(
+            SourceRequest::new([SourceInput::in_memory("query.pure", "model::Person.all()")]),
+            [],
+        );
+        let query_file = request.query_file_id(0).expect("registered query input");
+
+        let result = AnalysisDriver
+            .definition(&request, DefinitionPosition::new(query_file, 0.into()))
+            .expect("a loaded request always returns a typed definition result");
+
+        assert!(matches!(
+            result,
+            DefinitionResult::Unavailable(DefinitionUnavailable::NoModel)
+        ));
+    }
+
+    #[test]
+    fn definition_reports_missing_for_a_class_absent_from_a_loaded_model() {
+        let request = definition_query_request("unknown::Thing.all()");
+        let query_file = request.query_file_id(0).expect("registered query input");
+
+        let result = AnalysisDriver
+            .definition(&request, DefinitionPosition::new(query_file, 0.into()))
+            .expect("a loaded request always returns a typed definition result");
+
+        assert!(matches!(
+            result,
+            DefinitionResult::Unavailable(DefinitionUnavailable::Missing)
+        ));
+    }
+
+    #[test]
+    fn definition_resolves_a_class_all_reference_to_its_pmcd_model_source_without_a_span() {
+        let request = definition_query_request("model::Person.all()");
+        let query_file = request.query_file_id(0).expect("registered query input");
+        let model_file = request.model_file_id(0).expect("registered model input");
+
+        let result = AnalysisDriver
+            .definition(&request, DefinitionPosition::new(query_file, 0.into()))
+            .expect("a loaded request always returns a typed definition result");
+
+        let DefinitionResult::Found(target) = result else {
+            panic!("expected a resolved definition target, got {result:?}");
+        };
+        assert_eq!(target.file(), model_file);
+        assert_eq!(
+            target.span(),
+            None,
+            "a PMCD JSON model source does not retain a precise declaration span"
+        );
+    }
+
+    #[test]
+    fn definition_treats_a_navigation_reference_span_end_as_exclusive() {
+        let query = "model::Person.all()->filter(x| $x.name)";
+        let request = definition_query_request(query);
+        let query_file = request.query_file_id(0).expect("registered query input");
+        let driver = AnalysisDriver;
+
+        let name_start =
+            u32::try_from(query.find("name").expect("query references name")).expect("fits u32");
+        let name_len = u32::try_from("name".len()).expect("fits u32");
+        let inside = TextSize::from(name_start);
+        let at_end = TextSize::from(name_start + name_len);
+
+        let found = driver
+            .definition(&request, DefinitionPosition::new(query_file, inside))
+            .expect("a loaded request always returns a typed definition result");
+        assert!(
+            matches!(found, DefinitionResult::Found(_)),
+            "the reference span must include its own start offset, got {found:?}"
+        );
+
+        let past = driver
+            .definition(&request, DefinitionPosition::new(query_file, at_end))
+            .expect("a loaded request always returns a typed definition result");
+        assert!(
+            matches!(
+                past,
+                DefinitionResult::Unavailable(DefinitionUnavailable::NoReference)
+            ),
+            "the reference span must exclude its own end offset, got {past:?}"
+        );
+    }
+
+    #[test]
+    fn definition_targets_a_pure_model_property_with_a_verified_declaration_span() {
+        let query = "model::Person.all()->filter(x| $x.name)";
+        let request = LintRequest::new(
+            SourceRequest::new([SourceInput::in_memory("query.pure", query)]),
+            [ModelInput::pure(SourceInput::in_memory(
+                "model.pure",
+                PURE_MODEL,
+            ))],
+        );
+        let query_file = request.query_file_id(0).expect("registered query input");
+        let model_file = request.model_file_id(0).expect("registered model input");
+        let name_offset = TextSize::from(
+            u32::try_from(query.find("name").expect("query references name")).expect("fits u32"),
+        );
+
+        let result = AnalysisDriver
+            .definition(&request, DefinitionPosition::new(query_file, name_offset))
+            .expect("a loaded request always returns a typed definition result");
+
+        let DefinitionResult::Found(target) = result else {
+            panic!("expected a resolved definition target, got {result:?}");
+        };
+        assert_eq!(target.file(), model_file);
+        let span = target
+            .span()
+            .expect("a Pure Domain model source retains a precise declaration span");
+        let declaration = &PURE_MODEL[usize::from(span.start())..usize::from(span.end())];
+        assert!(
+            declaration.trim_start().starts_with("name"),
+            "the declaration span must start at the property identifier, got {declaration:?}"
+        );
+        assert!(
+            declaration.trim_end().ends_with(';'),
+            "the declaration span must end at the declaration's own terminator, got {declaration:?}"
+        );
+        assert!(
+            declaration.contains("String[0..1]"),
+            "the declaration span must cover the full property declaration, got {declaration:?}"
+        );
     }
 
     #[test]
