@@ -871,7 +871,10 @@ mod tests {
     use pure_analyzer_diagnostics::Label;
     use serde_json::Value;
 
-    use super::{AnalysisSnapshot, diagnostic_hover, unopened_model_document_uris};
+    use super::{
+        AnalysisSnapshot, diagnostic_contains, diagnostic_hover, hover_sort_key,
+        replacement_bounds, shared_prefix_len, unopened_model_document_uris,
+    };
     use crate::{DocumentSnapshot, Server};
 
     #[test]
@@ -967,6 +970,130 @@ mod tests {
             unopened_model_document_uris(&server),
             vec!["untitled:never-opened"]
         );
+    }
+
+    #[test]
+    fn hover_sort_key_prefers_the_narrowest_enclosing_span_regardless_of_code_order() {
+        let narrow = diagnostic_at(DiagCode::UnresolvedModelAssociation, 10, 12, "narrow");
+        let wide = diagnostic_at(DiagCode::BadToken, 5, 20, "wide");
+
+        assert!(hover_sort_key(&narrow) < hover_sort_key(&wide));
+        assert_eq!(narrowest(&[&wide, &narrow]), &narrow);
+    }
+
+    #[test]
+    fn hover_sort_key_breaks_equal_width_ties_by_the_earlier_start() {
+        let earlier = diagnostic_at(DiagCode::UnresolvedModelAssociation, 4, 9, "earlier");
+        let later = diagnostic_at(DiagCode::BadToken, 10, 15, "later");
+        assert_eq!(
+            span_width(&earlier),
+            span_width(&later),
+            "fixture widths must tie"
+        );
+
+        assert!(hover_sort_key(&earlier) < hover_sort_key(&later));
+        assert_eq!(narrowest(&[&later, &earlier]), &earlier);
+    }
+
+    #[test]
+    fn hover_sort_key_breaks_identical_span_ties_by_the_lexically_smaller_code() {
+        // The message ordering is deliberately the *opposite* of the code
+        // ordering: `lower_code` only wins because the code field is
+        // compared, not because its message happens to sort first.
+        let higher_code = diagnostic_at(DiagCode::BadToken, 0, 5, "aaa");
+        let lower_code = diagnostic_at(DiagCode::UnterminatedIsland, 0, 5, "zzz");
+
+        assert!(hover_sort_key(&lower_code) < hover_sort_key(&higher_code));
+        assert_eq!(narrowest(&[&higher_code, &lower_code]), &lower_code);
+    }
+
+    #[test]
+    fn hover_sort_key_breaks_identical_span_and_code_ties_by_the_lexically_smaller_message() {
+        let later_message = diagnostic_at(DiagCode::BadToken, 0, 5, "zzz");
+        let earlier_message = diagnostic_at(DiagCode::BadToken, 0, 5, "aaa");
+
+        assert!(hover_sort_key(&earlier_message) < hover_sort_key(&later_message));
+        assert_eq!(
+            narrowest(&[&later_message, &earlier_message]),
+            &earlier_message
+        );
+    }
+
+    #[test]
+    fn diagnostic_contains_treats_the_span_end_as_exclusive_and_the_start_as_inclusive() {
+        let span = TextRange::new(3.into(), 7.into());
+        assert!(!diagnostic_contains(span, 2));
+        assert!(diagnostic_contains(span, 3));
+        assert!(diagnostic_contains(span, 6));
+        assert!(!diagnostic_contains(span, 7));
+    }
+
+    #[test]
+    fn diagnostic_contains_matches_a_zero_width_span_only_at_its_own_offset() {
+        let span = TextRange::new(5.into(), 5.into());
+        assert!(!diagnostic_contains(span, 4));
+        assert!(diagnostic_contains(span, 5));
+        assert!(!diagnostic_contains(span, 6));
+    }
+
+    #[test]
+    fn replacement_bounds_isolates_a_pure_append() {
+        assert_eq!(replacement_bounds("abc", "abcd"), (3, 3, 4));
+    }
+
+    #[test]
+    fn replacement_bounds_isolates_a_pure_prepend_at_byte_zero() {
+        assert_eq!(replacement_bounds("bcd", "abcd"), (0, 0, 1));
+    }
+
+    #[test]
+    fn replacement_bounds_treats_a_disjoint_replacement_as_a_full_span_swap() {
+        assert_eq!(replacement_bounds("abc", "xyz"), (0, 3, 3));
+    }
+
+    #[test]
+    fn replacement_bounds_shrinks_around_a_multi_byte_edit_at_character_boundaries() {
+        assert_eq!(replacement_bounds("a😀b", "a😀c"), (5, 6, 6));
+    }
+
+    #[test]
+    fn replacement_bounds_walks_a_multi_byte_character_inside_the_matched_suffix() {
+        // The shared suffix ("π" then "y") is only reached by *matching*
+        // through the two-byte "π", not by a mismatch at the boundary — this
+        // exercises the loop's `len_utf8` step itself, unlike a fixture where
+        // the multi-byte character only ever appears in the shared prefix.
+        assert_eq!(replacement_bounds("xπy", "zπy"), (0, 1, 1));
+    }
+
+    #[test]
+    fn shared_prefix_len_counts_bytes_not_characters() {
+        assert_eq!(shared_prefix_len("a😀b", "a😀c"), 5);
+        assert_eq!(shared_prefix_len("abc", "xyz"), 0);
+        assert_eq!(shared_prefix_len("abc", "abc"), 3);
+    }
+
+    fn span_width(diagnostic: &Diagnostic) -> usize {
+        usize::from(diagnostic.primary.span.end()) - usize::from(diagnostic.primary.span.start())
+    }
+
+    fn diagnostic_at(code: DiagCode, start: u32, end: u32, message: &str) -> Diagnostic {
+        Diagnostic::builder(
+            code,
+            Severity::Info,
+            message,
+            Label::new(FileId::new(0), TextRange::new(start.into(), end.into())),
+        )
+        .build()
+    }
+
+    /// Selects the same way `AnalysisSnapshot::hover` selects among the
+    /// diagnostics that contain the hovered offset.
+    fn narrowest<'a>(diagnostics: &[&'a Diagnostic]) -> &'a Diagnostic {
+        diagnostics
+            .iter()
+            .copied()
+            .min_by(|left, right| hover_sort_key(left).cmp(&hover_sort_key(right)))
+            .expect("non-empty diagnostic slice")
     }
 
     fn value(source: &str) -> Value {
