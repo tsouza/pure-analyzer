@@ -1,11 +1,13 @@
-// gh-rest.mjs — minimal GitHub REST client shared by issue-label.mjs and
-// pr-label.mjs. Dependency-light by design: `node:` builtins + Bun's global
-// `fetch` only, so a bare `ubuntu-latest` runner needs no `actions/github-
-// script` step and no npm install — a Bun `run:` line is the whole job.
+// gh-rest.mjs — minimal GitHub REST client shared by issue-label.mjs,
+// pr-label.mjs, and mutation-nightly-failure.mjs. Dependency-light by
+// design: `node:` builtins + Bun's global `fetch` only, so a bare
+// `ubuntu-latest` runner needs no `actions/github-script` step and no npm
+// install — a Bun `run:` line is the whole job.
 //
-// Kept to exactly the four operations both labelers need (list open issues,
-// list open PRs, add labels, low-level JSON GET/POST) so the two scripts
-// never carry two copies of the same fetch-with-auth-headers boilerplate.
+// Kept to exactly the operations its callers need (list open issues, list
+// open PRs, add labels, create an issue, comment on one, low-level JSON
+// GET/POST) so no script carries its own copy of the same
+// fetch-with-auth-headers boilerplate.
 
 export const DEFAULT_API_URL = "https://api.github.com";
 const PER_PAGE = 100;
@@ -63,5 +65,23 @@ export async function addLabels(api, repo, token, number, labels) {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ labels }),
+  });
+}
+
+/** Create a new issue and return it. */
+export async function createIssue(api, repo, token, { title, body, labels }) {
+  return ghJSON(`${api}/repos/${repo}/issues`, token, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ title, body, labels }),
+  });
+}
+
+/** Post a comment onto issue/PR `number` and return it. */
+export async function addIssueComment(api, repo, token, number, body) {
+  return ghJSON(`${api}/repos/${repo}/issues/${number}/comments`, token, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ body }),
   });
 }

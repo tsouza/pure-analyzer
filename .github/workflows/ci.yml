@@ -140,10 +140,16 @@ jobs:
         run: cargo xtask coverage
 
   # --- Diff-scoped mutation testing (cargo-mutants) -----------------------
-  # The planner always emits a valid matrix sentinel. Only a direct PR with a
-  # verified production-source diff can run workers; full or ambiguous plans
-  # are deliberately deferred to nightly/manual full mutation. Its direct-PR
-  # budget is at most three shards of twelve mutants each.
+  # The planner always emits a valid matrix sentinel. A direct PR with a
+  # verified production-source diff (including its own test-file changes —
+  # #276) runs workers on that diff; every other shape (docs, Cargo.toml, a
+  # rename/delete, an inline test surface, a test-only change set, a draft
+  # PR, or a diff too large for its bounded budget) defers to `skip`. The
+  # nightly/manual full run remains the exhaustive backstop for everything
+  # `skip` doesn't cover. #276's deferred-to-full path was meant to also get
+  # some bounded PR-lane coverage instead of a hard skip; a first attempt at
+  # that surfaced pre-existing problems live (see #441) and was reverted
+  # rather than landed half-safe — #441 tracks the redesign.
   mutation-plan:
     name: mutation-plan
     runs-on: ubuntu-latest

@@ -8,7 +8,6 @@ import {
   FULL_MUTATION_SHARDS,
   MUTATION_COMMAND_TIMEOUT_SECONDS,
   PLANNER_COMMAND_MAX_BUFFER_BYTES,
-  PLANNER_COMMAND_TIMEOUT_MS,
   PR_DIFF_MAX_SHARDS,
   PR_DIFF_MUTANTS_PER_SHARD,
   MUTANTS_PER_DIFF_SHARD,
@@ -282,7 +281,11 @@ test("finds attribute, macro, and doctest surfaces in either source revision", a
   }
 });
 
-test("keeps production Rust plus documentation on the full mutation floor", () => {
+// Note: this is the classifier's PRE-deferral verdict only. On a real PR,
+// `MUTATION_DEFER_FULL=true` rewrites this `full` into `skip` (see "bounds
+// deferred direct-PR mutation plans..." below) — it is never a guarantee
+// that a full mutation pass runs inline.
+test("classifies production Rust plus documentation as full before PR-lane deferral", () => {
   expect(
     classifyChanges([
       changed("crates/pure-analyzer-model/src/loader.rs"),
@@ -291,7 +294,14 @@ test("keeps production Rust plus documentation on the full mutation floor", () =
   ).toEqual({ reason: "documentation-change", scope: "full" });
 });
 
-test("fails closed when production and test Rust paths mix", () => {
+// The overwhelmingly common PR shape — production Rust plus its own test
+// file(s) — must stay in `diff` scope: a test-only path never contributes a
+// mutant itself, so its presence must not push the whole PR to the
+// full/deferred-to-skip floor. Before this fix, EVERY such PR was classified
+// `full` here (see #276: 60/60 recent PR runs skipped mutation entirely).
+// This is the test #310 asked for: a realistic multi-file diff (production
+// Rust + its test) must yield `scope: "diff"`, not `full`.
+test("keeps production Rust plus its own test-only Rust changes in diff scope", () => {
   expect(
     classifyChanges([
       changed("crates/pure-analyzer-model/src/loader.rs"),
@@ -299,18 +309,19 @@ test("fails closed when production and test Rust paths mix", () => {
       changed("crates/pure-analyzer-model/src/tests.rs"),
     ]),
   ).toEqual({
-    reason: "non-production-or-configuration-change",
-    scope: "full",
+    reason: "production-rust-and-tests",
+    scope: "diff",
   });
 });
 
-test("keeps documentation-only changes on the full mutation floor", () => {
+// Same pre-deferral caveat as above.
+test("classifies documentation-only changes as full before PR-lane deferral", () => {
   expect(
     classifyChanges([changed("README.md"), changed("docs/architecture/ci.md", "A")]),
   ).toEqual({ reason: "documentation-change", scope: "full" });
 });
 
-test("fails closed for test-only, configuration, FFI, renames, deletions, and an empty diff", () => {
+test("fails closed for test-only-with-no-production, configuration, FFI, renames, deletions, and an empty diff", () => {
   for (const changes of [
     [changed("crates/pure-analyzer-model/tests/loader.rs")],
     [
@@ -326,6 +337,23 @@ test("fails closed for test-only, configuration, FFI, renames, deletions, and an
   ]) {
     expect(classifyChanges(changes).scope).toBe("full");
   }
+});
+
+test("classifies a test-only change set (no production Rust) as full", () => {
+  expect(classifyChanges([changed("crates/pure-analyzer-model/tests/loader.rs")])).toEqual({
+    reason: "test-only-change-set",
+    scope: "full",
+  });
+});
+
+test("keeps a mix of production Rust and one ineligible path on the full mutation floor", () => {
+  expect(
+    classifyChanges([
+      changed("crates/pure-analyzer-model/src/loader.rs"),
+      changed("crates/pure-analyzer-model/tests/loader.rs"),
+      changed("Cargo.toml"),
+    ]),
+  ).toEqual({ reason: "non-production-or-configuration-change", scope: "full" });
 });
 
 test("keeps non-PR events on the full mutation floor", () => {
@@ -346,6 +374,17 @@ test("bounds deferred direct-PR mutation plans and preserves a valid sentinel", 
     scope: "skip",
   });
   expect(deferred.matrix).toEqual(mutationMatrix("skip", 1));
+
+  // Every other deferrable full reason gets the same skip treatment.
+  for (const reason of [
+    "documentation-change",
+    "empty-change-set",
+    "inline-test-surface",
+    "rename-delete-or-type-change",
+    "test-only-change-set",
+  ]) {
+    expect(deferFullPlan({ ...full, reason }, true).scope).toBe("skip");
+  }
 
   expect(prDiffShardCount(0)).toBe(0);
   expect(prDiffShardCount(PR_DIFF_MUTANTS_PER_SHARD)).toBe(1);
@@ -460,6 +499,45 @@ test("deferred CI planning emits sentinels but surfaces planner failures", async
   });
 });
 
+// This is the end-to-end regression test #310 asked for: it calls the same
+// `planFromEnvironment` entry point CI's `mutation-plan` job actually
+// invokes, with `MUTATION_DEFER_FULL=true` exactly as the PR lane sets it,
+// over the realistic "production Rust + its own test file" diff shape that
+// #276 showed was 100% of PR runs falling through to `skip`. Had this test
+// existed, #276 could not have gone unnoticed for 60 consecutive PR runs.
+test("end-to-end PR lane runs a bounded diff pass for a realistic production-plus-test diff, not a skip", async () => {
+  const environment = {
+    GITHUB_EVENT_NAME: "pull_request",
+    MUTATION_BASE_SHA: mergeBase,
+    MUTATION_DEFER_FULL: "true",
+    MUTATION_HEAD_SHA: headSha,
+    MUTATION_PR_DRAFT: "false",
+    RUNNER_TEMP: "/tmp",
+  };
+  const changes = [
+    changed("crates/pure-analyzer-model/src/loader.rs"),
+    changed("crates/pure-analyzer-model/tests/loader.rs"),
+  ];
+
+  const plan = await planFromEnvironment(environment, {
+    checkedOutHead: async () => headSha,
+    changedPaths: async () => changes,
+    // Exercises the REAL classifier (not a hand-built classification), so a
+    // regression in `classifyChanges` itself would fail this test.
+    classifyCheckedOutChanges: async (_root, _base, _head, changedPaths) =>
+      classifyChanges(changedPaths),
+    listedMutantCount: async () => PR_DIFF_MUTANTS_PER_SHARD,
+    mergeBase: async () => mergeBase,
+    repoRoot: async () => "/workspace",
+    writeDiff: async () => diffSha256,
+  });
+
+  expect(plan.scope).toBe("diff");
+  expect(plan.reason).toBe("production-rust-and-tests");
+  expect(plan.matrix).toEqual(mutationMatrix("diff", 1));
+  expect(plan.matrix.include[0].scope).toBe("diff");
+});
+
 test("never emits a changed path as an Actions output reason", () => {
   expect(
     classifyChanges([changed("crates/pure-analyzer-model/tests/new\noutput=value.rs")]),
@@ -477,30 +555,58 @@ test("sizes incremental shards from the listed mutant count and caps at full wid
   expect(diffShardCount(Number.MAX_SAFE_INTEGER)).toBe(FULL_MUTATION_SHARDS);
 });
 
+// Asserts the command's observable CONTRACT (workspace scope, FFI exclusion,
+// list-only, diff-path plumbing) instead of reconstructing its literal
+// argv — a prior version of this test just restated `mutationListCommand`'s
+// body element-for-element, so it could never fail on a real regression
+// (#310).
 test("lists the same workspace scope as the mutation runner without unsupported flags", () => {
-  expect(mutationListCommand("target/mutation-scope.diff")).toEqual([
-    "cargo",
-    "mutants",
-    "--workspace",
-    "--exclude",
-    FFI_SOURCE,
-    "--in-place",
-    "--timeout",
-    MUTATION_COMMAND_TIMEOUT_SECONDS,
-    "--in-diff",
-    "target/mutation-scope.diff",
-    "--list",
-    "--json",
-  ]);
+  const diffPath = "target/mutation-scope.diff";
+  const command = mutationListCommand(diffPath);
+
+  expect(command.slice(0, 2)).toEqual(["cargo", "mutants"]);
+  expect(command).toContain("--workspace");
+  expect(command).toContain("--in-place");
+
+  const exclude = command.indexOf("--exclude");
+  expect(exclude).toBeGreaterThan(-1);
+  expect(command[exclude + 1]).toBe(FFI_SOURCE);
+
+  const timeout = command.indexOf("--timeout");
+  expect(timeout).toBeGreaterThan(-1);
+  expect(command[timeout + 1]).toBe(MUTATION_COMMAND_TIMEOUT_SECONDS);
+
+  const inDiff = command.indexOf("--in-diff");
+  expect(inDiff).toBeGreaterThan(-1);
+  expect(command[inDiff + 1]).toBe(diffPath);
+
+  // A listing command must never itself apply or check out a mutant.
+  expect(command.slice(-2)).toEqual(["--list", "--json"]);
+  expect(command).not.toContain("--check");
+  expect(command).not.toContain("--baseline");
+
+  // The diff path is the only thing that varies with its argument.
+  const otherCommand = mutationListCommand("target/other.diff");
+  expect(otherCommand[inDiff + 1]).toBe("target/other.diff");
+  const withoutDiffArg = (cmd) => cmd.filter((_, i) => i !== inDiff + 1);
+  expect(withoutDiffArg(otherCommand)).toEqual(withoutDiffArg(command));
 });
 
-test("bounds the planner mutant list subprocess", () => {
-  expect(mutationListRunOptions()).toEqual({
-    maxBuffer: PLANNER_COMMAND_MAX_BUFFER_BYTES,
-    timeoutMs: PLANNER_COMMAND_TIMEOUT_MS,
-  });
-  expect(PLANNER_COMMAND_TIMEOUT_MS).toBe(2 * 60 * 1_000);
-  expect(PLANNER_COMMAND_MAX_BUFFER_BYTES).toBe(8 * 1024 * 1024);
+// Behavioral replacement for a prior version of this test that only
+// re-asserted `PLANNER_COMMAND_TIMEOUT_MS`/`PLANNER_COMMAND_MAX_BUFFER_BYTES`
+// equal their own literal definitions (a change-detector that could never
+// fail on a real defect — #310). This instead proves `run()` actually
+// ENFORCES its default bound when no caller override is given, by sizing a
+// real subprocess's output off `mutationListRunOptions()` and observing it
+// get rejected.
+test("run() enforces the planner's own default output-size bound with no override", async () => {
+  const { maxBuffer } = mutationListRunOptions();
+  await expect(
+    run(
+      [process.execPath, "-e", `process.stdout.write("x".repeat(${maxBuffer + 1}));`],
+      process.cwd(),
+    ),
+  ).rejects.toThrow("output exceeded the configured limit");
 });
 
 test("fails closed when bounded planner output exceeds its cap", async () => {
