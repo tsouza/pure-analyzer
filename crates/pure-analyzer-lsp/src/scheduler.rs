@@ -287,6 +287,16 @@ mod tests {
     }
 
     #[test]
+    fn error_codes_match_the_json_rpc_spec() {
+        // Hardcoded against the literal JSON-RPC error codes, not each
+        // other: the response-frame assertions below compare against these
+        // same constants, so a mutant deleting the leading `-` (making a
+        // code positive) would still be self-consistent with those tests.
+        assert_eq!(REQUEST_CANCELLED_CODE, -32_800);
+        assert_eq!(INTERNAL_ERROR_CODE, -32_603);
+    }
+
+    #[test]
     fn complete_reports_internal_error_for_a_panicked_worker_without_a_cancellable_identifier() {
         let server = Server::new();
         let mut scheduler = idle_scheduler();

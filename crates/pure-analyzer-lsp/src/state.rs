@@ -874,6 +874,7 @@ mod tests {
     use super::{
         AnalysisSnapshot, diagnostic_contains, diagnostic_hover, hover_sort_key,
         replacement_bounds, shared_prefix_len, unopened_model_document_uris,
+        warn_unopened_model_documents, workspace_text_edit,
     };
     use crate::{DocumentSnapshot, Server};
 
@@ -973,6 +974,62 @@ mod tests {
     }
 
     #[test]
+    fn warn_unopened_model_documents_logs_each_excluded_uri() {
+        use std::{
+            io,
+            sync::{Arc, Mutex},
+        };
+
+        #[derive(Clone, Default)]
+        struct CapturedLog(Arc<Mutex<Vec<u8>>>);
+
+        impl io::Write for CapturedLog {
+            fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+                self.0
+                    .lock()
+                    .unwrap_or_else(|p| p.into_inner())
+                    .extend_from_slice(bytes);
+                Ok(bytes.len())
+            }
+
+            fn flush(&mut self) -> io::Result<()> {
+                Ok(())
+            }
+        }
+
+        let mut server = Server::new();
+        server.configuration.replace(value(
+            r#"{"modelDocuments":[{"uri":"untitled:never-opened","kind":"pure"}]}"#,
+        ));
+
+        let captured = CapturedLog::default();
+        let for_writer = captured.clone();
+        let subscriber = tracing_subscriber::fmt()
+            .with_writer(move || for_writer.clone())
+            .with_ansi(false)
+            .finish();
+
+        // `warn_unopened_model_documents` has no return value; a mutant that
+        // replaces its body with `()` is only observable through the
+        // `tracing::warn!` side effect it is supposed to have, so this
+        // captures the subscriber's actual output rather than a call count.
+        tracing::subscriber::with_default(subscriber, || {
+            warn_unopened_model_documents(&server);
+        });
+
+        let log = String::from_utf8(captured.0.lock().unwrap_or_else(|p| p.into_inner()).clone())
+            .expect("log output is UTF-8");
+        assert!(
+            log.contains("untitled:never-opened"),
+            "expected the unopened URI in the warning, got: {log}"
+        );
+        assert!(
+            log.contains("excluded from analysis"),
+            "expected the warning message, got: {log}"
+        );
+    }
+
+    #[test]
     fn hover_sort_key_prefers_the_narrowest_enclosing_span_regardless_of_code_order() {
         let narrow = diagnostic_at(DiagCode::UnresolvedModelAssociation, 10, 12, "narrow");
         let wide = diagnostic_at(DiagCode::BadToken, 5, 20, "wide");
@@ -1037,6 +1094,32 @@ mod tests {
     }
 
     #[test]
+    fn workspace_text_edit_is_none_for_an_unchanged_document() {
+        let document =
+            DocumentSnapshot::new("untitled:query".to_owned(), "same".to_owned(), Some(1));
+        // `before == after`: no edit is needed, regardless of the document's
+        // live text. Guards the `before == after || text != before` OR: a
+        // mutant weakening it to `&&` would only refuse here if the document
+        // had *also* drifted, so it would instead synthesize a spurious
+        // zero-width edit.
+        assert_eq!(workspace_text_edit(&document, "same", "same"), None);
+    }
+
+    #[test]
+    fn workspace_text_edit_is_none_against_a_stale_document_snapshot() {
+        let document =
+            DocumentSnapshot::new("untitled:query".to_owned(), "current".to_owned(), Some(1));
+        // The live document text no longer matches `before`: computing a
+        // diff against it would produce an edit against content the client
+        // no longer has. Guards the other side of the OR above.
+        assert_eq!(
+            workspace_text_edit(&document, "stale", "new"),
+            None,
+            "a diff computed against a stale snapshot must be refused"
+        );
+    }
+
+    #[test]
     fn replacement_bounds_isolates_a_pure_append() {
         assert_eq!(replacement_bounds("abc", "abcd"), (3, 3, 4));
     }
@@ -1063,6 +1146,24 @@ mod tests {
         // exercises the loop's `len_utf8` step itself, unlike a fixture where
         // the multi-byte character only ever appears in the shared prefix.
         assert_eq!(replacement_bounds("xπy", "zπy"), (0, 1, 1));
+    }
+
+    #[test]
+    fn replacement_bounds_stops_the_before_side_exactly_at_the_shared_prefix() {
+        // The shared suffix walk must stop as soon as `before_end` reaches
+        // `prefix`, even though `after_end` is still above it and the next
+        // characters on both sides happen to coincide ('a' inside the
+        // prefix vs. the leading 'a' just past it in `after`). A `>` mutated
+        // to `>=` on the `before_end` bound — or the guard's `&&` weakened
+        // to `||` — lets the walk take one extra, wrong step here.
+        assert_eq!(replacement_bounds("aXY", "aaXY"), (1, 1, 2));
+    }
+
+    #[test]
+    fn replacement_bounds_stops_the_after_side_exactly_at_the_shared_prefix() {
+        // Mirror of the above with the roles swapped, isolating a `>`
+        // mutated to `>=` on the `after_end` bound specifically.
+        assert_eq!(replacement_bounds("aaXY", "aXY"), (1, 2, 1));
     }
 
     #[test]

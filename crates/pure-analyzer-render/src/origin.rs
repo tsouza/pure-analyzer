@@ -230,3 +230,40 @@ fn json_model_anchor<'a>(anchor: &PreparedModelAnchor<'a>) -> JsonModelAnchor<'a
         },
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use libpure::{SourceInput, SourceStore};
+
+    use super::validate_span;
+    use crate::error::ComparisonOriginRole;
+    use pure_analyzer_diagnostics::{FileId, TextRange};
+
+    fn sources() -> SourceStore {
+        SourceStore::load([SourceInput::in_memory("origin.pure", "abcdef")]).expect("source loads")
+    }
+
+    #[test]
+    fn validate_span_accepts_a_zero_width_span() {
+        // `text_size::TextRange`'s own constructor already rejects a
+        // reversed (`start > end`) span, so `start > end` here can never
+        // observe `true` for any span this codebase can construct — the
+        // reachable boundary is `start == end`, a perfectly valid
+        // zero-width span (an insertion point). A mutant weakening `>` to
+        // `==` or `>=` turns every such span into a spurious error.
+        let sources = sources();
+        let span = TextRange::new(3.into(), 3.into());
+
+        let result = validate_span(
+            &sources,
+            ComparisonOriginRole::Indecision,
+            FileId::new(0),
+            span,
+        );
+
+        assert!(
+            result.is_ok(),
+            "a zero-width span must validate, got: {result:?}"
+        );
+    }
+}

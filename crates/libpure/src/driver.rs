@@ -1641,6 +1641,16 @@ Class model::Person
     }
 
     #[test]
+    fn comparison_request_exposes_the_models_it_was_constructed_with() {
+        // A mutant that replaces the accessor's body with a leaked empty
+        // slice would still type-check and compile (`Vec::leak` yields a
+        // `&mut [ModelInput]`, usable wherever `&[ModelInput]` is), but
+        // would silently drop every model the caller supplied.
+        let request = comparison_request("model::Person.all()", "model::Person.all()");
+        assert_eq!(request.models().len(), 1);
+    }
+
+    #[test]
     fn comparison_request_passes_its_explicit_normalization_budget_through() {
         let request = comparison_request("model::Person.all()", "model::Person.all()")
             .with_normalization_budget(NormalizationBudget::new(0));
