@@ -338,6 +338,29 @@ mod tests {
     }
 
     #[test]
+    fn milestoning_arity_guard_does_not_fire_when_a_wide_argument_list_mixes_non_date_tokens() {
+        // Regression for an `is_date_literal -> true` mutant: a mixed
+        // argument list with more than two arguments, only some of which are
+        // date literals, must not be flagged. If `is_date_literal` always
+        // reported `true`, `values.iter().all(is_date_literal)` would wrongly
+        // pass and this legal (if unusual) mixed call would be rejected.
+        assert!(codes("$x.prop(%2020-01-01, %2020-01-02, 5)").is_empty());
+    }
+
+    #[test]
+    fn join_kind_guard_does_not_fire_for_a_qualified_name_that_merely_resembles_joinkind() {
+        // Regression for an `is_bare_join_kind` `&&` -> `||` mutant: a bare
+        // qualified name in the exact `JoinKind.<member>` shape, but whose
+        // text is not literally "JoinKind", must not be treated as the real
+        // enum reference. A `||` flip would accept any `QUALIFIED_NAME`
+        // regardless of its text, or any text regardless of shape.
+        assert!(
+            codes("#>{db::testDB.left}#->join(#>{db::testDB.right}#, Foo.OUTER, {x,y| $x == $y})")
+                .is_empty()
+        );
+    }
+
+    #[test]
     fn a_genuine_joinkind_enum_reference_with_an_unknown_member_still_errors() {
         // Regression for #283: the fix above must not weaken the guard into
         // a false negative for the real enum-qualified case.

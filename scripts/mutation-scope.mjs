@@ -44,6 +44,7 @@ const DEFERRED_FULL_REASONS = new Set([
   "non-production-or-configuration-change",
   "non-pull-request-event",
   "rename-delete-or-type-change",
+  "test-only-change-set",
   "zero-diff-mutant-list",
 ]);
 
@@ -156,20 +157,38 @@ export function classifyChanges(changes) {
     return { scope: "full", reason: "rename-delete-or-type-change" };
   }
 
-  if (changes.flatMap(({ paths }) => paths).some(isDocumentationPath)) {
+  const paths = changes.flatMap(({ paths }) => paths);
+  if (paths.some(isDocumentationPath)) {
     // Rust permits source files and build scripts to consume arbitrary files.
     // A path-based documentation exemption cannot prove a documentation change
     // is inert, including when it accompanies an otherwise eligible Rust diff.
     return { scope: "full", reason: "documentation-change" };
   }
 
-  const ineligiblePath = changes.flatMap(({ paths }) => paths).find(
-    (path) => !isDiffEligibleRustPath(path),
+  // A test-only Rust path (its own `tests/` file, or an inline `src/tests.rs`
+  // sibling) never contributes a mutant itself — cargo-mutants only mutates
+  // production code — so its presence alongside an eligible production diff
+  // must not force the whole PR to the full/deferred-to-skip floor. That was
+  // the single largest driver of #276: the overwhelmingly common PR shape
+  // (production `.rs` plus its own test file) always fell through this
+  // escape hatch. Any OTHER ineligible path (docs, `Cargo.toml`, a workflow
+  // file, the FFI boundary, an unrelated crate's test-only path shape that
+  // isn't paired with production Rust) still forces `full`.
+  const ineligiblePath = paths.find(
+    (path) => !isDiffEligibleRustPath(path) && !isTestOnlyRustPath(path),
   );
   if (ineligiblePath) {
     return { scope: "full", reason: "non-production-or-configuration-change" };
   }
-  return { scope: "diff", reason: "production-rust-only" };
+
+  if (!paths.some(isDiffEligibleRustPath)) {
+    return { scope: "full", reason: "test-only-change-set" };
+  }
+
+  const reason = paths.some(isTestOnlyRustPath)
+    ? "production-rust-and-tests"
+    : "production-rust-only";
+  return { scope: "diff", reason };
 }
 
 /** Number of balanced round-robin shards needed for a nonempty incremental set. */
@@ -235,7 +254,20 @@ export function eventFallbackPlan(eventName, draft) {
   return undefined;
 }
 
-/** Apply the bounded direct-PR lane, deferring full proofs to a valid sentinel. */
+/**
+ * Apply the bounded direct-PR lane, deferring full proofs to a valid sentinel.
+ *
+ * A deferred `full` plan collapses to `skip` rather than running any
+ * full-workspace coverage inline: an earlier version of this function ran
+ * one rotating full-workspace shard instead, but that surfaced two
+ * pre-existing problems live on PR #439 — a single full-workspace shard can
+ * exceed the job's wall-time budget, and cargo-mutants reports each
+ * surviving mutant as a `##[warning]` annotation that the repo-wide
+ * warnings-are-errors sweep (`no-ci-warnings.mjs`) then hard-fails on,
+ * which would make ci-gate red on every PR until the whole pre-existing
+ * surviving-mutant backlog is cleared. See the follow-up issue for the
+ * bounded-full-workspace-coverage design this still owes #276.
+ */
 export function deferFullPlan(plan, deferFull = false) {
   if (!deferFull) return plan;
   if (plan.scope === "full") {

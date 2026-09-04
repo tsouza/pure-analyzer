@@ -1076,10 +1076,148 @@ fn write_usize(output: &mut String, value: usize) {
 
 #[cfg(test)]
 mod tests {
+    use pure_analyzer_diagnostics::{FileId, TextRange, TextSize};
     use pure_analyzer_model::{Name, PmcdDocument, QName, load_pmcd_documents};
     use pure_analyzer_resolve::{Resolution, Resolver};
 
     use super::*;
+
+    /// Regression for the `DEFAULT_NORMALIZATION_STEP_LIMIT` `*` -> `+`
+    /// mutant: the doc-pinned product (32 x 128 = 4096), not the much
+    /// smaller sum a `+` flip would silently substitute.
+    #[test]
+    fn default_normalization_step_limit_is_the_pinned_product() {
+        assert_eq!(
+            DEFAULT_NORMALIZATION_STEP_LIMIT,
+            MAX_RELATIONAL_RECURSION_DEPTH * NORMALIZATION_FANOUT_HEADROOM
+        );
+        assert_eq!(DEFAULT_NORMALIZATION_STEP_LIMIT, 4096);
+    }
+
+    fn depth_fixture_class() -> ResolvedClass {
+        let source = r#"{
+            "_type": "data",
+            "elements": [
+                {
+                    "_type": "class",
+                    "package": "model",
+                    "name": "Person",
+                    "stereotypes": [],
+                    "superTypes": [],
+                    "properties": [],
+                    "qualifiedProperties": []
+                }
+            ]
+        }"#;
+        let graph = load_pmcd_documents(&[PmcdDocument::new("normalizer-depth-fixture", source)])
+            .expect("fixture model loads");
+        let resolver = Resolver::new(&graph);
+        match resolver.resolve_class(&QName::new("model::Person").expect("fixture path is valid")) {
+            Resolution::Found(class) => class,
+            outcome => panic!("fixture class resolves: {outcome:?}"),
+        }
+    }
+
+    fn depth_fixture_origin() -> IrOrigin {
+        IrOrigin::new(
+            crate::SourceSpan::new(
+                FileId::new(91),
+                TextRange::new(TextSize::from(0), TextSize::from(1)),
+            ),
+            Vec::new(),
+        )
+    }
+
+    fn depth_fixture_scan() -> RelationExpression {
+        let source = depth_fixture_origin();
+        let schema = RelationSchema::new(vec![Column::new(
+            ColumnId::new(0),
+            Name::new("value").expect("fixture name is valid"),
+            TypeRef::new(
+                QName::new("String").expect("fixture type is valid"),
+                Vec::new(),
+            ),
+            Multiplicity::new(1, Some(1)).expect("fixture multiplicity is valid"),
+            Nullability::NonNullable,
+            source.clone(),
+        )])
+        .expect("fixture schema is valid");
+        RelationExpression::new(
+            RelationOperator::Scan(RelationSource::Class(depth_fixture_class())),
+            schema,
+            RelationFacts::unknown(),
+            source,
+        )
+        .expect("fixture scan is valid")
+    }
+
+    /// Regression for a `Normalizer::relation` `self.depth -= 1` mutant
+    /// (`-=` -> `+=`/`/=`): the stack-depth slot claimed by `enter` must be
+    /// fully released once `relation` returns, or a second, independent,
+    /// equally shallow call would wrongly inherit an inflated depth.
+    #[test]
+    fn relation_releases_its_depth_slot_after_returning() {
+        let mut normalizer = Normalizer {
+            remaining_steps: 1_000,
+            depth: 0,
+        };
+        let scan = depth_fixture_scan();
+
+        normalizer
+            .relation(&scan)
+            .expect("a bare scan must normalize");
+        assert_eq!(
+            normalizer.depth, 0,
+            "depth must fully reset after relation() returns"
+        );
+
+        normalizer
+            .relation(&scan)
+            .expect("a second, independent scan call must normalize identically");
+        assert_eq!(
+            normalizer.depth, 0,
+            "depth must still be zero after a second independent call"
+        );
+    }
+
+    /// Regression for a `Normalizer::scalar` `self.depth -= 1` mutant
+    /// (`-=` -> `+=`/`/=`): same rationale as the `relation` regression
+    /// above, for the scalar side of the shared depth budget.
+    #[test]
+    fn scalar_releases_its_depth_slot_after_returning() {
+        let mut normalizer = Normalizer {
+            remaining_steps: 1_000,
+            depth: 0,
+        };
+        let source = depth_fixture_origin();
+        let literal = ScalarExpression::new(
+            ScalarOperator::Literal(ScalarLiteral::Boolean(true)),
+            TypeRef::new(
+                QName::new("Boolean").expect("fixture type is valid"),
+                Vec::new(),
+            ),
+            Multiplicity::new(1, Some(1)).expect("fixture multiplicity is valid"),
+            Nullability::NonNullable,
+            Knowledge::<Totality>::unknown(),
+            source,
+        );
+
+        normalizer
+            .scalar(&literal)
+            .expect("a bare literal must normalize");
+        assert_eq!(
+            normalizer.depth, 0,
+            "depth must fully reset after scalar() returns"
+        );
+
+        normalizer
+            .scalar(&literal)
+            .expect("a second, independent literal call must normalize identically");
+        assert_eq!(
+            normalizer.depth, 0,
+            "depth must still be zero after a second independent call"
+        );
+    }
 
     /// Two distinct resolved members of the same class, used to isolate
     /// `KeyEncoder::member`/`member_kind` from the rest of a real navigation.
@@ -1167,6 +1305,70 @@ mod tests {
             pmcd.finish(),
             pure_file.finish(),
             "encoding two distinct model provenances must not collide"
+        );
+    }
+
+    /// Two classes resolved from two separate PMCD documents, so their
+    /// `DefinitionAnchor`s carry different `SourceId`s (PMCD anchors always
+    /// have a `None` span, so the source is the only distinguishing field).
+    fn two_classes_from_different_pmcd_documents() -> (ResolvedClass, ResolvedClass) {
+        let first = r#"{
+            "_type": "data",
+            "elements": [
+                {
+                    "_type": "class",
+                    "package": "model",
+                    "name": "First",
+                    "stereotypes": [],
+                    "superTypes": [],
+                    "properties": [],
+                    "qualifiedProperties": []
+                }
+            ]
+        }"#;
+        let second = r#"{
+            "_type": "data",
+            "elements": [
+                {
+                    "_type": "class",
+                    "package": "model",
+                    "name": "Second",
+                    "stereotypes": [],
+                    "superTypes": [],
+                    "properties": [],
+                    "qualifiedProperties": []
+                }
+            ]
+        }"#;
+        let graph = load_pmcd_documents(&[
+            PmcdDocument::new("key-encoder-anchor-fixture-first", first),
+            PmcdDocument::new("key-encoder-anchor-fixture-second", second),
+        ])
+        .expect("fixture model loads");
+        let resolver = Resolver::new(&graph);
+        let resolve = |name: &str| match resolver
+            .resolve_class(&QName::new(name).expect("fixture path is valid"))
+        {
+            Resolution::Found(class) => class,
+            outcome => panic!("fixture class resolves: {outcome:?}"),
+        };
+        (resolve("model::First"), resolve("model::Second"))
+    }
+
+    /// Regression for a `KeyEncoder::anchor -> ()` mutant: two distinct
+    /// definition anchors (different `SourceId`, both PMCD so both have a
+    /// `None` span) must not encode to the same fragment.
+    #[test]
+    fn key_encoder_anchor_fragment_differs_by_source() {
+        let (first, second) = two_classes_from_different_pmcd_documents();
+        let mut left = KeyEncoder::semantic();
+        left.anchor(first.definition());
+        let mut right = KeyEncoder::semantic();
+        right.anchor(second.definition());
+        assert_ne!(
+            left.finish(),
+            right.finish(),
+            "encoding two distinct definition anchors must not collide"
         );
     }
 }
