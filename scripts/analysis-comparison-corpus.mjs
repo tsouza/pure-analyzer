@@ -16,6 +16,7 @@ import {
   jsonEqual,
   legendEngineBaseUrl,
 } from "./lib/legend-engine.mjs";
+import { assertExactFields, isObject, nonEmptyString, oracleLambda } from "./lib/oracle.mjs";
 
 export {
   EngineUnavailableError,
@@ -24,6 +25,7 @@ export {
   canonicalJson,
   jsonEqual,
 } from "./lib/legend-engine.mjs";
+export { oracleLambda } from "./lib/oracle.mjs";
 
 export const CASES_PATH = `${CORPUS_DIRECTORY}/comparison.jsonl`;
 export const EQUIVALENT = "equivalent";
@@ -36,73 +38,6 @@ export const OUTPUT_COLUMN_FIELDS = Object.freeze([
   "multiplicity",
   "nullability",
 ]);
-
-function isObject(value) {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-function nonEmptyString(value) {
-  return typeof value === "string" && value.trim().length > 0;
-}
-
-function assertExactFields(value, fields, path) {
-  const actual = Object.keys(value).sort();
-  const expected = [...fields].sort();
-  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
-    throw new Error(`${path}: unexpected corpus fields`);
-  }
-}
-
-function assertIntegerValues(value, path) {
-  if (!Array.isArray(value) || value.length === 0 || value.some((item) => !Number.isSafeInteger(item))) {
-    throw new Error(`${path}: values must be a non-empty integer list`);
-  }
-  return value;
-}
-
-function assertStringValues(value, path) {
-  if (!Array.isArray(value) || value.length === 0 || value.some((item) => !nonEmptyString(item))) {
-    throw new Error(`${path}: values must be a non-empty string list`);
-  }
-  return value;
-}
-
-function pureString(value) {
-  return `'${value.replaceAll("'", "''")}'`;
-}
-
-/** Render the bounded engine oracle that is mechanically tied to one M3 source shape. */
-export function oracleLambda(value, path = "oracle") {
-  if (!isObject(value)) throw new Error(`${path}: oracle must be a JSON object`);
-  switch (value.kind) {
-    case "scan": {
-      assertExactFields(value, ["kind", "values"], path);
-      return `|[${assertIntegerValues(value.values, `${path}:values`).join(", ")}]`;
-    }
-    case "filter_true": {
-      assertExactFields(value, ["kind", "values"], path);
-      return `|[${assertIntegerValues(value.values, `${path}:values`).join(", ")}]->filter(x: Integer[1]|true)`;
-    }
-    case "ordered_columns": {
-      assertExactFields(value, ["kind", "columns"], path);
-      const columns = assertStringValues(value.columns, `${path}:columns`);
-      if (new Set(columns).size !== columns.length) {
-        throw new Error(`${path}: ordered column names must be unique`);
-      }
-      return `|[${columns.map(pureString).join(", ")}]`;
-    }
-    case "literal_filter": {
-      assertExactFields(value, ["kind", "values", "value"], path);
-      const values = assertStringValues(value.values, `${path}:values`);
-      if (!nonEmptyString(value.value) || !values.includes(value.value)) {
-        throw new Error(`${path}: literal filter value must be one of its input values`);
-      }
-      return `|[${values.map(pureString).join(", ")}]->filter(x: String[1]|$x == ${pureString(value.value)})`;
-    }
-    default:
-      throw new Error(`${path}: unsupported bounded oracle ${JSON.stringify(value.kind)}`);
-  }
-}
 
 function assertEvidence(value, path, decisive) {
   if (!isObject(value)) throw new Error(`${path}: evidence must be a JSON object`);
@@ -203,7 +138,8 @@ export function assertCorpus(fixtures) {
   const ids = new Set();
   const outcomes = new Set();
   for (const fixture of fixtures) {
-    if (!ids.add(fixture.id)) throw new Error(`duplicate fixture id ${JSON.stringify(fixture.id)}`);
+    if (ids.has(fixture.id)) throw new Error(`duplicate fixture id ${JSON.stringify(fixture.id)}`);
+    ids.add(fixture.id);
     outcomes.add(fixture.outcome);
   }
   for (const outcome of [EQUIVALENT, NOT_EQUIVALENT, INDECISIVE]) {

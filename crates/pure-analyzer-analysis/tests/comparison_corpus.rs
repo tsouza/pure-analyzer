@@ -27,14 +27,21 @@
 use std::collections::BTreeSet;
 
 use pure_analyzer_analysis::{
-    AnalysisInput, ComparisonOutcome, IrOrigin, OutputSchemaField, RelationOperator,
-    RelationalOutcome, RelationalQuery, ScalarLiteral, ScalarOperator, compare_relational_queries,
-    lower_m3_query,
+    AnalysisInput, ComparisonOutcome, IrOrigin, OutputSchemaField, RelationalOutcome,
+    compare_relational_queries, lower_m3_query,
 };
 use pure_analyzer_diagnostics::{FileId, ReasonCode};
 use pure_analyzer_model::{ModelGraph, PureDocument, load_pure_documents};
 use pure_analyzer_parser::parse_query;
-use serde_json::{Map, Value};
+use serde_json::Value;
+
+#[path = "support/legend_oracle.rs"]
+mod legend_oracle;
+
+use legend_oracle::{
+    Oracle, assert_exact_fields, assert_oracle_matches_query, non_empty_string, object,
+    parse_oracle, required_value,
+};
 
 const CORPUS_PATH: &str = "legend-4.113.0/comparison.jsonl";
 const CASES: &str = include_str!("../corpus/legend-4.113.0/comparison.jsonl");
@@ -58,39 +65,6 @@ struct Evidence<'source> {
     result: Option<&'source Value>,
 }
 
-/// A deliberately bounded executable observation derived from one M3 shape.
-///
-/// The Legend engine cannot execute the relation source used by the analyzer
-/// corpus directly, so this records only a closed, independently executable
-/// observation. `assert_oracle_matches_query` prevents it becoming unrelated
-/// decorative evidence.
-#[derive(Debug)]
-enum Oracle {
-    Scan { values: Vec<i64> },
-    FilterTrue { values: Vec<i64> },
-    OrderedColumns { columns: Vec<String> },
-    LiteralFilter { values: Vec<String>, value: String },
-}
-
-impl Oracle {
-    fn lambda(&self) -> String {
-        match self {
-            Self::Scan { values } => format!("|[{}]", integer_values(values)),
-            Self::FilterTrue { values } => {
-                format!("|[{}]->filter(x: Integer[1]|true)", integer_values(values))
-            }
-            Self::OrderedColumns { columns } => {
-                format!("|[{}]", string_values(columns))
-            }
-            Self::LiteralFilter { values, value } => format!(
-                "|[{}]->filter(x: String[1]|$x == {})",
-                string_values(values),
-                pure_string(value)
-            ),
-        }
-    }
-}
-
 #[derive(Debug)]
 struct ExpectedDifference {
     index: usize,
@@ -107,139 +81,12 @@ struct ComparisonCase<'source> {
     difference: Option<ExpectedDifference>,
 }
 
-fn object<'source>(value: &'source Value, path: &str) -> &'source Map<String, Value> {
-    value
-        .as_object()
-        .unwrap_or_else(|| panic!("{path}: expected a JSON object"))
-}
-
-fn non_empty_string<'source>(
-    object: &'source Map<String, Value>,
-    field: &str,
-    path: &str,
-) -> &'source str {
-    object
-        .get(field)
-        .and_then(Value::as_str)
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| panic!("{path}: {field} must be a non-empty string"))
-}
-
-fn required_value<'source>(
-    object: &'source Map<String, Value>,
-    field: &str,
-    path: &str,
-) -> &'source Value {
-    object
-        .get(field)
-        .unwrap_or_else(|| panic!("{path}: missing {field}"))
-}
-
-fn integer_values(value: &[i64]) -> String {
-    value
-        .iter()
-        .map(ToString::to_string)
-        .collect::<Vec<_>>()
-        .join(", ")
-}
-
-fn pure_string(value: &str) -> String {
-    format!("'{}'", value.replace('\'', "''"))
-}
-
-fn string_values(values: &[String]) -> String {
-    values
-        .iter()
-        .map(|value| pure_string(value))
-        .collect::<Vec<_>>()
-        .join(", ")
-}
-
-fn assert_exact_fields(object: &Map<String, Value>, expected: &[&str], path: &str) {
-    let actual = object.keys().map(String::as_str).collect::<BTreeSet<_>>();
-    let expected = expected.iter().copied().collect::<BTreeSet<_>>();
-    assert_eq!(actual, expected, "{path}: unexpected corpus fields");
-}
-
 fn parse_outcome(value: &str, path: &str) -> Outcome {
     match value {
         EQUIVALENT => Outcome::Equivalent,
         NOT_EQUIVALENT => Outcome::NotEquivalent,
         INDECISIVE => Outcome::Indecisive,
         other => panic!("{path}: unsupported outcome {other:?}"),
-    }
-}
-
-fn parse_integer_values(value: &Value, path: &str) -> Vec<i64> {
-    let values = value
-        .as_array()
-        .filter(|values| !values.is_empty())
-        .unwrap_or_else(|| panic!("{path}: values must be a non-empty integer list"));
-    values
-        .iter()
-        .enumerate()
-        .map(|(index, value)| {
-            value
-                .as_i64()
-                .unwrap_or_else(|| panic!("{path}:{index}: expected an integer"))
-        })
-        .collect()
-}
-
-fn parse_string_values(value: &Value, path: &str) -> Vec<String> {
-    let values = value
-        .as_array()
-        .filter(|values| !values.is_empty())
-        .unwrap_or_else(|| panic!("{path}: values must be a non-empty string list"));
-    values
-        .iter()
-        .enumerate()
-        .map(|(index, value)| {
-            value
-                .as_str()
-                .filter(|value| !value.trim().is_empty())
-                .unwrap_or_else(|| panic!("{path}:{index}: expected a non-empty string"))
-                .to_owned()
-        })
-        .collect()
-}
-
-fn parse_oracle(value: &Value, path: &str) -> Oracle {
-    let oracle = object(value, path);
-    match non_empty_string(oracle, "kind", path) {
-        "scan" => {
-            assert_exact_fields(oracle, &["kind", "values"], path);
-            Oracle::Scan {
-                values: parse_integer_values(required_value(oracle, "values", path), path),
-            }
-        }
-        "filter_true" => {
-            assert_exact_fields(oracle, &["kind", "values"], path);
-            Oracle::FilterTrue {
-                values: parse_integer_values(required_value(oracle, "values", path), path),
-            }
-        }
-        "ordered_columns" => {
-            assert_exact_fields(oracle, &["kind", "columns"], path);
-            let columns = parse_string_values(required_value(oracle, "columns", path), path);
-            assert_eq!(
-                columns.len(),
-                columns.iter().collect::<BTreeSet<_>>().len(),
-                "{path}: ordered column names must be unique"
-            );
-            Oracle::OrderedColumns { columns }
-        }
-        "literal_filter" => {
-            assert_exact_fields(oracle, &["kind", "values", "value"], path);
-            let values = parse_string_values(required_value(oracle, "values", path), path);
-            let value = non_empty_string(oracle, "value", path).to_owned();
-            assert!(
-                values.contains(&value),
-                "{path}: literal filter value must be one of its input values"
-            );
-            Oracle::LiteralFilter { values, value }
-        }
-        kind => panic!("{path}: unsupported bounded oracle {kind:?}"),
     }
 }
 
@@ -388,74 +235,6 @@ fn assert_origin_has_query_and_model_provenance(
         "{context}\ncomparison origin lost model provenance from {}",
         model_source.label(),
     );
-}
-
-fn assert_oracle_matches_query(oracle: &Oracle, query: &RelationalQuery, context: &str) {
-    match oracle {
-        Oracle::Scan { .. } => assert!(
-            matches!(query.root().operator(), RelationOperator::Scan(_)),
-            "{context}\nscan oracle must correspond to a lowered scan: {:#?}",
-            query.root().operator(),
-        ),
-        Oracle::FilterTrue { .. } => assert!(
-            matches!(
-                query.root().operator(),
-                RelationOperator::Filter { predicate, .. }
-                    if matches!(
-                        predicate.operator(),
-                        ScalarOperator::Literal(ScalarLiteral::Boolean(true))
-                    )
-            ),
-            "{context}\ntrue-filter oracle must correspond to a lowered true filter: {:#?}",
-            query.root().operator(),
-        ),
-        Oracle::OrderedColumns { columns } => {
-            assert!(
-                matches!(query.root().operator(), RelationOperator::Project { .. }),
-                "{context}\nordered-columns oracle must correspond to a lowered project: {:#?}",
-                query.root().operator(),
-            );
-            let actual = query
-                .output()
-                .columns()
-                .iter()
-                .map(|column| column.name().as_str())
-                .collect::<Vec<_>>();
-            let expected = columns.iter().map(String::as_str).collect::<Vec<_>>();
-            assert_eq!(
-                actual, expected,
-                "{context}\nordered-columns oracle must preserve lowered output aliases and order"
-            );
-        }
-        Oracle::LiteralFilter { value, .. } => assert!(
-            matches!(
-                query.root().operator(),
-                RelationOperator::Filter { predicate, .. }
-                    if is_matching_navigation_literal_equality(predicate.operator(), value)
-            ),
-            "{context}\nliteral-filter oracle must correspond to a lowered navigation equality literal: {:#?}",
-            query.root().operator(),
-        ),
-    }
-}
-
-fn is_matching_navigation_literal_equality(operator: &ScalarOperator, value: &str) -> bool {
-    let ScalarOperator::Equal { left, right } = operator else {
-        return false;
-    };
-    (is_navigation(left.operator()) && is_string_literal(right.operator(), value))
-        || (is_string_literal(left.operator(), value) && is_navigation(right.operator()))
-}
-
-fn is_navigation(operator: &ScalarOperator) -> bool {
-    matches!(operator, ScalarOperator::Navigation { .. })
-}
-
-fn is_string_literal(operator: &ScalarOperator, value: &str) -> bool {
-    matches!(
-        operator,
-        ScalarOperator::Literal(ScalarLiteral::String(candidate)) if candidate == value
-    )
 }
 
 fn load_model(case: &ComparisonCase<'_>) -> ModelGraph {

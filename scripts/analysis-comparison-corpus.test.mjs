@@ -136,6 +136,7 @@ describe("analysis comparison corpus validation", () => {
     ];
     expect(assertCorpus(fixtures)).toEqual(fixtures);
     expect(() => assertCorpus(fixtures.slice(0, 2))).toThrow(INDECISIVE);
+    expect(() => assertCorpus([...fixtures, fixtures[0]])).toThrow("duplicate fixture id");
     expect(parseFixtures(`${JSON.stringify(fixtures[0])}\n`, "comparison.jsonl")).toEqual([
       fixtures[0],
     ]);
