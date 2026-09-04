@@ -29,7 +29,6 @@ import {
   planFromClassification,
   prDiffShardCount,
   run,
-  sampleShardIndex,
   writeDiff,
 } from "./mutation-scope.mjs";
 
@@ -283,9 +282,9 @@ test("finds attribute, macro, and doctest surfaces in either source revision", a
 });
 
 // Note: this is the classifier's PRE-deferral verdict only. On a real PR,
-// `MUTATION_DEFER_FULL=true` rewrites this `full` into a bounded `sample`
-// (see "gives a deferred full-scope PR plan a bounded, non-empty sample"
-// below) — it is never a guarantee that a full mutation pass runs inline.
+// `MUTATION_DEFER_FULL=true` rewrites this `full` into `skip` (see "bounds
+// deferred direct-PR mutation plans..." below) — it is never a guarantee
+// that a full mutation pass runs inline.
 test("classifies production Rust plus documentation as full before PR-lane deferral", () => {
   expect(
     classifyChanges([
@@ -367,24 +366,16 @@ test("keeps non-PR events on the full mutation floor", () => {
   expect(eventFallbackPlan("pull_request", "false")).toBeUndefined();
 });
 
-// #276: a deferred `full` plan must still run SOME bounded mutation
-// coverage in the PR lane rather than collapsing straight to `skip` — that
-// full/skip collapse (with no bounded backstop) was the other half of why
-// the mutation gate never fired. `deferFullPlan` now converts a deferrable
-// `full` plan into one deterministic full-workspace shard instead.
-test("gives a deferred full-scope plan a bounded, non-empty sample instead of a hard skip", () => {
+test("bounds deferred direct-PR mutation plans and preserves a valid sentinel", () => {
   const full = eventFallbackPlan("merge_group", "false");
-  const sampled = deferFullPlan(full, true, 5);
-  expect(sampled).toMatchObject({
+  const deferred = deferFullPlan(full, true);
+  expect(deferred).toMatchObject({
     reason: "deferred-non-pull-request-event",
-    scope: "sample",
-    mutantCount: 0,
+    scope: "skip",
   });
-  expect(sampled.matrix).toEqual(mutationMatrix("sample", FULL_MUTATION_SHARDS, 5));
-  expect(sampled.matrix.include).toHaveLength(1);
-  expect(sampled.matrix.include[0]).toMatchObject({ index: 5, total: FULL_MUTATION_SHARDS });
+  expect(deferred.matrix).toEqual(mutationMatrix("skip", 1));
 
-  // Every other deferrable full reason gets the same bounded treatment.
+  // Every other deferrable full reason gets the same skip treatment.
   for (const reason of [
     "documentation-change",
     "empty-change-set",
@@ -392,33 +383,8 @@ test("gives a deferred full-scope plan a bounded, non-empty sample instead of a 
     "rename-delete-or-type-change",
     "test-only-change-set",
   ]) {
-    expect(deferFullPlan({ ...full, reason }, true, 0).scope).toBe("sample");
+    expect(deferFullPlan({ ...full, reason }, true).scope).toBe("skip");
   }
-
-  // A plan that isn't deferred (deferFull: false) is returned unchanged.
-  expect(deferFullPlan(full)).toBe(full);
-});
-
-test("derives a bounded, deterministic sample shard index from a commit SHA", () => {
-  expect(sampleShardIndex("")).toBe(0);
-  expect(sampleShardIndex(undefined)).toBe(0);
-  const shas = ["a".repeat(40), "1234abcd".padEnd(40, "0"), "f".repeat(40), "0".repeat(40)];
-  const indices = shas.map(sampleShardIndex);
-  for (const index of indices) {
-    expect(Number.isInteger(index)).toBeTrue();
-    expect(index).toBeGreaterThanOrEqual(0);
-    expect(index).toBeLessThan(FULL_MUTATION_SHARDS);
-  }
-  // Deterministic: recomputing from the same SHA reproduces the same shard.
-  for (const [i, sha] of shas.entries()) {
-    expect(sampleShardIndex(sha)).toBe(indices[i]);
-  }
-  // Not degenerate: these four commits don't all land on the same shard.
-  expect(new Set(indices).size).toBeGreaterThan(1);
-});
-
-test("bounds deferred direct-PR mutation plans and preserves a valid sentinel", () => {
-  const full = eventFallbackPlan("merge_group", "false");
 
   expect(prDiffShardCount(0)).toBe(0);
   expect(prDiffShardCount(PR_DIFF_MUTANTS_PER_SHARD)).toBe(1);
@@ -454,16 +420,13 @@ test("bounds deferred direct-PR mutation plans and preserves a valid sentinel", 
     scope: "skip",
   });
   expect(oversized.matrix).toEqual(mutationMatrix("skip", 1));
-  // A `diff` classification whose actual mutant list comes back empty falls
-  // back to `full` (`zero-diff-mutant-list`) and, deferred, gets the same
-  // bounded sample as any other deferred full reason — not a hard skip.
   const zero = planFromClassification(
     { reason: "production-rust-only", scope: "diff" },
     { diffSha256, headSha, mergeBase, mutantCount: 0 },
   );
   expect(deferFullPlan(zero, true)).toMatchObject({
     reason: "deferred-zero-diff-mutant-list",
-    scope: "sample",
+    scope: "skip",
   });
   const invalid = planFromClassification(
     { reason: "production-rust-only", scope: "diff" },
@@ -502,7 +465,7 @@ test("deferred CI planning emits sentinels but surfaces planner failures", async
     }),
   ).resolves.toMatchObject({
     reason: "deferred-non-production-or-configuration-change",
-    scope: "sample",
+    scope: "skip",
   });
 
   await expect(
@@ -532,7 +495,7 @@ test("deferred CI planning emits sentinels but surfaces planner failures", async
     }),
   ).resolves.toMatchObject({
     reason: "deferred-non-pull-request-event",
-    scope: "sample",
+    scope: "skip",
   });
 });
 
@@ -765,15 +728,4 @@ test("uses a sentinel matrix for skips and retains every full shard for fallback
   expect(mutationMatrix("full", FULL_MUTATION_SHARDS).include).toHaveLength(
     FULL_MUTATION_SHARDS,
   );
-  expect(mutationMatrix("sample", FULL_MUTATION_SHARDS, 7)).toEqual({
-    include: [
-      {
-        diagnostics: "shard",
-        index: 7,
-        report: "default",
-        scope: "sample",
-        total: FULL_MUTATION_SHARDS,
-      },
-    ],
-  });
 });
