@@ -148,14 +148,6 @@ pub enum BuildError {
         /// The supplied top-level kind.
         actual: SyntaxKind,
     },
-    /// A validated range could not be sliced from the supplied source.
-    #[error("token {token_index} range {range:?} cannot be sliced from source")]
-    InvalidSourceSlice {
-        /// The token's zero-based index.
-        token_index: usize,
-        /// The range that could not be sliced.
-        range: TextRange,
-    },
 }
 
 /// Collects parser events and folds them into an immutable green tree.

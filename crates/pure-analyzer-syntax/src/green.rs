@@ -45,6 +45,16 @@ impl GreenToken {
     }
 
     /// Returns this token's exact source text.
+    ///
+    /// `self.range` is provably in-bounds for every `GreenToken` the public
+    /// API can hand back: the sole construction site (`advance_token` in
+    /// `builder.rs`) only runs on ranges `GreenNodeBuilder::finish`'s
+    /// `validate_tokens` has already checked are contiguous, non-empty,
+    /// within the source, and UTF-8-boundary-aligned. `unwrap_or_default`
+    /// is unreachable defense-in-depth, not a live failure path — see
+    /// `fails_open_to_empty_text_if_the_range_invariant_is_ever_broken`
+    /// below, which pins that fallback with a `GreenToken` built to
+    /// deliberately violate the invariant.
     #[must_use]
     pub fn text(&self) -> &str {
         self.source
@@ -123,6 +133,23 @@ mod tests {
 
         let different_text = final_token("a y");
         assert_ne!(left, different_text);
+    }
+
+    #[test]
+    fn fails_open_to_empty_text_if_the_range_invariant_is_ever_broken() {
+        // `GreenNodeBuilder` never produces a `GreenToken` with a range
+        // `text()`'s slice can fail on (see the doc comment on `text()`), so
+        // this constructs one directly — the only way to exercise that path
+        // at all — to pin `text()`'s fallback as deliberate, tested
+        // behavior rather than untested dead code.
+        let source: Arc<str> = Arc::from("ab");
+        let out_of_range = GreenToken::new(
+            SyntaxKind::IDENT,
+            source,
+            crate::TextRange::new(0.into(), 5.into()),
+        );
+
+        assert_eq!(out_of_range.text(), "");
     }
 }
 

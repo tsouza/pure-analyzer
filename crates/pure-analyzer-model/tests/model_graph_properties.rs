@@ -30,11 +30,6 @@ fn load(value: &Value) -> Result<pure_analyzer_model::ModelGraph, ModelError> {
 }
 
 proptest! {
-    #![proptest_config(ProptestConfig {
-        failure_persistence: None,
-        ..ProptestConfig::default()
-    })]
-
     #[test]
     fn btree_normalization_is_invariant_to_element_and_property_order(
         raw_names in prop::collection::vec("[a-z][a-z0-9]{0,7}", 0..24)

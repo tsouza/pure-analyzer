@@ -22,9 +22,6 @@ pub pure_analyzer_syntax::BuildError::IncompleteTokenCoverage
 pub pure_analyzer_syntax::BuildError::IncompleteTokenCoverage::actual: text_size::size::TextSize
 pub pure_analyzer_syntax::BuildError::IncompleteTokenCoverage::expected: text_size::size::TextSize
 pub pure_analyzer_syntax::BuildError::InvalidCheckpoint
-pub pure_analyzer_syntax::BuildError::InvalidSourceSlice
-pub pure_analyzer_syntax::BuildError::InvalidSourceSlice::range: text_size::range::TextRange
-pub pure_analyzer_syntax::BuildError::InvalidSourceSlice::token_index: usize
 pub pure_analyzer_syntax::BuildError::InvalidUtf8Boundary
 pub pure_analyzer_syntax::BuildError::InvalidUtf8Boundary::offset: text_size::size::TextSize
 pub pure_analyzer_syntax::BuildError::InvalidUtf8Boundary::token_index: usize

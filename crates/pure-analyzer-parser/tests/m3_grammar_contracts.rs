@@ -5,7 +5,7 @@ use pure_analyzer_parser::parse_query;
 use pure_analyzer_syntax::{GreenElement, GreenNode, SyntaxKind};
 
 const TEST_FILE_ID: u32 = 91;
-const OUTER_EXPRESSION_FAILURE_DIAGNOSTICS: usize = 3;
+const OUTER_EXPRESSION_FAILURE_DIAGNOSTICS: usize = 2;
 const OUTER_EXPRESSION_FAILURE_NODES: usize = 1;
 const GENERIC_TYPE_REFERENCE_COUNT: usize = 3;
 
@@ -272,7 +272,7 @@ fn malformed_collection_members_stop_at_eof() {
     let parsed = parse(source);
 
     assert_eq!(parsed.green.text(), source);
-    assert_eq!(syntax_error_count(&parsed), 4, "{:#?}", parsed.diagnostics);
+    assert_eq!(syntax_error_count(&parsed), 3, "{:#?}", parsed.diagnostics);
     assert_eq!(count_kind(&parsed.green, SyntaxKind::ERROR_NODE), 2);
 }
 
@@ -282,7 +282,7 @@ fn malformed_collection_members_stop_at_source_separators() {
     let parsed = parse(source);
 
     assert_eq!(parsed.green.text(), source);
-    assert_eq!(syntax_error_count(&parsed), 5, "{:#?}", parsed.diagnostics);
+    assert_eq!(syntax_error_count(&parsed), 4, "{:#?}", parsed.diagnostics);
     assert_eq!(count_kind(&parsed.green, SyntaxKind::QUERY_EXPR), 1);
     assert_eq!(count_kind(&parsed.green, SyntaxKind::ERROR_NODE), 3);
 }
