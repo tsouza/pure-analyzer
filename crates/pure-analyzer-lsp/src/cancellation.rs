@@ -132,3 +132,91 @@ impl CancellationRegistry {
         access(&mut active)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{CancellationRegistry, RequestId};
+
+    #[test]
+    fn begin_registers_a_fresh_token_and_rejects_a_duplicate_active_identifier() {
+        let registry = CancellationRegistry::default();
+        let id = RequestId::Number(1);
+
+        let token = registry.begin(id.clone()).expect("first begin succeeds");
+        assert!(!token.is_cancelled());
+        assert_eq!(registry.len(), 1);
+        assert!(!registry.is_empty());
+
+        assert!(
+            registry.begin(id.clone()).is_none(),
+            "a duplicate in-flight identifier must be rejected"
+        );
+        assert_eq!(
+            registry.len(),
+            1,
+            "the rejected duplicate must not replace the original"
+        );
+    }
+
+    #[test]
+    fn finish_removes_the_entry_and_reports_the_final_cancellation_state() {
+        let registry = CancellationRegistry::default();
+        let id = RequestId::Number(2);
+
+        let token = registry.begin(id.clone()).expect("begin succeeds");
+        assert!(
+            !registry.finish(&id, &token),
+            "an uncancelled completion must report false"
+        );
+        assert!(registry.is_empty(), "finish must remove the entry");
+        assert!(!registry.is_cancelled(&id));
+
+        let token = registry
+            .begin(id.clone())
+            .expect("the identifier is reusable once its prior entry finished");
+        registry.cancel(id.clone());
+        assert!(token.is_cancelled());
+        assert!(
+            registry.finish(&id, &token),
+            "a cancelled completion must report true"
+        );
+        assert!(registry.is_empty());
+    }
+
+    #[test]
+    fn finish_ignores_a_token_that_does_not_match_the_active_registration() {
+        let registry = CancellationRegistry::default();
+        let first = RequestId::Number(3);
+        let second = RequestId::String("other".to_owned());
+
+        let first_token = registry.begin(first.clone()).expect("begin the first id");
+        let second_token = registry.begin(second.clone()).expect("begin the second id");
+
+        assert!(
+            !registry.finish(&first, &second_token),
+            "a token from a different request must not finish this one"
+        );
+        assert_eq!(
+            registry.len(),
+            2,
+            "a mismatched token must leave the active entry in place"
+        );
+
+        assert!(!registry.finish(&first, &first_token));
+        assert_eq!(registry.len(), 1);
+        assert!(!registry.finish(&second, &second_token));
+        assert!(registry.is_empty());
+    }
+
+    #[test]
+    fn cancel_and_is_cancelled_ignore_identifiers_that_are_not_active() {
+        let registry = CancellationRegistry::default();
+        let id = RequestId::Number(4);
+
+        assert!(!registry.is_cancelled(&id));
+        registry.cancel(id.clone());
+        assert!(!registry.is_cancelled(&id));
+        assert!(registry.is_empty());
+        assert_eq!(registry.len(), 0);
+    }
+}
