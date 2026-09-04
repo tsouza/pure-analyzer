@@ -99,6 +99,10 @@ pub enum SourceOrigin {
 }
 
 /// A one-based line and byte-column location in a UTF-8 source snapshot.
+///
+/// This is the column the human and JSON renderers emit. SARIF output emits
+/// a separately computed Unicode code-point column instead, to match its own
+/// declared `columnKind`; see `pure-analyzer-render`'s `code_point_column`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LineColumn {
     /// One-based source line number.

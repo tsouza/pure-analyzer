@@ -2787,4 +2787,3 @@ pub fn pure_analyzer_analysis::lower_m3_query(pure_analyzer_analysis::AnalysisIn
 pub fn pure_analyzer_analysis::normalize_relational_query(&pure_analyzer_analysis::RelationalQuery) -> pure_analyzer_analysis::NormalizationOutcome
 pub fn pure_analyzer_analysis::normalize_relational_query_with_budget(&pure_analyzer_analysis::RelationalQuery, pure_analyzer_analysis::NormalizationBudget) -> pure_analyzer_analysis::NormalizationOutcome
 pub fn pure_analyzer_analysis::resolve_relation_column_selectors(pure_analyzer_diagnostics::file::FileId, &pure_analyzer_syntax::green::GreenNode, &pure_analyzer_analysis::RelationSchema) -> pure_analyzer_analysis::ColumnSelectorOutcome
-pub fn pure_analyzer_analysis::version() -> &'static str

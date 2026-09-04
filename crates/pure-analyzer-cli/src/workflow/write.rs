@@ -291,7 +291,7 @@ struct StagedReplacement {
 impl StagedReplacement {
     fn stage(replacement: Replacement) -> Result<Self, Failure> {
         let permissions = verify_snapshot(&replacement.path, &replacement.before)?;
-        let (temporary, mut file) = create_staging_file(&replacement.path)?;
+        let (temporary, mut file) = create_staging_file(&replacement.path, &permissions)?;
         let write_result = write_staged(&mut file, &replacement.after, permissions, &temporary);
         drop(file);
         if let Err(error) = write_result {
@@ -722,14 +722,28 @@ fn restore_rollback_after_mismatch<O: FileOperations>(
     clean_backup_after_failure(failure, &replacement.backup)
 }
 
-fn create_staging_file(path: &Path) -> Result<(PathBuf, File), Failure> {
+/// Create a fresh staging file beside `path`, at `permissions` from its very
+/// first instant.
+///
+/// A plain `create_new` followed by a later `set_permissions` (as
+/// `write_staged` still performs, on platforms without a POSIX file mode)
+/// leaves the file at the process umask — typically world-readable — for
+/// the entire span between creation and that later call, briefly exposing a
+/// stricter source's new content at a predictable sibling path. Passing
+/// `permissions` to `open` itself closes that window: POSIX `open(2)` still
+/// applies the umask to the requested mode, but a umask can only narrow it
+/// further, never widen it past what was requested.
+fn create_staging_file(path: &Path, permissions: &Permissions) -> Result<(PathBuf, File), Failure> {
     for _ in 0..MAX_UNIQUE_NAME_ATTEMPTS {
         let temporary = unique_sibling(path, STAGING_ROLE)?;
-        match OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&temporary)
+        let mut options = OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(any(target_os = "linux", target_vendor = "apple"))]
         {
+            use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+            options.mode(permissions.mode());
+        }
+        match options.open(&temporary) {
             Ok(file) => return Ok((temporary, file)),
             Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
             Err(error) => {
@@ -1072,6 +1086,44 @@ mod tests {
             .mode()
             & PERMISSION_BITS;
         assert_eq!(mode, FIXTURE_MODE);
+    }
+
+    #[cfg(any(target_os = "linux", target_vendor = "apple"))]
+    #[test]
+    fn staging_file_never_exposes_a_wider_mode_than_its_destination() {
+        use std::os::unix::fs::PermissionsExt;
+
+        const FIXTURE_MODE: u32 = 0o600;
+        const PERMISSION_BITS: u32 = 0o777;
+
+        let fixture = Fixture::new("staging-permissions");
+        let path = fixture.write("secret.pure", "before");
+        fs::set_permissions(&path, fs::Permissions::from_mode(FIXTURE_MODE))
+            .expect("set fixture permissions");
+        let permissions = fs::metadata(&path)
+            .expect("read fixture metadata")
+            .permissions();
+
+        // Check the mode immediately on creation, before any content is
+        // written: a plain `create_new` followed by a later
+        // `set_permissions` would still pass `preserves_destination_permissions`
+        // above (which only checks the final, installed file) while leaving
+        // exactly the window this test exists to close.
+        let (temporary, file) =
+            create_staging_file(&path, &permissions).expect("create staging file");
+        let mode = file
+            .metadata()
+            .expect("read staged file metadata")
+            .permissions()
+            .mode()
+            & PERMISSION_BITS;
+        drop(file);
+        fs::remove_file(&temporary).expect("clean up staged file");
+
+        assert_eq!(
+            mode, FIXTURE_MODE,
+            "staged file must be created at the destination's exact mode from its first instant"
+        );
     }
 
     #[test]

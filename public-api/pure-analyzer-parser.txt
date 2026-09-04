@@ -165,4 +165,3 @@ impl<T> core::convert::From<T> for pure_analyzer_parser::Parse
 pub fn pure_analyzer_parser::Parse::from(T) -> T
 pub fn pure_analyzer_parser::parse_domain(&str, pure_analyzer_diagnostics::file::FileId) -> core::result::Result<pure_analyzer_parser::DomainParse, pure_analyzer_syntax::builder::BuildError>
 pub fn pure_analyzer_parser::parse_query(&str, pure_analyzer_diagnostics::file::FileId) -> core::result::Result<pure_analyzer_parser::Parse, pure_analyzer_syntax::builder::BuildError>
-pub fn pure_analyzer_parser::version() -> &'static str

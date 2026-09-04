@@ -1180,4 +1180,3 @@ pub fn pure_analyzer_model::load_pmcd_documents(&[pure_analyzer_model::PmcdDocum
 pub fn pure_analyzer_model::load_pmcd_files(&[std::path::PathBuf]) -> core::result::Result<pure_analyzer_model::ModelGraph, pure_analyzer_model::ModelError>
 pub fn pure_analyzer_model::load_pure_documents(&[pure_analyzer_model::PureDocument<'_>]) -> core::result::Result<pure_analyzer_model::ModelGraph, pure_analyzer_model::ModelError>
 pub fn pure_analyzer_model::load_pure_files(&[std::path::PathBuf]) -> core::result::Result<pure_analyzer_model::ModelGraph, pure_analyzer_model::ModelError>
-pub fn pure_analyzer_model::version() -> &'static str

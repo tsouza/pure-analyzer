@@ -291,10 +291,10 @@ fn sarif_omits_properties_without_a_documentation_url() {
 fn assert_sarif_rule(rule: &Value) {
     assert_eq!(rule["id"], "PUR2002");
     assert_eq!(rule["shortDescription"]["text"], "unknown property");
-    assert_eq!(
-        rule["helpUri"],
-        "https://github.com/tsouza/pure-analyzer/tree/main/docs"
-    );
+    let expected_help_uri = libpure::explain("PUR2002")
+        .expect("registered diagnostic")
+        .documentation_url;
+    assert_eq!(rule["helpUri"], expected_help_uri);
     assert_eq!(rule["defaultConfiguration"]["level"], "error");
 }
 

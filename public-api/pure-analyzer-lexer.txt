@@ -96,4 +96,3 @@ pub unsafe fn pure_analyzer_lexer::SyntaxKind::clone_to_uninit(&self, *mut u8)
 impl<T> core::convert::From<T> for pure_analyzer_lexer::SyntaxKind
 pub fn pure_analyzer_lexer::SyntaxKind::from(T) -> T
 pub fn pure_analyzer_lexer::lex(&str) -> alloc::vec::Vec<(pure_analyzer_lexer::SyntaxKind, text_size::range::TextRange)>
-pub fn pure_analyzer_lexer::version() -> &'static str

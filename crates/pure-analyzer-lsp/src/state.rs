@@ -4,7 +4,7 @@ use std::io::{self, Write};
 use libpure::{
     AnalysisDriver, DefinitionPosition, DefinitionResult, DefinitionTarget, Diagnostic,
     DriverError, FileId, LintRequest, ModelError, ModelInput, Severity, SourceInput, SourceRequest,
-    TextRange, explain,
+    TextRange, explain, model_source_file_id,
 };
 use serde_json::{Map, Value};
 
@@ -211,7 +211,33 @@ pub(crate) fn update_configuration<W: Write>(
         return Ok(());
     };
     server.configuration.replace(settings);
+    warn_unopened_model_documents(server);
     publish_current_diagnostics(server, writer)
+}
+
+/// Warn once, at the moment `modelDocuments` is (re)configured, about any
+/// route naming a URI the client has not opened. Analysis silently excludes
+/// such a route (there is nothing to load), so without this the model is
+/// simply missing from every subsequent diagnostic with no indication why.
+fn warn_unopened_model_documents(server: &Server) {
+    for uri in unopened_model_document_uris(server) {
+        tracing::warn!(
+            uri,
+            "configured modelDocuments entry is not an open document; excluded from analysis \
+             until the client opens it"
+        );
+    }
+}
+
+/// Every configured `modelDocuments` URI that is not a currently open document.
+fn unopened_model_document_uris(server: &Server) -> Vec<&str> {
+    server
+        .configuration
+        .model_documents()
+        .iter()
+        .map(|route| route.uri())
+        .filter(|uri| server.documents.get(uri).is_none())
+        .collect()
 }
 
 pub(crate) fn definition_work(
@@ -244,6 +270,18 @@ fn definition_params(params: Option<&Value>) -> Option<(&str, ProtocolPosition)>
     Some((uri, position))
 }
 
+/// Validate a `textDocument/codeAction` request's shape and return its
+/// document URI.
+///
+/// `range` and `context.diagnostics` are validated (rejecting a malformed
+/// request per the LSP spec) but their values are not threaded any further:
+/// `libpure`'s `FixPlan` plans and previews a whole file's
+/// machine-applicable fixes at once, with no per-diagnostic selection, so
+/// there is nothing downstream yet that could narrow a code action to one
+/// cursor position or one `context.diagnostics` entry within a document.
+/// `AnalysisSnapshot`'s own `code_actions` instead scopes the returned
+/// action to `uri`'s own file, so it never bundles an edit to a *different*
+/// document into the same action.
 fn code_action_uri(params: Option<&Value>) -> Option<&str> {
     let params = params?;
     let uri = params.get("textDocument")?.get("uri")?.as_str()?;
@@ -506,18 +544,22 @@ impl AnalysisSnapshot {
             .collect::<BTreeMap<_, _>>();
         let plan = output.plan_fixes().ok()?;
         let changes = plan.preview(&sources).ok()?;
-        if changes.is_empty() || !changes.iter().any(|change| change.file == requested_file) {
-            return Some(Vec::new());
-        }
-
-        let document_changes = changes
+        // Scoped to `requested_file`: a client asking for code actions on one
+        // document must never receive an edit to a different one bundled
+        // into the same action. `FixPlan` itself plans whole files, not
+        // individual diagnostics, so an action here still applies every
+        // machine-applicable fix *in the requested file*, not only the one
+        // diagnostic under the client's cursor or in `context.diagnostics`.
+        let requested_change = changes
             .iter()
-            .map(|change| {
-                let uri = files.get(&change.file)?;
-                let document = self.documents.get(uri)?;
-                versioned_document_edit(document, &change.before, &change.after)
-            })
-            .collect::<Option<Vec<_>>>()?;
+            .find(|change| change.file == requested_file)?;
+        let uri = files.get(&requested_change.file)?;
+        let document = self.documents.get(uri)?;
+        let document_changes = vec![versioned_document_edit(
+            document,
+            &requested_change.before,
+            &requested_change.after,
+        )?];
         Some(vec![code_action_value(document_changes)])
     }
 
@@ -654,9 +696,7 @@ impl AnalysisSnapshot {
             .iter()
             .enumerate()
             .filter_map(|(index, route)| {
-                u32::try_from(index)
-                    .ok()
-                    .map(|index| (FileId::new(index), route.uri.clone()))
+                model_source_file_id(index).map(|file_id| (file_id, route.uri.clone()))
             })
             .collect()
     }
@@ -831,7 +871,7 @@ mod tests {
     use pure_analyzer_diagnostics::Label;
     use serde_json::Value;
 
-    use super::{AnalysisSnapshot, diagnostic_hover};
+    use super::{AnalysisSnapshot, diagnostic_hover, unopened_model_document_uris};
     use crate::{DocumentSnapshot, Server};
 
     #[test]
@@ -878,19 +918,54 @@ mod tests {
             hover["range"],
             value(r#"{"start":{"line":0,"character":0},"end":{"line":0,"character":5}}"#)
         );
-        let diagnostic = explain("PUR2002").expect("registered diagnostic");
         assert_eq!(
-            hover["contents"]["value"],
-            format!(
-                "**`{}`** · {} / {}\n\n{}\n\n**Limit:** {}\n\n**Remedy:** {}\n\n[Documentation]({})",
-                diagnostic.identifier,
-                diagnostic.kind.as_str(),
-                diagnostic.classification.as_str(),
-                diagnostic.meaning,
-                diagnostic.limit,
-                diagnostic.remedy,
-                diagnostic.documentation_url,
-            )
+            hover["contents"]["kind"],
+            Value::String("markdown".to_owned())
+        );
+
+        // Assert every field of the registered explanation surfaces in the
+        // rendered markup, without mirroring `explanation_markup`'s own
+        // format string: a change to how those fields are laid out should
+        // not itself break this test, only a change to which content it
+        // carries.
+        let expected = explain("PUR2002").expect("registered diagnostic");
+        let markup = hover["contents"]["value"]
+            .as_str()
+            .expect("hover markup is a string");
+        for field in [
+            expected.identifier,
+            expected.kind.as_str(),
+            expected.classification.as_str(),
+            expected.meaning,
+            expected.limit,
+            expected.remedy,
+            expected.documentation_url,
+        ] {
+            assert!(
+                markup.contains(field),
+                "hover markup missing {field:?}: {markup}"
+            );
+        }
+    }
+
+    #[test]
+    fn unopened_model_document_uris_reports_only_configured_routes_not_currently_open() {
+        let mut server = Server::new();
+        assert!(server.documents.replace(DocumentSnapshot::new(
+            "untitled:open-model".to_owned(),
+            "Class A {}".to_owned(),
+            Some(1),
+        )));
+        server.configuration.replace(value(
+            r#"{"modelDocuments":[
+                {"uri":"untitled:open-model","kind":"pure"},
+                {"uri":"untitled:never-opened","kind":"pmcd"}
+            ]}"#,
+        ));
+
+        assert_eq!(
+            unopened_model_document_uris(&server),
+            vec!["untitled:never-opened"]
         );
     }
 

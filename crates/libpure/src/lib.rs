@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
-//! Facade exposing shared diagnostics, explain lookup, and analyzer-crate versions.
+//! Facade exposing shared diagnostics, explain lookup, and the analysis driver.
 
 mod driver;
 mod source;
@@ -11,6 +11,7 @@ pub use driver::{
     ComparisonOutput, ComparisonRequest, DefinitionPosition, DefinitionResult, DefinitionTarget,
     DefinitionUnavailable, DiagnosticPolicy, DriverError, FormatOutput, FormattedSource,
     LintRequest, ModelInput, ParseOutput, ParsedSource, RequestError, SourceRequest,
+    model_source_file_id,
 };
 /// Formatter API exposed to front ends through the workspace facade.
 pub use pure_analyzer_analysis::{
@@ -39,39 +40,9 @@ pub fn explain(identifier: &str) -> Result<&'static ExplainContent, UnknownExpla
     pure_analyzer_diagnostics::lookup_explanation(identifier)
 }
 
-/// One entry of [`engine_crate_versions`]: a crate name paired with its
-/// `Cargo.toml`-declared semantic version.
-pub type CrateVersion = (&'static str, &'static str);
-
-/// The version of every crate in the analysis-engine dependency order.
-#[must_use]
-pub fn engine_crate_versions() -> Vec<CrateVersion> {
-    vec![
-        ("pure-analyzer-lexer", pure_analyzer_lexer::version()),
-        ("pure-analyzer-syntax", pure_analyzer_syntax::version()),
-        ("pure-analyzer-parser", pure_analyzer_parser::version()),
-        ("pure-analyzer-model", pure_analyzer_model::version()),
-        ("pure-analyzer-resolve", pure_analyzer_resolve::version()),
-        ("pure-analyzer-analysis", pure_analyzer_analysis::version()),
-    ]
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn reports_every_engine_crate() {
-        let versions = engine_crate_versions();
-        assert_eq!(versions.len(), 6);
-        for (name, version) in versions {
-            assert!(
-                name.starts_with("pure-analyzer-"),
-                "unexpected crate name: {name}"
-            );
-            assert!(!version.is_empty(), "{name} reported an empty version");
-        }
-    }
 
     #[test]
     fn exposes_exact_renderer_neutral_explain_content() {

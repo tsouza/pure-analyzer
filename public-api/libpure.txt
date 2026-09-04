@@ -1396,6 +1396,5 @@ pub unsafe fn libpure::SourceStore::deref_mut<'a>(usize) -> &'a mut T
 pub unsafe fn libpure::SourceStore::drop(usize)
 pub unsafe fn libpure::SourceStore::init(<T as crossbeam_epoch::atomic::Pointable>::Init) -> usize
 impl<T> either::into_either::IntoEither for libpure::SourceStore
-pub fn libpure::engine_crate_versions() -> alloc::vec::Vec<libpure::CrateVersion>
 pub fn libpure::explain(&str) -> core::result::Result<&'static pure_analyzer_diagnostics::explain::ExplainContent, pure_analyzer_diagnostics::explain::UnknownExplainIdentifier>
-pub type libpure::CrateVersion = (&'static str, &'static str)
+pub fn libpure::model_source_file_id(usize) -> core::option::Option<pure_analyzer_diagnostics::file::FileId>

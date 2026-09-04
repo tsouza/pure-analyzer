@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use libpure::{LineColumn, SourceFile};
+use libpure::{LineColumn, SourceFile, explain};
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, utf8_percent_encode};
 use pure_analyzer_diagnostics::{
     Applicability, DiagCode, DiagFamily, FixProvenance, Severity, TextRange,
@@ -17,8 +17,11 @@ use crate::{
 const SARIF_SCHEMA: &str = "https://json.schemastore.org/sarif-2.1.0.json";
 const SARIF_VERSION: &str = "2.1.0";
 const SARIF_COLUMN_KIND: &str = "unicodeCodePoints";
-const PROJECT_URI: &str = "https://github.com/tsouza/pure-analyzer";
-const DOCUMENTATION_URI: &str = "https://github.com/tsouza/pure-analyzer/tree/main/docs";
+/// This crate's own repository, the single source of truth this module and
+/// `pure-analyzer-diagnostics::explain` (`EXPLAIN_INDEX_URL`) both derive
+/// their URLs from, rather than each hardcoding the GitHub URL separately.
+const PROJECT_URI: &str = env!("CARGO_PKG_REPOSITORY");
+const DOCUMENTATION_URI: &str = concat!(env!("CARGO_PKG_REPOSITORY"), "/tree/main/docs");
 const ARTIFACT_PATH_ENCODE_SET: &AsciiSet = &NON_ALPHANUMERIC
     .remove(b'-')
     .remove(b'.')
@@ -227,7 +230,7 @@ fn sarif_rules<'a>(diagnostics: &[PreparedDiagnostic<'a>]) -> Vec<SarifRule<'a>>
             short_description: SarifMessage {
                 text: rule_description(code),
             },
-            help_uri: DOCUMENTATION_URI,
+            help_uri: rule_help_uri(code),
             default_configuration: SarifConfiguration {
                 level: sarif_level(severity),
             },
@@ -236,6 +239,15 @@ fn sarif_rules<'a>(diagnostics: &[PreparedDiagnostic<'a>]) -> Vec<SarifRule<'a>>
             },
         })
         .collect()
+}
+
+/// The per-code documentation page registered for `code`, falling back to
+/// the documentation root on the defensive, otherwise-unreachable case that a
+/// registered [`DiagCode`] has no matching explain entry (every code is
+/// covered by the producer-coverage gate that keeps `ALL_DIAG_CODES` and the
+/// explain registry in sync).
+fn rule_help_uri(code: DiagCode) -> &'static str {
+    explain(code.as_str()).map_or(DOCUMENTATION_URI, |content| content.documentation_url)
 }
 
 const fn rule_description(code: DiagCode) -> &'static str {
@@ -362,6 +374,14 @@ fn sarif_region(
     }
 }
 
+/// A one-based Unicode code-point column, deliberately not `LineColumn`'s own
+/// (byte-based) `column`: this crate's `columnKind` metadata declares
+/// `unicodeCodePoints` (`SARIF_COLUMN_KIND`), so every SARIF region column
+/// must count code points, while the human and JSON renderers count bytes
+/// (see `LineColumn::column`'s own doc comment, and `docs/pure-analyzer.md`'s
+/// "Output and streams" section for the user-facing statement of this
+/// divergence). A source line with any multi-byte character has a different
+/// byte column and code-point column at the same position.
 fn code_point_column(source: &SourceFile, offset: usize) -> usize {
     let text = source.text();
     // `PreparedInput` has already established that `offset` is a UTF-8 boundary.

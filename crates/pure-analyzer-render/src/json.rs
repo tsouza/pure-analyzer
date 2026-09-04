@@ -1,15 +1,13 @@
 //! Versioned JSON diagnostic envelope.
 
-use libpure::{LineColumn, SourceFile, SourceOrigin};
-use pure_analyzer_diagnostics::{Applicability, FixProvenance, Severity, TextRange};
+use pure_analyzer_diagnostics::{Applicability, FixProvenance, Severity};
 use serde::Serialize;
 
 use crate::{
     RenderError, RenderInput,
     input::{PreparedDiagnostic, PreparedEdit, PreparedInput, PreparedLabel, Summary},
+    json_envelope::{JSON_SCHEMA_VERSION, JsonFile, JsonRange, json_file, json_range},
 };
-
-const JSON_SCHEMA_VERSION: &str = "1.0";
 
 pub(crate) fn render(input: RenderInput<'_>) -> Result<String, RenderError> {
     let prepared = PreparedInput::new(input)?;
@@ -37,13 +35,6 @@ struct JsonEnvelope<'a> {
 }
 
 #[derive(Serialize)]
-struct JsonFile<'a> {
-    id: u32,
-    name: &'a str,
-    origin: &'static str,
-}
-
-#[derive(Serialize)]
 struct JsonDiagnostic<'a> {
     code: &'static str,
     severity: &'static str,
@@ -59,19 +50,6 @@ struct JsonLabel<'a> {
     file: u32,
     range: JsonRange,
     note: &'a str,
-}
-
-#[derive(Serialize)]
-struct JsonRange {
-    start: JsonPosition,
-    end: JsonPosition,
-}
-
-#[derive(Serialize)]
-struct JsonPosition {
-    byte: u32,
-    line: usize,
-    column: usize,
 }
 
 #[derive(Serialize)]
@@ -96,22 +74,6 @@ struct JsonSummary {
     info: usize,
     hints: usize,
     total: usize,
-}
-
-fn json_file(source: &SourceFile) -> JsonFile<'_> {
-    JsonFile {
-        id: source.id().index(),
-        name: source.name(),
-        origin: origin_name(source.origin()),
-    }
-}
-
-const fn origin_name(origin: &SourceOrigin) -> &'static str {
-    match origin {
-        SourceOrigin::File { .. } => "file",
-        SourceOrigin::InMemory => "memory",
-        SourceOrigin::Stdin => "stdin",
-    }
 }
 
 fn json_diagnostic<'a>(diagnostic: &PreparedDiagnostic<'a>) -> JsonDiagnostic<'a> {
@@ -148,21 +110,6 @@ fn json_edit<'a>(edit: &PreparedEdit<'a>) -> JsonEdit<'a> {
         file: edit.source.id().index(),
         range: json_range(edit.edit.span, edit.start, edit.end),
         replacement: &edit.edit.new_text,
-    }
-}
-
-fn json_range(range: TextRange, start: LineColumn, end: LineColumn) -> JsonRange {
-    JsonRange {
-        start: json_position(range.start(), start),
-        end: json_position(range.end(), end),
-    }
-}
-
-fn json_position(byte: pure_analyzer_diagnostics::TextSize, location: LineColumn) -> JsonPosition {
-    JsonPosition {
-        byte: u32::from(byte),
-        line: location.line,
-        column: location.column,
     }
 }
 

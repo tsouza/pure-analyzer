@@ -17,6 +17,7 @@ mod error;
 mod human;
 mod input;
 mod json;
+mod json_envelope;
 mod origin;
 mod sarif;
 
