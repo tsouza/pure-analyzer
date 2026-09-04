@@ -8,7 +8,6 @@ import {
   FULL_MUTATION_SHARDS,
   MUTATION_COMMAND_TIMEOUT_SECONDS,
   PLANNER_COMMAND_MAX_BUFFER_BYTES,
-  PLANNER_COMMAND_TIMEOUT_MS,
   PR_DIFF_MAX_SHARDS,
   PR_DIFF_MUTANTS_PER_SHARD,
   MUTANTS_PER_DIFF_SHARD,
@@ -30,6 +29,7 @@ import {
   planFromClassification,
   prDiffShardCount,
   run,
+  sampleShardIndex,
   writeDiff,
 } from "./mutation-scope.mjs";
 
@@ -282,7 +282,11 @@ test("finds attribute, macro, and doctest surfaces in either source revision", a
   }
 });
 
-test("keeps production Rust plus documentation on the full mutation floor", () => {
+// Note: this is the classifier's PRE-deferral verdict only. On a real PR,
+// `MUTATION_DEFER_FULL=true` rewrites this `full` into a bounded `sample`
+// (see "gives a deferred full-scope PR plan a bounded, non-empty sample"
+// below) — it is never a guarantee that a full mutation pass runs inline.
+test("classifies production Rust plus documentation as full before PR-lane deferral", () => {
   expect(
     classifyChanges([
       changed("crates/pure-analyzer-model/src/loader.rs"),
@@ -291,7 +295,14 @@ test("keeps production Rust plus documentation on the full mutation floor", () =
   ).toEqual({ reason: "documentation-change", scope: "full" });
 });
 
-test("fails closed when production and test Rust paths mix", () => {
+// The overwhelmingly common PR shape — production Rust plus its own test
+// file(s) — must stay in `diff` scope: a test-only path never contributes a
+// mutant itself, so its presence must not push the whole PR to the
+// full/deferred-to-skip floor. Before this fix, EVERY such PR was classified
+// `full` here (see #276: 60/60 recent PR runs skipped mutation entirely).
+// This is the test #310 asked for: a realistic multi-file diff (production
+// Rust + its test) must yield `scope: "diff"`, not `full`.
+test("keeps production Rust plus its own test-only Rust changes in diff scope", () => {
   expect(
     classifyChanges([
       changed("crates/pure-analyzer-model/src/loader.rs"),
@@ -299,18 +310,19 @@ test("fails closed when production and test Rust paths mix", () => {
       changed("crates/pure-analyzer-model/src/tests.rs"),
     ]),
   ).toEqual({
-    reason: "non-production-or-configuration-change",
-    scope: "full",
+    reason: "production-rust-and-tests",
+    scope: "diff",
   });
 });
 
-test("keeps documentation-only changes on the full mutation floor", () => {
+// Same pre-deferral caveat as above.
+test("classifies documentation-only changes as full before PR-lane deferral", () => {
   expect(
     classifyChanges([changed("README.md"), changed("docs/architecture/ci.md", "A")]),
   ).toEqual({ reason: "documentation-change", scope: "full" });
 });
 
-test("fails closed for test-only, configuration, FFI, renames, deletions, and an empty diff", () => {
+test("fails closed for test-only-with-no-production, configuration, FFI, renames, deletions, and an empty diff", () => {
   for (const changes of [
     [changed("crates/pure-analyzer-model/tests/loader.rs")],
     [
@@ -328,6 +340,23 @@ test("fails closed for test-only, configuration, FFI, renames, deletions, and an
   }
 });
 
+test("classifies a test-only change set (no production Rust) as full", () => {
+  expect(classifyChanges([changed("crates/pure-analyzer-model/tests/loader.rs")])).toEqual({
+    reason: "test-only-change-set",
+    scope: "full",
+  });
+});
+
+test("keeps a mix of production Rust and one ineligible path on the full mutation floor", () => {
+  expect(
+    classifyChanges([
+      changed("crates/pure-analyzer-model/src/loader.rs"),
+      changed("crates/pure-analyzer-model/tests/loader.rs"),
+      changed("Cargo.toml"),
+    ]),
+  ).toEqual({ reason: "non-production-or-configuration-change", scope: "full" });
+});
+
 test("keeps non-PR events on the full mutation floor", () => {
   expect(eventFallbackPlan("merge_group", "false")).toMatchObject({
     reason: "non-pull-request-event",
@@ -338,14 +367,58 @@ test("keeps non-PR events on the full mutation floor", () => {
   expect(eventFallbackPlan("pull_request", "false")).toBeUndefined();
 });
 
+// #276: a deferred `full` plan must still run SOME bounded mutation
+// coverage in the PR lane rather than collapsing straight to `skip` — that
+// full/skip collapse (with no bounded backstop) was the other half of why
+// the mutation gate never fired. `deferFullPlan` now converts a deferrable
+// `full` plan into one deterministic full-workspace shard instead.
+test("gives a deferred full-scope plan a bounded, non-empty sample instead of a hard skip", () => {
+  const full = eventFallbackPlan("merge_group", "false");
+  const sampled = deferFullPlan(full, true, 5);
+  expect(sampled).toMatchObject({
+    reason: "deferred-non-pull-request-event",
+    scope: "sample",
+    mutantCount: 0,
+  });
+  expect(sampled.matrix).toEqual(mutationMatrix("sample", FULL_MUTATION_SHARDS, 5));
+  expect(sampled.matrix.include).toHaveLength(1);
+  expect(sampled.matrix.include[0]).toMatchObject({ index: 5, total: FULL_MUTATION_SHARDS });
+
+  // Every other deferrable full reason gets the same bounded treatment.
+  for (const reason of [
+    "documentation-change",
+    "empty-change-set",
+    "inline-test-surface",
+    "rename-delete-or-type-change",
+    "test-only-change-set",
+  ]) {
+    expect(deferFullPlan({ ...full, reason }, true, 0).scope).toBe("sample");
+  }
+
+  // A plan that isn't deferred (deferFull: false) is returned unchanged.
+  expect(deferFullPlan(full)).toBe(full);
+});
+
+test("derives a bounded, deterministic sample shard index from a commit SHA", () => {
+  expect(sampleShardIndex("")).toBe(0);
+  expect(sampleShardIndex(undefined)).toBe(0);
+  const shas = ["a".repeat(40), "1234abcd".padEnd(40, "0"), "f".repeat(40), "0".repeat(40)];
+  const indices = shas.map(sampleShardIndex);
+  for (const index of indices) {
+    expect(Number.isInteger(index)).toBeTrue();
+    expect(index).toBeGreaterThanOrEqual(0);
+    expect(index).toBeLessThan(FULL_MUTATION_SHARDS);
+  }
+  // Deterministic: recomputing from the same SHA reproduces the same shard.
+  for (const [i, sha] of shas.entries()) {
+    expect(sampleShardIndex(sha)).toBe(indices[i]);
+  }
+  // Not degenerate: these four commits don't all land on the same shard.
+  expect(new Set(indices).size).toBeGreaterThan(1);
+});
+
 test("bounds deferred direct-PR mutation plans and preserves a valid sentinel", () => {
   const full = eventFallbackPlan("merge_group", "false");
-  const deferred = deferFullPlan(full, true);
-  expect(deferred).toMatchObject({
-    reason: "deferred-non-pull-request-event",
-    scope: "skip",
-  });
-  expect(deferred.matrix).toEqual(mutationMatrix("skip", 1));
 
   expect(prDiffShardCount(0)).toBe(0);
   expect(prDiffShardCount(PR_DIFF_MUTANTS_PER_SHARD)).toBe(1);
@@ -381,13 +454,16 @@ test("bounds deferred direct-PR mutation plans and preserves a valid sentinel", 
     scope: "skip",
   });
   expect(oversized.matrix).toEqual(mutationMatrix("skip", 1));
+  // A `diff` classification whose actual mutant list comes back empty falls
+  // back to `full` (`zero-diff-mutant-list`) and, deferred, gets the same
+  // bounded sample as any other deferred full reason — not a hard skip.
   const zero = planFromClassification(
     { reason: "production-rust-only", scope: "diff" },
     { diffSha256, headSha, mergeBase, mutantCount: 0 },
   );
   expect(deferFullPlan(zero, true)).toMatchObject({
     reason: "deferred-zero-diff-mutant-list",
-    scope: "skip",
+    scope: "sample",
   });
   const invalid = planFromClassification(
     { reason: "production-rust-only", scope: "diff" },
@@ -426,7 +502,7 @@ test("deferred CI planning emits sentinels but surfaces planner failures", async
     }),
   ).resolves.toMatchObject({
     reason: "deferred-non-production-or-configuration-change",
-    scope: "skip",
+    scope: "sample",
   });
 
   await expect(
@@ -456,8 +532,47 @@ test("deferred CI planning emits sentinels but surfaces planner failures", async
     }),
   ).resolves.toMatchObject({
     reason: "deferred-non-pull-request-event",
-    scope: "skip",
+    scope: "sample",
   });
+});
+
+// This is the end-to-end regression test #310 asked for: it calls the same
+// `planFromEnvironment` entry point CI's `mutation-plan` job actually
+// invokes, with `MUTATION_DEFER_FULL=true` exactly as the PR lane sets it,
+// over the realistic "production Rust + its own test file" diff shape that
+// #276 showed was 100% of PR runs falling through to `skip`. Had this test
+// existed, #276 could not have gone unnoticed for 60 consecutive PR runs.
+test("end-to-end PR lane runs a bounded diff pass for a realistic production-plus-test diff, not a skip", async () => {
+  const environment = {
+    GITHUB_EVENT_NAME: "pull_request",
+    MUTATION_BASE_SHA: mergeBase,
+    MUTATION_DEFER_FULL: "true",
+    MUTATION_HEAD_SHA: headSha,
+    MUTATION_PR_DRAFT: "false",
+    RUNNER_TEMP: "/tmp",
+  };
+  const changes = [
+    changed("crates/pure-analyzer-model/src/loader.rs"),
+    changed("crates/pure-analyzer-model/tests/loader.rs"),
+  ];
+
+  const plan = await planFromEnvironment(environment, {
+    checkedOutHead: async () => headSha,
+    changedPaths: async () => changes,
+    // Exercises the REAL classifier (not a hand-built classification), so a
+    // regression in `classifyChanges` itself would fail this test.
+    classifyCheckedOutChanges: async (_root, _base, _head, changedPaths) =>
+      classifyChanges(changedPaths),
+    listedMutantCount: async () => PR_DIFF_MUTANTS_PER_SHARD,
+    mergeBase: async () => mergeBase,
+    repoRoot: async () => "/workspace",
+    writeDiff: async () => diffSha256,
+  });
+
+  expect(plan.scope).toBe("diff");
+  expect(plan.reason).toBe("production-rust-and-tests");
+  expect(plan.matrix).toEqual(mutationMatrix("diff", 1));
+  expect(plan.matrix.include[0].scope).toBe("diff");
 });
 
 test("never emits a changed path as an Actions output reason", () => {
@@ -477,30 +592,58 @@ test("sizes incremental shards from the listed mutant count and caps at full wid
   expect(diffShardCount(Number.MAX_SAFE_INTEGER)).toBe(FULL_MUTATION_SHARDS);
 });
 
+// Asserts the command's observable CONTRACT (workspace scope, FFI exclusion,
+// list-only, diff-path plumbing) instead of reconstructing its literal
+// argv — a prior version of this test just restated `mutationListCommand`'s
+// body element-for-element, so it could never fail on a real regression
+// (#310).
 test("lists the same workspace scope as the mutation runner without unsupported flags", () => {
-  expect(mutationListCommand("target/mutation-scope.diff")).toEqual([
-    "cargo",
-    "mutants",
-    "--workspace",
-    "--exclude",
-    FFI_SOURCE,
-    "--in-place",
-    "--timeout",
-    MUTATION_COMMAND_TIMEOUT_SECONDS,
-    "--in-diff",
-    "target/mutation-scope.diff",
-    "--list",
-    "--json",
-  ]);
+  const diffPath = "target/mutation-scope.diff";
+  const command = mutationListCommand(diffPath);
+
+  expect(command.slice(0, 2)).toEqual(["cargo", "mutants"]);
+  expect(command).toContain("--workspace");
+  expect(command).toContain("--in-place");
+
+  const exclude = command.indexOf("--exclude");
+  expect(exclude).toBeGreaterThan(-1);
+  expect(command[exclude + 1]).toBe(FFI_SOURCE);
+
+  const timeout = command.indexOf("--timeout");
+  expect(timeout).toBeGreaterThan(-1);
+  expect(command[timeout + 1]).toBe(MUTATION_COMMAND_TIMEOUT_SECONDS);
+
+  const inDiff = command.indexOf("--in-diff");
+  expect(inDiff).toBeGreaterThan(-1);
+  expect(command[inDiff + 1]).toBe(diffPath);
+
+  // A listing command must never itself apply or check out a mutant.
+  expect(command.slice(-2)).toEqual(["--list", "--json"]);
+  expect(command).not.toContain("--check");
+  expect(command).not.toContain("--baseline");
+
+  // The diff path is the only thing that varies with its argument.
+  const otherCommand = mutationListCommand("target/other.diff");
+  expect(otherCommand[inDiff + 1]).toBe("target/other.diff");
+  const withoutDiffArg = (cmd) => cmd.filter((_, i) => i !== inDiff + 1);
+  expect(withoutDiffArg(otherCommand)).toEqual(withoutDiffArg(command));
 });
 
-test("bounds the planner mutant list subprocess", () => {
-  expect(mutationListRunOptions()).toEqual({
-    maxBuffer: PLANNER_COMMAND_MAX_BUFFER_BYTES,
-    timeoutMs: PLANNER_COMMAND_TIMEOUT_MS,
-  });
-  expect(PLANNER_COMMAND_TIMEOUT_MS).toBe(2 * 60 * 1_000);
-  expect(PLANNER_COMMAND_MAX_BUFFER_BYTES).toBe(8 * 1024 * 1024);
+// Behavioral replacement for a prior version of this test that only
+// re-asserted `PLANNER_COMMAND_TIMEOUT_MS`/`PLANNER_COMMAND_MAX_BUFFER_BYTES`
+// equal their own literal definitions (a change-detector that could never
+// fail on a real defect — #310). This instead proves `run()` actually
+// ENFORCES its default bound when no caller override is given, by sizing a
+// real subprocess's output off `mutationListRunOptions()` and observing it
+// get rejected.
+test("run() enforces the planner's own default output-size bound with no override", async () => {
+  const { maxBuffer } = mutationListRunOptions();
+  await expect(
+    run(
+      [process.execPath, "-e", `process.stdout.write("x".repeat(${maxBuffer + 1}));`],
+      process.cwd(),
+    ),
+  ).rejects.toThrow("output exceeded the configured limit");
 });
 
 test("fails closed when bounded planner output exceeds its cap", async () => {
@@ -622,4 +765,15 @@ test("uses a sentinel matrix for skips and retains every full shard for fallback
   expect(mutationMatrix("full", FULL_MUTATION_SHARDS).include).toHaveLength(
     FULL_MUTATION_SHARDS,
   );
+  expect(mutationMatrix("sample", FULL_MUTATION_SHARDS, 7)).toEqual({
+    include: [
+      {
+        diagnostics: "shard",
+        index: 7,
+        report: "default",
+        scope: "sample",
+        total: FULL_MUTATION_SHARDS,
+      },
+    ],
+  });
 });

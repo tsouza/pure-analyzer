@@ -140,10 +140,19 @@ jobs:
         run: cargo xtask coverage
 
   # --- Diff-scoped mutation testing (cargo-mutants) -----------------------
-  # The planner always emits a valid matrix sentinel. Only a direct PR with a
-  # verified production-source diff can run workers; full or ambiguous plans
-  # are deliberately deferred to nightly/manual full mutation. Its direct-PR
-  # budget is at most three shards of twelve mutants each.
+  # The planner always emits a valid matrix sentinel, and every PR run leaves
+  # SOME bounded mutation evidence rather than none (#276):
+  #   - scope=diff:   a verified production-source diff — up to three shards
+  #                    of twelve mutants each, targeted at the PR's own change.
+  #   - scope=sample: any other change shape the diff lane can't safely scope
+  #                    (docs, Cargo.toml, a rename/delete, an inline test
+  #                    surface, …) — one deterministic full-workspace shard
+  #                    (of the nightly's twelve), rotating by commit SHA so
+  #                    coverage accrues across PRs over time instead of never
+  #                    running at all.
+  #   - scope=skip:   a draft PR, or a diff-lane plan that outgrew its bounded
+  #                    shard budget. The nightly/manual full run remains the
+  #                    exhaustive backstop for both scope=sample and scope=skip.
   mutation-plan:
     name: mutation-plan
     runs-on: ubuntu-latest
@@ -238,6 +247,65 @@ jobs:
         with:
           name: mutation-diagnostics-diff-shard-${{ matrix.index }}
           path: target/mutation-diagnostics-diff-shard-${{ matrix.index }}
+          if-no-files-found: warn
+
+  # A deferred full-scope plan (docs, Cargo.toml, a rename/delete, an inline
+  # test surface, …) runs ONE deterministic full-workspace shard here instead
+  # of nothing (#276's "the deferred-to-full path itself gets some bounded
+  # mutation coverage" criterion). The shard/total pair is the same
+  # `test-mutation-shard` mechanism the nightly full run uses — this job is
+  # just one rotating slice of that same twelve-shard matrix, run inline.
+  mutation-sample:
+    name: mutation (sample ${{ matrix.index }}/${{ matrix.total }})
+    needs: mutation-plan
+    if: >-
+      github.event_name == 'pull_request' &&
+      needs.mutation-plan.result == 'success' &&
+      needs.mutation-plan.outputs.scope == 'sample'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.mutation-plan.outputs.matrix) }}
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: sccache
+      CARGO_INCREMENTAL: "0"
+      MUTATION_SHARD_INDEX: ${{ matrix.index }}
+      MUTATION_SHARD_TOTAL: ${{ matrix.total }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba # v0.0.11
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - uses: taiki-e/install-action@fcf5432d9f50d67e37ee6e29bdb7a224ff67b4a7 # v2.86.8
+        with:
+          tool: cargo-mutants@27.1.0,cargo-nextest,just
+      - name: cargo mutants (sample shard ${{ matrix.index }}/${{ matrix.total }})
+        run: bun scripts/run-mutation-debug.mjs shard "$MUTATION_SHARD_INDEX" "$MUTATION_SHARD_TOTAL"
+      - name: Collect mutation diagnostics
+        if: always()
+        run: bun scripts/run-mutation-debug.mjs --collect shard "$MUTATION_SHARD_INDEX"
+      - name: Upload mutation report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: mutants-out-sample-shard-${{ matrix.index }}
+          path: target/mutants-default-shard-${{ matrix.index }}
+          if-no-files-found: error
+      - name: Upload mutation diagnostics
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: mutation-diagnostics-sample-shard-${{ matrix.index }}
+          path: target/mutation-diagnostics-shard-${{ matrix.index }}
           if-no-files-found: warn
 
   # --- Supply chain: deny + audit + vet + unused deps ----------------------
@@ -421,7 +489,7 @@ jobs:
   # warnings in a job that failed.
   no-warnings:
     name: no-warnings (log sweep)
-    needs: [changes, check, coverage, mutation-plan, mutation, supply-chain, api-stability, structural, docs, fuzz]
+    needs: [changes, check, coverage, mutation-plan, mutation, mutation-sample, supply-chain, api-stability, structural, docs, fuzz]
     if: always()
     permissions:
       actions: read
@@ -431,7 +499,7 @@ jobs:
   # --- Aggregate gate: the single required check ---------------------------
   ci-gate:
     name: ci-gate
-    needs: [changes, check, coverage, mutation-plan, mutation, supply-chain, api-stability, structural, docs, fuzz, no-warnings]
+    needs: [changes, check, coverage, mutation-plan, mutation, mutation-sample, supply-chain, api-stability, structural, docs, fuzz, no-warnings]
     if: always()
     runs-on: ubuntu-latest
     steps:

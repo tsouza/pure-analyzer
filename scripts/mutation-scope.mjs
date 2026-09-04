@@ -44,6 +44,7 @@ const DEFERRED_FULL_REASONS = new Set([
   "non-production-or-configuration-change",
   "non-pull-request-event",
   "rename-delete-or-type-change",
+  "test-only-change-set",
   "zero-diff-mutant-list",
 ]);
 
@@ -156,20 +157,38 @@ export function classifyChanges(changes) {
     return { scope: "full", reason: "rename-delete-or-type-change" };
   }
 
-  if (changes.flatMap(({ paths }) => paths).some(isDocumentationPath)) {
+  const paths = changes.flatMap(({ paths }) => paths);
+  if (paths.some(isDocumentationPath)) {
     // Rust permits source files and build scripts to consume arbitrary files.
     // A path-based documentation exemption cannot prove a documentation change
     // is inert, including when it accompanies an otherwise eligible Rust diff.
     return { scope: "full", reason: "documentation-change" };
   }
 
-  const ineligiblePath = changes.flatMap(({ paths }) => paths).find(
-    (path) => !isDiffEligibleRustPath(path),
+  // A test-only Rust path (its own `tests/` file, or an inline `src/tests.rs`
+  // sibling) never contributes a mutant itself — cargo-mutants only mutates
+  // production code — so its presence alongside an eligible production diff
+  // must not force the whole PR to the full/deferred-to-skip floor. That was
+  // the single largest driver of #276: the overwhelmingly common PR shape
+  // (production `.rs` plus its own test file) always fell through this
+  // escape hatch. Any OTHER ineligible path (docs, `Cargo.toml`, a workflow
+  // file, the FFI boundary, an unrelated crate's test-only path shape that
+  // isn't paired with production Rust) still forces `full`.
+  const ineligiblePath = paths.find(
+    (path) => !isDiffEligibleRustPath(path) && !isTestOnlyRustPath(path),
   );
   if (ineligiblePath) {
     return { scope: "full", reason: "non-production-or-configuration-change" };
   }
-  return { scope: "diff", reason: "production-rust-only" };
+
+  if (!paths.some(isDiffEligibleRustPath)) {
+    return { scope: "full", reason: "test-only-change-set" };
+  }
+
+  const reason = paths.some(isTestOnlyRustPath)
+    ? "production-rust-and-tests"
+    : "production-rust-only";
+  return { scope: "diff", reason };
 }
 
 /** Number of balanced round-robin shards needed for a nonempty incremental set. */
@@ -188,8 +207,20 @@ export function prDiffShardCount(mutantCount) {
   return shardTotal <= PR_DIFF_MAX_SHARDS ? shardTotal : 0;
 }
 
-/** Create the GitHub Actions matrix, including a sentinel for a skipped run. */
-export function mutationMatrix(scope, total) {
+/**
+ * Create the GitHub Actions matrix, including a sentinel for a skipped run.
+ *
+ * `sampleIndex` selects the single full-workspace shard (of `total`, the
+ * same `FULL_MUTATION_SHARDS` the nightly run divides its whole workspace
+ * into) that the PR-lane sample runs — only meaningful for `scope ===
+ * "sample"`.
+ */
+export function mutationMatrix(scope, total, sampleIndex = 0) {
+  if (scope === "sample") {
+    return {
+      include: [{ diagnostics: "shard", index: sampleIndex, report: "default", scope, total }],
+    };
+  }
   const shardTotal = scope === "skip" ? 1 : total;
   const report = scope === "diff" ? "diff" : scope === "full" ? "default" : "skip";
   const diagnostics = scope === "diff" ? "diff-shard" : scope === "full" ? "shard" : "skip";
@@ -228,6 +259,31 @@ function skippedPlan(reason) {
   };
 }
 
+/**
+ * A bounded, non-empty stand-in for a deferred `full` plan: one deterministic
+ * full-workspace shard (of `FULL_MUTATION_SHARDS`) runs in the PR lane instead
+ * of nothing at all (#276). Rotating which shard runs, PR by PR, gives the
+ * deferred-to-full path *some* coverage over time rather than none.
+ */
+function samplePlan(reason, sampleIndex) {
+  return {
+    scope: "sample",
+    reason: `deferred-${reason}`,
+    mergeBase: "",
+    headSha: "",
+    diffSha256: "",
+    mutantCount: 0,
+    matrix: mutationMatrix("sample", FULL_MUTATION_SHARDS, sampleIndex),
+  };
+}
+
+/** Deterministic full-workspace shard index derived from a commit SHA. */
+export function sampleShardIndex(sha) {
+  if (typeof sha !== "string" || sha.length === 0) return 0;
+  const seed = Number.parseInt(sha.slice(0, 8), 16);
+  return Number.isSafeInteger(seed) ? seed % FULL_MUTATION_SHARDS : 0;
+}
+
 /** Return an event-level plan when incremental planning is categorically inapplicable. */
 export function eventFallbackPlan(eventName, draft) {
   if (eventName !== "pull_request") return fullPlan("non-pull-request-event");
@@ -235,14 +291,19 @@ export function eventFallbackPlan(eventName, draft) {
   return undefined;
 }
 
-/** Apply the bounded direct-PR lane, deferring full proofs to a valid sentinel. */
-export function deferFullPlan(plan, deferFull = false) {
+/**
+ * Apply the bounded direct-PR lane. A deferrable `full` plan becomes a
+ * bounded, rotating single-shard `sample` (not a hard `skip` — see
+ * {@link samplePlan}); a `diff` plan that outgrows the PR-lane budget still
+ * defers to `skip`.
+ */
+export function deferFullPlan(plan, deferFull = false, sampleIndex = 0) {
   if (!deferFull) return plan;
   if (plan.scope === "full") {
     if (!DEFERRED_FULL_REASONS.has(plan.reason)) {
       throw new Error(`full mutation plan is not safely deferrable: ${plan.reason}`);
     }
-    return skippedPlan(`deferred-${plan.reason}`);
+    return samplePlan(plan.reason, sampleIndex);
   }
   if (plan.scope !== "diff") return plan;
 
@@ -464,7 +525,12 @@ export async function planFromEnvironment(environment = process.env, dependencie
     writeDiff: writeMutationDiff = writeDiff,
   } = dependencies;
   const deferFull = environment.MUTATION_DEFER_FULL === "true";
-  const applyDeferral = (plan) => deferFullPlan(plan, deferFull);
+  // Non-PR events (e.g. merge_group) carry no pull-request head SHA; fall
+  // back to the run's own commit so a sampled shard is still deterministic.
+  const sampleIndex = sampleShardIndex(
+    environment.MUTATION_HEAD_SHA || environment.GITHUB_SHA || "",
+  );
+  const applyDeferral = (plan) => deferFullPlan(plan, deferFull, sampleIndex);
   const eventFallback = eventFallbackPlan(
     environment.GITHUB_EVENT_NAME,
     environment.MUTATION_PR_DRAFT,
