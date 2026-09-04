@@ -183,7 +183,8 @@ export function assertCorpus(metadata, fixtures) {
   const families = new Set();
   const outcomes = new Set();
   for (const fixture of fixtures) {
-    if (!ids.add(fixture.id)) throw new Error(`duplicate fixture id ${JSON.stringify(fixture.id)}`);
+    if (ids.has(fixture.id)) throw new Error(`duplicate fixture id ${JSON.stringify(fixture.id)}`);
+    ids.add(fixture.id);
     if (!metadata.required_families.includes(fixture.family)) {
       throw new Error(`fixture ${fixture.id} uses undocumented semantic family ${fixture.family}`);
     }

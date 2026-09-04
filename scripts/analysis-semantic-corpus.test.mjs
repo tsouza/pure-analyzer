@@ -96,6 +96,9 @@ describe("analysis semantic corpus validation", () => {
     ];
     expect(assertCorpus(metadata, fixtures)).toEqual(fixtures);
     expect(() => assertCorpus(metadata, fixtures.slice(0, 2))).toThrow("three-valued-logic");
+    expect(() => assertCorpus(metadata, [...fixtures, fixtures[0]])).toThrow(
+      "duplicate fixture id",
+    );
   });
 
   test("parses JSONL records with line-specific errors", () => {
