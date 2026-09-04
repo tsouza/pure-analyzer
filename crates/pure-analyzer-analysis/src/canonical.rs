@@ -687,3 +687,749 @@ fn literal_text(literal: &ScalarLiteral) -> Option<String> {
         ScalarLiteral::Null => None,
     }
 }
+
+/// White-box unit tests for `Emitter`'s private boolean guards and the
+/// shape-matching/equality helpers that feed them.
+///
+/// `tests/canonical_emission.rs` exercises this module end to end (parse →
+/// lower → normalize → emit), which is the right contract-level coverage but
+/// cannot isolate a single guard term: normalization and lowering only ever
+/// hand `Emitter` internally-consistent IR, so any one guard clause that is
+/// implied by another (e.g. `Filter`'s schema-equality term, which
+/// `RelationExpression::new` already enforces structurally) never gets
+/// exercised in isolation through that path. Every fixture below therefore
+/// constructs `RelationExpression`/`ScalarExpression` values directly and
+/// calls `Emitter`'s private methods or the free helper functions directly,
+/// so each guard term and shape/equality helper can be driven independently
+/// — the same style already established by `relational.rs`'s and
+/// `normalizer.rs`'s own `#[cfg(test)] mod tests`.
+///
+/// Each test's doc comment names the exact mutant (file:line, and the
+/// operator swap) it regresses, per
+/// https://github.com/tsouza/pure-analyzer/issues/442. Every one was
+/// hand-verified by applying that exact source mutation, confirming the
+/// named test fails, and reverting.
+#[cfg(test)]
+#[allow(clippy::disallowed_methods)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use pure_analyzer_diagnostics::{FileId, TextRange, TextSize};
+    use pure_analyzer_model::{
+        Multiplicity, Name, PmcdDocument, QName, TypeRef, load_pmcd_documents,
+    };
+    use pure_analyzer_resolve::{Resolution, ResolvedClass, Resolver};
+    use serde_json::json;
+
+    use crate::{
+        CandidateKey, Column, JoinKind, Knowledge, Nullability, Projection, SortKey, SourceSpan,
+    };
+
+    use super::*;
+
+    const QUERY_FILE: u32 = 89;
+    const EXACTLY_ONE: u32 = 1;
+
+    fn origin() -> IrOrigin {
+        IrOrigin::new(
+            SourceSpan::new(
+                FileId::new(QUERY_FILE),
+                TextRange::new(TextSize::from(0), TextSize::from(1)),
+            ),
+            Vec::new(),
+        )
+    }
+
+    fn one_multiplicity() -> Multiplicity {
+        Multiplicity::new(EXACTLY_ONE, Some(EXACTLY_ONE)).expect("fixture multiplicity is valid")
+    }
+
+    fn string_type() -> TypeRef {
+        TypeRef::new(
+            QName::new("String").expect("fixture type is valid"),
+            Vec::new(),
+        )
+    }
+
+    fn boolean_type() -> TypeRef {
+        TypeRef::new(
+            QName::new("Boolean").expect("fixture type is valid"),
+            Vec::new(),
+        )
+    }
+
+    fn resolved_class(package: &str, name: &str) -> ResolvedClass {
+        let document = json!({
+            "_type": "data",
+            "elements": [{
+                "_type": "class",
+                "package": package,
+                "name": name,
+                "stereotypes": [],
+                "superTypes": [],
+                "properties": [],
+                "qualifiedProperties": []
+            }]
+        })
+        .to_string();
+        let graph = load_pmcd_documents(&[PmcdDocument::new("canonical-unit-fixture", &document)])
+            .expect("fixture model loads");
+        let path = QName::new(format!("{package}::{name}")).expect("fixture path is valid");
+        match Resolver::new(&graph).resolve_class(&path) {
+            Resolution::Found(class) => class,
+            outcome => panic!("fixture class must resolve, got {outcome:?}"),
+        }
+    }
+
+    fn column(id: u32, name: &str, type_ref: TypeRef) -> Column {
+        Column::new(
+            ColumnId::new(id),
+            Name::new(name).expect("fixture name is valid"),
+            type_ref,
+            one_multiplicity(),
+            Nullability::Unknown,
+            origin(),
+        )
+    }
+
+    /// A single-column schema shaped exactly like `class_scan_schema_matches`
+    /// requires, except for a display name that never matches the scanned
+    /// class's own simple name.
+    fn schema_with_mismatched_name(path: &str) -> RelationSchema {
+        let type_ref = TypeRef::new(QName::new(path).expect("fixture path is valid"), Vec::new());
+        RelationSchema::new(vec![column(1, "NotTheScannedClass", type_ref)])
+            .expect("fixture schema is valid")
+    }
+
+    /// A valid, directly emittable `Scan` over `class`, whose single-column
+    /// schema exactly satisfies `class_scan_schema_matches`.
+    fn class_scan(class: ResolvedClass, column_id: u32) -> RelationExpression {
+        let simple_name = class
+            .path()
+            .as_str()
+            .rsplit("::")
+            .next()
+            .unwrap_or_else(|| class.path().as_str());
+        let type_ref = TypeRef::new(class.path().clone(), Vec::new());
+        let schema = RelationSchema::new(vec![column(column_id, simple_name, type_ref)])
+            .expect("fixture scan schema is valid");
+        RelationExpression::new(
+            RelationOperator::Scan(RelationSource::Class(class)),
+            schema,
+            RelationFacts::unknown(),
+            origin(),
+        )
+        .expect("fixture scan is valid")
+    }
+
+    /// A trivially valid carrier `RelationExpression` for tests that only
+    /// need a `.schema()`/`.facts()`/`.origin()` triple: `Emitter`'s guards
+    /// never read a node's own `.operator()`, only the input(s) supplied
+    /// alongside it, so a `Scan` stands in for any operator shape.
+    fn carrier(schema: RelationSchema, facts: RelationFacts) -> RelationExpression {
+        RelationExpression::new(
+            RelationOperator::Scan(RelationSource::Class(resolved_class("model", "Carrier"))),
+            schema,
+            facts,
+            origin(),
+        )
+        .expect("fixture carrier is valid")
+    }
+
+    fn column_scalar(column: &Column) -> ScalarExpression {
+        ScalarExpression::new(
+            ScalarOperator::Column(column.id()),
+            column.type_ref().clone(),
+            column.multiplicity(),
+            column.nullability(),
+            Knowledge::unknown(),
+            origin(),
+        )
+    }
+
+    fn boolean_literal(value: bool) -> ScalarExpression {
+        ScalarExpression::new(
+            ScalarOperator::Literal(ScalarLiteral::Boolean(value)),
+            boolean_type(),
+            one_multiplicity(),
+            Nullability::NonNullable,
+            Knowledge::unknown(),
+            origin(),
+        )
+    }
+
+    fn trivial_equal_condition(column: &Column) -> ScalarExpression {
+        ScalarExpression::new(
+            ScalarOperator::Equal {
+                left: Box::new(column_scalar(column)),
+                right: Box::new(column_scalar(column)),
+            },
+            boolean_type(),
+            one_multiplicity(),
+            Nullability::NonNullable,
+            Knowledge::unknown(),
+            origin(),
+        )
+    }
+
+    /// A valid `Join` over two class scans, whose condition trivially
+    /// compares the left scan's own column to itself.
+    fn valid_join(left: RelationExpression, right: RelationExpression) -> RelationExpression {
+        let condition = trivial_equal_condition(&left.schema().columns()[0]);
+        let mut columns = left.schema().columns().to_vec();
+        columns.extend(right.schema().columns().iter().cloned());
+        let schema = RelationSchema::new(columns).expect("fixture join schema is valid");
+        RelationExpression::new(
+            RelationOperator::Join {
+                kind: JoinKind::Inner,
+                left: Box::new(left),
+                right: Box::new(right),
+                condition,
+            },
+            schema,
+            RelationFacts::unknown(),
+            origin(),
+        )
+        .expect("fixture join is valid")
+    }
+
+    /// A valid, `Row`-bound `Project(Relation)` over `input`'s single
+    /// column, renamed to `out_name` under a fresh id. `Project`'s
+    /// `Relation` arm is the only source of `Row` binding in `Emitter`'s
+    /// output, used where a fixture needs an input that is neither
+    /// `Column`- nor `None`-bound.
+    fn row_bound_project(
+        input: RelationExpression,
+        out_id: u32,
+        out_name: &str,
+    ) -> RelationExpression {
+        let input_column = input.schema().columns()[0].clone();
+        let output = column(out_id, out_name, input_column.type_ref().clone());
+        let projections = vec![Projection::new(output.id(), column_scalar(&input_column))];
+        let schema = RelationSchema::new(vec![output]).expect("fixture schema is valid");
+        RelationExpression::new(
+            RelationOperator::Project {
+                input: Box::new(input),
+                projections,
+                kind: ProjectionKind::Relation,
+            },
+            schema,
+            RelationFacts::unknown(),
+            origin(),
+        )
+        .expect("fixture row-bound project is valid")
+    }
+
+    // -- `Emitter::scan` --------------------------------------------------
+
+    /// Regression for `Emitter::scan` (canonical.rs:253) `||` -> `&&`: a
+    /// scan whose facts and class path are both fine must still be refused
+    /// once its schema does not match the scanned class.
+    #[test]
+    fn scan_refuses_a_schema_that_does_not_match_its_scanned_class() {
+        let class = resolved_class("model", "Person");
+        let schema = schema_with_mismatched_name(class.path().as_str());
+        let expression = RelationExpression::new(
+            RelationOperator::Scan(RelationSource::Class(class)),
+            schema,
+            RelationFacts::unknown(),
+            origin(),
+        )
+        .expect("fixture scan carrier is valid");
+        let RelationOperator::Scan(source) = expression.operator() else {
+            panic!("fixture operator is a scan");
+        };
+
+        let result = Emitter::default().scan(&expression, source);
+
+        assert!(
+            result.is_err(),
+            "a schema mismatched against the scanned class must not emit"
+        );
+    }
+
+    // -- `Emitter::filter` --------------------------------------------------
+
+    /// Regression for `Emitter::filter` (canonical.rs:271) `||` -> `&&`: a
+    /// filter's own facts must be refused when they diverge from its
+    /// input's, even though nothing here can also make the schemas diverge
+    /// (`RelationExpression::new` already enforces `Filter`'s
+    /// schema-preserving invariant structurally, so that term can never be
+    /// true for a validly constructed value).
+    #[test]
+    fn filter_refuses_facts_that_diverge_from_its_input_even_with_matching_schema() {
+        let input = class_scan(resolved_class("model", "Person"), 1);
+        let predicate = boolean_literal(true);
+        let proven_facts = RelationFacts::new(
+            Knowledge::unknown(),
+            Knowledge::proven(RowSemantics::Set, origin()),
+        );
+        let filter_expression = RelationExpression::new(
+            RelationOperator::Filter {
+                input: Box::new(input.clone()),
+                predicate: predicate.clone(),
+            },
+            input.schema().clone(),
+            proven_facts,
+            origin(),
+        )
+        .expect("fixture filter is valid");
+
+        let result = Emitter::default().filter(&filter_expression, &input, &predicate);
+
+        assert!(
+            result.is_err(),
+            "facts diverging from the input must not emit, even with a matching schema"
+        );
+    }
+
+    // -- `Emitter::project` -------------------------------------------------
+
+    /// Regression for `Emitter::project` (canonical.rs:293) `||` -> `&&`: a
+    /// project node with unknown facts must still be refused when its
+    /// projections do not match its own output shape.
+    #[test]
+    fn project_refuses_a_shape_mismatched_against_its_own_output_schema() {
+        let input = class_scan(resolved_class("model", "Person"), 1);
+        let schema =
+            RelationSchema::new(vec![column(2, "value", string_type())]).expect("valid schema");
+        let expression = carrier(schema, RelationFacts::unknown());
+        let projections: Vec<Projection> = Vec::new();
+
+        let result =
+            Emitter::default().project(&expression, &input, &projections, ProjectionKind::Relation);
+
+        assert!(
+            result.is_err(),
+            "an empty projection list must not match a non-empty output schema"
+        );
+    }
+
+    /// Regression for `Emitter::project` (canonical.rs:305) `||` -> `&&`: a
+    /// `Scalar`-kind projection with more than one output column must be
+    /// refused even though its input is column-bound.
+    #[test]
+    fn project_refuses_a_multi_column_scalar_projection_even_with_a_column_bound_input() {
+        let input = class_scan(resolved_class("model", "Person"), 1);
+        let input_column = input.schema().columns()[0].clone();
+        let output_a = column(2, "a", string_type());
+        let output_b = column(3, "b", string_type());
+        let schema = RelationSchema::new(vec![output_a.clone(), output_b.clone()])
+            .expect("fixture schema is valid");
+        let expression = carrier(schema, RelationFacts::unknown());
+        let projections = vec![
+            Projection::new(output_a.id(), column_scalar(&input_column)),
+            Projection::new(output_b.id(), column_scalar(&input_column)),
+        ];
+
+        let result =
+            Emitter::default().project(&expression, &input, &projections, ProjectionKind::Scalar);
+
+        assert!(
+            result.is_err(),
+            "a Scalar-kind projection with more than one output column must not emit as ->map"
+        );
+    }
+
+    /// Regression for `Emitter::project` (canonical.rs:319) `||` -> `&&`: a
+    /// `Relation`-kind projection with duplicate output names must be
+    /// refused even though its input is column-bound.
+    #[test]
+    fn project_refuses_duplicate_output_names_even_with_a_column_bound_input() {
+        let input = class_scan(resolved_class("model", "Person"), 1);
+        let input_column = input.schema().columns()[0].clone();
+        let output_a = column(2, "dup", string_type());
+        let output_b = column(3, "dup", string_type());
+        let schema = RelationSchema::new(vec![output_a.clone(), output_b.clone()])
+            .expect("fixture schema is valid");
+        let expression = carrier(schema, RelationFacts::unknown());
+        let projections = vec![
+            Projection::new(output_a.id(), column_scalar(&input_column)),
+            Projection::new(output_b.id(), column_scalar(&input_column)),
+        ];
+
+        let result =
+            Emitter::default().project(&expression, &input, &projections, ProjectionKind::Relation);
+
+        assert!(
+            result.is_err(),
+            "duplicate output names must not emit as ->project(~[...]), even column-bound"
+        );
+    }
+
+    // -- `Emitter::join` ------------------------------------------------
+
+    /// Regression for `Emitter::join` (canonical.rs:355) `||` -> `&&`: a
+    /// join with column-bound, schema-matching inputs must still be refused
+    /// once any relational fact is proven for the join's own output, since
+    /// no lowering path proves inner-join facts today.
+    ///
+    /// This does not also exercise the mutants at 360/361 below: `&&` binds
+    /// tighter than `||` in Rust, so mutating either of those only ANDs its
+    /// own two immediately adjacent terms — with the leading term true (as
+    /// here), the guard's outermost `||` still short-circuits to `true`
+    /// regardless of that inner sub-clause.
+    #[test]
+    fn join_refuses_a_proven_fact_even_with_matching_column_bound_inputs() {
+        let left = class_scan(resolved_class("model", "Person"), 1);
+        let right = class_scan(resolved_class("model", "Manager"), 2);
+        let left_column = left.schema().columns()[0].clone();
+        let condition = trivial_equal_condition(&left_column);
+        let mut columns = left.schema().columns().to_vec();
+        columns.extend(right.schema().columns().iter().cloned());
+        let schema = RelationSchema::new(columns).expect("fixture schema is valid");
+        let proven_facts = RelationFacts::new(
+            Knowledge::proven(vec![CandidateKey::new(vec![left_column.id()])], origin()),
+            Knowledge::unknown(),
+        );
+        let expression = carrier(schema, proven_facts);
+
+        let result =
+            Emitter::default().join(&expression, JoinKind::Inner, &left, &right, &condition);
+
+        assert!(
+            result.is_err(),
+            "a proven fact on a join's output must not emit, even with valid inputs"
+        );
+    }
+
+    /// Regression for `Emitter::join` (canonical.rs:360,361) `||` -> `&&`:
+    /// unlike the proven-fact fixture above, this keeps the leading two
+    /// guard terms false and makes exactly the left input's binding term
+    /// true, which the mutated `&&` at either position incorrectly
+    /// swallows (its own two adjacent terms become the only ones checked,
+    /// and the other one of the pair is false).
+    #[test]
+    fn join_refuses_a_row_bound_left_input_even_with_a_column_bound_right_and_matching_schema() {
+        let left = row_bound_project(class_scan(resolved_class("model", "Person"), 1), 2, "value");
+        let right = class_scan(resolved_class("model", "Manager"), 3);
+        let left_column = left.schema().columns()[0].clone();
+        let condition = trivial_equal_condition(&left_column);
+        let mut columns = left.schema().columns().to_vec();
+        columns.extend(right.schema().columns().iter().cloned());
+        let schema = RelationSchema::new(columns).expect("fixture schema is valid");
+        let expression = carrier(schema, RelationFacts::unknown());
+
+        let result =
+            Emitter::default().join(&expression, JoinKind::Inner, &left, &right, &condition);
+
+        assert!(
+            result.is_err(),
+            "a row-bound (non-column) left input must not emit ->join(), even with a matching schema"
+        );
+    }
+
+    // -- `Emitter::distinct` ------------------------------------------------
+
+    /// Regression for `Emitter::distinct` (canonical.rs:403,404) `||` ->
+    /// `&&`: a schema mismatch alone must refuse `->distinct()` even with a
+    /// column-bound input and proven distinct-set facts. Unlike a
+    /// proven-fact-only fixture, this keeps `input.binding == None` false
+    /// throughout, so `&&` binding tighter than `||` cannot make either
+    /// mutated position short-circuit past the schema-mismatch term.
+    #[test]
+    fn distinct_refuses_a_schema_mismatch_even_with_a_column_bound_input_and_distinct_set_facts() {
+        let input = class_scan(resolved_class("model", "Person"), 1);
+        let mismatched_schema = RelationSchema::new(vec![column(99, "different", string_type())])
+            .expect("fixture schema is valid");
+        let distinct_set_facts = RelationFacts::new(
+            Knowledge::unknown(),
+            Knowledge::proven(RowSemantics::Set, origin()),
+        );
+        let expression = carrier(mismatched_schema, distinct_set_facts);
+
+        let result = Emitter::default().distinct(&expression, &input);
+
+        assert!(
+            result.is_err(),
+            "a schema mismatch must refuse ->distinct(), even column-bound with distinct-set facts"
+        );
+    }
+
+    // -- `Emitter::distinct_on` ----------------------------------------------
+
+    /// Regression for `Emitter::distinct_on` (canonical.rs:430) `||` ->
+    /// `&&`: selectors over a non-unique input schema must be refused even
+    /// when the input is not a class extent and the outer node's own facts
+    /// are unknown.
+    #[test]
+    fn distinct_on_refuses_non_unique_input_names_even_off_a_class_extent() {
+        let person = resolved_class("model", "Person");
+        let left = class_scan(person.clone(), 1);
+        let left_column_id = left.schema().columns()[0].id();
+        let expression = left.clone();
+        let right = class_scan(person, 2);
+        let join_expression = valid_join(left, right);
+
+        let result =
+            Emitter::default().distinct_on(&expression, &join_expression, &[left_column_id]);
+
+        assert!(
+            result.is_err(),
+            "non-unique input names must refuse ->distinct(~[...]), even off a class extent"
+        );
+    }
+
+    // -- `Emitter::sort` ------------------------------------------------
+
+    /// Regression for `Emitter::sort` (canonical.rs:467,468) `||` -> `&&`:
+    /// a join result must be refused when its own facts diverge from the
+    /// input's, even off a class extent and with a matching schema.
+    #[test]
+    fn sort_refuses_facts_that_diverge_from_a_non_extent_input_with_matching_schema() {
+        let left = class_scan(resolved_class("model", "Person"), 1);
+        let right = class_scan(resolved_class("model", "Manager"), 2);
+        let join_expression = valid_join(left, right);
+        let left_column_id = join_expression.schema().columns()[0].id();
+        let proven_facts = RelationFacts::new(
+            Knowledge::unknown(),
+            Knowledge::proven(RowSemantics::Set, origin()),
+        );
+        let expression = carrier(join_expression.schema().clone(), proven_facts);
+        let keys = vec![SortKey::new(
+            left_column_id,
+            SortDirection::Ascending,
+            origin(),
+        )];
+
+        let result = Emitter::default().sort(&expression, &join_expression, &keys);
+
+        assert!(
+            result.is_err(),
+            "diverging facts must refuse ->sort(), even off a class extent with a matching schema"
+        );
+    }
+
+    // -- `Emitter::relation` / `Emitter::scalar` depth bookkeeping ----------
+
+    /// Regression for `Emitter::relation` (canonical.rs:213) `-=` -> `+=`
+    /// and `-=` -> `/=`: a single non-nested `relation` call must return the
+    /// emitter's recursion depth to exactly zero, not leave it incremented
+    /// or unchanged.
+    #[test]
+    fn relation_restores_depth_to_zero_after_a_single_call() {
+        let mut emitter = Emitter::default();
+        let scan = class_scan(resolved_class("model", "Person"), 1);
+
+        let result = emitter.relation(&scan);
+
+        assert!(result.is_ok(), "fixture scan must emit");
+        assert_eq!(
+            emitter.depth, 0,
+            "depth must return to zero once the call unwinds"
+        );
+    }
+
+    /// Regression for `Emitter::scalar` (canonical.rs:505) `-=` -> `+=` and
+    /// `-=` -> `/=`: same invariant as `relation` above, for the scalar
+    /// recursion budget.
+    #[test]
+    fn scalar_restores_depth_to_zero_after_a_single_call() {
+        let mut emitter = Emitter::default();
+        let literal = boolean_literal(true);
+
+        let result = emitter.scalar(&literal, &BTreeMap::new());
+
+        assert!(result.is_ok(), "fixture literal must emit");
+        assert_eq!(
+            emitter.depth, 0,
+            "depth must return to zero once the call unwinds"
+        );
+    }
+
+    // -- shape-matching / equality helpers -----------------------------------
+
+    /// Regression for `class_scan_schema_matches` (canonical.rs:567)
+    /// `-> bool` => `true`, and its five `&&` -> `||` body mutants
+    /// (canonical.rs:571-575): a name mismatch alone must refuse the match
+    /// even though every other field (type, arguments, multiplicity,
+    /// nullability) is otherwise exactly right. Since a leading false
+    /// conjunct forces the whole `&&` chain false regardless of the rest,
+    /// and any single `&&` flipped to `||` at any position downstream of
+    /// that leading false term would instead let the (all-true) remainder
+    /// force it back to true, this one fixture distinguishes every position
+    /// in the chain.
+    #[test]
+    fn class_scan_schema_matches_rejects_a_name_mismatch_with_every_other_field_valid() {
+        let path = "model::Person";
+        let schema = schema_with_mismatched_name(path);
+
+        assert!(
+            !class_scan_schema_matches(&schema, path),
+            "a name mismatch alone must refuse the match"
+        );
+    }
+
+    /// Regression for `project_shape_matches` (canonical.rs:582)
+    /// `-> bool` => `true`, and its `&&` -> `||` body mutant
+    /// (canonical.rs:583): a projection-count mismatch alone must refuse
+    /// the shape even though the (vacuous, zero-length) zip comparison
+    /// alone would trivially pass.
+    #[test]
+    fn project_shape_matches_rejects_a_projection_count_mismatch() {
+        let schema =
+            RelationSchema::new(vec![column(1, "value", string_type())]).expect("valid schema");
+        let expression = carrier(schema, RelationFacts::unknown());
+
+        assert!(
+            !project_shape_matches(&expression, &[]),
+            "an empty projection list must not match a non-empty output schema"
+        );
+    }
+
+    /// Regression for `is_map_shape` (canonical.rs:594) `-> bool` => `true`.
+    #[test]
+    fn is_map_shape_rejects_more_than_one_output_column() {
+        let projections = vec![
+            Projection::new(ColumnId::new(1), boolean_literal(true)),
+            Projection::new(ColumnId::new(2), boolean_literal(true)),
+        ];
+
+        assert!(
+            !is_map_shape(&projections),
+            "more than one output column is not a ->map shape"
+        );
+    }
+
+    /// Regression for `join_schema_matches` (canonical.rs:602) `-> bool`
+    /// => `true`: an output schema that drops a right-input column must be
+    /// refused.
+    #[test]
+    fn join_schema_matches_rejects_an_output_schema_missing_a_right_column() {
+        let left_schema =
+            RelationSchema::new(vec![column(1, "left", string_type())]).expect("valid schema");
+        let right_schema =
+            RelationSchema::new(vec![column(2, "right", string_type())]).expect("valid schema");
+        let expression = carrier(left_schema.clone(), RelationFacts::unknown());
+
+        assert!(
+            !join_schema_matches(&expression, &left_schema, &right_schema),
+            "an output schema missing a right-input column must not match"
+        );
+    }
+
+    /// Regression for `facts_are_distinct_set` (canonical.rs:645)
+    /// `-> bool` => `true`, and its `&&` -> `||` body mutant
+    /// (canonical.rs:646): a proven candidate key alone must refuse the
+    /// distinct-set claim even when row-semantics separately proves `Set`.
+    #[test]
+    fn facts_are_distinct_set_rejects_a_proven_candidate_key_even_with_proven_set_semantics() {
+        let facts = RelationFacts::new(
+            Knowledge::proven(vec![CandidateKey::new(vec![ColumnId::new(1)])], origin()),
+            Knowledge::proven(RowSemantics::Set, origin()),
+        );
+
+        assert!(
+            !facts_are_distinct_set(&facts),
+            "a proven candidate key must refuse the distinct-set claim"
+        );
+    }
+
+    /// Regression for `schema_names_are_unique` (canonical.rs:653)
+    /// `-> bool` => `true`.
+    #[test]
+    fn schema_names_are_unique_rejects_a_duplicate_column_name() {
+        let schema = RelationSchema::new(vec![
+            column(1, "dup", string_type()),
+            column(2, "dup", string_type()),
+        ])
+        .expect("fixture schema is valid");
+
+        assert!(!schema_names_are_unique(&schema));
+    }
+
+    /// Regression for `references_for_binding` (canonical.rs:622) `delete
+    /// !`, and (canonical.rs:626) `delete !`: unique, emittable column
+    /// names must resolve row references. Deleting the negation at either
+    /// site flips it into refusing this otherwise-valid input.
+    #[test]
+    fn references_for_binding_row_accepts_unique_emittable_names() {
+        let schema = RelationSchema::new(vec![
+            column(1, "alpha", string_type()),
+            column(2, "beta", string_type()),
+        ])
+        .expect("fixture schema is valid");
+
+        let result = references_for_binding(BindingKind::Row, &schema, "v0");
+
+        assert!(
+            result.is_ok(),
+            "unique, emittable column names must resolve row references"
+        );
+    }
+
+    /// Regression for `references_for_binding` (canonical.rs:623) `||` ->
+    /// `&&`: duplicate column names alone must refuse row references, even
+    /// though every name is individually emittable.
+    #[test]
+    fn references_for_binding_row_refuses_duplicate_column_names() {
+        let schema = RelationSchema::new(vec![
+            column(1, "dup", string_type()),
+            column(2, "dup", string_type()),
+        ])
+        .expect("fixture schema is valid");
+
+        let result = references_for_binding(BindingKind::Row, &schema, "v0");
+
+        assert!(
+            result.is_err(),
+            "duplicate column names must refuse row references"
+        );
+    }
+
+    /// Regression for `is_emittable_path` (canonical.rs:661) `-> bool` =>
+    /// `true`.
+    #[test]
+    fn is_emittable_path_rejects_a_segment_that_is_not_a_valid_identifier() {
+        assert!(!is_emittable_path("model::9Bad"));
+    }
+
+    /// Regression for `is_emittable_identifier` (canonical.rs:669) `==` ->
+    /// `!=`: a leading digit must be refused. Under the mutant, a
+    /// non-alphabetic, non-underscore leading character satisfies `first !=
+    /// '_'` unconditionally, wrongly accepting it.
+    #[test]
+    fn is_emittable_identifier_rejects_a_leading_digit() {
+        assert!(!is_emittable_identifier("9x"));
+    }
+
+    // -- `CanonicalEmissionOutcome` accessors --------------------------------
+
+    /// Regression for `CanonicalEmissionOutcome::emitted` (canonical.rs:81)
+    /// `-> Option<&CanonicalPure>` => `None`.
+    #[test]
+    fn emitted_accessor_returns_text_only_for_the_emitted_variant() {
+        let emitted = CanonicalEmissionOutcome::Emitted(CanonicalPure {
+            text: "x".to_owned(),
+        });
+        let indecisive = CanonicalEmissionOutcome::Indecisive(CanonicalEmissionIndecision::new(
+            ReasonCode::IndUnmodeledOp,
+            origin(),
+        ));
+
+        assert_eq!(emitted.emitted().map(CanonicalPure::as_str), Some("x"));
+        assert!(indecisive.emitted().is_none());
+    }
+
+    /// Regression for `CanonicalEmissionOutcome::indecision`
+    /// (canonical.rs:90) `-> Option<&CanonicalEmissionIndecision>` =>
+    /// `None`.
+    #[test]
+    fn indecision_accessor_returns_the_refusal_only_for_the_indecisive_variant() {
+        let emitted = CanonicalEmissionOutcome::Emitted(CanonicalPure {
+            text: "x".to_owned(),
+        });
+        let indecisive = CanonicalEmissionOutcome::Indecisive(CanonicalEmissionIndecision::new(
+            ReasonCode::IndUnmodeledOp,
+            origin(),
+        ));
+
+        assert!(emitted.indecision().is_none());
+        assert_eq!(
+            indecisive
+                .indecision()
+                .map(CanonicalEmissionIndecision::reason),
+            Some(ReasonCode::IndUnmodeledOp)
+        );
+    }
+}
