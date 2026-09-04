@@ -1,6 +1,14 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { addLabels, DEFAULT_API_URL, ghJSON, listOpenIssues, listOpenPullRequests } from "./gh-rest.mjs";
+import {
+  addIssueComment,
+  addLabels,
+  createIssue,
+  DEFAULT_API_URL,
+  ghJSON,
+  listOpenIssues,
+  listOpenPullRequests,
+} from "./gh-rest.mjs";
 
 const originalFetch = globalThis.fetch;
 
@@ -92,5 +100,47 @@ describe("addLabels", () => {
     expect(seenUrl).toBe("https://api.github.com/repos/o/r/issues/42/labels");
     expect(seenMethod).toBe("POST");
     expect(seenBody).toEqual({ labels: ["bug", "analyzer"] });
+  });
+});
+
+describe("createIssue", () => {
+  test("POSTs title/body/labels to the issues endpoint and returns the created issue", async () => {
+    let seenUrl;
+    let seenMethod;
+    let seenBody;
+    stubFetch(async (url, init) => {
+      seenUrl = url;
+      seenMethod = init.method;
+      seenBody = JSON.parse(init.body);
+      return new Response(JSON.stringify({ number: 999, html_url: "https://x/999" }), { status: 201 });
+    });
+    const issue = await createIssue(DEFAULT_API_URL, "o/r", "tok", {
+      title: "t",
+      body: "b",
+      labels: ["l"],
+    });
+    expect(seenUrl).toBe("https://api.github.com/repos/o/r/issues");
+    expect(seenMethod).toBe("POST");
+    expect(seenBody).toEqual({ title: "t", body: "b", labels: ["l"] });
+    expect(issue).toEqual({ number: 999, html_url: "https://x/999" });
+  });
+});
+
+describe("addIssueComment", () => {
+  test("POSTs a comment body to the issue's comments endpoint and returns it", async () => {
+    let seenUrl;
+    let seenMethod;
+    let seenBody;
+    stubFetch(async (url, init) => {
+      seenUrl = url;
+      seenMethod = init.method;
+      seenBody = JSON.parse(init.body);
+      return new Response(JSON.stringify({ id: 1, body: "c" }), { status: 201 });
+    });
+    const comment = await addIssueComment(DEFAULT_API_URL, "o/r", "tok", 42, "c");
+    expect(seenUrl).toBe("https://api.github.com/repos/o/r/issues/42/comments");
+    expect(seenMethod).toBe("POST");
+    expect(seenBody).toEqual({ body: "c" });
+    expect(comment).toEqual({ id: 1, body: "c" });
   });
 });
