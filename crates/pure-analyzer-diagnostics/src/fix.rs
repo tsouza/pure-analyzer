@@ -130,6 +130,26 @@ mod tests {
     use super::*;
 
     #[test]
+    fn partial_ord_agrees_with_ord_and_orders_by_span() {
+        // `TextEdit`'s `PartialOrd` delegates to its manual `Ord`; a mutant
+        // that replaces it with an always-`None` stub leaves `Ord::cmp`
+        // untouched but breaks `<`/`<=` (which go through `PartialOrd`) and
+        // any direct `partial_cmp` caller.
+        let earlier = TextEdit {
+            file: FileId::new(0),
+            span: TextRange::new(0.into(), 1.into()),
+            new_text: "a".to_owned(),
+        };
+        let later = TextEdit {
+            file: FileId::new(0),
+            span: TextRange::new(1.into(), 2.into()),
+            new_text: "b".to_owned(),
+        };
+        assert_eq!(earlier.partial_cmp(&later), Some(earlier.cmp(&later)));
+        assert!(earlier < later);
+    }
+
+    #[test]
     fn serializes_and_deserializes_round_trip() {
         let fix = Fix {
             title: "insert %latest argument".to_owned(),

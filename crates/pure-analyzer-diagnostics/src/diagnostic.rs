@@ -192,6 +192,18 @@ mod tests {
     }
 
     #[test]
+    fn label_partial_ord_agrees_with_ord_and_orders_by_span() {
+        // `Label`'s `PartialOrd` delegates to its manual `Ord`; a mutant
+        // that replaces it with an always-`None` stub leaves `Ord::cmp`
+        // untouched but breaks `<`/`<=` (which go through `PartialOrd`) and
+        // any direct `partial_cmp` caller.
+        let earlier = Label::new(FileId::new(0), TextRange::new(0.into(), 1.into()));
+        let later = Label::new(FileId::new(0), TextRange::new(1.into(), 2.into()));
+        assert_eq!(earlier.partial_cmp(&later), Some(earlier.cmp(&later)));
+        assert!(earlier < later);
+    }
+
+    #[test]
     fn builder_defaults_optional_fields_to_empty() {
         let d = Diagnostic::builder(DiagCode::BadToken, Severity::Error, "boom", label()).build();
         assert_eq!(d.code, DiagCode::BadToken);

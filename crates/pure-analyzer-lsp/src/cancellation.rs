@@ -138,7 +138,38 @@ impl CancellationRegistry {
 
 #[cfg(test)]
 mod tests {
+    use serde_json::Value;
+
     use super::{CancellationRegistry, RequestId};
+
+    #[test]
+    fn from_json_parses_string_and_integer_identifiers_and_rejects_others() {
+        // Each `Value` arm is load-bearing: a mutant that folds the number
+        // arm into the wildcard would still compile (the match stays
+        // exhaustive) but silently turn every numeric request id into
+        // `None`.
+        assert_eq!(
+            RequestId::from_json(&Value::String("abc".to_owned())),
+            Some(RequestId::String("abc".to_owned()))
+        );
+        assert_eq!(
+            RequestId::from_json(&Value::from(42_i64)),
+            Some(RequestId::Number(42))
+        );
+        assert_eq!(RequestId::from_json(&Value::Null), None);
+        assert_eq!(RequestId::from_json(&Value::Bool(true)), None);
+    }
+
+    #[test]
+    fn registry_is_cancelled_reflects_a_cancelled_active_request() {
+        let registry = CancellationRegistry::default();
+        let id = RequestId::Number(5);
+        let _token = registry.begin(id.clone()).expect("begin succeeds");
+
+        assert!(!registry.is_cancelled(&id));
+        registry.cancel(id.clone());
+        assert!(registry.is_cancelled(&id));
+    }
 
     #[test]
     fn begin_registers_a_fresh_token_and_rejects_a_duplicate_active_identifier() {

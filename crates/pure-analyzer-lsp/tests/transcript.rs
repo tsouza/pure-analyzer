@@ -13,6 +13,23 @@ use std::process::{Command, Output, Stdio};
 use serde_json::Value;
 
 #[test]
+fn malformed_input_is_logged_to_stderr_by_the_process_own_subscriber() {
+    // `init_tracing` has no return value; a mutant that replaces its body
+    // with `()` never installs a subscriber, so `tracing::error!` in
+    // `main`'s error branch reaches the global no-op dispatcher instead of
+    // standard error. A malformed header (no `:` separator) makes
+    // `read_frame` return an `io::Error`, which `main` logs and turns into
+    // an unsuccessful exit.
+    let output = run_lsp(b"not-a-header-line\r\n");
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    assert_unsuccessful_exit(output);
+    assert!(
+        stderr.contains("pure-analyzer-lsp exited on an I/O failure"),
+        "expected the I/O failure to be logged to stderr, got: {stderr}"
+    );
+}
+
+#[test]
 fn process_exits_unsuccessfully_without_shutdown() {
     let exit_before_shutdown = run_lsp(&transcript(&[value(
         r#"{"jsonrpc":"2.0","method":"exit"}"#,
